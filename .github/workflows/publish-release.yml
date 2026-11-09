@@ -83,10 +83,11 @@ jobs:
             echo "APK metadata: $display"
             version=$(echo "$display" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p")
             code=$(echo "$display" | sed -n "s/.*versionCode='\([^']*\)'.*/\1/p")
-            pkg=$(echo "$display" | sed -n "s/.*name='\([^']*\)'.*/\1/p")
+            pkg=$(echo "$display" | sed -n "s/^package: name='\([^']*\)'.*/\1/p")
             test "v$version" = "$RELEASE_TAG"
             test -n "$code" && test -n "$pkg"
             test "$pkg" = "ar.com.rango5gps.drivelabauto.$app"
+            echo "Validado $app: package=$pkg version=$version code=$code"
             proper=$(echo "$app" | sed 's/^./\U&/')
             name="DriveLab-Auto-$proper-$RELEASE_TAG.apk"
             cp "$apk" "output/$name"
