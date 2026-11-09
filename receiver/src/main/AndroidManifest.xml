@@ -4,7 +4,6 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
-    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <queries>
         <package android:name="com.waze" />
         <intent><action android:name="android.intent.action.MAIN" />
@@ -12,12 +11,6 @@
     </queries>
     <application android:label="DriveLab Auto Receiver" android:allowBackup="false"
         android:usesCleartextTraffic="false" android:theme="@android:style/Theme.Material.Light.NoActionBar">
-        <provider android:name="androidx.core.content.FileProvider"
-            android:authorities="${applicationId}.fileprovider" android:exported="false"
-            android:grantUriPermissions="true">
-            <meta-data android:name="android.support.FILE_PROVIDER_PATHS"
-                android:resource="@xml/bridge_paths" />
-        </provider>
         <service android:name=".ReceiverService" android:exported="false"
             android:foregroundServiceType="dataSync" />
         <receiver android:name=".BootReceiver" android:exported="false">
