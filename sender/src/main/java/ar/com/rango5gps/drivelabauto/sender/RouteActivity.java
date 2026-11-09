@@ -24,7 +24,7 @@ public final class RouteActivity extends Activity {
             String content=text==null?null:text.toString();
             if(content!=null&&subject!=null&&!subject.toString().trim().isEmpty()&&
                 MapLinks.extract(subject.toString())==null)
-                content=subject.toString().trim()+"\\n"+content;
+                content=subject.toString().trim()+"\n"+content;
             raw=content;
         }else raw=null;
         if(raw==null){dialog("No se recibió ningún enlace de navegación");return;}
