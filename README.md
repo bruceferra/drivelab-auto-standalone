@@ -1,3 +1,30 @@
+# DriveLab Auto v0.2.10 — puente + controles OEM T1
+
+## Cambios preparados
+
+- Conserva la navegación y Compartir de Google Maps en la T1 de v0.2.9, con el mismo protocolo, paquetes y firmas.
+- Receiver agrega VEHÍCULO / ENERGÍA / CODE como módulo de la misma APK: controles manuales grupales e individuales de ventilación 1/4 y cierre para IDs 2004–2007, alarma peatonal 2074 solo manual, combustible OEM CI186, SOC 1042/1062, corriente 1064, detector diferencial 45 segundos, lector de tandas de 25 IDs y exportación CSV.
+- Los controles OEM se activan solo desde pantalla visible y un toque deliberado; se leen estados y no se ejecutan al encender. No se fuerzan comandos 0 ni apertura total, ni se pretende anular seguridad OEM.
+- Sender conserva las funciones de v0.2.9, con versión 0.2.10 para mantener ambas APK alineadas.
+- Spotify no se automatiza: primero hay que estudiar conflicto de fuente Bluetooth/Spotify Connect, interrupciones y metadatos NOT PROVIDED.
+- Sin migración o borrado de DriveLab GPS/Uber Beta/T1. El firmware puede rechazar accesos OEM de una aplicación con nuevo package: verificar en vehículo estacionado, no considerarlos confirmados antes de prueba.
+
+## Secuencia de pruebas v0.2.10
+
+1. Actualizar Sender y Receiver sobre 0.2.9 sin desinstalar ni desvincular.
+2. Comprobar Xiaomi → clúster, Google Maps → Compartir → Receiver → Waze en T1, y arranque del receptor después de reiniciar.
+3. En T1 estacionada y en P: abrir VEHÍCULO, consultar estados OEM, probar cierre y ventilación con ventanas libres; cada orden debe mostrar lectura posterior.
+4. Alarma 2074: solo probar manualmente si es necesario y dejar activa antes de circular.
+5. ENERGÍA: CI186, SOC 1042/1062 y 1064, comparar valores crudos con tablero/menú OEM. No extrapolar automáticamente litros utilizables.
+6. CODE: detector 45 segundos con cambios físicos aislados, +25/-25 y CSV; no escribir códigos no identificados.
+7. Spotify: probar por separado reproducción local y fuente del volante, sin automatizaciones en DriveLab.
+
+## Alcance y límites
+
+No HOME launcher. No modificación de T1Launcher, DriveLab original ni Uber Beta. Los controles del vehículo pueden depender de permisos OEM no concedidos a Receiver, y requieren prueba en la T1. No instalar versiones QA encima de firmas release.
+
+---
+
 # DriveLab Auto — Sender + Receiver (independiente)
 
 > **v0.2.9 · Google Maps Compartir:** Sender acepta destinos compartidos que tengan nombre de lugar o un enlace `/maps/place/...`; si Google Maps envía un enlace corto y no se logra obtener coordenadas, usa **únicamente el nombre explícitamente compartido**, no la posición del mapa. Receiver en la propia Jetour ahora figura como **«DriveLab · Navegar en clúster»** en el menú **Compartir** de Google Maps (acción texto o enlace compatible). Al seleccionarlo, solicita a Waze de la T1 `waze://?ll=...&navigate=yes` o `waze://?q=...&navigate=yes`, sin utilizar el teléfono ni requerir tocar el clúster. Si solo tenemos el nombre, Waze puede elegir el primer resultado y debe verificarse; si no hay un destino identificable no se envía uno inventado. No se modifican el puente cifrado, el autoarranque, T1Launcher, ni los permisos. Se requiere actualización de **Sender y Receiver** para tener ambas funciones; quedan con versión y firma continuas.
