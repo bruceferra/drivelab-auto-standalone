@@ -1,6 +1,10 @@
 package ar.com.rango5gps.drivelabauto.sender;
 
 import android.app.*;
+import android.Manifest;
+import android.bluetooth.BluetoothDevice;
+import android.content.pm.PackageManager;
+import android.provider.Settings;
 import android.os.*;
 import android.content.*;
 import android.net.Uri;
@@ -44,6 +48,35 @@ public final class SenderActivity extends Activity {
         button(body,"Vincular Receiver · código de 6 dígitos",this::pair);
         button(body,"Probar envío real a La Plata",this::test);
         button(body,"Pegar enlace de Google Maps / WhatsApp",this::paste);
+        title(body,"SPOTIFY AUTOMÁTICO · XIAOMI",20);
+        title(body,"Al conectar el audio Bluetooth de la T1, intenta reanudar Spotify "+
+            "en este Xiaomi sin abrir su pantalla. No cambia MODE ni Spotify de la T1.",13);
+        title(body,"Bluetooth elegido: "+SpotifyAutoPlay.label(this)+
+            "\nDispositivos cercanos: "+(SpotifyAutoPlay.hasBluetoothPermission(this)?"CONCEDIDO":"SIN AUTORIZAR")+
+            "\nControl de Spotify: "+(SpotifyAutoPlay.hasListenerAccess(this)?"AUTORIZADO":"SIN AUTORIZAR")+
+            "\nEstado: "+SpotifyAutoPlay.status(this),14);
+        if(!SpotifyAutoPlay.hasBluetoothPermission(this))
+            button(body,"AUTORIZAR DISPOSITIVOS CERCANOS",this::requestBluetooth);
+        button(body,"ELEGIR BLUETOOTH DE LA T1",this::pickSpotifyBluetooth);
+        if(!SpotifyAutoPlay.hasListenerAccess(this))
+            button(body,"AUTORIZAR CONTROL DE SPOTIFY",this::grantSpotifyControl);
+        boolean spotifyAuto=SpotifyAutoPlay.enabled(this);
+        button(body,spotifyAuto?"DESACTIVAR SPOTIFY AUTOMÁTICO":
+            "ACTIVAR SPOTIFY AUTOMÁTICO",()->{
+            if(!spotifyAuto&&(!SpotifyAutoPlay.hasBluetoothPermission(this)||
+                !SpotifyAutoPlay.hasListenerAccess(this)||
+                "Sin seleccionar".equals(SpotifyAutoPlay.label(this)))){
+                info("Primero elegí T1 y concedé los dos permisos para el control de Spotify.");
+                return;
+            }
+            SpotifyAutoPlay.setEnabled(this,!spotifyAuto);render();
+        });
+        button(body,"PROBAR PLAY DE SPOTIFY SIN ABRIRLO",()->{
+            SpotifyAutoPlay.checkConnected(this,"prueba manual",true,
+                ()->runOnUiThread(this::render));
+            info("Verificando que el Bluetooth Music de la T1 esté conectado…");
+        });
+        button(body,"ACTUALIZAR ESTADO SPOTIFY",this::render);
         button(body,"ACTUALIZAR SENDER · INSTALACIÓN DIRECTA",()->Updater.check(this,"sender",this::info));
         button(body,"Desvincular Receiver",()->new AlertDialog.Builder(this)
             .setMessage("¿Desvincular? La próxima vez tendrás que comparar los 6 dígitos.")
@@ -53,6 +86,49 @@ public final class SenderActivity extends Activity {
             "El modo Solo clúster no abre Waze en el teléfono si la T1 confirma recepción.",13);
         if(!status.isEmpty())title(body,status,14);
         setContentView(scroll);
+    }
+    private void requestBluetooth(){
+        if(android.os.Build.VERSION.SDK_INT>=31)
+            requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT},71);
+        else render();
+    }
+    @Override public void onRequestPermissionsResult(int code,String[] permissions,int[] results){
+        super.onRequestPermissionsResult(code,permissions,results);
+        if(code==71){
+            if(results.length==0||results[0]!=PackageManager.PERMISSION_GRANTED)
+                info("Sin permiso de Dispositivos cercanos; no se activará Spotify.");
+            else render();
+        }
+    }
+    private void pickSpotifyBluetooth(){
+        if(!SpotifyAutoPlay.hasBluetoothPermission(this)){requestBluetooth();return;}
+        java.util.List<BluetoothDevice> devices=SpotifyAutoPlay.bonded(this);
+        if(devices.isEmpty()){info("No se encontraron dispositivos Bluetooth emparejados.");return;}
+        String[] names=new String[devices.size()];
+        for(int i=0;i<devices.size();i++){
+            try{
+                String name=devices.get(i).getName();
+                names[i]=name==null?"Dispositivo sin nombre":name;
+            }catch(SecurityException error){names[i]="Dispositivo Bluetooth";}
+        }
+        new AlertDialog.Builder(this).setTitle("Elegí exclusivamente el Bluetooth de la T1")
+            .setItems(names,(d,n)->{
+                SpotifyAutoPlay.select(this,devices.get(n));render();
+            }).setNegativeButton("CANCELAR",null).show();
+    }
+    private void grantSpotifyControl(){
+        new AlertDialog.Builder(this).setTitle("Permiso para controlar Spotify")
+            .setMessage("Android exige habilitar el acceso a notificaciones de DriveLab Auto "+
+                "Sender para controlar la sesión multimedia de Spotify. Es un permiso "+
+                "amplio del sistema; esta función solo consulta sesiones multimedia "+
+                "y controla Spotify del Xiaomi. No lee ni almacena mensajes. "+
+                "Podés revocarlo cuando quieras.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("ABRIR AJUSTES",(d,w)->{
+                try{startActivity(new Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS));}
+                catch(Exception error){info("Abrí Ajustes → Apps → Acceso especial → "+
+                    "Acceso a notificaciones → DriveLab Auto Sender");}
+            }).show();
     }
     private void pair(){
         EditText field=new EditText(this);field.setSingleLine(true);
