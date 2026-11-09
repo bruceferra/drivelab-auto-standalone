@@ -15,7 +15,7 @@ public final class SenderActivity extends Activity {
     private static final int NAVY=0xFF111821,TEAL=0xFF108A80;
     private String status="";
     @Override public void onCreate(Bundle state){super.onCreate(state);render();}
-    @Override public void onResume(){super.onResume();render();}
+    @Override public void onResume(){super.onResume();render();Updater.onResume(this,this::info);}
     private void title(LinearLayout body,String s,int size){
         TextView t=new TextView(this);t.setText(s);t.setTextSize(size);
         t.setTextColor(NAVY);t.setPadding(8,12,8,12);body.addView(t);
@@ -44,7 +44,7 @@ public final class SenderActivity extends Activity {
         button(body,"Vincular Receiver · código de 6 dígitos",this::pair);
         button(body,"Probar envío real a La Plata",this::test);
         button(body,"Pegar enlace de Google Maps / WhatsApp",this::paste);
-        button(body,"Comprobar actualización de Sender",()->Updater.check(this,"sender",this::info));
+        button(body,"ACTUALIZAR SENDER · INSTALACIÓN DIRECTA",()->Updater.check(this,"sender",this::info));
         button(body,"Desvincular Receiver",()->new AlertDialog.Builder(this)
             .setMessage("¿Desvincular? La próxima vez tendrás que comparar los 6 dígitos.")
             .setNegativeButton("CANCELAR",null)

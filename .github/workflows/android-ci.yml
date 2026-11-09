@@ -53,10 +53,19 @@ jobs:
           ! "$aapt" dump permissions "$sender" | grep -E 'ACCESSIBILITY|ACCESS_FINE_LOCATION|QUERY_ALL_PACKAGES|CAMERA'
           ! "$aapt" dump permissions "$receiver" | grep -E 'ACCESSIBILITY|ACCESS_FINE_LOCATION|QUERY_ALL_PACKAGES|CAMERA'
           ! grep -R -E 'VehicleWindowPilot|VehicleReadOnly|transact\(15|AUTO_LINK_CAR' sender/src receiver/src common/src
-          ! "$aapt" dump permissions "$sender" | grep REQUEST_INSTALL_PACKAGES
-          ! "$aapt" dump permissions "$receiver" | grep REQUEST_INSTALL_PACKAGES
-          ! grep -R -E 'FileProvider|canRequestPackageInstalls|ACTION_MANAGE_UNKNOWN_APP_SOURCES' sender/src receiver/src common/src
-          grep -q 'ABRIR DESCARGA' common/src/main/java/ar/com/rango5gps/drivelabauto/common/Updater.java
+          "$aapt" dump permissions "$sender" | grep REQUEST_INSTALL_PACKAGES
+          "$aapt" dump permissions "$receiver" | grep REQUEST_INSTALL_PACKAGES
+          "$aapt" dump xmltree "$sender" AndroidManifest.xml | grep 'updatefiles'
+          "$aapt" dump xmltree "$receiver" AndroidManifest.xml | grep 'updatefiles'
+          grep -q 'ACTION_INSTALL_PACKAGE' common/src/main/java/ar/com/rango5gps/drivelabauto/common/Updater.java
+          grep -q 'getPackageArchiveInfo' common/src/main/java/ar/com/rango5gps/drivelabauto/common/Updater.java
+          grep -q 'certificateHashes' common/src/main/java/ar/com/rango5gps/drivelabauto/common/Updater.java
+          grep -q 'SHA-256' common/src/main/java/ar/com/rango5gps/drivelabauto/common/Updater.java
+          grep -q 'FLAG_GRANT_READ_URI_PERMISSION' common/src/main/java/ar/com/rango5gps/drivelabauto/common/Updater.java
+          grep -q 'MODE_READ_ONLY' common/src/main/java/ar/com/rango5gps/drivelabauto/common/UpdateApkProvider.java
+          grep -q 'getPackageManager().canRequestPackageInstalls()' common/src/main/java/ar/com/rango5gps/drivelabauto/common/Updater.java
+          ! grep -R 'openBrowser\|ABRIR DESCARGA' common/src/main/java/ar/com/rango5gps/drivelabauto/common/Updater.java
+          echo 'OK · sender/receiver native updater; no browser; verified APK'
           echo 'OK · two isolated apps; no vehicle control or monitoring'
       - uses: actions/upload-artifact@v4
         with:

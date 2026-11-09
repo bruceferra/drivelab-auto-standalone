@@ -34,6 +34,7 @@ public final class ReceiverActivity extends Activity {
         super.onResume();visible=true;render();
         pairUiHandler.removeCallbacks(pairUiRefresh);
         pairUiHandler.postDelayed(pairUiRefresh,450);
+        Updater.onResume(this,this::report);
     }
     @Override protected void onPause(){
         visible=false;
@@ -110,7 +111,7 @@ public final class ReceiverActivity extends Activity {
         });
         button(body,"PRUEBA DIRECTA A LA PLATA",()->direct("-34.9214,-57.9545"));
         button(body,"PRUEBA DIRECTA A MAR DEL PLATA",()->direct("-38.0055,-57.5426"));
-        button(body,"COMPROBAR ACTUALIZACIÓN RECEIVER",()->Updater.check(this,"receiver",this::report));
+        button(body,"ACTUALIZAR RECEIVER · INSTALACIÓN DIRECTA",()->Updater.check(this,"receiver",this::report));
         label(body,"El servicio sigue activo aunque cierres esta pantalla. "+
             "No fuerza Wi-Fi ni modifica Android Auto o T1Launcher. "+
             "La apertura en clúster depende de la ROM de la camioneta.",13);
