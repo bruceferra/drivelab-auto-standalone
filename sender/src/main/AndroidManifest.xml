@@ -1,13 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
-    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
-    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <!-- Only user-triggered, verified signed updates; system confirmation required. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <queries>
         <package android:name="com.waze" />
-        <package android:name="com.spotify.music" />
         <package android:name="com.ubercab.driver" />
     </queries>
     <application android:label="DriveLab Auto Sender" android:allowBackup="false"
@@ -17,22 +14,6 @@
             android:authorities="${applicationId}.updatefiles"
             android:exported="false"
             android:grantUriPermissions="true" />
-        <!-- Media-session control is user-authorized. We never read notification contents. -->
-        <service android:name=".SpotifySessionListener"
-            android:label="DriveLab Auto · Control Spotify"
-            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE"
-            android:exported="false">
-            <intent-filter>
-                <action android:name="android.service.notification.NotificationListenerService" />
-            </intent-filter>
-        </service>
-        <receiver android:name=".SpotifyBluetoothReceiver" android:exported="true">
-            <intent-filter>
-                <action android:name="android.bluetooth.a2dp.profile.action.CONNECTION_STATE_CHANGED" />
-                <action android:name="android.bluetooth.device.action.ACL_CONNECTED" />
-                <action android:name="android.bluetooth.device.action.ACL_DISCONNECTED" />
-            </intent-filter>
-        </receiver>
         <activity android:name=".SenderActivity" android:exported="true">
             <intent-filter><action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" /></intent-filter>
