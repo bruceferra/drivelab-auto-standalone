@@ -16,7 +16,9 @@ concurrency:
   cancel-in-progress: false
 jobs:
   release:
-    if: github.event_name == 'workflow_dispatch' || startsWith(github.event.head_commit.message, 'release: drivelab-auto v0.2.7')
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      startsWith(github.event.head_commit.message, 'release: drivelab-auto v0.2.7')
     runs-on: ubuntu-24.04
     env:
       SENDER_STORE_PASSWORD: ${{ secrets.SENDER_STORE_PASSWORD }}
