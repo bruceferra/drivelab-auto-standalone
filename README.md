@@ -36,12 +36,12 @@ El receptor mantiene el puerto abierto mientras Wi-Fi se conecta o desconecta, p
 
 ## Actualizadores independientes
 
-Ambas apps tienen **COMPROBAR ACTUALIZACIÓN**. Consultan manifiestos HTTPS propios:
+Desde **v0.2.3**, ambas apps tienen **ACTUALIZAR SENDER / RECEIVER · INSTALACIÓN DIRECTA**. No abren navegador ni GitHub: consultan manifiestos HTTPS propios dentro de la app:
 
 - Sender: `https://github.com/bruceferra/drivelab-auto-standalone/releases/latest/download/sender.json`
 - Receiver: `https://github.com/bruceferra/drivelab-auto-standalone/releases/latest/download/receiver.json`
 
-Un manifest contiene `packageName`, `versionName`, `versionCode`, `sha256`, `apkUrl`. El actualizador comprueba que el manifiesto HTTPS sea del repositorio oficial, valide el paquete Android, la versión ascendente y el formato SHA-256 publicado. Abre el APK oficial en el navegador; Android gestiona la descarga e instalación. La APK descargada por el navegador no se coteja criptográficamente contra el manifiesto dentro de DriveLab Auto; el instalador de Android exige la misma firma para actualizar. La firma del paquete debe coincidir; Android no deja actualizar con un certificado distinto. **No hay instalación silenciosa** ni permiso root, y ninguna de las dos apps solicita `REQUEST_INSTALL_PACKAGES`. Al descargar el APK desde el navegador, Android puede pedir autorización para instalar desde ese navegador y exige confirmación del usuario. La actualización es por app, no depende del VPS de telemetría.
+El manifiesto tiene `packageName`, `versionName`, `versionCode`, `sha256` y `apkUrl`. Al tocar Actualizar se consulta el manifiesto, se descarga **en caché privada dentro de la misma aplicación** la APK oficial por HTTPS (la URL nunca se abre en pantalla), se verifica SHA-256 del archivo y se cotejan **paquete, versión y certificado digital de firma** con los instalados. Si todos coinciden se abre el **instalador nativo de Android** con un proveedor privado de un único archivo en solo lectura. No se instala silenciosamente, no se usa root y Android exige aceptar la instalación. Por única vez Android puede solicitar autorizar «Instalar apps desconocidas» desde esta aplicación; al volver se retoma el instalador sin descargar de nuevo. El permiso `REQUEST_INSTALL_PACKAGES` es requerido para ofrecer esta función desde el botón, y puede causar revisiones de Play Protect. Si aparece una detección real de malware, no desactivar Play Protect: investigar el mensaje y presentar apelación si corresponde. La actualización es por app y no depende del VPS de telemetría.
 
 Los manifiestos están diseñados para **GitHub Releases de un repositorio público sin secretos en el código**. En un repo privado los teléfonos no podrán descargar los assets sin autenticación; también se puede adaptar el host HTTPS de updates a otro servidor público. El repositorio y la versión inicial v0.2.0 se publicaron correctamente en GitHub.
 
@@ -95,3 +95,13 @@ En v0.2.1 la prueba criptográfica final y el ACK aplicaban además una ventana 
 Antes de enviar cada destino, el Sender solicita un **ping AES-GCM autenticado** al Receiver, comprueba que el nonce corresponda a esa solicitud y usa el reloj remoto autenticado para ajustar la marca de tiempo de la ruta y del recibo, sin debilitar la ventana temporal de cinco minutos ni almacenar coordenadas. La T1 admite el ping de sincronización aunque su reloj local no coincida, pero nunca acepta destinos caducados.
 
 El Receiver presenta el motivo general cuando el emparejamiento caduca o le falta la confirmación física. Actualizar **ambas** APK a 0.2.2 con las claves originales de firma; no desinstalar ni borrar la vinculación anterior. Si todavía falla, registrar el mensaje exacto que aparece en las dos pantallas (sin compartir claves ni contraseñas).
+
+## v0.2.3 · Actualizador nativo integrado, sin navegador
+
+Tanto el Receiver Android 11 de la T1 como el Sender del Xiaomi replican el mecanismo ya utilizado en DriveLab Uber/ProManager. El botón **ACTUALIZAR** consulta, descarga y verifica la APK firmada y abre el instalador Android dentro del flujo de la aplicación. GitHub sigue siendo únicamente el servidor remoto donde se publican las versiones: no se abre una página ni un navegador en la T1.
+
+**Primer salto:** la versión anterior 0.2.2 todavía contiene el actualizador por navegador. Para pasar a 0.2.3 es necesaria **una última actualización manual** del Receiver por un instalador ya habilitado en la T1 (p. ej. WebADB o administrador de archivos) sin desinstalarlo. Las siguientes versiones se podrán instalar directamente desde el botón 0.2.3. El Sender puede actualizar 0.2.3 desde el Xiaomi de la misma manera.
+
+El actualizador verifica también el certificado de la APK contra el certificado ya instalado. Las firmas de Sender y Receiver permanecen separadas y estables. Android 11 puede solicitar, una vez, la autorización de instalación desde Receiver y siempre mantiene la confirmación del instalador del sistema: no es una actualización silenciosa. El firmware de Jetour puede limitar este tipo de instalaciones y debe comprobarse **estacionado**.
+
+No se cambia el receptor de navegación, sus puertos (48391/48392), las llaves de vinculación, el modo clúster, el launcher, ni la app DriveLab T1 de telemetría.
