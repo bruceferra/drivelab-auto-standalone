@@ -125,7 +125,16 @@ public final class ReceiverService extends Service {
                     String nonce=BridgeCrypto.nonce(packet);
                     if(recentNonces.contains(nonce))continue;
                     byte[] key=BridgeCrypto.unpackKey(prefs().getString("secret",""));
-                    BridgeCrypto.Packet message=BridgeCrypto.decrypt(key,packet);
+                    BridgeCrypto.Packet message;
+                    try{
+                        message=BridgeCrypto.decrypt(key,packet);
+                    }catch(GeneralSecurityException clockOrCryptoError){
+                        // An authenticated ping is allowed even when the T1
+                        // and Xiaomi clocks differ. Navigation packets remain
+                        // timestamp-protected and are never eligible here.
+                        message=BridgeCrypto.decryptPairing(key,packet);
+                        if(!"ping".equals(message.kind))throw clockOrCryptoError;
+                    }
                     recentNonces.add(nonce);
                     if(recentNonces.size()>64)recentNonces.remove(recentNonces.iterator().next());
                     boolean ready="ping".equals(message.kind)||dispatchNavigation(message);
