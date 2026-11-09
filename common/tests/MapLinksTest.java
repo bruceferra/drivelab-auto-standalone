@@ -19,11 +19,11 @@ public final class MapLinksTest {
   if(MapLinks.parse("https://maps.app.goo.gl/SomeShortId")!=null)
    throw new AssertionError("Short URL accepted without resolving destination");
   MapLinks.Destination title=MapLinks.fromShareLabel(
-      "YPF NUEVA BORGHETTO SA\\nhttps://maps.app.goo.gl/SomeShortId");
+      "YPF NUEVA BORGHETTO SA\nhttps://maps.app.goo.gl/SomeShortId");
   if(title==null||!"search".equals(title.kind)||
      !"YPF NUEVA BORGHETTO SA".equals(title.value))
    throw new AssertionError("Explicit Google Maps share label was lost");
-  if(MapLinks.fromShareLabel("YPF NUEVA BORGHETTO SA\\nhttps://bad.example/place")!=null)
+  if(MapLinks.fromShareLabel("YPF NUEVA BORGHETTO SA\nhttps://bad.example/place")!=null)
    throw new AssertionError("Untrusted share title accepted");
   if(MapLinks.parse("https://evil.example/maps/?q=-34.9214,-57.9545")!=null)
    throw new AssertionError("Untrusted host accepted");
