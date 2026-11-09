@@ -2,10 +2,12 @@ package ar.com.rango5gps.drivelabauto.common;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.PendingIntent;
 import android.content.ClipData;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageInfo;
+import android.content.pm.PackageInstaller;
 import android.content.pm.PackageManager;
 import android.content.pm.Signature;
 import android.net.Uri;
@@ -49,6 +51,7 @@ public final class Updater {
     private static final String READY_SHA="ready_sha";
     private static final String READY_CODE="ready_code";
     private static final String NEED_PERMISSION="waiting_for_android_permission";
+    private static final String INSTALL_STATUS="last_install_status";
     private static volatile boolean busy=false;
     private static volatile boolean permissionRecovery=false;
 
@@ -210,6 +213,12 @@ public final class Updater {
 
     private static void requestInstaller(Activity a,File apk,Offer offer,Reporter reporter){
         if(a.isFinishing()||a.isDestroyed())return;
+        // OEM Android 11 Settings does not reliably open unknown-app-sources.
+        // A standard PackageInstaller session can request confirmation directly.
+        if(isT1Receiver(a)){
+            installVerified(a,reporter);
+            return;
+        }
         if(Build.VERSION.SDK_INT>=26&&!a.getPackageManager().canRequestPackageInstalls()){
             new AlertDialog.Builder(a)
                 .setTitle("Permiso de actualización")
@@ -249,7 +258,8 @@ public final class Updater {
         new Thread(()->{
             try{
                 verifyReady(a);
-                a.runOnUiThread(()->openInstaller(a,reporter));
+                if(isT1Receiver(a))commitT1Session(a,UpdateApkProvider.apk(a),reporter);
+                else a.runOnUiThread(()->openInstaller(a,reporter));
             }catch(Exception e){
                 notify(a,reporter,"La APK ya no es válida. Tocá Actualizar nuevamente.");
             }finally{permissionRecovery=false;}
@@ -260,12 +270,104 @@ public final class Updater {
         new Thread(()->{
             try{
                 verifyReady(a);
-                a.runOnUiThread(()->openInstaller(a,reporter));
+                if(isT1Receiver(a))
+                    commitT1Session(a,UpdateApkProvider.apk(a),reporter);
+                else a.runOnUiThread(()->openInstaller(a,reporter));
             }catch(Exception error){
-                notify(a,reporter,"No se pudo verificar la APK antes de instalar: "+
+                notify(a,reporter,"No se pudo completar la instalación: "+
                     error.getClass().getSimpleName());
+                if(isT1Receiver(a))
+                    status(a,"Sesión Android no iniciada ("+
+                        error.getClass().getSimpleName()+"). "+
+                        "Probá el instalador alternativo o los Ajustes de Receiver.");
             }
         },"DriveLab-Verify-Install").start();
+    }
+
+    private static boolean isT1Receiver(Activity a){
+        return "ar.com.rango5gps.drivelabauto.receiver".equals(a.getPackageName());
+    }
+
+    private static void status(Activity a,String message){
+        a.getSharedPreferences(PREFS,Activity.MODE_PRIVATE).edit()
+            .putString(INSTALL_STATUS,message).apply();
+    }
+
+    /**
+     * Standard Android PackageInstaller session. No special OEM APIs or
+     * silent installation: system prompts for user consent through callback.
+     * The session itself may be disallowed by a restrictive Jetour firmware.
+     */
+    private static void commitT1Session(Activity a,File apk,Reporter reporter)
+            throws Exception {
+        PackageInstaller installer=a.getPackageManager().getPackageInstaller();
+        PackageInstaller.SessionParams params=new PackageInstaller.SessionParams(
+            PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+        params.setAppPackageName(a.getPackageName());
+        params.setSize(apk.length());
+        if(Build.VERSION.SDK_INT>=31)
+            params.setRequireUserAction(
+                PackageInstaller.SessionParams.USER_ACTION_REQUIRED);
+        int sessionId=installer.createSession(params);
+        boolean committed=false;
+        try(PackageInstaller.Session session=installer.openSession(sessionId)){
+            try(InputStream in=new FileInputStream(apk);
+                OutputStream out=session.openWrite("base.apk",0,apk.length())){
+                byte[] chunk=new byte[32768];int n;
+                while((n=in.read(chunk))!=-1)out.write(chunk,0,n);
+                session.fsync(out);
+            }
+            Intent result=new Intent("drivelab.auto.RECEIVER_INSTALL_RESULT");
+            result.setClassName(a.getPackageName(),
+                a.getPackageName()+".ReceiverInstallResultReceiver");
+            int flags=PendingIntent.FLAG_UPDATE_CURRENT;
+            if(Build.VERSION.SDK_INT>=31)flags|=PendingIntent.FLAG_MUTABLE;
+            PendingIntent callback=PendingIntent.getBroadcast(a,sessionId,result,flags);
+            status(a,"APK verificada. Sesión Android "+sessionId+
+                " enviada; esperando autorización o resultado del sistema…");
+            notify(a,reporter,"Receiver: solicitando confirmación al instalador Android…");
+            session.commit(callback.getIntentSender());
+            committed=true;
+        }finally{
+            if(!committed)installer.abandonSession(sessionId);
+        }
+    }
+
+    /** Retry an already downloaded and verified APK without transferring it. */
+    public static void retryInstall(Activity a,Reporter reporter){
+        if(!isT1Receiver(a))return;
+        notify(a,reporter,"Verificando APK descargada y reintentando instalación…");
+        installVerified(a,reporter);
+    }
+
+    /** Open the normal Android app settings if the specialized page is missing. */
+    public static void openReceiverSettings(Activity a,Reporter reporter){
+        if(!isT1Receiver(a))return;
+        a.getSharedPreferences(PREFS,Activity.MODE_PRIVATE).edit()
+            .putBoolean(NEED_PERMISSION,true).apply();
+        try{
+            a.startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:"+a.getPackageName())));
+            notify(a,reporter,"Abrí el permiso para instalar apps desde Receiver si "+
+                "está disponible. Si no aparece, volvé y tocá REINTENTAR.");
+        }catch(Exception error){
+            notify(a,reporter,"Jetour no abrió Ajustes: "+
+                error.getClass().getSimpleName());
+        }
+    }
+
+    /** Alternate OEM package installer intent, without opening a browser. */
+    public static void tryNativeIntent(Activity a,Reporter reporter){
+        if(!isT1Receiver(a))return;
+        new Thread(()->{
+            try{
+                verifyReady(a);
+                a.runOnUiThread(()->openInstaller(a,reporter));
+            }catch(Exception error){
+                notify(a,reporter,"No hay APK verificada para instalar: "+
+                    error.getClass().getSimpleName());
+            }
+        },"DriveLab-T1-Native-Intent").start();
     }
 
     private static void verifyReady(Activity a)throws Exception{
@@ -297,7 +399,7 @@ public final class Updater {
         install.putExtra(Intent.EXTRA_RETURN_RESULT,false);
         try{
             a.startActivity(install);
-            notify(a,reporter,"Instalador Android abierto. Confirmá la actualización.");
+            notify(a,reporter,"Instalador Android solicitado. Confirmá si aparece la ventana.");
         }catch(Exception first){
             Intent fallback=new Intent(Intent.ACTION_VIEW);
             fallback.setDataAndType(content,"application/vnd.android.package-archive");
