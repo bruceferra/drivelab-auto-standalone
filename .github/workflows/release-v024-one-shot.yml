@@ -1,0 +1,22 @@
+name: Lanzar prueba firmada 0.2.4 una sola vez
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/release-v024-one-shot.yml'
+permissions:
+  actions: write
+  contents: read
+jobs:
+  dispatch-release:
+    if: github.repository == 'bruceferra/drivelab-auto-standalone'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Publicar Sender + Receiver 0.2.4 firmados
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh workflow run publish-release.yml --ref main --repo "$GITHUB_REPOSITORY" -f tag=v0.2.4
+          echo 'Publicación v0.2.4 solicitada, manteniendo certificados originales.'
