@@ -73,9 +73,13 @@ public final class SenderClient {
             out.writeInt(BridgeCrypto.PAIR_MAGIC);out.writeByte(2);
             out.writeLong(session.id);BridgeCrypto.write(out,proof);
             if(in.readInt()!=BridgeCrypto.PAIR_MAGIC||in.readUnsignedByte()!=12)
-                throw new IOException("Autorizá el mismo código en la T1");
+                throw new IOException("T1 rechazó la confirmación. En Receiver, tocá "+
+                    "AUTORIZAR CÓDIGO COINCIDENTE → SÍ, COINCIDEN; "+
+                    "después confirmá en Xiaomi. Si venció, iniciá un código nuevo.");
             byte[] ack=BridgeCrypto.read(in);
-            BridgeCrypto.Packet result=BridgeCrypto.decrypt(session.key,ack);
+            // The two screens can have different wall clocks while the
+            // vehicle is offline. Physical SAS approval authenticates pairing.
+            BridgeCrypto.Packet result=BridgeCrypto.decryptPairing(session.key,ack);
             if(!"ack".equals(result.kind)||!BridgeCrypto.nonce(proof).equals(result.value))
                 throw new IOException("Confirmación de T1 no autenticada");
             if(!prefs(context).edit().putString("receiver_ip",session.ip)
