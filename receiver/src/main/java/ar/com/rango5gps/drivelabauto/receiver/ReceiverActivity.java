@@ -14,11 +14,32 @@ import ar.com.rango5gps.drivelabauto.common.Updater;
 public final class ReceiverActivity extends Activity {
     private static volatile boolean visible;
     private String message="";
+    private final Handler pairUiHandler=new Handler(Looper.getMainLooper());
+    private String pairUiSnapshot="";
+    private final Runnable pairUiRefresh=new Runnable(){
+        @Override public void run(){
+            if(!visible||isFinishing()||isDestroyed())return;
+            SharedPreferences p=prefs();
+            String latest=p.getString("pair_status","")+"|"+
+                p.getString("pair_code","")+"|"+
+                p.getLong("approved_id",0);
+            if(!latest.equals(pairUiSnapshot))render();
+            pairUiHandler.postDelayed(this,750);
+        }
+    };
     public static boolean isVisible(){return visible;}
     private SharedPreferences prefs(){return getSharedPreferences(ReceiverService.PREFS,MODE_PRIVATE);}
     @Override public void onCreate(Bundle state){super.onCreate(state);render();}
-    @Override protected void onResume(){super.onResume();visible=true;render();}
-    @Override protected void onPause(){visible=false;super.onPause();}
+    @Override protected void onResume(){
+        super.onResume();visible=true;render();
+        pairUiHandler.removeCallbacks(pairUiRefresh);
+        pairUiHandler.postDelayed(pairUiRefresh,450);
+    }
+    @Override protected void onPause(){
+        visible=false;
+        pairUiHandler.removeCallbacks(pairUiRefresh);
+        super.onPause();
+    }
     private void label(LinearLayout root,String text,int size){
         TextView view=new TextView(this);view.setText(text);view.setTextSize(size);
         view.setPadding(7,10,7,10);root.addView(view);
@@ -29,6 +50,10 @@ public final class ReceiverActivity extends Activity {
     }
     private void report(String text){message=text;render();}
     private void render(){
+        SharedPreferences pairState=prefs();
+        pairUiSnapshot=pairState.getString("pair_status","")+"|"+
+            pairState.getString("pair_code","")+"|"+
+            pairState.getLong("approved_id",0);
         ScrollView scroll=new ScrollView(this);
         LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);
         body.setPadding(22,20,22,35);scroll.addView(body);
@@ -46,8 +71,11 @@ public final class ReceiverActivity extends Activity {
             .setPositiveButton("DETENER",(d,w)->start(ReceiverService.ACTION_STOP)).show());
         button(body,"VINCULAR XIAOMI · 6 DÍGITOS",()->start(ReceiverService.ACTION_PAIR));
         label(body,"Vinculación: "+p.getString("pair_status","Aún sin vincular"),14);
+        label(body,"El código aparece automáticamente cuando el Xiaomi "+
+            "inicia la vinculación. COMPARÁ los 6 dígitos en ambos equipos. "+
+            "Después autorizá en la T1 y confirmá en Xiaomi.",13);
         if(p.contains("pair_code"))label(body,"CÓDIGO DE COMPARACIÓN: "+p.getString("pair_code",""),22);
-        button(body,"AUTORIZAR CÓDIGO COINCIDENTE",this::approve);
+        button(body,"AUTORIZAR CÓDIGO COINCIDENTE · PASO 1",this::approve);
         button(body,"ACTUALIZAR ESTADO",this::render);
         boolean auto=p.getBoolean("auto_boot",false);
         label(body,"Inicio automático del receptor: "+(auto?"ACTIVO":"DESACTIVADO"),16);

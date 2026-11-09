@@ -17,7 +17,8 @@ public final class BridgeCrypto {
     private static final SecureRandom RANDOM=new SecureRandom();
     public static final class Packet {
         public final String kind,value;
-        public Packet(String k,String v){kind=k;value=v;}
+        public final long createdAt;
+        public Packet(String k,String v,long created){kind=k;value=v;createdAt=created;}
     }
     public static KeyPair newKeyPair() throws Exception {
         KeyPairGenerator gen=KeyPairGenerator.getInstance("EC");
@@ -67,10 +68,14 @@ public final class BridgeCrypto {
         throw new GeneralSecurityException("Invalid navigation payload");
     }
     public static byte[] encrypt(byte[] key,String kind,String value) throws Exception {
+        return encryptAt(key,kind,value,System.currentTimeMillis());
+    }
+    // Package-private time injection for cryptographic clock-skew tests.
+    static byte[] encryptAt(byte[] key,String kind,String value,long createdAt) throws Exception {
         validate(kind,value);
         ByteArrayOutputStream raw=new ByteArrayOutputStream();
         DataOutputStream out=new DataOutputStream(raw);
-        out.writeInt(MAGIC);out.writeLong(System.currentTimeMillis());
+        out.writeInt(MAGIC);out.writeLong(createdAt);
         out.writeUTF(kind);out.writeUTF(value);out.flush();
         byte[] iv=new byte[12];RANDOM.nextBytes(iv);
         Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");
@@ -82,7 +87,40 @@ public final class BridgeCrypto {
         if(combined.length>MAX_PACKET)throw new GeneralSecurityException("Oversized packet");
         return combined;
     }
+    /**
+     * Pairing proof/ACK uses the explicit two-minute, on-device pairing window,
+     * six-digit SAS confirmation and one-time ECDH session ID, not the
+     * absolute wall-clock time of a second (possibly offline) Android device.
+     * ONLY ping/ack are valid in this context. Routes retain strict expiry.
+     */
+    public static Packet decryptPairing(byte[] key,byte[] payload) throws Exception {
+        Packet p=decryptInternal(key,payload,false);
+        if(!"ping".equals(p.kind)&&!"ack".equals(p.kind))
+            throw new GeneralSecurityException("Invalid pairing packet type");
+        return p;
+    }
     public static Packet decrypt(byte[] key,byte[] payload) throws Exception {
+        return decryptInternal(key,payload,true,System.currentTimeMillis());
+    }
+
+    /**
+     * Only used by a previously authenticated Sender after an authenticated
+     * LAN ping. The ACK timestamp supplies a fresh remote clock offset.
+     * Route expiration continues to be checked on both devices.
+     */
+    public static Packet decryptWithClockOffset(byte[] key,byte[] payload,long offsetMillis)
+            throws Exception {
+        return decryptInternal(key,payload,true,System.currentTimeMillis()-offsetMillis);
+    }
+    public static byte[] encryptWithClockOffset(byte[] key,String kind,String value,long offsetMillis)
+            throws Exception {
+        return encryptAt(key,kind,value,System.currentTimeMillis()-offsetMillis);
+    }
+    private static Packet decryptInternal(byte[] key,byte[] payload,boolean checkClock) throws Exception {
+        return decryptInternal(key,payload,checkClock,System.currentTimeMillis());
+    }
+    private static Packet decryptInternal(byte[] key,byte[] payload,boolean checkClock,long now)
+            throws Exception {
         if(payload==null||payload.length<28||payload.length>MAX_PACKET)
             throw new GeneralSecurityException("Invalid packet length");
         byte[] iv=Arrays.copyOfRange(payload,0,12);
@@ -92,12 +130,15 @@ public final class BridgeCrypto {
         DataInputStream input=new DataInputStream(new ByteArrayInputStream(dec));
         if(input.readInt()!=MAGIC)throw new GeneralSecurityException("Bad packet magic");
         long created=input.readLong();
-        if(Math.abs(System.currentTimeMillis()-created)>MAX_AGE_MS)
-            throw new GeneralSecurityException("Expired message");
+        if(checkClock){
+            // Overflow-safe age check (malformed extremes must not wrap).
+            if(created>now+MAX_AGE_MS||created<now-MAX_AGE_MS)
+                throw new GeneralSecurityException("Expired message");
+        }
         String kind=input.readUTF(),value=input.readUTF();
         validate(kind,value);
         if(input.available()!=0)throw new GeneralSecurityException("Trailing data");
-        return new Packet(kind,value);
+        return new Packet(kind,value,created);
     }
     public static byte[] read(DataInputStream in) throws Exception {
         int size=in.readInt();

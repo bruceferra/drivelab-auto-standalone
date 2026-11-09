@@ -85,3 +85,13 @@ Requisitos locales: JDK 17, Android SDK 35, Gradle 8.7. En Windows puede ejecuta
 - Ninguna APK puede instalar paquetes directamente ni se autoactualiza en silencio. El botón COMPROBAR ACTUALIZACIÓN consulta el manifiesto oficial y ofrece abrir GitHub con el navegador. El instalador del sistema conserva las comprobaciones de firma al actualizar.
 - Quitar permisos innecesarios puede reducir alertas, pero **NO garantiza** que Play Protect no marque una APK externa como sospechosa. Si Play Protect muestra «aplicación dañina» o bloquea la instalación, no desactivar la protección: identificar el mensaje concreto y presentar apelación por falso positivo a Google si corresponde.
 - Se mantienen los identificadores de paquete y las claves de firma originales; **no ejecutar bootstrap ni regenerar claves**. Los usuarios con v0.2.0 podrán actualizar a v0.2.1 encima, si Android permite la instalación.
+
+## v0.2.2: vinculación Xiaomi ↔ T1 recuperada
+
+El asistente de Receiver ahora **actualiza automáticamente** el estado y los seis dígitos mientras está visible (sin tocar «ACTUALIZAR ESTADO»). La confirmación sigue siendo **obligatoriamente presencial**: con Receiver activo, tocar VINCULAR XIAOMI; en Sender iniciar vinculación con la IP privada mostrada en Receiver; esperar a que ambos muestren el mismo código; tocar **AUTORIZAR CÓDIGO COINCIDENTE → SÍ, COINCIDEN** en T1 y **COINCIDEN · CONFIRMAR** en Xiaomi. Si los códigos no coinciden, no aprobar; repetir el proceso con un par nuevo.
+
+En v0.2.1 la prueba criptográfica final y el ACK aplicaban además una ventana de reloj absoluto de cinco minutos. En un coche que arranca sin Internet, el reloj de Android 11 puede estar desfasado con respecto al Xiaomi. v0.2.2 elimina esa dependencia **solo en mensajes de emparejamiento `ping/ack`**, dentro de la sesión ECDH de un solo uso y dos minutos autorizada físicamente en la T1. Los paquetes de navegación conservan caducidad y protección anti-replay.
+
+Antes de enviar cada destino, el Sender solicita un **ping AES-GCM autenticado** al Receiver, comprueba que el nonce corresponda a esa solicitud y usa el reloj remoto autenticado para ajustar la marca de tiempo de la ruta y del recibo, sin debilitar la ventana temporal de cinco minutos ni almacenar coordenadas. La T1 admite el ping de sincronización aunque su reloj local no coincida, pero nunca acepta destinos caducados.
+
+El Receiver presenta el motivo general cuando el emparejamiento caduca o le falta la confirmación física. Actualizar **ambas** APK a 0.2.2 con las claves originales de firma; no desinstalar ni borrar la vinculación anterior. Si todavía falla, registrar el mensaje exacto que aparece en las dos pantallas (sin compartir claves ni contraseñas).

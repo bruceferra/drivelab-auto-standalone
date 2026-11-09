@@ -73,9 +73,13 @@ public final class SenderClient {
             out.writeInt(BridgeCrypto.PAIR_MAGIC);out.writeByte(2);
             out.writeLong(session.id);BridgeCrypto.write(out,proof);
             if(in.readInt()!=BridgeCrypto.PAIR_MAGIC||in.readUnsignedByte()!=12)
-                throw new IOException("Autorizá el mismo código en la T1");
+                throw new IOException("T1 rechazó la confirmación. En Receiver, tocá "+
+                    "AUTORIZAR CÓDIGO COINCIDENTE → SÍ, COINCIDEN; "+
+                    "después confirmá en Xiaomi. Si venció, iniciá un código nuevo.");
             byte[] ack=BridgeCrypto.read(in);
-            BridgeCrypto.Packet result=BridgeCrypto.decrypt(session.key,ack);
+            // The two screens can have different wall clocks while the
+            // vehicle is offline. Physical SAS approval authenticates pairing.
+            BridgeCrypto.Packet result=BridgeCrypto.decryptPairing(session.key,ack);
             if(!"ack".equals(result.kind)||!BridgeCrypto.nonce(proof).equals(result.value))
                 throw new IOException("Confirmación de T1 no autenticada");
             if(!prefs(context).edit().putString("receiver_ip",session.ip)
@@ -88,18 +92,44 @@ public final class SenderClient {
         prefs(c).edit().remove("receiver_ip").remove("receiver_key")
             .putString("last_status","SIN VINCULAR").apply();
     }
+    /**
+     * The T1 may boot offline with a different system date. Obtain the
+     * authenticated T1 clock from an AES-GCM ping before each destination.
+     * Its response must match the fresh nonce so stale traffic cannot
+     * impersonate a clock sync. The route still expires on both ends.
+     */
+    private static long remoteClockOffset(String ip,byte[] key)throws Exception{
+        long before=System.currentTimeMillis();
+        byte[] ping=BridgeCrypto.encrypt(key,"ping","");
+        try(Socket socket=connect(ip,BridgeCrypto.NAV_PORT)){
+            DataOutputStream out=new DataOutputStream(socket.getOutputStream());
+            DataInputStream in=new DataInputStream(socket.getInputStream());
+            BridgeCrypto.write(out,ping);
+            BridgeCrypto.Packet ack=BridgeCrypto.decryptPairing(
+                key,BridgeCrypto.read(in));
+            if(!"ack".equals(ack.kind)||
+               !BridgeCrypto.nonce(ping).equals(ack.value))
+                throw new IOException("Confirmación de hora T1 no autenticada");
+            long after=System.currentTimeMillis();
+            long midpoint=before+(after-before)/2;
+            return midpoint-ack.createdAt;
+        }
+    }
+
     public static Delivery send(Context c,String kind,String value){
         try{
             SharedPreferences p=prefs(c);
             String ip=p.getString("receiver_ip","");
             byte[] key=BridgeCrypto.unpackKey(p.getString("receiver_key",""));
             if(!localIpv4(ip))throw new IOException("IP no configurada");
-            byte[] packet=BridgeCrypto.encrypt(key,kind,value);
+            long offset=remoteClockOffset(ip,key);
+            byte[] packet=BridgeCrypto.encryptWithClockOffset(key,kind,value,offset);
             try(Socket socket=connect(ip,BridgeCrypto.NAV_PORT)){
                 DataOutputStream out=new DataOutputStream(socket.getOutputStream());
                 DataInputStream in=new DataInputStream(socket.getInputStream());
                 BridgeCrypto.write(out,packet);
-                BridgeCrypto.Packet reply=BridgeCrypto.decrypt(key,BridgeCrypto.read(in));
+                BridgeCrypto.Packet reply=BridgeCrypto.decryptWithClockOffset(
+                    key,BridgeCrypto.read(in),offset);
                 if(!BridgeCrypto.nonce(packet).equals(reply.value))
                     throw new IOException("Respuesta no autenticada");
                 boolean accepted="ack".equals(reply.kind);
