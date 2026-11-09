@@ -1,7 +1,6 @@
 # DriveLab Auto — Sender + Receiver (independiente)
 
-> **v0.2.7 · Spotify automático experimental (Xiaomi solamente):** Sender ofrece un interruptor opcional para enviar **Play** a la sesión multimedia de `com.spotify.music` **solamente cuando el audio Bluetooth A2DP del dispositivo T1 elegido está conectado**. Es necesario autorizar `BLUETOOTH_CONNECT` ("Dispositivos cercanos"), elegir el dispositivo emparejado T1 y habilitar manualmente el acceso a notificaciones para consultar y controlar las sesiones multimedia. **El servicio no lee mensajes ni contenido de notificaciones.** No abre Spotify ni cambia T1Launcher/MODE, no controla otras apps y limita las órdenes automáticas a una por cada 90 segundos. Si Spotify no tiene una sesión multimedia activa en el teléfono, Sender informa que debe iniciarse una vez manualmente; Android/HyperOS pueden restringir el comportamiento en segundo plano. El arranque de Receiver, el enlace cifrado y la navegación no se modifican. La función comienza **DESACTIVADA** hasta autorización del propietario.
-
+> **v0.2.8 · corrección de seguridad:** Se elimina del Sender el control de Spotify por acceso general a notificaciones y los receptores Bluetooth experimentales añadidos en v0.2.7. Se conserva la navegación Sender→Receiver, el emparejamiento y la actualización directa. El inicio automático de Spotify queda **sin implementar** mientras se investiga una alternativa de permisos mínimos (Spotify App Remote requiere autenticación y configuración propia). Esta corrección no garantiza eliminar advertencias de Play Protect: confirmar el texto exacto si persisten.
 **Proyecto separado de `bruceferra/drivelab`. No contiene telemetría, controles de ventanillas, CODE, Uber Beta, OEM, CAN ni T1Launcher.**
 
 Dos APK autónomas:
