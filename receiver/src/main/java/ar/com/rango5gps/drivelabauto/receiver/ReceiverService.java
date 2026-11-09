@@ -186,7 +186,12 @@ public final class ReceiverService extends Service {
                     int action=in.readUnsignedByte();
                     if(action==1)beginPair(in,out);
                     else if(action==2)finishPair(in,out);
-                }catch(SocketTimeoutException ignored){}catch(Exception ignored){}
+                }catch(SocketTimeoutException ignored){}catch(Exception error){
+                    // Only failure category, never the code, key, IP or payload.
+                    prefs().edit().putString("pair_status",
+                        "VINCULACIÓN FALLIDA · "+error.getClass().getSimpleName()+
+                        " · reiniciá el código y repetí las dos confirmaciones").apply();
+                }
             }
         }catch(Exception error){
             prefs().edit().putString("pair_status","ERROR PUERTO 48392").apply();
@@ -216,9 +221,19 @@ public final class ReceiverService extends Service {
     private void finishPair(DataInputStream in,DataOutputStream out) throws Exception{
         long id=in.readLong();byte[] proof=BridgeCrypto.read(in);
         Pending session=pending;
-        if(session==null||id!=session.id||System.currentTimeMillis()>session.expiry||
-            prefs().getLong("approved_id",0)!=id){reject(out);return;}
-        BridgeCrypto.Packet request=BridgeCrypto.decrypt(session.secret,proof);
+        if(session==null||id!=session.id||System.currentTimeMillis()>session.expiry){
+            prefs().edit().putString("pair_status",
+                "CÓDIGO CADUCADO O SESIÓN DISTINTA · empezá otra vinculación").apply();
+            reject(out);return;
+        }
+        if(prefs().getLong("approved_id",0)!=id){
+            prefs().edit().putString("pair_status",
+                "FALTA AUTORIZAR EN T1 · tocá SÍ, COINCIDEN antes que Xiaomi").apply();
+            reject(out);return;
+        }
+        // Two device clocks may differ. This AES proof is valid only inside
+        // the physical two-minute, one-time SAS-authorized pairing session.
+        BridgeCrypto.Packet request=BridgeCrypto.decryptPairing(session.secret,proof);
         if(!"ping".equals(request.kind)||!"".equals(request.value)){reject(out);return;}
         if(!prefs().edit().putString("secret",BridgeCrypto.packKey(session.secret))
             .putString("pair_status","XIAOMI VINCULADO · CIFRADO ACTIVO")
