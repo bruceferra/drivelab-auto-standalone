@@ -1,0 +1,32 @@
+plugins { id 'com.android.application' }
+android {
+  namespace 'ar.com.rango5gps.drivelabauto.receiver'
+  compileSdk 35
+  defaultConfig {
+    applicationId 'ar.com.rango5gps.drivelabauto.receiver'
+    minSdk 30
+    targetSdk 32
+    versionCode 1
+    versionName '0.2.0'
+  }
+  signingConfigs {
+    release {
+      if (System.getenv('RECEIVER_KEYSTORE')) {
+        storeFile file(System.getenv('RECEIVER_KEYSTORE'))
+        storePassword System.getenv('RECEIVER_STORE_PASSWORD')
+        keyAlias System.getenv('RECEIVER_KEY_ALIAS')
+        keyPassword System.getenv('RECEIVER_KEY_PASSWORD')
+      }
+    }
+  }
+  buildTypes {
+    release { signingConfig signingConfigs.release; minifyEnabled false }
+  }
+  compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}
+dependencies { implementation project(':common') }
+gradle.taskGraph.whenReady { graph ->
+  if (graph.hasTask(':receiver:assembleRelease') && !System.getenv('RECEIVER_KEYSTORE')) {
+    throw new GradleException('Missing RECEIVER_KEYSTORE for signed receiver release')
+  }
+}

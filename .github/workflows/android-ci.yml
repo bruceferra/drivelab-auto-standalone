@@ -1,0 +1,66 @@
+name: DriveLab Auto Standalone · QA independiente
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Android SDK 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool=$(command -v sdkmanager || find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)
+          "$tool" 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Protocol security regression (no Android runtime needed)
+        run: |
+          mkdir -p /tmp/bridge-test
+          javac -encoding UTF-8 -d /tmp/bridge-test \
+            common/src/main/java/ar/com/rango5gps/drivelabauto/common/BridgeCrypto.java \
+            common/tests/BridgeCryptoTest.java
+          java -cp /tmp/bridge-test BridgeCryptoTest
+          javac -encoding UTF-8 -d /tmp/bridge-test \
+            common/tests/android/net/Uri.java \
+            common/src/main/java/ar/com/rango5gps/drivelabauto/common/MapLinks.java \
+            common/tests/MapLinksTest.java
+          java -cp /tmp/bridge-test MapLinksTest
+      - name: Separate apps and Android APK builds
+        run: gradle --no-daemon :sender:assembleDebug :receiver:assembleDebug
+      - name: Verify independent identities, permissions and no telemetry
+        shell: bash
+        run: |
+          set -euo pipefail
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          sender=sender/build/outputs/apk/debug/sender-debug.apk
+          receiver=receiver/build/outputs/apk/debug/receiver-debug.apk
+          test -s "$sender" && test -s "$receiver"
+          "$aapt" dump badging "$sender" | grep "package: name='ar.com.rango5gps.drivelabauto.sender'"
+          "$aapt" dump badging "$receiver" | grep "package: name='ar.com.rango5gps.drivelabauto.receiver'"
+          ! "$aapt" dump permissions "$sender" | grep -E 'ACCESSIBILITY|ACCESS_FINE_LOCATION|QUERY_ALL_PACKAGES|CAMERA'
+          ! "$aapt" dump permissions "$receiver" | grep -E 'ACCESSIBILITY|ACCESS_FINE_LOCATION|QUERY_ALL_PACKAGES|CAMERA'
+          ! grep -R -E 'VehicleWindowPilot|VehicleReadOnly|transact\(15|AUTO_LINK_CAR' sender/src receiver/src common/src
+          echo 'OK · two isolated apps; no vehicle control or monitoring'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Sender-Debug-QA-Not-Install-Update
+          path: sender/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 7
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Receiver-Debug-QA-Not-Install-Update
+          path: receiver/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 7

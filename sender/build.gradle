@@ -1,0 +1,33 @@
+plugins { id 'com.android.application' }
+android {
+  namespace 'ar.com.rango5gps.drivelabauto.sender'
+  compileSdk 35
+  defaultConfig {
+    applicationId 'ar.com.rango5gps.drivelabauto.sender'
+    minSdk 26
+    targetSdk 34
+    versionCode 1
+    versionName '0.2.0'
+  }
+  signingConfigs {
+    release {
+      if (System.getenv('SENDER_KEYSTORE')) {
+        storeFile file(System.getenv('SENDER_KEYSTORE'))
+        storePassword System.getenv('SENDER_STORE_PASSWORD')
+        keyAlias System.getenv('SENDER_KEY_ALIAS')
+        keyPassword System.getenv('SENDER_KEY_PASSWORD')
+      }
+    }
+  }
+  buildTypes {
+    release { signingConfig signingConfigs.release; minifyEnabled false }
+  }
+  compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}
+dependencies { implementation project(':common') }
+// Dedicated signing key: release MUST fail if absent.
+gradle.taskGraph.whenReady { graph ->
+  if (graph.hasTask(':sender:assembleRelease') && !System.getenv('SENDER_KEYSTORE')) {
+    throw new GradleException('Missing SENDER_KEYSTORE for signed sender release')
+  }
+}

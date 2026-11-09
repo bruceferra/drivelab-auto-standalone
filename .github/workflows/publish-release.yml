@@ -1,0 +1,118 @@
+name: DriveLab Auto · APK release firmadas y actualizador
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag, e.g. v0.2.0 (must match both Gradle versionName)'
+        required: true
+        default: 'v0.2.0'
+permissions:
+  contents: write
+concurrency:
+  group: signed-drivelabauto-publication
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    env:
+      SENDER_STORE_PASSWORD: ${{ secrets.SENDER_STORE_PASSWORD }}
+      SENDER_KEY_ALIAS: ${{ secrets.SENDER_KEY_ALIAS }}
+      SENDER_KEY_PASSWORD: ${{ secrets.SENDER_KEY_PASSWORD }}
+      RECEIVER_STORE_PASSWORD: ${{ secrets.RECEIVER_STORE_PASSWORD }}
+      RECEIVER_KEY_ALIAS: ${{ secrets.RECEIVER_KEY_ALIAS }}
+      RECEIVER_KEY_PASSWORD: ${{ secrets.RECEIVER_KEY_PASSWORD }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Android SDK 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool=$(command -v sdkmanager || find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)
+          "$tool" 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Load two permanent signing keys from repository secrets
+        shell: bash
+        env:
+          SENDER_KEYSTORE_B64: ${{ secrets.SENDER_KEYSTORE_B64 }}
+          RECEIVER_KEYSTORE_B64: ${{ secrets.RECEIVER_KEYSTORE_B64 }}
+        run: |
+          set -euo pipefail
+          test -n "$SENDER_KEYSTORE_B64" && test -n "$RECEIVER_KEYSTORE_B64"
+          test -n "$SENDER_STORE_PASSWORD" && test -n "$RECEIVER_STORE_PASSWORD"
+          test -n "$SENDER_KEY_ALIAS" && test -n "$RECEIVER_KEY_ALIAS"
+          test -n "$SENDER_KEY_PASSWORD" && test -n "$RECEIVER_KEY_PASSWORD"
+          printf %s "$SENDER_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/sender.p12"
+          printf %s "$RECEIVER_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/receiver.p12"
+          chmod 600 "$RUNNER_TEMP/sender.p12" "$RUNNER_TEMP/receiver.p12"
+          echo "SENDER_KEYSTORE=$RUNNER_TEMP/sender.p12" >> "$GITHUB_ENV"
+          echo "RECEIVER_KEYSTORE=$RUNNER_TEMP/receiver.p12" >> "$GITHUB_ENV"
+      - name: Compile and verify signed independent production APKs
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          test "$GITHUB_REPOSITORY" = 'bruceferra/drivelab-auto-standalone'
+          ! gh release view "$RELEASE_TAG" >/dev/null 2>&1
+          mkdir -p /tmp/bridge-test
+          javac -encoding UTF-8 -d /tmp/bridge-test \
+            common/src/main/java/ar/com/rango5gps/drivelabauto/common/BridgeCrypto.java \
+            common/tests/BridgeCryptoTest.java
+          java -cp /tmp/bridge-test BridgeCryptoTest
+          javac -encoding UTF-8 -d /tmp/bridge-test \
+            common/tests/android/net/Uri.java \
+            common/src/main/java/ar/com/rango5gps/drivelabauto/common/MapLinks.java \
+            common/tests/MapLinksTest.java
+          java -cp /tmp/bridge-test MapLinksTest
+          gradle --no-daemon :sender:assembleRelease :receiver:assembleRelease
+          mkdir -p output
+          for app in sender receiver; do
+            apk="$app/build/outputs/apk/release/$app-release.apk"
+            test -s "$apk"
+            "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$apk"
+            display=$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" | head -1)
+            version=$(echo "$display" | sed -n "s/.*versionName='\([^']*\)'.*/\1/p")
+            code=$(echo "$display" | sed -n "s/.*versionCode='\([^']*\)'.*/\1/p")
+            pkg=$(echo "$display" | sed -n "s/.*name='\([^']*\)'.*/\1/p")
+            test "v$version" = "$RELEASE_TAG"
+            test -n "$code" && test -n "$pkg"
+            test "$pkg" = "ar.com.rango5gps.drivelabauto.$app"
+            proper=$(echo "$app" | sed 's/^./\U&/')
+            name="DriveLab-Auto-$proper-$RELEASE_TAG.apk"
+            cp "$apk" "output/$name"
+            hash=$(sha256sum "output/$name" | awk '{print $1}')
+            export APP_NAME="$app" APP_PACKAGE="$pkg" APP_VERSION="$version" \
+              APP_CODE="$code" APP_HASH="$hash" RELEASE_TAG="$RELEASE_TAG" APP_APK="$name"
+            python3 - <<'PY'
+          import json,os
+          repo=os.environ['GITHUB_REPOSITORY'];app=os.environ['APP_NAME']
+          obj={'packageName':os.environ['APP_PACKAGE'],
+               'versionName':os.environ['APP_VERSION'],
+               'versionCode':int(os.environ['APP_CODE']),
+               'sha256':os.environ['APP_HASH'],
+               'apkUrl':f'https://github.com/{repo}/releases/download/{os.environ["RELEASE_TAG"]}/{os.environ["APP_APK"]}'}
+          with open(f'output/{app}.json','w') as f:json.dump(obj,f,indent=2)
+          PY
+          done
+      - name: Publish both signed APKs and both updater manifests atomically in one release
+        shell: bash
+        env:
+          RELEASE_TAG: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          gh release create "$RELEASE_TAG" \
+            output/DriveLab-Auto-Sender-"$RELEASE_TAG".apk \
+            output/DriveLab-Auto-Receiver-"$RELEASE_TAG".apk \
+            output/sender.json output/receiver.json \
+            --title "DriveLab Auto $RELEASE_TAG (Sender + Receiver)" \
+            --notes "Dos aplicaciones independientes con firma estable; actualización manual verificada por SHA-256." \
+            --latest
+          gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name'
