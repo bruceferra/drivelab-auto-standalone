@@ -76,6 +76,14 @@ jobs:
           ! "$aapt" dump permissions "$sender" | grep BLUETOOTH_CONNECT
           ! "$aapt" dump xmltree "$sender" AndroidManifest.xml | grep SpotifySessionListener
           ! "$aapt" dump xmltree "$sender" AndroidManifest.xml | grep SpotifyBluetoothReceiver
+          # Google Maps can share a place name or a short URL from T1.
+          "$aapt" dump xmltree "$receiver" AndroidManifest.xml | grep 'ShareToClusterActivity'
+          grep -q 'android.intent.action.SEND' receiver/src/main/AndroidManifest.xml
+          grep -q 'android.intent.action.VIEW' receiver/src/main/AndroidManifest.xml
+          grep -q 'setPackage("com.waze")' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/ShareToClusterActivity.java
+          grep -q 'destination.wazeUri()' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/ShareToClusterActivity.java
+          grep -q 'fromShareLabel' common/src/main/java/ar/com/rango5gps/drivelabauto/common/MapLinks.java
+          echo 'OK · Maps sharing inside T1 -> Waze navigate=yes without OEM access'
           echo 'OK · removed Spotify broad notification listener'
           echo 'OK · receiver session installer + actionable Jetour status'
           echo 'OK · sender/receiver native updater; no browser; verified APK'
