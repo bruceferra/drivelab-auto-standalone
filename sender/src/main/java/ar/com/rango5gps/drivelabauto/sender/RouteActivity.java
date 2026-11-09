@@ -20,7 +20,12 @@ public final class RouteActivity extends Activity {
             raw=intent.getData().toString();
         else if(intent!=null&&Intent.ACTION_SEND.equals(intent.getAction())){
             CharSequence text=intent.getCharSequenceExtra(Intent.EXTRA_TEXT);
-            raw=text==null?null:text.toString();
+            CharSequence subject=intent.getCharSequenceExtra(Intent.EXTRA_SUBJECT);
+            String content=text==null?null:text.toString();
+            if(content!=null&&subject!=null&&!subject.toString().trim().isEmpty()&&
+                MapLinks.extract(subject.toString())==null)
+                content=subject.toString().trim()+"\n"+content;
+            raw=content;
         }else raw=null;
         if(raw==null){dialog("No se recibió ningún enlace de navegación");return;}
         progress("Identificando destino…");

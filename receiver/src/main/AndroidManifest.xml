@@ -28,6 +28,25 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+        <!-- User-selected Share target inside Jetour T1: maps place -> Waze navigation. -->
+        <activity android:name=".ShareToClusterActivity"
+            android:exported="true" android:launchMode="singleTop"
+            android:label="DriveLab · Navegar en clúster">
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="maps.app.goo.gl" />
+                <data android:scheme="https" android:host="maps.google.com" />
+                <data android:scheme="https" android:host="www.google.com" android:pathPrefix="/maps" />
+                <data android:scheme="https" android:host="google.com" android:pathPrefix="/maps" />
+            </intent-filter>
+        </activity>
         <activity android:name=".ReceiverActivity" android:exported="true">
             <intent-filter><action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" /></intent-filter>

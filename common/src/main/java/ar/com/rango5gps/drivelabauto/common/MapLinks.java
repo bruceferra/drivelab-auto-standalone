@@ -53,6 +53,45 @@ public final class MapLinks {
             cleaned.contains("\\r")||!cleaned.matches("(?s).*\\p{L}.*"))return null;
         return new Destination("search",cleaned);
     }
+    /**
+     * Maps shares a named PLACE as a human-readable first line followed by a URL.
+     * Use only the EXPLICIT shared place title, never a map viewport or an inferred
+     * coordinate. Waze may select the first search match if coordinates are absent.
+     */
+    public static Destination fromShareLabel(String raw){
+        String link=extract(raw);
+        if(link==null)return null;
+        try{
+            Uri u=Uri.parse(link);
+            if(!"https".equalsIgnoreCase(u.getScheme())||!hostAllowed(u.getHost()))return null;
+            int at=raw.indexOf(link);
+            if(at<=0)return null;
+            String preceding=raw.substring(0,at).trim();
+            if(preceding.isEmpty())return null;
+            String label=preceding.split("[\\r\\n]",2)[0].trim();
+            // The supplied title is useful as a Waze search, not a verified lat/lon.
+            if(label.length()<4||label.length()>120||
+                label.contains("://")||label.matches("(?i)^(compartir|share|maps|direcciones|ruta)[: ]*$"))
+                return null;
+            return text(label);
+        }catch(RuntimeException ex){return null;}
+    }
+    private static Destination googleNamedPlace(Uri uri){
+        String path=uri.getEncodedPath();
+        if(path==null)return null;
+        String decoded=Uri.decode(path);
+        String prefix="/maps/place/";
+        int at=decoded.indexOf(prefix);
+        if(at<0)return null;
+        String name=decoded.substring(at+prefix.length());
+        int slash=name.indexOf('/');
+        if(slash>=0)name=name.substring(0,slash);
+        // A /maps/place/name is an explicit place; /maps/@lat,lon is only viewport.
+        name=name.replace('+',' ').trim();
+        if(name.matches("(?i)0x[0-9a-f]+:0x[0-9a-f]+")||
+           name.equalsIgnoreCase("data")||name.startsWith("@"))return null;
+        return text(name);
+    }
     public static Destination parse(String raw){
         try{
             if(raw==null)return null;
@@ -97,6 +136,8 @@ public final class MapLinks {
             if(path==null)return null;
             Matcher markers=MARKERS.matcher(link);
             if(markers.find())return coords(markers.group(1)+","+markers.group(2));
+            Destination named=googleNamedPlace(u);
+            if(named!=null)return named;
             Matcher dir=DIR_COORD.matcher(Uri.decode(path));
             Destination result=null;
             while(dir.find())result=coords(dir.group(1)+","+dir.group(2));
@@ -105,9 +146,10 @@ public final class MapLinks {
             return null;
         }catch(Exception e){return null;}
     }
-    public static Destination resolve(String text){
-        String next=extract(text);
+    public static Destination resolve(String raw){
+        String next=extract(raw);
         if(next==null)return null;
+        Destination explicitShareTitle=fromShareLabel(raw);
         for(int i=0;i<6;i++){
             Destination direct=parse(next);
             if(direct!=null)return direct;
@@ -120,14 +162,16 @@ public final class MapLinks {
                 connection.setRequestMethod("GET");
                 try{
                     int status=connection.getResponseCode();
-                    if(status!=301&&status!=302&&status!=303&&status!=307&&status!=308)return null;
+                    if(status!=301&&status!=302&&status!=303&&status!=307&&status!=308)
+                        return explicitShareTitle;
                     String target=connection.getHeaderField("Location");
-                    if(target==null)return null;
+                    if(target==null)return explicitShareTitle;
                     next=new URL(new URL(next),target).toString();
                     if(next.length()>4096)return null;
                 }finally{connection.disconnect();}
-            }catch(Exception e){return null;}
+            }catch(Exception e){return explicitShareTitle;}
         }
-        return parse(next);
+        Destination finalLink=parse(next);
+        return finalLink!=null?finalLink:explicitShareTitle;
     }
 }

@@ -1,5 +1,8 @@
 # DriveLab Auto — Sender + Receiver (independiente)
 
+> **v0.2.9 · Google Maps Compartir:** Sender acepta destinos compartidos que tengan nombre de lugar o un enlace `/maps/place/...`; si Google Maps envía un enlace corto y no se logra obtener coordenadas, usa **únicamente el nombre explícitamente compartido**, no la posición del mapa. Receiver en la propia Jetour ahora figura como **«DriveLab · Navegar en clúster»** en el menú **Compartir** de Google Maps (acción texto o enlace compatible). Al seleccionarlo, solicita a Waze de la T1 `waze://?ll=...&navigate=yes` o `waze://?q=...&navigate=yes`, sin utilizar el teléfono ni requerir tocar el clúster. Si solo tenemos el nombre, Waze puede elegir el primer resultado y debe verificarse; si no hay un destino identificable no se envía uno inventado. No se modifican el puente cifrado, el autoarranque, T1Launcher, ni los permisos. Se requiere actualización de **Sender y Receiver** para tener ambas funciones; quedan con versión y firma continuas.
+
+
 > **v0.2.8 · corrección de seguridad:** Se elimina del Sender el control de Spotify por acceso general a notificaciones y los receptores Bluetooth experimentales añadidos en v0.2.7. Se conserva la navegación Sender→Receiver, el emparejamiento y la actualización directa. El inicio automático de Spotify queda **sin implementar** mientras se investiga una alternativa de permisos mínimos (Spotify App Remote requiere autenticación y configuración propia). Esta corrección no garantiza eliminar advertencias de Play Protect: confirmar el texto exacto si persisten.
 **Proyecto separado de `bruceferra/drivelab`. No contiene telemetría, controles de ventanillas, CODE, Uber Beta, OEM, CAN ni T1Launcher.**
 
