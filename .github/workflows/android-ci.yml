@@ -72,6 +72,15 @@ jobs:
           grep -q 'REINTENTAR INSTALACIÓN YA DESCARGADA' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/ReceiverActivity.java
           grep -q 'android:exported="false"' receiver/src/main/AndroidManifest.xml
           "$aapt" dump xmltree "$receiver" AndroidManifest.xml | grep 'ReceiverInstallResultReceiver'
+
+          # v0.2.7 phone-only opt-in Spotify autoplay; no extra permissions on Receiver.
+          "$aapt" dump permissions "$sender" | grep BLUETOOTH_CONNECT
+          "$aapt" dump xmltree "$sender" AndroidManifest.xml | grep SpotifySessionListener
+          "$aapt" dump xmltree "$sender" AndroidManifest.xml | grep SpotifyBluetoothReceiver
+          grep -q 'com.spotify.music' sender/src/main/java/ar/com/rango5gps/drivelabauto/sender/SpotifyAutoPlay.java
+          grep -q 'BluetoothProfile.A2DP' sender/src/main/java/ar/com/rango5gps/drivelabauto/sender/SpotifyAutoPlay.java
+          grep -q 'getActiveSessions' sender/src/main/java/ar/com/rango5gps/drivelabauto/sender/SpotifyAutoPlay.java
+          ! grep -E 'startActivity|dispatchMediaKeyEvent' sender/src/main/java/ar/com/rango5gps/drivelabauto/sender/SpotifyAutoPlay.java
           echo 'OK · receiver session installer + actionable Jetour status'
           echo 'OK · sender/receiver native updater; no browser; verified APK'
           echo 'OK · two isolated apps; no vehicle control or monitoring'
