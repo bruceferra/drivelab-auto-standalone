@@ -65,6 +65,14 @@ jobs:
           grep -q 'MODE_READ_ONLY' common/src/main/java/ar/com/rango5gps/drivelabauto/common/UpdateApkProvider.java
           grep -q 'getPackageManager().canRequestPackageInstalls()' common/src/main/java/ar/com/rango5gps/drivelabauto/common/Updater.java
           ! grep -R 'openBrowser\|ABRIR DESCARGA' common/src/main/java/ar/com/rango5gps/drivelabauto/common/Updater.java
+          # T1 OEM Android 11 updater must not depend on a missing Settings screen.
+          grep -q 'PackageInstaller.SessionParams.MODE_FULL_INSTALL' common/src/main/java/ar/com/rango5gps/drivelabauto/common/Updater.java
+          grep -q 'session.commit(callback.getIntentSender())' common/src/main/java/ar/com/rango5gps/drivelabauto/common/Updater.java
+          grep -q 'STATUS_PENDING_USER_ACTION' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/ReceiverInstallResultReceiver.java
+          grep -q 'REINTENTAR INSTALACIÓN YA DESCARGADA' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/ReceiverActivity.java
+          grep -q 'android:exported="false"' receiver/src/main/AndroidManifest.xml
+          "$aapt" dump xmltree "$receiver" AndroidManifest.xml | grep 'ReceiverInstallResultReceiver'
+          echo 'OK · receiver session installer + actionable Jetour status'
           echo 'OK · sender/receiver native updater; no browser; verified APK'
           echo 'OK · two isolated apps; no vehicle control or monitoring'
       - uses: actions/upload-artifact@v4

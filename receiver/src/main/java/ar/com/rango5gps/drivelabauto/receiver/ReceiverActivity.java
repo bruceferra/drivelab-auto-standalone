@@ -22,7 +22,9 @@ public final class ReceiverActivity extends Activity {
             SharedPreferences p=prefs();
             String latest=p.getString("pair_status","")+"|"+
                 p.getString("pair_code","")+"|"+
-                p.getLong("approved_id",0);
+                p.getLong("approved_id",0)+"|"+
+                getSharedPreferences("drivelab_native_update",MODE_PRIVATE)
+                    .getString("last_install_status","");
             if(!latest.equals(pairUiSnapshot))render();
             pairUiHandler.postDelayed(this,750);
         }
@@ -54,7 +56,9 @@ public final class ReceiverActivity extends Activity {
         SharedPreferences pairState=prefs();
         pairUiSnapshot=pairState.getString("pair_status","")+"|"+
             pairState.getString("pair_code","")+"|"+
-            pairState.getLong("approved_id",0);
+            pairState.getLong("approved_id",0)+"|"+
+            getSharedPreferences("drivelab_native_update",MODE_PRIVATE)
+                .getString("last_install_status","");
         ScrollView scroll=new ScrollView(this);
         LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);
         body.setPadding(22,20,22,35);scroll.addView(body);
@@ -111,7 +115,20 @@ public final class ReceiverActivity extends Activity {
         });
         button(body,"PRUEBA DIRECTA A LA PLATA",()->direct("-34.9214,-57.9545"));
         button(body,"PRUEBA DIRECTA A MAR DEL PLATA",()->direct("-38.0055,-57.5426"));
-        button(body,"ACTUALIZAR RECEIVER · INSTALACIÓN DIRECTA",()->Updater.check(this,"receiver",this::report));
+        button(body,"ACTUALIZAR RECEIVER · INSTALACIÓN DIRECTA",
+            ()->Updater.check(this,"receiver",this::report));
+        label(body,"Estado instalador T1: "+
+            getSharedPreferences("drivelab_native_update",MODE_PRIVATE)
+                .getString("last_install_status","Aún no hay instalación solicitada"),14);
+        button(body,"REINTENTAR INSTALACIÓN YA DESCARGADA",
+            ()->Updater.retryInstall(this,this::report));
+        button(body,"INSTALADOR NATIVO ALTERNATIVO",
+            ()->Updater.tryNativeIntent(this,this::report));
+        button(body,"ABRIR AJUSTES DE RECEIVER (PERMISO)",
+            ()->Updater.openReceiverSettings(this,this::report));
+        label(body,"El sistema Android debe confirmar la instalación. "+
+            "Si Jetour rechaza ambos métodos, el estado indicará el motivo. "+
+            "No desactives Play Protect ni desinstales Receiver.",13);
         label(body,"El servicio sigue activo aunque cierres esta pantalla. "+
             "No fuerza Wi-Fi ni modifica Android Auto o T1Launcher. "+
             "La apertura en clúster depende de la ROM de la camioneta.",13);

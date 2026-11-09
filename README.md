@@ -111,3 +111,13 @@ No se cambia el receptor de navegación, sus puertos (48391/48392), las llaves d
 La v0.2.4 conserva el código de actualización introducido en v0.2.3. Se publica con `versionCode 5` y las mismas firmas para permitir la prueba real: instalar primero v0.2.3 por el método ya utilizado para la instalación inicial (en la T1, WebADB o instalador de archivos), abrir **ACTUALIZAR RECEIVER · INSTALACIÓN DIRECTA** y observar que v0.2.3 descarga, verifica e instala v0.2.4 sin abrir navegador ni página de GitHub. El mismo proceso sirve para Sender.
 
 Android debe confirmar la instalación y puede pedir autorización de fuente desconocida por primera vez. Si Play Protect detecta una amenaza, detener la prueba y revisar el diagnóstico: no desactivar protecciones. No desinstalar, no volver a generar certificados, no desvincular.
+
+## v0.2.5 · Instalador de Receiver adaptado a Jetour Android 11
+
+En la T1, la página `ACTION_MANAGE_UNKNOWN_APP_SOURCES` puede no abrir ninguna interfaz. La v0.2.3/0.2.4 ya descargaban y verificaban la APK, pero quedaban detenidas en el cuadro «AUTORIZAR». Esta versión **no detiene Receiver en esa pantalla**: tras verificar SHA-256, paquete, versión y certificado, solicita una sesión Android estándar de `PackageInstaller` para que el sistema decida la confirmación necesaria.
+
+Se agregó un `ReceiverInstallResultReceiver` privado para informar `STATUS_PENDING_USER_ACTION`, `STATUS_SUCCESS` o el código/error de rechazo; intenta abrir el diálogo oficial de consentimiento, con notificación accionable cuando Android restringe las aperturas desde segundo plano. El Receiver actualiza automáticamente ese estado en pantalla y ofrece «REINTENTAR INSTALACIÓN YA DESCARGADA», «INSTALADOR NATIVO ALTERNATIVO» y «ABRIR AJUSTES DE RECEIVER (PERMISO)». Ninguna opción instala en silencio ni elude las restricciones del firmware.
+
+**Advertencia:** si la ROM restringe deliberadamente las instalaciones desde otras aplicaciones, Android podría rechazar también las sesiones de `PackageInstaller`. En ese caso la app no puede prometer una actualización sin intervención del sistema; mostrará el fallo y seguirá estando disponible instalar una APK firmada mediante WebADB. No desactivar Play Protect. Solo hay un Receiver; no modificar la app de telemetría ni desinstalar el paquete existente. Las claves de firma siguen siendo las originales.
+
+Prueba recomendada: instalar una vez Receiver 0.2.5 encima de 0.2.4 mediante WebADB (o instalador Android habilitado) y usar su botón de actualización para instalar la siguiente versión de prueba. El Sender mantiene exactamente el mismo flujo ya probado en el Xiaomi.
