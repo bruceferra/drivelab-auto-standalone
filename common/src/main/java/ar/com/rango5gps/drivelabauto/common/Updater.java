@@ -69,8 +69,8 @@ public final class Updater {
                     .setTitle("DriveLab Auto · Actualización "+version)
                     .setMessage("Se abrirá GitHub en el navegador para descargar "+
                         "la APK oficial. El navegador y Android gestionan "+
-                        "la instalación con tu confirmación.\\n\\n"+
-                        "SHA-256 publicado: "+hash+"\\n\\n"+
+                        "la instalación con tu confirmación.\n\n"+
+                        "SHA-256 publicado: "+hash+"\n\n"+
                         "No hace falta desactivar Play Protect.")
                     .setNegativeButton("CANCELAR",null)
                     .setPositiveButton("ABRIR DESCARGA",(d,w)->
