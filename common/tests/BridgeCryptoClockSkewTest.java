@@ -31,9 +31,25 @@ public final class BridgeCryptoClockSkewTest {
             throw new AssertionError("Pairing receipt authentication failed");
         byte[] route=BridgeCrypto.encryptAt(key,"coord","-34.9214,-57.9545",t-3600_000L);
         failAsExpected(()->BridgeCrypto.decrypt(key,route),"stale route");
+        // Remote T1 is one hour ahead; sender derives clock offset from an
+        // encrypted ACK timestamp and then sends time-adjusted navigation.
+        long offset=-3600_000L;
+        byte[] aligned=BridgeCrypto.encryptWithClockOffset(key,
+            "coord","-34.9214,-57.9545",offset);
+        failAsExpected(()->BridgeCrypto.decrypt(key,aligned),"unaligned route");
+        BridgeCrypto.Packet alignedRoute=BridgeCrypto.decryptWithClockOffset(
+            key,aligned,offset);
+        if(!"coord".equals(alignedRoute.kind))
+            throw new AssertionError("Adjusted route rejected");
+        // Even after sync, an aged packet remains invalid.
+        byte[] adjustedStale=BridgeCrypto.encryptAt(key,
+            "coord","-34.9214,-57.9545",t+3600_000L-900_000L);
+        failAsExpected(
+            ()->BridgeCrypto.decryptWithClockOffset(key,adjustedStale,offset),
+            "stale adjusted route");
         failAsExpected(()->BridgeCrypto.decryptPairing(key,route),"route disguised as proof");
         ack[ack.length-1]^=0x01;
         failAsExpected(()->BridgeCrypto.decryptPairing(key,ack),"tampered pairing ACK");
-        System.out.println("OK: clock-independent physical SAS pairing, strict route age, no route-as-proof, GCM integrity");
+        System.out.println("OK: SAS pairing under clock skew, clock-aligned navigation, strict route age, GCM integrity");
     }
 }
