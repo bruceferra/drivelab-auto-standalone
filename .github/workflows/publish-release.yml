@@ -65,8 +65,10 @@ jobs:
           mkdir -p /tmp/bridge-test
           javac -encoding UTF-8 -d /tmp/bridge-test \
             common/src/main/java/ar/com/rango5gps/drivelabauto/common/BridgeCrypto.java \
-            common/tests/BridgeCryptoTest.java
+            common/tests/BridgeCryptoTest.java \
+            common/tests/BridgeCryptoClockSkewTest.java
           java -cp /tmp/bridge-test BridgeCryptoTest
+          java -cp /tmp/bridge-test ar.com.rango5gps.drivelabauto.common.BridgeCryptoClockSkewTest
           javac -encoding UTF-8 -d /tmp/bridge-test \
             common/tests/android/net/Uri.java \
             common/src/main/java/ar/com/rango5gps/drivelabauto/common/MapLinks.java \
