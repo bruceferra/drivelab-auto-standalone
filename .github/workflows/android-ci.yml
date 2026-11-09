@@ -52,7 +52,11 @@ jobs:
           "$aapt" dump badging "$receiver" | grep "package: name='ar.com.rango5gps.drivelabauto.receiver'"
           ! "$aapt" dump permissions "$sender" | grep -E 'ACCESSIBILITY|ACCESS_FINE_LOCATION|QUERY_ALL_PACKAGES|CAMERA'
           ! "$aapt" dump permissions "$receiver" | grep -E 'ACCESSIBILITY|ACCESS_FINE_LOCATION|QUERY_ALL_PACKAGES|CAMERA'
-          ! grep -R -E 'VehicleWindowPilot|VehicleReadOnly|transact\(15|AUTO_LINK_CAR' sender/src receiver/src common/src
+          ! grep -R -E 'VehicleWindowPilot|VehicleReadOnly|transact\(15|AUTO_LINK_CAR' sender/src common/src
+          ! grep -R -E 'VehicleWindowGroup|PedestrianAlertControl|transact\(15' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/BootReceiver.java receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/ReceiverService.java
+          grep -q 'ReceiverVehicleActivity' receiver/src/main/AndroidManifest.xml
+          grep -q 'setForeground(true)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/ReceiverVehicleActivity.java
+          grep -q 'startOne' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/VehicleWindowGroup.java
           "$aapt" dump permissions "$sender" | grep REQUEST_INSTALL_PACKAGES
           "$aapt" dump permissions "$receiver" | grep REQUEST_INSTALL_PACKAGES
           "$aapt" dump xmltree "$sender" AndroidManifest.xml | grep 'updatefiles'

@@ -7,6 +7,9 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <queries>
+        <package android:name="com.autolink.app.vehicleservice" />
+        <package android:name="com.autolink.carservice" />
+        <package android:name="com.autolink.clusterinteraction" />
         <package android:name="com.waze" />
         <intent><action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" /></intent>
@@ -47,6 +50,7 @@
                 <data android:scheme="https" android:host="google.com" android:pathPrefix="/maps" />
             </intent-filter>
         </activity>
+        <activity android:name=".ReceiverVehicleActivity" android:exported="false" />
         <activity android:name=".ReceiverActivity" android:exported="true">
             <intent-filter><action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" /></intent-filter>
