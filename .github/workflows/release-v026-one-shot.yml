@@ -1,0 +1,19 @@
+name: Lanzar actualización de prueba T1 v0.2.6
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/release-v026-one-shot.yml']
+permissions:
+  contents: read
+  actions: write
+jobs:
+  publish:
+    if: github.repository == 'bruceferra/drivelab-auto-standalone'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Crear release firmada 0.2.6 para probar el instalador T1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh workflow run publish-release.yml --ref main --repo "$GITHUB_REPOSITORY" -f tag=v0.2.6
