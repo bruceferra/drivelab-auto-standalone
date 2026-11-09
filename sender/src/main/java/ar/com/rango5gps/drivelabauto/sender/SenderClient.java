@@ -92,18 +92,44 @@ public final class SenderClient {
         prefs(c).edit().remove("receiver_ip").remove("receiver_key")
             .putString("last_status","SIN VINCULAR").apply();
     }
+    /**
+     * The T1 may boot offline with a different system date. Obtain the
+     * authenticated T1 clock from an AES-GCM ping before each destination.
+     * Its response must match the fresh nonce so stale traffic cannot
+     * impersonate a clock sync. The route still expires on both ends.
+     */
+    private static long remoteClockOffset(String ip,byte[] key)throws Exception{
+        long before=System.currentTimeMillis();
+        byte[] ping=BridgeCrypto.encrypt(key,"ping","");
+        try(Socket socket=connect(ip,BridgeCrypto.NAV_PORT)){
+            DataOutputStream out=new DataOutputStream(socket.getOutputStream());
+            DataInputStream in=new DataInputStream(socket.getInputStream());
+            BridgeCrypto.write(out,ping);
+            BridgeCrypto.Packet ack=BridgeCrypto.decryptPairing(
+                key,BridgeCrypto.read(in));
+            if(!"ack".equals(ack.kind)||
+               !BridgeCrypto.nonce(ping).equals(ack.value))
+                throw new IOException("Confirmación de hora T1 no autenticada");
+            long after=System.currentTimeMillis();
+            long midpoint=before+(after-before)/2;
+            return midpoint-ack.createdAt;
+        }
+    }
+
     public static Delivery send(Context c,String kind,String value){
         try{
             SharedPreferences p=prefs(c);
             String ip=p.getString("receiver_ip","");
             byte[] key=BridgeCrypto.unpackKey(p.getString("receiver_key",""));
             if(!localIpv4(ip))throw new IOException("IP no configurada");
-            byte[] packet=BridgeCrypto.encrypt(key,kind,value);
+            long offset=remoteClockOffset(ip,key);
+            byte[] packet=BridgeCrypto.encryptWithClockOffset(key,kind,value,offset);
             try(Socket socket=connect(ip,BridgeCrypto.NAV_PORT)){
                 DataOutputStream out=new DataOutputStream(socket.getOutputStream());
                 DataInputStream in=new DataInputStream(socket.getInputStream());
                 BridgeCrypto.write(out,packet);
-                BridgeCrypto.Packet reply=BridgeCrypto.decrypt(key,BridgeCrypto.read(in));
+                BridgeCrypto.Packet reply=BridgeCrypto.decryptWithClockOffset(
+                    key,BridgeCrypto.read(in),offset);
                 if(!BridgeCrypto.nonce(packet).equals(reply.value))
                     throw new IOException("Respuesta no autenticada");
                 boolean accepted="ack".equals(reply.kind);
