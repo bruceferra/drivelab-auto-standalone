@@ -18,6 +18,8 @@
             android:authorities="${applicationId}.updatefiles"
             android:exported="false"
             android:grantUriPermissions="true" />
+        <receiver android:name=".ReceiverInstallResultReceiver"
+            android:exported="false" />
         <service android:name=".ReceiverService" android:exported="false"
             android:foregroundServiceType="dataSync" />
         <receiver android:name=".BootReceiver" android:exported="false">
