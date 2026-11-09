@@ -1,8 +1,5 @@
 name: DriveLab Auto · APK release firmadas y actualizador
 on:
-  # One-time main push for v0.2.8; remove after signed publication.
-  push:
-    branches: [main]
   workflow_dispatch:
     inputs:
       tag:
@@ -16,9 +13,6 @@ concurrency:
   cancel-in-progress: false
 jobs:
   release:
-    if: >-
-      github.event_name == 'workflow_dispatch' ||
-      startsWith(github.event.head_commit.message, 'release: drivelab-auto v0.2.8')
     runs-on: ubuntu-24.04
     env:
       SENDER_STORE_PASSWORD: ${{ secrets.SENDER_STORE_PASSWORD }}
@@ -62,7 +56,7 @@ jobs:
       - name: Compile and verify signed independent production APKs
         shell: bash
         env:
-          RELEASE_TAG: ${{ inputs.tag || 'v0.2.8' }}
+          RELEASE_TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
           [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
@@ -116,7 +110,7 @@ jobs:
       - name: Publish both signed APKs and both updater manifests atomically in one release
         shell: bash
         env:
-          RELEASE_TAG: ${{ inputs.tag || 'v0.2.8' }}
+          RELEASE_TAG: ${{ inputs.tag }}
         run: |
           set -euo pipefail
           gh release create "$RELEASE_TAG" \
