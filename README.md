@@ -15,11 +15,11 @@ Dos APK autónomas:
 
 El proyecto original ha sido probado físicamente: Uber Driver y Google Maps → DriveLab Auto Xiaomi → Waze en clúster de Jetour T1. Este proyecto es una **separación de código, todavía sin prueba física en la camioneta**. No afirmar que el nuevo Receiver abre Waze en el clúster hasta probarlo con la ROM de T1.
 
-## Instalación inicial (cuando existan las APK release firmadas)
+## Instalación de las APK firmadas (v0.2.1, luego de confirmar publicación)
 
-1. Instalar `DriveLab-Auto-Receiver-v0.2.0.apk` en Jetour T1 desde la pantalla de instalación de Android (una sola vez, por WebADB u otro instalador habilitado). Abrir **Receiver → INICIAR RECEPTOR**; si se quiere que se inicie al encender, activar **INICIO AL ENCENDER T1**.
+1. Instalar `DriveLab-Auto-Receiver-v0.2.1.apk` en Jetour T1 desde la pantalla de instalación de Android (una sola vez, por WebADB u otro instalador habilitado). Abrir **Receiver → INICIAR RECEPTOR**; si se quiere que se inicie al encender, activar **INICIO AL ENCENDER T1**.
 2. Abrir el permiso especial **Mostrar sobre otras apps** para **Receiver** desde Ajustes Android 11. El Receiver no dibuja ventanas ni registra pantalla: es el permiso con el que Android 11 puede permitir lanzar Waze desde segundo plano. El firmware puede bloquearlo igualmente.
-3. En Receiver tocar **VINCULAR XIAOMI · 6 DÍGITOS**. Leer la IP que se muestra arriba. En Xiaomi instalar `DriveLab-Auto-Sender-v0.2.0.apk`; abrir y escribir esa IP en **Vincular Receiver · código de 6 dígitos**.
+3. En Receiver tocar **VINCULAR XIAOMI · 6 DÍGITOS**. Leer la IP que se muestra arriba. En Xiaomi instalar `DriveLab-Auto-Sender-v0.2.1.apk`; abrir y escribir esa IP en **Vincular Receiver · código de 6 dígitos**.
 4. Comparar los números de ambas pantallas. **Primero autorizar en T1**, después tocar **COINCIDEN · CONFIRMAR** en Xiaomi. Si no coinciden, rechazar. Ambos conservarán la clave fuerte de AES y la IP.
 5. Probar **Probar envío real a La Plata** desde Sender. Si funciona, probar desde Google Maps → Compartir → DriveLab Auto Sender. Después, cuando sea seguro hacerlo, en Uber Driver elegir DriveLab Auto Sender como opción para los enlaces de navegación. Dado que el paquete es nuevo, habrá que elegir **Siempre** nuevamente.
 6. Solo cuando Sender / Receiver superen las pruebas físicas de navegación con el Receiver oculto y de reinicio, desinstalar los puentes anteriores que ya no se necesiten.
@@ -41,9 +41,9 @@ Ambas apps tienen **COMPROBAR ACTUALIZACIÓN**. Consultan manifiestos HTTPS prop
 - Sender: `https://github.com/bruceferra/drivelab-auto-standalone/releases/latest/download/sender.json`
 - Receiver: `https://github.com/bruceferra/drivelab-auto-standalone/releases/latest/download/receiver.json`
 
-Un manifest contiene `packageName`, `versionName`, `versionCode`, `sha256`, `apkUrl`. El actualizador valida dominio HTTPS, paquete Android, versión ascendente y SHA-256 antes de solicitar al instalador de Android la actualización. La firma del paquete debe coincidir; Android no deja actualizar con un certificado distinto. **No hay instalación silenciosa** ni permiso root; la primera instalación requiere autorización para "Instalar apps desconocidas" y confirmación del usuario. La actualización es por app, no depende del VPS de telemetría.
+Un manifest contiene `packageName`, `versionName`, `versionCode`, `sha256`, `apkUrl`. El actualizador comprueba que el manifiesto HTTPS sea del repositorio oficial, valide el paquete Android, la versión ascendente y el formato SHA-256 publicado. Abre el APK oficial en el navegador; Android gestiona la descarga e instalación. La APK descargada por el navegador no se coteja criptográficamente contra el manifiesto dentro de DriveLab Auto; el instalador de Android exige la misma firma para actualizar. La firma del paquete debe coincidir; Android no deja actualizar con un certificado distinto. **No hay instalación silenciosa** ni permiso root, y ninguna de las dos apps solicita `REQUEST_INSTALL_PACKAGES`. Al descargar el APK desde el navegador, Android puede pedir autorización para instalar desde ese navegador y exige confirmación del usuario. La actualización es por app, no depende del VPS de telemetría.
 
-Los manifiestos están diseñados para **GitHub Releases de un repositorio público sin secretos en el código**. En un repo privado los teléfonos no podrán descargar los assets sin autenticación; también se puede adaptar el host HTTPS de updates a otro servidor público. No usar estas URLs antes de crear el repositorio y publicar una release firmada.
+Los manifiestos están diseñados para **GitHub Releases de un repositorio público sin secretos en el código**. En un repo privado los teléfonos no podrán descargar los assets sin autenticación; también se puede adaptar el host HTTPS de updates a otro servidor público. El repositorio y la versión inicial v0.2.0 se publicaron correctamente en GitHub.
 
 ## Compilar y distribuir APK definitivas
 
@@ -57,7 +57,7 @@ En un nuevo repositorio de GitHub llamado **`bruceferra/drivelab-auto-standalone
 1. Subir el contenido de este ZIP a la rama `main` (en Windows, opción automatizada `tools/create-github-repo.ps1`, que requiere `gh auth login` y Git).
 2. `.github/workflows/android-ci.yml` compila ambas APK debug para QA y prueba cifrado. Los artefactos debug **no** deben instalarse sobre releases ya firmadas.
 3. Crear una **clave PKCS12 permanente distinta por app** (ayuda local: `tools/setup-signing.ps1`; ejecutarlo una sola vez después de crear el repo; el parámetro `-UploadSecrets` permite enviarlas usando `gh auth login`, y las claves nunca se incluyen en la APK ni en el código). Guardar de manera privada y hacer backup fuera de GitHub. Subir a GitHub Actions Secrets los valores `SENDER_KEYSTORE_B64`, `SENDER_STORE_PASSWORD`, `SENDER_KEY_ALIAS`, `SENDER_KEY_PASSWORD`, y las cuatro variables equivalentes `RECEIVER_...`. No versionar claves ni contraseñas.
-4. En Actions correr **DriveLab Auto · APK release firmadas y actualizador** con `tag=v0.2.0`. El workflow verifica protocolo, construye las dos APK firmadas, valida los paquetes, publica un único GitHub Release con **ambas APK y ambos manifests de actualización**. El repositorio debe ser público para descarga directa.
+4. En Actions correr **DriveLab Auto · APK release firmadas y actualizador** con el nuevo tag de versión (por ejemplo, `tag=v0.2.1`). El workflow verifica protocolo, construye las dos APK firmadas, valida los paquetes, publica un único GitHub Release con **ambas APK y ambos manifests de actualización**. El repositorio debe ser público para descarga directa.
 5. Las actualizaciones posteriores solo requieren aumentar el número de versión y `versionCode` en los dos Gradle según corresponda, y publicar una nueva release con los mismos certificados de firma originales.
 
 Requisitos locales: JDK 17, Android SDK 35, Gradle 8.7. En Windows puede ejecutarse `tools/build-local.ps1 -Variant Debug` con Gradle instalado. Las APK se instalan normalmente usando Android; ni este proyecto ni el updater necesitan acceso a los APIs del vehículo.
@@ -73,7 +73,15 @@ Requisitos locales: JDK 17, Android SDK 35, Gradle 8.7. En Windows puede ejecuta
 
 ## Estado de entrega
 
-- Fuente separada: **incluida en este ZIP**.
-- Prueba de protocolo Java (ECDH, SAS, GCM, integridad): **validada localmente**.
-- Compilación de ambas APK Android, firmas productivas, publicación remota, actualización real y prueba física en T1: **pendientes**.
-- Repositorio remoto independiente: **todavía no creado**, porque el conector GitHub disponible no ofrece crear repositorios; no se ha tocado el repositorio original.
+- Fuente separada: **repositorio público** `bruceferra/drivelab-auto-standalone`.
+- Prueba de protocolo Java (ECDH, SAS, GCM, integridad): **validada en GitHub Actions**.
+- Las APK iniciales v0.2.0 se compilaron, firmaron y publicaron. v0.2.1 reduce los permisos de instalación. La validación de Play Protect y las pruebas físicas en la T1 están pendientes.
+- Repositorio independiente: `https://github.com/bruceferra/drivelab-auto-standalone`; no se modificó el repositorio original.
+
+## v0.2.1: reducción de permisos y advertencias de Play Protect
+
+- **Sender** solicita únicamente permiso de Internet. No usa overlay, arranque, permisos de instalación, accesibilidad ni acceso a datos personales.
+- **Receiver** solicita Internet, inicio tras el arranque, servicio de primer plano y el permiso especial opcional `SYSTEM_ALERT_WINDOW` para intentar abrir Waze cuando la UI no está visible. Este permiso requiere autorización explícita en Android 11.
+- Ninguna APK puede instalar paquetes directamente ni se autoactualiza en silencio. El botón COMPROBAR ACTUALIZACIÓN consulta el manifiesto oficial y ofrece abrir GitHub con el navegador. El instalador del sistema conserva las comprobaciones de firma al actualizar.
+- Quitar permisos innecesarios puede reducir alertas, pero **NO garantiza** que Play Protect no marque una APK externa como sospechosa. Si Play Protect muestra «aplicación dañina» o bloquea la instalación, no desactivar la protección: identificar el mensaje concreto y presentar apelación por falso positivo a Google si corresponde.
+- Se mantienen los identificadores de paquete y las claves de firma originales; **no ejecutar bootstrap ni regenerar claves**. Los usuarios con v0.2.0 podrán actualizar a v0.2.1 encima, si Android permite la instalación.
