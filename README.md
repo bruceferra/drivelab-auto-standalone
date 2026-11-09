@@ -105,3 +105,9 @@ Tanto el Receiver Android 11 de la T1 como el Sender del Xiaomi replican el meca
 El actualizador verifica también el certificado de la APK contra el certificado ya instalado. Las firmas de Sender y Receiver permanecen separadas y estables. Android 11 puede solicitar, una vez, la autorización de instalación desde Receiver y siempre mantiene la confirmación del instalador del sistema: no es una actualización silenciosa. El firmware de Jetour puede limitar este tipo de instalaciones y debe comprobarse **estacionado**.
 
 No se cambia el receptor de navegación, sus puertos (48391/48392), las llaves de vinculación, el modo clúster, el launcher, ni la app DriveLab T1 de telemetría.
+
+## v0.2.4 · Release de prueba para comprobar la actualización nativa real
+
+La v0.2.4 conserva el código de actualización introducido en v0.2.3. Se publica con `versionCode 5` y las mismas firmas para permitir la prueba real: instalar primero v0.2.3 por el método ya utilizado para la instalación inicial (en la T1, WebADB o instalador de archivos), abrir **ACTUALIZAR RECEIVER · INSTALACIÓN DIRECTA** y observar que v0.2.3 descarga, verifica e instala v0.2.4 sin abrir navegador ni página de GitHub. El mismo proceso sirve para Sender.
+
+Android debe confirmar la instalación y puede pedir autorización de fuente desconocida por primera vez. Si Play Protect detecta una amenaza, detener la prueba y revisar el diagnóstico: no desactivar protecciones. No desinstalar, no volver a generar certificados, no desvincular.
