@@ -36,6 +36,33 @@ Las llamadas de escritura siguen la misma familia de `VehicleLink.setIntData` qu
 
 **Decisión para DriveLab Receiver:** NO integrar directamente los pulsos automáticos. Primero implementar descubrimiento/lectura verificada de marcha y velocidad en una sesión detenida, modelar una posición inicial reconocible/restaurable, conservar la memoria OEM, permitir anulación manual y restauración segura. El inicio automático de una función motorizada queda desactivado. No copiar código ni comportamiento potencialmente inseguro; usar implementación independiente tras validar las transacciones con la T1.
 
+## Decisión de interfaz propuesta: pulsación sostenida para espejos (10/11/2026)
+
+**Origen:** observación del propietario en la T1 argentina: los controles manuales OEM permiten **mantener presionado** para desplazar el espejo de forma continua y **soltarlo** en el punto deseado. En T1Launcher T1N134 el módulo de retroceso usa desplazamientos por pulsos/pasos (incluidos grupos de cinco), almacena posiciones relativas de la aplicación y advierte que el ajuste manual posterior descalibra esas memorias.
+
+**Decisión de UX:** en el futuro módulo del Receiver, preferir **botones “mantener para subir/bajar”** (y, si se documentan, izquierda/derecha) por espejo; el usuario ve el movimiento y lo detiene al levantar el dedo. Ofrecer memorias de **posición normal** y **posición de reversa** separadas por espejo únicamente si puede garantizarse una restauración comprobable. La elección manual/automática y el lado afectado deben ser opt-in y reversibles.
+
+### Limitación crítica: NO equiparar el botón físico con un setter Binder
+
+El APK usa valores `2069=1/2` seguidos de `2069=0`, compatibles con **pulsos**. **NO se ha demostrado** si un solo `setIntData(2069, 1 o 2)` sostenido genera movimiento continuo, si se requiere repetir la orden o cuál es la dirección asociada a cada valor. No simular un HOLD enviando una orden persistente antes de validar que un fallo de UI/proceso **no deje el espejo moviéndose**.
+
+Señales a comprobar en pruebas físicas estacionado:
+1. ¿Se inicia movimiento con el cambio de estado `0 → 1/2`? ¿Continúa hasta recibir `0` o solo ejecuta un paso? ¿Cuánto desplaza por comando?
+2. ¿`0` detiene inmediatamente y de forma segura? ¿Qué pasa ante `ACTION_CANCEL`, pérdida de foco, app en segundo plano, corte Binder, apagado de pantalla o proceso terminado?
+3. ¿Los sentidos y lados coinciden con la suposición? ¿Existe respuesta de **posición real** o solo contadores locales? ¿Puede identificarse memoria OEM de espejo sin modificarla?
+4. Probar velocidad y marcha solo como señales **leídas** y calibradas, nunca mandar escrituras de espejo en circulación para experimentar.
+
+### Contrato técnico propuesto, NO IMPLEMENTADO
+
+- **Pulsar:** comenzar una acción de duración **limitada**, con un solo movimiento pendiente y estado claramente visible; no enviar simultáneamente órdenes opuestas ni duplicarlas por eventos táctiles.
+- **Soltar / cancelar / perder foco:** ordenar liberación `0` **solo después de validar que ese es el comando seguro**; bloquear nuevas órdenes si falla una liberación o readback; mantener mecanismo de desactivación independiente.
+- **Timeout/watchdog:** limitar tanto duración total de una pulsación como longitud de cada acción. Una **limitación de software no garantiza paro** ante bloqueo total de Android: si el protocolo OEM requiere soltar activamente, no habilitar HOLD sin mecanismo de parada fiable.
+- **Topes físicos:** la observación de que el espejo se detiene al llegar a sus extremos **no demuestra** que el comando software no mantenga carga sobre el motor ni garantiza que protecciones OEM funcionen igual desde Binder. Nunca usarlos como método de calibración/homing automático.
+- **Memorias:** registrar si son ángulos reales o pasos estimados. Ante movimiento manual, reinicio, error de lectura o descalibración, no prometer restauración automática. Si no hay lectura de ángulo ni memoria OEM fiable, dejar modo de ajuste **manual HOLD** solamente y exigir recalibración explícita antes de un eventual auto-tilt en R.
+- **No regresiones:** mantener Receiver v0.2.10, Sender, mapas, controles actuales, viajes y puente sin modificaciones. Crear y probar esta pieza de manera desacoplada antes de ofrecerla como opción experimental.
+
+**Estado de esta decisión:** UX acordada como preferencia del usuario; contrato de control continuo, sentido de 1/2, verificación de STOP, posiciones reales y futura automatización en R **PENDIENTES**.
+
 ## Hallazgo adicional relevante para el tablero de combustible/energía
 
 En las clases `mainthor.MainthorRepo` y corutinas de lectura se encontraron propiedades HAL adicionales:
