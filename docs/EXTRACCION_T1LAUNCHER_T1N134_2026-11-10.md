@@ -63,6 +63,47 @@ Señales a comprobar en pruebas físicas estacionado:
 
 **Estado de esta decisión:** UX acordada como preferencia del usuario; contrato de control continuo, sentido de 1/2, verificación de STOP, posiciones reales y futura automatización en R **PENDIENTES**.
 
+## Investigación de lectura real de posición y deriva (10/11/2026)
+
+### Evidencia física del propietario — Receiver 0.2.11
+
+- **CONFIRMADO en la T1 argentina (usuario):** el comando OEM **2069=2** baja el espejo **derecho**, **2069=1** lo sube. Se probaron cuatro pulsos en cada sentido, se observaron los movimientos y el retorno. En estos ensayos no se ha medido carrera total ni ángulo; no demuestra que cada pulso equivalga a un mismo desplazamiento.
+- El launcher de terceros se **descalibra repetidamente incluso sin tocar los mandos manuales**, según el usuario. No atribuir causa única sin telemetría. Posibles motivos a ensayar: órdenes rechazadas/interrumpidas, duraciones variables, aceleración y fricción del motor, movimiento OEM externo/memoria al arrancar, límite alcanzado o actualizaciones de estado locales fuera de secuencia.
+- El método de recalibración del launcher: marcar cero en tope superior, almacenar D y R, estimar `pos_actual` mediante pasos; **no garantiza retorno geométrico exacto**. Es un sistema en lazo abierto.
+
+### Qué reconoce el propio APK de T1Launcher
+
+Los strings oficiales embebidos en `classes2.dex` incluyen el aviso **«El auto no nos dice en qué ángulo está el espejo. No hay forma de preguntárselo.»**, además de una advertencia de que mover el espejo con el volante después de marcar el cero desajusta el contador. Esto es evidencia de que **EspejoRService NO basa su posición en un ángulo OEM validado**. No constituye prueba de que el firmware carezca de toda señal de posición, dado que su catálogo también enumera identificadores HAL.
+
+### Propiedades HAL candidatas a lectura REAL, sin validar en la Jetour
+
+| ID decimal | Nombre en catálogo del APK / Android Automotive | Qué probar |
+|---:|---|---|
+| **339741504** | `MIRROR_Z_POS` | **Posición vertical relativa**; Android Automotive documenta un entero entre límites min/max, con área de espejo izquierdo/derecho. No es ángulo en grados. |
+| **339741505** | `MIRROR_Z_MOVE` | Movimiento vertical, puede dar estado de desplazamiento, **no es sensor de posición**. |
+| **339741506** | `MIRROR_Y_POS` | Posición horizontal relativa, no vertical. |
+| **557843649** | `VC.PASSENGER MIRROR LOCATION (lee)` | Vendor candidate: podría ser valor real, memoria OEM o estado, **desconocido**. |
+| **557867096** | `SOC SEAT EXT MIRROR POSITION` | Vendor candidate: posición/memoria del asiento-espejo **no diferenciada**. |
+| **557875203** | `SETTINGS SEAT EXT MIRROR POSITION` | Vendor candidate sin tipo/unidad confirmada. |
+| **557879310** | `SOC SEAT EXT MIRROR POSITION BY QNX` | Vendor candidate sin interpretación física demostrada. |
+
+**Referencia oficial:** [Android Automotive `VehiclePropertyIds`](https://developer.android.com/reference/android/car/VehiclePropertyIds), `MIRROR_Z_POS` 339741504 y `MIRROR_Y_POS` 339741506 (posiciones relativas), `MIRROR_Z_MOVE` 339741505 (movimiento). Su API estándar requiere permiso **`android.car.permission.CONTROL_CAR_MIRRORS` (signature|privileged)** y soporte real de la ROM; que un catálogo incluya el nombre NO implica que Receiver tenga autorización ni valores útiles. También existen servicios OEM Binder, pero no está confirmado el contrato de lectura para estos IDs HAL.
+
+### Prueba determinante: leer antes y después, SIN homing al tope
+
+1. **SOLO lectura**, en P, vehículo quieto. Enumerar si `MIRROR_Z_POS` está soportada, sus `areaId` para cada espejo, rangos min/max, tipo y permisos. Registrar valor bruto y estado de acceso sin disparar órdenes.
+2. Leer posición vertical de ambos espejos. Ajustar una distancia pequeña mediante el mando OEM (sin llegar a topes), leer de nuevo y observar **si el dato cambia** en el lado correcto y repite el mismo valor al volver.
+3. Si no responde `MIRROR_Z_POS`, investigar `VC.PASSENGER MIRROR LOCATION (lee)`, `SOC SEAT EXT MIRROR POSITION` y las demás propiedades HAL **una por una**, sin escribir ni modificar memorias. Diferenciar lectura no soportada / permiso denegado / valor constante / valor real.
+4. Repetir desde la aplicación con un movimiento corto validado (`2069` derecho; **2068 izquierdo sigue pendiente de validación física**). Comparar posiciones reportadas antes y después. Guardar log de duración del comando, valor previo/posterior, confirmación de paro, marcha, app/ROM.
+5. **Si existe retroalimentación real:** almacenar `normalZ` y `reverseZ` por espejo y regresar por **lectura de posición** (lazo cerrado) sin adivinar número de pulsos; no exceder límites OEM y detener el motor al alcanzar el objetivo.
+6. **Si NO existe:** no se puede saber dónde quedó el espejo ni detectar el final de carrera solo porque un setter Binder responde; el método de contar pulsos/tiempos es de **lazo abierto** y puede derivar. No sustituir la falta de sensor por llevar el motor al tope con la app.
+
+**Respuesta a la hipótesis del usuario:** colocar el derecho arriba y el izquierdo abajo **NO permite a DriveLab conocer automáticamente el límite**. Solo es posible si un getter OEM devuelve de manera fiable la posición/fin de carrera del espejo correspondiente. Probar primero cambios pequeños y reversibles con el mando original; **no usar el final mecánico como sensor**.
+
+### Estado de integración
+
+Hasta aquí se verificaron los textos/códigos **en APK** y el accionamiento del espejo derecho **en el vehículo**. Ningún campo HAL de posición ha sido leído todavía desde DriveLab Receiver. **No habilitar auto-bajada al engranar R/retorno a D** hasta validar estado de marcha, lectura real o procedimiento de referencia seguro, duración y parada. La clave de la solución es medir primero, no aumentar la cantidad de pulsos.
+
 ## Hallazgo adicional relevante para el tablero de combustible/energía
 
 En las clases `mainthor.MainthorRepo` y corutinas de lectura se encontraron propiedades HAL adicionales:
