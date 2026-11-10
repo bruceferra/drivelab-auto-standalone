@@ -114,6 +114,12 @@ Se generaron dos maquetas de tablero con ~21,6 L, ~22,7 L, 659 km, 15,3 km/L y p
 4. Diseñar módulo de lectura local y estado persistente sin tocar el puente LAN.
 5. Incorporar al Receiver mediante un módulo TABLERO experimental, sin borrar la app antigua ni alterar viajes existentes.
 
+## Hallazgo de inspección de APK recibido el 10/11/2026
+
+Con el archivo original T1Launcher T1N134 entregado por el usuario (SHA-256 verificado) se comprobó que `MainthorRepo$acumulados$2` consulta por HAL dos propiedades adicionales: **559964335** etiquetada `SETTINGS PHEV SUM FUEL (lee)` y **559964336** etiquetada `SETTINGS PHEV SUM CHRG EGY (lee)`. Podrían servir para contrastar combustible y energía acumulada, particularmente durante la zona de 56 Ω saturada, **solo después** de validar acceso, unidad, escala, continuidad y semántica en el vehículo. **No está demostrado** que 559964335 sean litros reales de inyección ni que los dos códigos aporten mediciones independientes. El código `MainthorRepo$litrosNafta$2` también confirma lectura mediante `CiLink.litrosNafta()` (CI186), la misma fuente OEM. No usar el cálculo viejo de T1Launcher bajo ningún concepto.
+
+El mismo análisis localizó el comando de retrovisor **2069** y lectura de marcha **1033**, pero estas órdenes **no se integran** al Receiver hasta validación física. Detalles, fuente DEX y advertencias en [extracción del APK original](EXTRACCION_T1LAUNCHER_T1N134_2026-11-10.md).
+
 ## Fuentes para profundizar
 
 - Informe privado de análisis estático T1Launcher T1N134, 2026-11-04 (muestra SHA-256 6765a8fcc0645a98424de43c1e122ce771883dd46d6d6ca7264cbe47c94fd480).
