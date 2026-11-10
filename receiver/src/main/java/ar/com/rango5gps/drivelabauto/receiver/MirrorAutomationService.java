@@ -45,7 +45,15 @@ public final class MirrorAutomationService extends Service {
         return Math.max(1,Math.min(10,prefs().getInt(key,2)));
     }
     @Override public int onStartCommand(Intent intent,int flags,int startId){
-        String action=intent==null?null:intent.getAction();
+        // A restarted process cannot know the actual manual D pose.
+        // Require conscious re-arming before any new automatic movement.
+        if(intent==null){
+            prefs().edit().putBoolean(AUTO,false)
+                .putString(STATUS,"AUTO suspendido tras reiniciar app; "+
+                    "ajustá espejos D y volvé a activar AUTO").apply();
+            stopSelf();return START_NOT_STICKY;
+        }
+        String action=intent.getAction();
         if(ACTION_STOP.equals(action)||ACTION_MANUAL.equals(action)){
             prefs().edit().putBoolean(AUTO,false)
                 .putString(STATUS,"MANUAL · automatización desactivada").apply();
@@ -227,6 +235,9 @@ public final class MirrorAutomationService extends Service {
     }
     @Override public void onDestroy(){
         stop=true;if(worker!=null)worker.interrupt();
+        if(prefs().getBoolean(AUTO,false))
+            prefs().edit().putBoolean(AUTO,false)
+                .putString(STATUS,"AUTO detenido por Android; rearmar desde la app").apply();
         super.onDestroy();
     }
 }
