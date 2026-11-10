@@ -267,6 +267,9 @@ public final class MirrorPulsePilot {
         stop.set(false);
         new Thread(()->{
             Connection c=null;String status;int target=unfold?1:0;
+            // Wait until any active AUTO/manual tilt pulse releases the OEM
+            // mirror gateway before attempting the latching fold setter 2003.
+            synchronized(MirrorAutomationService.OEM_MIRROR_MUTEX){
             try{
                 requireReady();
                 c=connect();
@@ -296,6 +299,7 @@ public final class MirrorPulsePilot {
             }finally{
                 if(c!=null)c.close();
                 busy.set(false);
+            }
             }
             emit(callback,status);
         },"T1-Fold2003-SingleTest").start();
