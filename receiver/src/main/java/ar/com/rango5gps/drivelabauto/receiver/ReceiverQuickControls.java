@@ -169,7 +169,7 @@ final class ReceiverQuickControls {
         if(busy()){message("Otra operación está en curso");return;}
         if(!avas.toggle(r->message(r.summary())))
             message("Alarma peatón: espera OEM/no se inició");
-        else message("Verificando P/0 antes de cambiar alarma peatonal…");
+        else message("Verificando si se puede cambiar alarma peatonal…");
     }
     private void setMirrorMode(boolean auto){
         try{
