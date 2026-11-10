@@ -208,6 +208,7 @@ public final class T1TankDashboardActivity extends Activity {
             "El cálculo viejo de consumo T1Launcher permanece DESCARTADO.",
             12,RED,false));
         formStatus=text("",13,GRAY,false);root.addView(formStatus);
+        Receiver3DButtons.apply(root);
         setContentView(scroll);
     }
 
