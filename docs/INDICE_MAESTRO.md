@@ -49,6 +49,12 @@ Las notas antiguas en README y en las carpetas de continuidad son **históricas*
 
 La antigua [pre-release v0.2.11-mirror-qa](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.11-mirror-qa) fue un artefacto previo de laboratorio: **NO es el canal de actualización** ni el enlace para el usuario. El canal correcto es v0.2.11 latest.
 
+## Nuevo ensayo previsto: Receiver 0.2.12 · espejos 500 ms y lectura HAL (10/11/2026)
+
+**Evidencia física en 0.2.11:** usuario confirma `2069=1` **SUBE** y `2069=2` **BAJA** el espejo **derecho**; hizo cuatro pulsos de ida y cuatro de retorno. Para movimientos perceptibles solicita **500 ms**, sin secuencias rápidas de 10 pasos. El izquierdo **2068** sigue como candidato no validado. El launcher externo se descalibra repetidamente al guardar `pos_actual` por pulsos, incluso sin ajustes manuales posteriores.
+
+**Receiver 0.2.12 (QA inicialmente):** agrega órdenes manuales de hasta 500 ms por lado, lectura de marcha/velocidad y un **diagnóstico HAL estrictamente de lectura** para `MIRROR_Z_POS`, `MIRROR_Y_POS` y propiedades vendor candidatas, mostrando área/rango/valor o error de acceso. Referencias D/R son **instantáneas crudas**, no memorias para auto-inclinación. No se implementan `IR VALOR INICIAL/FINAL` ni auto-R/D sin comprobar un getter de posición real. [Plan de pruebas](RECEIVER_ESPEJOS_0_2_12_CALIBRACION.md). Publicación por **actualizador incorporado de Receiver**, nunca APK aparte; Sender permanece en 0.2.10.
+
 ## Próxima integración
 
 El módulo hoy llamado **ENERGÍA / CODE** en Receiver crecerá hasta **TABLERO T1** con litros reales estimados, autonomía contrastada, SOC, corriente, energía y consumo. Su modelo deberá almacenar observaciones originales y cálculos reproducibles por separado. El tratamiento del consumo continúa en el documento de tablero; no inventar señales ni convertir mediciones de otro proyecto en valores OEM verificados.
