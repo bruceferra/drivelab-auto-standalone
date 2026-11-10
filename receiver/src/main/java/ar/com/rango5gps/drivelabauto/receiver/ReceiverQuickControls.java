@@ -90,6 +90,7 @@ final class ReceiverQuickControls {
         Button b=new Button(activity);b.setText(text);b.setAllCaps(false);
         b.setTextSize(14);b.setTextColor(Color.WHITE);
         styleSurface(b,color);
+        b.setTag(Receiver3DButtons.QUICK_TAG);
         // Return false to preserve native clicks, long-press and accessibility.
         b.setOnTouchListener((view,event)->{
             int a=event.getActionMasked();
