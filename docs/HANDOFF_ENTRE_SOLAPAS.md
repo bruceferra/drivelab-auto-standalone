@@ -49,6 +49,12 @@ Observación del propietario (10/11): `2068` izquierdo; `2069` derecho. En la in
 
 **OTA 0.2.14 confirmado:** [release latest Receiver 0.2.14](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.14) y [workflow firmado exitoso 42832582917](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42832582917). Sender permanece 0.2.13 (manifest sin cambios). No hay confirmación de instalación en T1. El usuario debe actualizar desde el botón integrado u oferta de actualización al abrir. Incluye pruebas de 1/2s, getter RAW estados y plegado condicionado; NO movimiento automático en R/D ni tiempo total medido. [Doc](RECEIVER_ESPEJOS_CALIBRACION_TEMPORAL_2026-11-10.md).
 
+## Segundo tanque y primer tablero Receiver — 10/11/2026
+
+**Cierre físico:** el 10/11 entraron **66,230 L reales al primer corte sin sobrellenado** en la misma estación pero distinto surtidor; foto confirma **$141.004 a $2.129/L**. Se recorrieron **887 km Jetour**, otro testigo 867 km y GPS DriveLab 895,089 km. El térmico se apagó cerca de **5,3 L OEM** por segunda vez. Consumo estimado por repostaje: **7,47 L/100 km**. Previo: **66,865 L al primer corte / ~950 km / ~7,04 L/100 km**. El OEM subió solo **61,7 L** entre 5,3 y 67,0, pero la bomba introdujo **66,230 L**; no usar diferencias OEM como litros físicos. El CSV `T1testigo_2026-11-10 (1).csv` integra el repostaje y contiene íntegramente la versión sin `(1)`. [Documento de evidencia](CIERRE_SEGUNDO_TANQUE_T1_2026-11-10.md). No subir CSV originales privados.
+
+[Receiver v0.2.15 TABLERO T1 experimental](TABLERO_T1_RECEIVER_V0_2_15.md) es una pantalla de lectura aislada con históricos, tres odómetros, CI186/SOC puntuales y CSV local/exportable. Sin cambios de Sender, mapas, viajes o espejos. No afirmar que mide kWh/consumo del térmico real ni que ya tiene TRIP A/B. Toda publicación debe ser por **actualizador incorporado** del Receiver, conservando firma.
+
 ## Qué aportar al expediente desde la solapa de consumo
 
 Registrar cada ensayo nuevo como:
