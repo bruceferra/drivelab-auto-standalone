@@ -40,7 +40,7 @@ public final class ReceiverVehicleActivity extends Activity {
     private TextView operationView,alertView,scannerView,scannerValuesView,scannerEventsView,mirrorView;
     private TextView mirrorGearView,mirrorRawView,mirrorHalView;
     private String windowStatus="Sin órdenes enviadas";
-    private String mirrorStatus="Validado en la T1: derecho 2069=1 sube, 2069=2 baja. Izquierdo 2068 pendiente.";
+    private String mirrorStatus="Validado en la T1: 2068 izquierdo y 2069 derecho funcionan en ambos sentidos.";
     private String mirrorGearStatus="Marcha y velocidad: sin consultar";
     private String mirrorRawStatus="Estados RAW 2068/2069: sin consultar";
     private String mirrorPositionStatus="Posiciones HAL aún no consultadas";
@@ -124,7 +124,7 @@ public final class ReceiverVehicleActivity extends Activity {
         LinearLayout root=column();root.setPadding(16,10,16,26);
         scroll.addView(root);
         label(root,"DRIVELAB AUTO · T1",23);
-        label(root,"v0.2.16 · Resultado de espejos junto a cada lector",12);
+        label(root,"v0.2.17 · Ajustes de espejos y AVAS de un toque",12);
         button(root,"← VOLVER A MAPAS Y PUENTE",this::finish);
         LinearLayout menu=new LinearLayout(this);
         menu.setOrientation(LinearLayout.HORIZONTAL);
@@ -156,9 +156,9 @@ public final class ReceiverVehicleActivity extends Activity {
     private void renderVehicle(LinearLayout body){
         section(body,"ESPEJOS · CONTROL MANUAL EN P");
         mirrorView=status(body,mirrorStatus);
-        label(body,"Derecho 2069: 1 SUBE, 2 BAJA. Izquierdo: 2068 en ensayo. "+
-            "Un toque ejecuta un movimiento breve y libera a 0. "+
-            "El piloto exige P y velocidad cero.",13);
+        label(body,"Derecho 2069 e izquierdo 2068, ambos validados. "+
+            "Un toque mueve; el siguiente está disponible tras concluir la orden. "+
+            "Requiere P y velocidad cero.",13);
         button(body,"LEER MARCHA Y VELOCIDAD · SIN MOVER",()->{
             if(vehicleBusy()){
                 updateMirrorGear("Otra consulta OEM está en curso");return;
@@ -194,10 +194,9 @@ public final class ReceiverVehicleActivity extends Activity {
             else updateMirrorHal("Consultando CarPropertyManager…");
         });
         mirrorHalView=status(body,mirrorPositionStatus);
-        button(body,"GUARDAR LECTURA ACTUAL COMO REFERENCIA D",()->saveMirrorSnapshot("D"));
-        button(body,"GUARDAR LECTURA ACTUAL COMO REFERENCIA R",()->saveMirrorSnapshot("R"));
-        label(body,"La HAL puede no estar accesible. Estas instantáneas NO son "+
-            "memorias de ángulo verificadas ni habilitan movimientos automáticos.",12);
+        label(body,"HAL de posición no accesible en esta unidad. "+
+            "Se retiraron las falsas memorias D/R; la futura reversa "+
+            "usará pasos relativos configurables y necesita validar la marcha D.",12);
 
         section(body,"DERECHO · CONTROL PROBADO");
         LinearLayout rightRow=new LinearLayout(this);
@@ -214,10 +213,9 @@ public final class ReceiverVehicleActivity extends Activity {
         label(body,"Prueba física: 500, 1.000 y 2.000 ms producen el mismo "+
             "desplazamiento observable. Se conserva solo 500 ms para no "+
             "mandar una orden más larga sin beneficio.",12);
-        section(body,"IZQUIERDO · 2068 SIN VALIDACIÓN FÍSICA");
-        label(body,"Códigos candidatos. No se conoce todavía si 1/2 corresponde "+
-            "a subir/bajar ni si ese ID acepta órdenes en esta unidad. "+
-            "Un solo ensayo por vez.",12);
+        section(body,"IZQUIERDO · 2068 VALIDADO");
+        label(body,"Ambas direcciones confirmadas físicamente. "+ 
+            "El significado exacto de 1/2 se conserva como comando, no ángulo.",12);
         LinearLayout leftRow=new LinearLayout(this);
         leftRow.setOrientation(LinearLayout.HORIZONTAL);
         Button leftOne=new Button(this);leftOne.setText("IZQ · 1 · 500 ms");
@@ -229,12 +227,8 @@ public final class ReceiverVehicleActivity extends Activity {
         leftTwo.setOnClickListener(v->confirmMirrorPulse(2068,2,500));
         leftRow.addView(leftTwo,new LinearLayout.LayoutParams(0,64,1));
         body.addView(leftRow);
-        section(body,"PLEGADO DE ESPEJOS · OEM PERMISO PRIVILEGIADO");
-        label(body,"Solo si Android habilita MIRROR_FOLD 287312709 de tipo Boolean "+
-            "y Receiver posee el permiso OEM. Si falta, se informa sin mover nada. "+
-            "No se utilizan los IDs vendor desconocidos del launcher.",12);
-        button(body,"PLEGAR ESPEJOS · PROBAR OEM",()->confirmMirrorFold(true));
-        button(body,"DESPLEGAR ESPEJOS · PROBAR OEM",()->confirmMirrorFold(false));
+        // Plegado/desplegado OEM requiere permiso privilegiado denegado;
+        // no mostrar botones que no actúan ni escribir IDs vendor desconocidos.
         button(body,"LIBERAR ÚLTIMO ESPEJO · VALOR 0",()->{
             mirror.cancel();
             if(!mirror.release(this::updateMirror))
@@ -271,45 +265,22 @@ public final class ReceiverVehicleActivity extends Activity {
             ()->{windows.cancel();windowStatus="Cancelación solicitada; no detiene un motor ya activo";
                  if(operationView!=null)operationView.setText(windowStatus);});
         section(body,"ALARMA DE PEATONES · ID 2074");
-        label(body,"Solo lectura/alternancia manual. No se desactiva al arrancar. "+
-            "Es una alerta de seguridad: mantenerla activa para circular.",13);
+        label(body,"Un toque cambia el estado solamente en P y velocidad cero. "+
+            "No se desactiva automáticamente al arrancar.",13);
         button(body,"ALARMA PEATÓN · CAMBIAR ON/OFF",this::confirmPedestrian);
         alertView=status(body,pedestrianStatus);
     }
     /** One tap = one attempt. OEM validation is enforced in MirrorPulsePilot. */
-    private void confirmMirrorFold(boolean folded){
-        if(vehicleBusy()){
-            updateMirror("Otra operación OEM está en curso");return;
-        }
-        // No modal confirmation: if privileged permission is unavailable,
-        // MirrorPulsePilot refuses the command and reports why.
-        if(!mirror.requestFold(folded,this::updateMirror))
-            updateMirror("Consulta de plegado no iniciada");
-        else updateMirror("Comprobando disponibilidad OEM de plegado…");
-    }
-    /** User-triggered mirror action: no modal dialogs or surprise scrolling. */
     private void confirmMirrorPulse(int mirrorId,int direction,int durationMs){
         if(vehicleBusy()){
             updateMirror("Otra operación OEM está en curso");return;
         }
-        // Mandatory stationarity/gear check, cooldown, bounded duration and
+        // Mandatory stationarity/gear check, single active command and
         // release(0) are performed by the pilot BEFORE/AFTER the OEM write.
         if(!mirror.pulse(mirrorId,direction,durationMs,this::updateMirror))
             updateMirror("No se inició: panel oculto, espera o control ocupado");
         else updateMirror("Moviendo espejo "+mirrorId+
             " · verificación OEM P/0 y liberación automática…");
-    }
-    private void saveMirrorSnapshot(String position){
-        if(!mirrorPositionStatus.startsWith("POSICIÓN DE ESPEJOS")){
-            updateMirror("Primero tocá LEER POSICIONES Y RANGOS HAL");
-            return;
-        }
-        getSharedPreferences("mirror_calibration",MODE_PRIVATE).edit()
-            .putString("mirror_reference_"+position,mirrorPositionStatus)
-            .putLong("mirror_reference_"+position+"_at",System.currentTimeMillis())
-            .apply();
-        updateMirror("Referencia "+position+" guardada como instantánea HAL "+
-            "(NO prueba ángulo ni permite auto-reversa).");
     }
     private void updateMirrorGear(String value){
         mirrorGearStatus=value;
@@ -347,17 +318,9 @@ public final class ReceiverVehicleActivity extends Activity {
     }
     private void confirmPedestrian(){
         if(vehicleBusy()){updateAlert("Otra operación OEM está en curso");return;}
-        new AlertDialog.Builder(this)
-            .setTitle("Alarma peatonal AVAS · 2074")
-            .setMessage("Se leerá su estado actual y se solicitará invertirlo. "+
-                "El auto debe estar detenido en P. La alarma de peatones debe "+
-                "quedar activada antes de circular. ¿Continuar?")
-            .setNegativeButton("CANCELAR",null)
-            .setPositiveButton("CAMBIAR AHORA",(d,w)->{
-                if(!pedestrian.toggle(r->updateAlert(r.summary())))
-                    updateAlert("Sin orden: la app debe estar visible y fuera de cooldown");
-                else updateAlert("Consultando y cambiando 2074…");
-            }).show();
+        if(!pedestrian.toggle(r->updateAlert(r.summary())))
+            updateAlert("Sin orden: app no visible o control en espera");
+        else updateAlert("Verificando P/velocidad 0 y cambiando 2074…");
     }
     private void updateAlert(String s){
         pedestrianStatus=s;
