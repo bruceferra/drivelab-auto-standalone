@@ -35,7 +35,9 @@ final class T1FuelCalibration {
         double km=p(context).getFloat(SINCE_KM,0f);
         if(oemValue!=null&&Double.isFinite(oemValue)&&
                 oemValue<=T1TripMath.CUTOFF_OEM)return 0;
-        double nominalKm=T1TripMath.PUMP_LITERS*100/latestL100(context);
+        double latestPump=p(context).getFloat(LAST_PUMP,
+            (float)T1TripMath.PUMP_LITERS);
+        double nominalKm=latestPump*100/latestL100(context);
         return Math.max(0,nominalKm-Math.max(0,km));
     }
     /** Verified refill pairs are appended, NEVER overwrite the historic evidence. */
