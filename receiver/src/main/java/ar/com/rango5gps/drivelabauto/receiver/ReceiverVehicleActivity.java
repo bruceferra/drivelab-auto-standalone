@@ -31,13 +31,15 @@ public final class ReceiverVehicleActivity extends Activity {
     private int activeTab=0;
     private VehicleWindowGroup windows;
     private MirrorPulsePilot mirror;
+    private MirrorPositionProbe mirrorProbe;
     private PedestrianAlertControl pedestrian;
     private VehicleReadOnly reader;
     private VehicleChangeScanner changeScanner;
     private VehicleBatchReader batchReader;
     private TextView operationView,alertView,scannerView,scannerValuesView,scannerEventsView,mirrorView;
     private String windowStatus="Sin órdenes enviadas";
-    private String mirrorStatus="Espejos · sin prueba todavía";
+    private String mirrorStatus="Validado en la T1: derecho 2069=1 sube, 2069=2 baja. Izquierdo 2068 pendiente.";
+    private String mirrorPositionStatus="Posiciones HAL aún no consultadas";
     private String pedestrianStatus="SIN CONSULTAR · alarma de peatones";
     private String fuelStatus="Sin lectura actual";
     private String energyStatus="Sin lectura";
@@ -53,6 +55,7 @@ public final class ReceiverVehicleActivity extends Activity {
         super.onCreate(saved);
         windows=new VehicleWindowGroup(this);
         mirror=new MirrorPulsePilot(this);
+        mirrorProbe=new MirrorPositionProbe(this);
         pedestrian=new PedestrianAlertControl(this);
         reader=new VehicleReadOnly(this);
         changeScanner=new VehicleChangeScanner(this);
@@ -71,11 +74,13 @@ public final class ReceiverVehicleActivity extends Activity {
         super.onResume();
         windows.setForeground(true);
         mirror.setForeground(true);
+        mirrorProbe.setForeground(true);
         pedestrian.setForeground(true);
     }
     @Override protected void onPause(){
         windows.setForeground(false);
         mirror.setForeground(false);
+        mirrorProbe.setForeground(false);
         mirror.cancel();
         pedestrian.setForeground(false);
         changeScanner.stop();
@@ -114,7 +119,7 @@ public final class ReceiverVehicleActivity extends Activity {
         LinearLayout root=column();root.setPadding(16,10,16,26);
         scroll.addView(root);
         label(root,"DRIVELAB AUTO · T1",23);
-        label(root,"v0.2.11 QA · Prueba experimental de espejos",12);
+        label(root,"v0.2.12 QA · Espejos 500 ms y lectura de posición",12);
         button(root,"← VOLVER A MAPAS Y PUENTE",this::finish);
         LinearLayout menu=new LinearLayout(this);
         menu.setOrientation(LinearLayout.HORIZONTAL);
@@ -136,34 +141,74 @@ public final class ReceiverVehicleActivity extends Activity {
         setContentView(scroll);
     }
     private boolean vehicleBusy(){
-        return windows.busy()||mirror.busy()||pedestrian.busy()||
+        return windows.busy()||mirror.busy()||mirrorProbe.busy()||pedestrian.busy()||
             changeScanner.isRunning()||batchReader.busy();
     }
     private void renderVehicle(LinearLayout body){
-        section(body,"ESPEJO EN REVERSA · PRUEBA MANUAL EXPERIMENTAL");
-        label(body,"Código 2069 identificado en T1N134. Esta prueba NO inclina automáticamente " +
-            "al poner R: solo envía un pulso de 120 ms tras confirmar que la marcha OEM " +
-            "es P y la velocidad OEM es 0. Valores 1/2: sentido y lado SIN VALIDAR. " +
-            "Probar en P, detenido, espejo despejado, mirando el movimiento.",13);
-        LinearLayout mirrorRow=new LinearLayout(this);
-        mirrorRow.setOrientation(LinearLayout.HORIZONTAL);
-        Button m1=new Button(this);m1.setText("PULSO 1");m1.setAllCaps(false);
-        m1.setOnClickListener(v->confirmMirrorPulse(1));
-        mirrorRow.addView(m1,new LinearLayout.LayoutParams(0,60,1));
-        Button m2=new Button(this);m2.setText("PULSO 2");m2.setAllCaps(false);
-        m2.setOnClickListener(v->confirmMirrorPulse(2));
-        mirrorRow.addView(m2,new LinearLayout.LayoutParams(0,60,1));
-        body.addView(mirrorRow);
-        button(body,"LIBERAR MANDO · 2069=0",()->{
+        section(body,"ESPEJOS · ENSAYO MANUAL SOLO EN P");
+        label(body,"Validado físicamente: derecho 2069=1 SUBE, 2069=2 BAJA "+
+            "(cuatro pulsos y retorno). Izquierdo ID 2068: candidato SIN validar. "+
+            "Las órdenes siguientes duran como máximo 500 ms y se liberan con valor 0. "+
+            "Vehículo estacionado en P, velocidad 0, observando el retrovisor.",13);
+        button(body,"LEER MARCHA Y VELOCIDAD · SIN MOVER",()->{
+            if(vehicleBusy()){updateMirror("Otra consulta OEM en curso");return;}
+            if(!mirror.readGearOnce(this::updateMirror))
+                updateMirror("No se inició lectura de marcha");
+            else updateMirror("Leyendo marcha 1033 y velocidad…");
+        });
+        button(body,"LEER POSICIONES Y RANGOS HAL · SOLO LECTURA",()->{
+            if(vehicleBusy()){updateMirror("Otra operación OEM en curso");return;}
+            if(!mirrorProbe.readOnce(value->{
+                mirrorPositionStatus=value;
+                if(activeTab==0&&!isFinishing())render();
+            }))updateMirror("No se pudo iniciar lectura HAL");
+            else {mirrorPositionStatus="Consultando CarPropertyManager…";render();}
+        });
+        status(body,mirrorPositionStatus);
+        button(body,"GUARDAR LECTURA ACTUAL COMO REFERENCIA D",()->saveMirrorSnapshot("D"));
+        button(body,"GUARDAR LECTURA ACTUAL COMO REFERENCIA R",()->saveMirrorSnapshot("R"));
+        label(body,"Estas referencias conservan la lectura cruda, NO un ángulo validado. "+
+            "Si la HAL no entrega posición, no podemos detectar extremos ni ordenar "+
+            "IR AL VALOR INICIAL/FINAL con seguridad.",12);
+        section(body,"DERECHO · CONTROL PROBADO");
+        LinearLayout rightRow=new LinearLayout(this);
+        rightRow.setOrientation(LinearLayout.HORIZONTAL);
+        Button upRight=new Button(this);upRight.setText("SUBIR ▲ 500 ms");
+        upRight.setAllCaps(false);
+        upRight.setOnClickListener(v->confirmMirrorPulse(2069,1,500));
+        rightRow.addView(upRight,new LinearLayout.LayoutParams(0,64,1));
+        Button downRight=new Button(this);downRight.setText("BAJAR ▼ 500 ms");
+        downRight.setAllCaps(false);
+        downRight.setOnClickListener(v->confirmMirrorPulse(2069,2,500));
+        rightRow.addView(downRight,new LinearLayout.LayoutParams(0,64,1));
+        body.addView(rightRow);
+        button(body,"DERECHO · PULSO CORTO 120 ms PARA COMPARAR",()->
+            confirmMirrorPulse(2069,2,120));
+        section(body,"IZQUIERDO · 2068 SIN VALIDACIÓN FÍSICA");
+        label(body,"Códigos candidatos. No se conoce todavía si 1/2 corresponde "+
+            "a subir/bajar ni si ese ID acepta órdenes en esta unidad. "+
+            "Un solo ensayo por vez.",12);
+        LinearLayout leftRow=new LinearLayout(this);
+        leftRow.setOrientation(LinearLayout.HORIZONTAL);
+        Button leftOne=new Button(this);leftOne.setText("IZQ · 1 · 500 ms");
+        leftOne.setAllCaps(false);
+        leftOne.setOnClickListener(v->confirmMirrorPulse(2068,1,500));
+        leftRow.addView(leftOne,new LinearLayout.LayoutParams(0,64,1));
+        Button leftTwo=new Button(this);leftTwo.setText("IZQ · 2 · 500 ms");
+        leftTwo.setAllCaps(false);
+        leftTwo.setOnClickListener(v->confirmMirrorPulse(2068,2,500));
+        leftRow.addView(leftTwo,new LinearLayout.LayoutParams(0,64,1));
+        body.addView(leftRow);
+        button(body,"LIBERAR ÚLTIMO ESPEJO · VALOR 0",()->{
             mirror.cancel();
             if(!mirror.release(this::updateMirror))
                 updateMirror("No se pudo intentar liberar: panel no visible");
-            else updateMirror("Solicitando liberación OEM 2069=0…");
+            else updateMirror("Solicitando liberación OEM del último espejo…");
         });
         mirrorView=status(body,mirrorStatus);
-        label(body,"No hay posición absoluta ni restauración de espejo validada. " +
-            "La respuesta Binder no confirma movimiento ni parada física. " +
-            "Si el espejo no se detiene, usar el control OEM; no circular hasta verificar.",12);
+        label(body,"NO hay cambio automático a R/D ni desplazamiento a topes. "+
+            "La respuesta Binder no prueba parada física. Si algo se mueve de "+
+            "forma anormal, usá el mando OEM y suspendé la prueba.",12);
         section(body,"VENTANILLAS · CONTROLES MANUALES");
         label(body,"Accionamientos OEM para 2004–2007. Una operación por vez, "+
             "con lectura anterior/posterior. Probar detenido, en P y sin obstáculos.",13);
@@ -196,22 +241,36 @@ public final class ReceiverVehicleActivity extends Activity {
         button(body,"ALARMA PEATÓN · CAMBIAR ON/OFF",this::confirmPedestrian);
         alertView=status(body,pedestrianStatus);
     }
-    private void confirmMirrorPulse(int direction){
+    private void confirmMirrorPulse(int mirrorId,int direction,int durationMs){
         if(vehicleBusy()){
             updateMirror("Otra operación OEM está en curso");return;
         }
         new AlertDialog.Builder(this)
-            .setTitle("ESPEJO · PRUEBA 2069="+direction)
-            .setMessage("Solo con la Jetour detenida y en P. Un pulso de 120 ms; " +
-                "el sentido y el espejo afectado aún NO están confirmados. " +
-                "Mirá el espejo antes de continuar y tené disponible el mando físico OEM. " +
-                "¿Enviar una sola orden experimental?")
+            .setTitle("ESPEJO "+mirrorId+" · ORDEN "+direction)
+            .setMessage("Solo con la Jetour detenida en P. Se enviará una orden "+
+                "de "+durationMs+" ms, seguida de liberar a 0. "+
+                (mirrorId==2068?
+                "El izquierdo todavía no está validado; sentido desconocido. ":
+                "El derecho está probado: 1 sube, 2 baja. ")+
+                "Tené disponible el mando físico OEM y mirá el movimiento. ¿Confirmás?")
             .setNegativeButton("CANCELAR",null)
-            .setPositiveButton("UN PULSO",(d,w)->{
-                if(!mirror.pulse(direction,this::updateMirror))
-                    updateMirror("Orden no iniciada: panel oculto, cooldown o control ocupado");
-                else updateMirror("Consultando marcha/velocidad y, si es seguro, emitiendo pulso…");
+            .setPositiveButton("ENSAYAR", (dialog,which)->{
+                if(!mirror.pulse(mirrorId,direction,durationMs,this::updateMirror))
+                    updateMirror("No se inició: cooldown, panel oculto o control ocupado");
+                else updateMirror("Validando P/velocidad y enviando orden limitada…");
             }).show();
+    }
+    private void saveMirrorSnapshot(String position){
+        if(!mirrorPositionStatus.startsWith("POSICIÓN DE ESPEJOS")){
+            updateMirror("Primero tocá LEER POSICIONES Y RANGOS HAL");
+            return;
+        }
+        getSharedPreferences("mirror_calibration",MODE_PRIVATE).edit()
+            .putString("mirror_reference_"+position,mirrorPositionStatus)
+            .putLong("mirror_reference_"+position+"_at",System.currentTimeMillis())
+            .apply();
+        updateMirror("Referencia "+position+" guardada como instantánea HAL "+
+            "(NO prueba ángulo ni permite auto-reversa).");
     }
     private void updateMirror(String value){
         mirrorStatus=value;
