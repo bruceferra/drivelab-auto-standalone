@@ -93,7 +93,11 @@ El propietario propuso una alternativa más simple que las ocho posiciones virtu
 
 **CONFIRMADO en GitHub:** [Receiver 0.2.15/latest](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.15), [workflow firmado 42838320184 EXITOSO](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42838320184). El botón/aviso del actualizador interno ofrece v0.2.15 / code16. `sender.json` conserva **idéntico SHA-256** a v0.2.14, por lo cual **Sender queda v0.2.13**. No descargar APK suelta ni desinstalar Receiver. La [pantalla nueva TABLERO T1](TABLERO_T1_RECEIVER_V0_2_15.md) contiene dos históricos de repostaje, CI186 y energía cruda en lectura puntual y exportación CSV privada; no calcula autonomía física, kWh, TRIP A/B sin sensores validados. Instalación en T1 **pendiente de prueba del usuario**.
 
-## Próxima integración## Próxima integración
+## Corrección de usabilidad de espejos Receiver 0.2.16
+
+Prueba visual con una marca fija: **500, 1.000 y 2.000 ms producen el mismo desplazamiento** del espejo en las órdenes OEM actuales. No se puede calibrar el recorrido acumulando esos milisegundos como desplazamiento proporcional; es probable que cada transición envíe un paso discreto. La UI nueva deja solo movimiento de **500 ms**, quita las confirmaciones modales para controles de espejo/plegado, y muestra la lectura **RAW 2068/2069 justo debajo del botón** correspondiente, no al final. Las condiciones OEM de **P, velocidad cero, liberación 0 y cooldown** permanecen en código. El plegado vía API Android Automotive está denegado por permiso OEM, sin bypass. [Evidencia y restricciones](RECEIVER_ESPEJOS_CALIBRACION_TEMPORAL_2026-11-10.md). Los cambios no afectan Sender, viajes, mapas, tablero de consumo ni ventanas.
+
+## Próxima integración## Próxima integración## Próxima integración
 
 El módulo hoy llamado **ENERGÍA / CODE** en Receiver crecerá hasta **TABLERO T1** con litros reales estimados, autonomía contrastada, SOC, corriente, energía y consumo. Su modelo deberá almacenar observaciones originales y cálculos reproducibles por separado. El tratamiento del consumo continúa en el documento de tablero; no inventar señales ni convertir mediciones de otro proyecto en valores OEM verificados.
 
