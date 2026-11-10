@@ -107,6 +107,14 @@ La [release v0.2.16/latest](https://github.com/bruceferra/drivelab-auto-standalo
 
 **Cambio de lógica pedido:** al entrar en R, bajar una sola vez N pasos por espejo, sin repetir durante R↔otras marchas a baja velocidad. Recuperar solo con **marcha conocida distinta de R + velocidad >10 km/h mantenida 800 ms**, incluso N si el coche estuviera rodando. **El motor automático aún NO está conectado:** se añadió `MirrorParkingPolicy` Java puro con pruebas, mientras se valida 1033 en R y velocidad OEM. Documentación: [espejos R/no-R](ESPEJOS_AUTO_R_NO_R_10KMH_2026-11-10.md). Los pasos 10 son ejemplo, no ajuste medido. Sin cambios a Sender, mapas, viajes ni cálculo de tanque.
 
+## Marcha R con cámara y posible plegado por 2003 (10/11/2026)
+
+El propietario confirmó **P=1, N=3, D=4** en `1033`; todavía no puede leer **R** porque aparece la cámara OEM. La Receiver experimental **0.2.18** agrega grabación puntual **35s** de cambios de `1033` mediante servicio de lectura independiente, para consultar el historial al regresar a P. La cámara no se desactiva.
+
+También observó **2003: desplegar 0→1, plegar 1→0**. Es una **transición de lectura**, no una prueba de escritura. Nuevos controles experimentales de lectura y **ensayo individual** `2003=0` plegar / `2003=1` desplegar, con prelectura P/velocidad 0 y una sola orden; **no liberar con 0** después de desplegar, porque 0 podría plegar. **No se habilita auto-R** hasta verificar `1033` y velocidad. [Pasos de ensayo y evidencia](PRUEBA_MARCHA_CAMARA_Y_PLEGADO_2003_2026-11-10.md).
+
+El propietario confirmó capacidad de **proyección a pantalla completa e importación ZIP de skins** desde T1Launcher. El objetivo del tablero es una vista dinámica propia, independiente de mapas, con agujas animadas basadas en señales OEM verificadas y autonomía estimada usando **solo surtidor/CSV/Ω/CI186**; no usar cálculo viejo T1Launcher. La proyección arbitraria está observada, pero la integración técnica del ZIP y sus datos **sigue por validar**.
+
 ## Próxima integración## Próxima integración## Próxima integración## Próxima integración## Próxima integración
 
 El módulo hoy llamado **ENERGÍA / CODE** en Receiver crecerá hasta **TABLERO T1** con litros reales estimados, autonomía contrastada, SOC, corriente, energía y consumo. Su modelo deberá almacenar observaciones originales y cálculos reproducibles por separado. El tratamiento del consumo continúa en el documento de tablero; no inventar señales ni convertir mediciones de otro proyecto en valores OEM verificados.

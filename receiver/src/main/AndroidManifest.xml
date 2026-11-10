@@ -27,6 +27,9 @@
             android:exported="false" />
         <service android:name=".ReceiverService" android:exported="false"
             android:foregroundServiceType="dataSync" />
+        <!-- User-triggered, 35-second OEM 1033 read-only sampler; independent of navigation. -->
+        <service android:name=".GearCaptureService" android:exported="false"
+            android:foregroundServiceType="dataSync" />
         <receiver android:name=".BootReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

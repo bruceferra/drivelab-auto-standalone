@@ -38,11 +38,12 @@ public final class ReceiverVehicleActivity extends Activity {
     private VehicleChangeScanner changeScanner;
     private VehicleBatchReader batchReader;
     private TextView operationView,alertView,scannerView,scannerValuesView,scannerEventsView,mirrorView;
-    private TextView mirrorGearView,mirrorRawView,mirrorHalView;
+    private TextView mirrorGearView,mirrorRawView,mirrorHalView,gearCaptureView,fold2003View;
     private String windowStatus="Sin órdenes enviadas";
     private String mirrorStatus="Validado en la T1: 2068 izquierdo y 2069 derecho funcionan en ambos sentidos.";
     private String mirrorGearStatus="Marcha y velocidad: sin consultar";
     private String mirrorRawStatus="Estados RAW 2068/2069: sin consultar";
+    private String fold2003Status="Plegado OEM 2003: sin consultar";
     private String mirrorPositionStatus="Posiciones HAL aún no consultadas";
     private String pedestrianStatus="SIN CONSULTAR · alarma de peatones";
     private String fuelStatus="Sin lectura actual";
@@ -80,6 +81,7 @@ public final class ReceiverVehicleActivity extends Activity {
         mirror.setForeground(true);
         mirrorProbe.setForeground(true);
         pedestrian.setForeground(true);
+        refreshGearCaptureView();
     }
     @Override protected void onPause(){
         windows.setForeground(false);
@@ -124,7 +126,7 @@ public final class ReceiverVehicleActivity extends Activity {
         LinearLayout root=column();root.setPadding(16,10,16,26);
         scroll.addView(root);
         label(root,"DRIVELAB AUTO · T1",23);
-        label(root,"v0.2.17 · Ajustes de espejos y AVAS de un toque",12);
+        label(root,"v0.2.18 · Registro de marchas con cámara de reversa",12);
         button(root,"← VOLVER A MAPAS Y PUENTE",this::finish);
         LinearLayout menu=new LinearLayout(this);
         menu.setOrientation(LinearLayout.HORIZONTAL);
@@ -168,6 +170,13 @@ public final class ReceiverVehicleActivity extends Activity {
             else updateMirrorGear("Consultando marcha 1033 y velocidad…");
         });
         mirrorGearView=status(body,mirrorGearStatus);
+        section(body,"REGISTRO DE MARCHAS · AUNQUE APAREZCA LA CÁMARA");
+        label(body,"P=1, N=3, D=4 observados. Falta confirmar R=2. "+
+            "Grabación OEM de 35 segundos: solo lectura, sin mover espejos.",12);
+        button(body,"GRABAR MARCHAS 35 S · SOLO LECTURA",this::startGearCapture);
+        button(body,"VER RESULTADO GRABADO",this::refreshGearCaptureView);
+        button(body,"DETENER REGISTRO",this::stopGearCapture);
+        gearCaptureView=status(body,gearCaptureText());
 
         section(body,"LECTOR DE ESTADO · DERECHO 2069 / IZQUIERDO 2068");
         button(body,"LEER ESTADO RAW 2068 / 2069 · MANDO SUELTO",()->{
@@ -227,16 +236,35 @@ public final class ReceiverVehicleActivity extends Activity {
         leftTwo.setOnClickListener(v->confirmMirrorPulse(2068,2,500));
         leftRow.addView(leftTwo,new LinearLayout.LayoutParams(0,64,1));
         body.addView(leftRow);
-        // Plegado/desplegado OEM requiere permiso privilegiado denegado;
-        // no mostrar botones que no actúan ni escribir IDs vendor desconocidos.
+        section(body,"PLEGADO OEM · 2003 EXPERIMENTAL");
+        label(body,"Observación con control original: 0 PLEGADO / 1 DESPLEGADO. "+
+            "La escritura 2003 todavía no fue probada físicamente.",12);
+        button(body,"LEER ESTADO DE PLEGADO · 2003",()->{
+            if(vehicleBusy()){updateFold2003("Otra consulta OEM en curso");return;}
+            if(!mirror.readFold2003(this::updateFold2003))
+                updateFold2003("No se inició la lectura 2003");
+            else updateFold2003("Consultando estado OEM 2003…");
+        });
+        fold2003View=status(body,fold2003Status);
+        LinearLayout foldRow=new LinearLayout(this);
+        foldRow.setOrientation(LinearLayout.HORIZONTAL);
+        Button foldButton=new Button(this);foldButton.setAllCaps(false);
+        foldButton.setText("PROBAR PLEGAR 2003=0");
+        foldButton.setOnClickListener(v->testFold2003(false));
+        foldRow.addView(foldButton,new LinearLayout.LayoutParams(0,64,1));
+        Button unfoldButton=new Button(this);unfoldButton.setAllCaps(false);
+        unfoldButton.setText("PROBAR DESPLEGAR 2003=1");
+        unfoldButton.setOnClickListener(v->testFold2003(true));
+        foldRow.addView(unfoldButton,new LinearLayout.LayoutParams(0,64,1));
+        body.addView(foldRow);
         button(body,"LIBERAR ÚLTIMO ESPEJO · VALOR 0",()->{
             mirror.cancel();
             if(!mirror.release(this::updateMirror))
                 updateMirror("No se pudo intentar liberar: panel no visible");
             else updateMirror("Solicitando liberación OEM del último espejo…");
         });
-        label(body,"Auto R: una bajada al entrar en R; vuelta sólo con D >10 km/h. "+
-            "La política está preparada, pero sin actuación hasta validar D/velocidad.",12);
+        label(body,"Auto R aún desactivado: bajada una vez en R, regreso con "+
+            "marcha no-R y velocidad >10 km/h. Requiere validar R y velocidad.",12);
         section(body,"VENTANILLAS · CONTROLES MANUALES");
         label(body,"Accionamientos OEM para 2004–2007. Una operación por vez, "+
             "con lectura anterior/posterior. Probar detenido, en P y sin obstáculos.",13);
@@ -281,10 +309,55 @@ public final class ReceiverVehicleActivity extends Activity {
         else updateMirror("Moviendo espejo "+mirrorId+
             " · verificación OEM P/0 y liberación automática…");
     }
+    private String gearCaptureText(){
+        android.content.SharedPreferences p=getSharedPreferences(
+            GearCaptureService.PREFS,MODE_PRIVATE);
+        String state=p.getString(GearCaptureService.KEY_STATUS,
+            "Sin grabación previa");
+        String log=p.getString(GearCaptureService.KEY_LOG,"");
+        boolean running=p.getBoolean(GearCaptureService.KEY_RUNNING,false);
+        return (running?"GRABANDO · ":"")+state+"\n"+
+            (log.isEmpty()?"Sin transiciones guardadas todavía":log);
+    }
+    private void refreshGearCaptureView(){
+        if(gearCaptureView!=null&&!isFinishing()&&!isDestroyed())
+            gearCaptureView.setText(gearCaptureText());
+    }
+    private void startGearCapture(){
+        try{
+            android.content.Intent i=new android.content.Intent(this,
+                GearCaptureService.class).setAction(GearCaptureService.ACTION_CAPTURE);
+            startForegroundService(i);
+            if(gearCaptureView!=null)gearCaptureView.setText(
+                "Iniciando grabación de 35 segundos…\n"+
+                "Seleccioná R y luego P; la cámara puede cubrir esta pantalla.");
+        }catch(Exception ex){
+            if(gearCaptureView!=null)gearCaptureView.setText(
+                "No se pudo iniciar la lectura: "+ex.getClass().getSimpleName());
+        }
+    }
+    private void stopGearCapture(){
+        startService(new android.content.Intent(this,GearCaptureService.class)
+            .setAction(GearCaptureService.ACTION_CANCEL));
+        if(gearCaptureView!=null)gearCaptureView.setText(
+            "Deteniendo la lectura… Tocá VER RESULTADO para consultar.");
+    }
+
     private void updateMirrorGear(String value){
         mirrorGearStatus=value;
         if(mirrorGearView!=null&&!isFinishing()&&!isDestroyed())
             mirrorGearView.setText(value);
+    }
+    private void testFold2003(boolean unfold){
+        if(vehicleBusy()){updateFold2003("Otra operación OEM está en curso");return;}
+        if(!mirror.testFold2003(unfold,this::updateFold2003))
+            updateFold2003("No se inició el ensayo 2003");
+        else updateFold2003("Verificando P/velocidad 0 y estado 2003…");
+    }
+    private void updateFold2003(String value){
+        fold2003Status=value;
+        if(fold2003View!=null&&!isFinishing()&&!isDestroyed())
+            fold2003View.setText(value);
     }
     private void updateMirrorRaw(String value){
         mirrorRawStatus=value;

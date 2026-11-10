@@ -226,6 +226,106 @@ public final class MirrorPulsePilot {
         }
     }
 
+    /**
+     * First-party OEM property 2003 observed by the driver: 0 when folded,
+     * 1 when unfolded. Diagnostic readback does not establish write permission.
+     * P+stationary and foreground are required even for a read here.
+     */
+    public boolean readFold2003(Callback callback){
+        if(!foreground||!busy.compareAndSet(false,true))return false;
+        stop.set(false);
+        new Thread(()->{
+            Connection c=null;String status;
+            try{
+                requireReady();
+                c=connect();
+                requireParked(c.binder);
+                int value=readInt(c.binder,2003);
+                status="LECTURA 2003="+value+" · "+
+                    (value==0?"candidato PLEGADO":value==1?
+                    "candidato DESPLEGADO":"NO IDENTIFICADO")+
+                    " (comprobar visualmente)";
+            }catch(Exception e){
+                status="LECTURA 2003 NO DISPONIBLE · "+e.getClass().getSimpleName()+
+                    " · "+String.valueOf(e.getMessage());
+            }finally{
+                if(c!=null)c.close();
+                busy.set(false);
+            }
+            emit(callback,status);
+        },"T1-Fold2003-ReadOnly").start();
+        return true;
+    }
+
+    /**
+     * Experimental manually initiated write. 2003 is a *latching fold state*,
+     * not a timed 2068/2069 direction: NEVER send a release=0 after unfolded=1,
+     * because 0 is the driver's observed FOLD state.
+     */
+    public boolean testFold2003(boolean unfold,Callback callback){
+        if(!foreground||!busy.compareAndSet(false,true))return false;
+        stop.set(false);
+        new Thread(()->{
+            Connection c=null;String status;int target=unfold?1:0;
+            try{
+                requireReady();
+                c=connect();
+                requireParked(c.binder);
+                int beforeState=readInt(c.binder,2003);
+                if(beforeState!=0&&beforeState!=1)
+                    throw new IllegalStateException("Estado 2003 desconocido: "+
+                        beforeState+"; no se escribió");
+                if(beforeState==target){
+                    status="2003 ya indica "+target+
+                        " · no se repitió orden (verificar visualmente)";
+                }else{
+                    requireReady();
+                    // Exactly one write; no repeated/timed pulse and no reset to 0.
+                    writeFold2003(c.binder,target);
+                    SystemClock.sleep(250);
+                    int afterState=readInt(c.binder,2003);
+                    status="ENSAYO OEM 2003 "+beforeState+"→"+target+
+                        " · lectura posterior="+afterState+
+                        (afterState==target?" · lectura coherente":
+                        " · CAMBIO NO CONFIRMADO")+
+                        ". Verificar movimiento físico antes de reutilizar.";
+                }
+            }catch(Exception ex){
+                status="PLEGADO 2003 NO EJECUTADO/NO CONFIRMADO · "+
+                    ex.getClass().getSimpleName()+" · "+String.valueOf(ex.getMessage());
+            }finally{
+                if(c!=null)c.close();
+                busy.set(false);
+            }
+            emit(callback,status);
+        },"T1-Fold2003-SingleTest").start();
+        return true;
+    }
+
+    private void requireParked(IBinder binder)throws Exception{
+        int gear=readInt(binder,GEAR_ID);
+        if(gear!=GEAR_P)
+            throw new IllegalStateException("Se exige P (1033=1); actual="+gear);
+        double speed=readSpeed(binder);
+        if(!Double.isFinite(speed)||speed<0||speed>0.5)
+            throw new IllegalStateException("Se exige velocidad 0, actual="+speed);
+    }
+
+    private void writeFold2003(IBinder binder,int target)throws Exception{
+        if(target!=0&&target!=1)
+            throw new SecurityException("Estado de plegado no permitido");
+        Parcel data=Parcel.obtain(),reply=Parcel.obtain();
+        try{
+            data.writeInterfaceToken(TOKEN);
+            data.writeInt(2003);
+            data.writeInt(target);
+            data.writeString(app.getPackageName());
+            if(!binder.transact(15,data,reply,0))
+                throw new IllegalStateException("OEM rechazó setInt(2003,"+target+")");
+            reply.readException();
+        }finally{data.recycle();reply.recycle();}
+    }
+
     private void emit(Callback callback,String status){
         main.post(()->callback.done(status));
     }
@@ -324,7 +424,7 @@ public final class MirrorPulsePilot {
     }
 
     private static int readInt(IBinder binder,int id)throws Exception{
-        if(id!=GEAR_ID&&id!=SPEED_INT_ID&&id!=LEFT_ID&&id!=RIGHT_ID)
+        if(id!=GEAR_ID&&id!=SPEED_INT_ID&&id!=LEFT_ID&&id!=RIGHT_ID&&id!=2003)
             throw new SecurityException("ID lectura inválido");
         Parcel data=Parcel.obtain(),reply=Parcel.obtain();
         try{
