@@ -61,6 +61,8 @@ Releases firmadas Sender/Receiver en este repo público; manifiestos HTTPS lates
 
 En 0.2.10 pasaron compilación Android y tests automáticos del puente; no equivale a prueba de firmware. Release: https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.10.
 
+**Actualización 10/11 — Sender 0.2.10 / Receiver 0.2.11:** la [release oficial latest v0.2.11](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.11) actualiza **solo Receiver** mediante su botón incorporado `ACTUALIZAR RECEIVER · INSTALACIÓN DIRECTA`; `Updater.latest()` lee `releases/latest/download/receiver.json`. El workflow `publish-receiver-ota.yml` verificó que el certificado de firma coincide con la v0.2.10 y dejó el `sender.json` **idéntico** al anterior para no requerir Sender nuevo. El nuevo panel manual de espejo es experimental, sin validación física, no altera el puente. La tabla superior documenta la identidad de la versión base conjunta 0.2.10; versión Receiver más reciente es **0.2.11 / code12**.
+
 ## Diseño objetivo después de 0.2.10 (NO implementado todavía)
 
 Una única interfaz coherente en la T1, que comience por mapas/puente, seguida por **NAVEGACIÓN / MÚSICA / VEHÍCULO / TABLERO (combustible y energía) / AJUSTES**. El diseño de pestañas es intención de producto, **no** algo ya completado en la APK. El panel del vehículo debería leer valores como funciones separadas de los mandos (por seguridad) y actualizarse sin robar foco a Waze.
