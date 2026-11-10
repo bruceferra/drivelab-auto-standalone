@@ -51,7 +51,7 @@ public final class T1InstrumentView extends View {
     }
     private void dial(Canvas c,float cx,float cy,float radius,String label,
                       Float actual,float drawn,float min,float max,int color,
-                      String suffix,String detail){
+                      String suffix,String detail,boolean twoDecimalLiters){
         stroke(0xFF29465A,19);
         RectF r=new RectF(cx-radius,cy-radius,cx+radius,cy+radius);
         c.drawArc(r,145,250,false,p);
@@ -66,8 +66,10 @@ public final class T1InstrumentView extends View {
             fill(color);c.drawCircle(cx,cy,8,p);
         }
         text(c,label,cx,cy-radius-21,23,0xFFD3E7F1);
-        text(c,actual==null?"--":String.format(Locale.US,"%.0f",actual),
-            cx,cy+31,58,actual==null?MUTED:WHITE);
+        text(c,actual==null?"--":(twoDecimalLiters?
+                T1FuelDisplay.liters(actual.doubleValue()):
+                String.format(Locale.US,"%.0f",actual)),
+            cx,cy+31,twoDecimalLiters?54:58,actual==null?MUTED:WHITE);
         text(c,suffix,cx,cy+64,20,color);
         text(c,detail,cx,cy+radius+27,18,MUTED);
     }
@@ -78,11 +80,11 @@ public final class T1InstrumentView extends View {
         fill(NAVY);canvas.drawRoundRect(0,0,1200,490,32,32,p);
         text(canvas,"DRIVELAB  ·  JETOUR T1",600,40,29,WHITE);
         dial(canvas,220,255,145,"VELOCIDAD OEM",speed,shownSpeed,0,200,BLUE,
-            "km/h · señal OEM","SIN SENSOR = --");
+            "km/h · señal OEM","SIN SENSOR = --",false);
         dial(canvas,600,255,145,"NAFTA · CI186",fuel,shownFuel,0,67,GOLD,
-            "L indicados","No son litros físicos");
+            "L indicados · 0,01 L","No son litros físicos",true);
         dial(canvas,980,255,145,"BATERÍA PHEV",soc,shownSoc,0,100,TEAL,
-            "% SOC OEM","No implica kWh de red");
+            "% SOC OEM","No implica kWh de red",false);
         text(canvas,"Los tres indicadores requieren datos reales; sin lectura muestran --",
             600,475,16,MUTED);
         canvas.restore();

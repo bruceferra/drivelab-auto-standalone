@@ -47,6 +47,15 @@ jobs:
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TankEvidence.java \
             receiver/tests/T1TankEvidenceTest.java
           java -cp /tmp/tank-evidence-test T1TankEvidenceTest
+      - name: CI186 fuel display two decimals regression (pure JVM)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/fuel-display-test
+          javac -encoding UTF-8 -d /tmp/fuel-display-test \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1FuelDisplay.java \
+            receiver/tests/T1FuelDisplayTest.java
+          java -cp /tmp/fuel-display-test T1FuelDisplayTest
       - name: Mirror parking R/D policy regression (pure JVM)
         shell: bash
         run: |
