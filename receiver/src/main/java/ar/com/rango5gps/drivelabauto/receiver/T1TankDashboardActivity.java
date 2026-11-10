@@ -43,7 +43,8 @@ public final class T1TankDashboardActivity extends Activity {
     private final AtomicBoolean sampling=new AtomicBoolean(false);
     private volatile boolean visible;
     private T1InstrumentView instruments;
-    private TextView liveStatus,rangeStatus,tripStatus,formStatus;
+    private TextView liveStatus,rangeStatus,tripStatus,formStatus,syncStatus;
+    private EditText syncPin;
     private EditText gasolinePrice,energyPrice,refillLiters,refillKm,anchorKm;
     private File pendingCsv;
     private double lastFuel=Double.NaN;
@@ -52,6 +53,7 @@ public final class T1TankDashboardActivity extends Activity {
         @Override public void run(){
             if(!visible)return;
             updateTripStatus();
+            updateSyncStatus();
             if(!sampling.get()&&System.currentTimeMillis()-lastUiSample>=3500)
                 readTelem();
             ui.postDelayed(this,1300);
@@ -60,6 +62,7 @@ public final class T1TankDashboardActivity extends Activity {
     @Override public void onCreate(Bundle state){super.onCreate(state);render();}
     @Override protected void onResume(){
         super.onResume();visible=true;ui.removeCallbacks(update);ui.post(update);
+        T1TripSync.trigger(this,false);
     }
     @Override protected void onPause(){
         visible=false;ui.removeCallbacks(update);super.onPause();
@@ -160,6 +163,26 @@ public final class T1TankDashboardActivity extends Activity {
             "1048/1049, recirculación, plegado y ruta GPS disponible.",
             12,GRAY,false));
         action(root,"EXPORTAR ÚLTIMO TRIP CSV",BLUE,this::exportLastTrip);
+
+        section(root,"SINCRONIZACIÓN PRIVADA · TRIP");
+        LinearLayout sync=card(root,PALE);
+        sync.addView(text("Sube automáticamente cada ~60 segundos cuando hay "+
+            "Internet. Si falla, conserva el CSV y reintenta. Sin GPS, VIN "+
+            "ni ubicaciones. Desactivada hasta que la configures.",
+            13,NAVY,false));
+        syncPin=new EditText(this);
+        syncPin.setHint("PIN de 8 dígitos de DriveLab T1");
+        syncPin.setSingleLine(true);
+        syncPin.setInputType(InputType.TYPE_CLASS_NUMBER|
+            InputType.TYPE_NUMBER_VARIATION_PASSWORD);
+        syncPin.setFilters(new android.text.InputFilter[]{
+            new android.text.InputFilter.LengthFilter(8)});
+        sync.addView(syncPin);
+        syncStatus=text("Sincronización desactivada",13,NAVY,true);
+        sync.addView(syncStatus);
+        action(root,"ACTIVAR SINCRONIZACIÓN PRIVADA",TEAL,this::enableSync);
+        action(root,"SUBIR PENDIENTES AHORA",BLUE,this::syncNow);
+        action(root,"PAUSAR SINCRONIZACIÓN",RED,this::disableSync);
 
         section(root,"PRECIOS DEL VIAJE · ARS");
         LinearLayout prices=card(root,PALE);
@@ -285,6 +308,37 @@ public final class T1TankDashboardActivity extends Activity {
                 " = ~$"+fmt(hv*price,0)+" (NO costo de red)":
                 "Precio kWh no configurado; costo eléctrico pendiente")+
             "\n"+p.getString(T1TripRecorderService.STATUS,"Sin viaje"));
+    }
+    private void updateSyncStatus(){
+        if(syncStatus==null)return;
+        android.content.SharedPreferences p=T1TripSync.prefs(this);
+        boolean enabled=p.getBoolean(T1TripSync.ENABLED,false);
+        syncStatus.setText((enabled?"● SINCRONIZACIÓN ACTIVA":"○ SINCRONIZACIÓN PAUSADA")+
+            "\n"+p.getString(T1TripSync.STATUS,"Sin envíos")+
+            "\nMuestras confirmadas: "+p.getInt(T1TripSync.SENT,0));
+    }
+    private void enableSync(){
+        try{
+            T1TripSync.configure(this,syncPin.getText().toString().trim());
+            syncPin.setText("");
+            T1TripSync.trigger(this,true);
+            formStatus.setText("Sincronización activada; enviando pendientes si hay Internet");
+            updateSyncStatus();
+        }catch(Exception ex){formStatus.setText("No se pudo activar: "+ex.getMessage());}
+    }
+    private void syncNow(){
+        if(!T1TripSync.prefs(this).getBoolean(T1TripSync.ENABLED,false)){
+            formStatus.setText("Primero activá con el PIN privado de 8 dígitos");
+            return;
+        }
+        T1TripSync.trigger(this,true);
+        formStatus.setText("Se solicitó la subida; la confirmación aparece en estado.");
+        updateSyncStatus();
+    }
+    private void disableSync(){
+        T1TripSync.disable(this);
+        formStatus.setText("Subida pausada. Los TRIP y CSV locales no se borraron.");
+        updateSyncStatus();
     }
     private void startTrip(){
         if(getSharedPreferences(T1TripRecorderService.PREFS,MODE_PRIVATE)
