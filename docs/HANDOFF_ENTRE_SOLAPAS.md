@@ -59,7 +59,9 @@ Observación del propietario (10/11): `2068` izquierdo; `2069` derecho. En la in
 
 **UX espejos y ensayo de duraciones (10/11):** el usuario constató con una marca fija que **500/1.000/2.000 ms desplazan lo mismo**; por tanto la duración enviada por Binder no equivale a movimiento proporcional. La calibración por tiempo continuo queda **NO VALIDADA**: investigar paso OEM por transición o mecanismo nativo HOLD. Revisión Receiver 0.2.16: resultados RAW 2068/2069 visibles justo bajo el botón, marcha y HAL también junto a los suyos, elimina carteles modales en movimiento de espejos y plegado; mantiene bloqueo real en P, velocidad 0 y liberación, con botones 500 ms solamente. Plegado estándar no funciona por permiso privilegiado; no mandar códigos desconocidos. Sender y tablero no cambian. [Informe](RECEIVER_ESPEJOS_CALIBRACION_TEMPORAL_2026-11-10.md).
 
-## Qué aportar al expediente desde la solapa de consumo## Qué aportar al expediente desde la solapa de consumo
+**Receiver OTA v0.2.16 publicado (10/11)**: [release latest](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.16); lector RAW de espejo bajo el mismo botón, resultados de marcha/HAL separados, sin cuadros modales al accionar espejos o plegado y solo botón 500 ms (usuario confirmó que 500/1.000/2.000 ms producen el mismo recorrido). Se mantienen P/velocidad cero, cooldown y liberación al finalizar; **no hay control continuo ni auto-R/D**. `receiver.json` actualizado, `sender.json` byte a byte idéntico al anterior: Sender v0.2.13, tablero/consumo/viajes intactos. [QA](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42842438931), [publicación OTA](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42842439213). Instalación real en vehículo pendiente de confirmación.
+
+## Qué aportar al expediente desde la solapa de consumo## Qué aportar al expediente desde la solapa de consumo## Qué aportar al expediente desde la solapa de consumo
 
 Registrar cada ensayo nuevo como:
 1. Fecha/hora y condición (EV/HEV, conectado o no, carga/repostaje, nivel, km).
