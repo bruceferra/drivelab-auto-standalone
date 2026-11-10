@@ -154,7 +154,8 @@ public final class ReceiverVehicleActivity extends Activity {
             changeScanner.isRunning()||batchReader.busy();
     }
     private void renderVehicle(LinearLayout body){
-        section(body,"ESPEJOS · ENSAYO MANUAL SOLO EN P");
+        section(body,"ESPEJOS · CONTROL MANUAL EN P");
+        mirrorView=status(body,mirrorStatus);
         label(body,"Validado físicamente: derecho 2069=1 SUBE, 2069=2 BAJA "+
             "(cuatro pulsos y retorno). Izquierdo ID 2068: candidato SIN validar. "+
             "Las órdenes manuales duran hasta 2.000 ms y se liberan con valor 0. "+
@@ -211,9 +212,9 @@ public final class ReceiverVehicleActivity extends Activity {
         downRight.setOnClickListener(v->confirmMirrorPulse(2069,2,500));
         rightRow.addView(downRight,new LinearLayout.LayoutParams(0,64,1));
         body.addView(rightRow);
-        button(body,"DERECHO · BAJAR 1.000 ms · UN SOLO MOVIMIENTO",()->
+        button(body,"DERECHO · BAJAR 1.000 ms · COMPARAR",()->
             confirmMirrorPulse(2069,2,1000));
-        button(body,"DERECHO · SUBIR 1.000 ms · UN SOLO MOVIMIENTO",()->
+        button(body,"DERECHO · SUBIR 1.000 ms · COMPARAR",()->
             confirmMirrorPulse(2069,1,1000));
         button(body,"DERECHO · BAJAR 2.000 ms · ENSAYO LIMITADO",()->
             confirmMirrorPulse(2069,2,2000));
@@ -252,7 +253,6 @@ public final class ReceiverVehicleActivity extends Activity {
                 updateMirror("No se pudo intentar liberar: panel no visible");
             else updateMirror("Solicitando liberación OEM del último espejo…");
         });
-        mirrorView=status(body,mirrorStatus);
         label(body,"NO hay cambio automático a R/D ni desplazamiento a topes. "+
             "La respuesta Binder no prueba parada física. Si algo se mueve de "+
             "forma anormal, usá el mando OEM y suspendé la prueba.",12);
@@ -288,41 +288,28 @@ public final class ReceiverVehicleActivity extends Activity {
         button(body,"ALARMA PEATÓN · CAMBIAR ON/OFF",this::confirmPedestrian);
         alertView=status(body,pedestrianStatus);
     }
+    /** One tap = one attempt. OEM validation is enforced in MirrorPulsePilot. */
     private void confirmMirrorFold(boolean folded){
         if(vehicleBusy()){
             updateMirror("Otra operación OEM está en curso");return;
         }
-        new AlertDialog.Builder(this)
-            .setTitle(folded?"PLEGAR ESPEJOS":"DESPLEGAR ESPEJOS")
-            .setMessage("Solo estacionado en P y velocidad cero, mirando ambos "+
-                "retrovisores. Se intenta exclusivamente la propiedad oficial "+
-                "MIRROR_FOLD con permiso OEM; si no está disponible no hace nada. "+
-                "¿Intentar?")
-            .setNegativeButton("CANCELAR",null)
-            .setPositiveButton("PROBAR",(d,w)->{
-                if(!mirror.requestFold(folded,this::updateMirror))
-                    updateMirror("Consulta de plegado no iniciada");
-                else updateMirror("Comprobando permiso y capacidad MIRROR_FOLD…");
-            }).show();
+        // No modal confirmation: if privileged permission is unavailable,
+        // MirrorPulsePilot refuses the command and reports why.
+        if(!mirror.requestFold(folded,this::updateMirror))
+            updateMirror("Consulta de plegado no iniciada");
+        else updateMirror("Comprobando disponibilidad OEM de plegado…");
     }
+    /** User-triggered mirror action: no modal dialogs or surprise scrolling. */
     private void confirmMirrorPulse(int mirrorId,int direction,int durationMs){
         if(vehicleBusy()){
             updateMirror("Otra operación OEM está en curso");return;
         }
-        new AlertDialog.Builder(this)
-            .setTitle("ESPEJO "+mirrorId+" · ORDEN "+direction)
-            .setMessage("Solo con la Jetour detenida en P. Se enviará una orden "+
-                "de "+durationMs+" ms, seguida de liberar a 0. "+
-                (mirrorId==2068?
-                "El izquierdo todavía no está validado; sentido desconocido. ":
-                "El derecho está probado: 1 sube, 2 baja. ")+
-                "Tené disponible el mando físico OEM y mirá el movimiento. ¿Confirmás?")
-            .setNegativeButton("CANCELAR",null)
-            .setPositiveButton("ENSAYAR", (dialog,which)->{
-                if(!mirror.pulse(mirrorId,direction,durationMs,this::updateMirror))
-                    updateMirror("No se inició: cooldown, panel oculto o control ocupado");
-                else updateMirror("Validando P/velocidad y enviando orden limitada…");
-            }).show();
+        // Mandatory stationarity/gear check, cooldown, bounded duration and
+        // release(0) are performed by the pilot BEFORE/AFTER the OEM write.
+        if(!mirror.pulse(mirrorId,direction,durationMs,this::updateMirror))
+            updateMirror("No se inició: panel oculto, espera o control ocupado");
+        else updateMirror("Moviendo espejo "+mirrorId+
+            " · verificación OEM P/0 y liberación automática…");
     }
     private void saveMirrorSnapshot(String position){
         if(!mirrorPositionStatus.startsWith("POSICIÓN DE ESPEJOS")){
