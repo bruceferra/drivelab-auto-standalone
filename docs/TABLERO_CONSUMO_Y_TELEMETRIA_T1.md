@@ -34,7 +34,7 @@ El nuevo cálculo de T1Launcher T1N134 se describe como medición por **variaci�
 | Consumo mostrado T1 de últimos 50 km | ~6,2 L/100 km en un momento | Promedio de ventana corta, no consumo acumulado del tanque. |
 | Autonomía visual de tablero en muestra | ~383 km restantes cerca de 659 km | Proyección OEM, no medición física de combustible. |
 
-**Nunca** comparar dos lecturas tomadas en distinta hora o distinto ciclo sin declarar esa diferencia. Los valores anteriores proceden de conversaciones, surtidor, menús y CSV relatados; falta integrar/exportar los registros originales completos con marcas de tiempo antes de convertirlos en curva definitiva.
+**Nunca** comparar dos lecturas tomadas en distinta hora o distinto ciclo sin declarar esa diferencia. **Ya se auditaron 13 CSV originales del 03–09/11 (52.880 muestras únicas, con duplicados de exportaciones removidos)**; véase [auditoría de CSV y modelo de calibración del 10/11](CALIBRACION_CSV_T1_2026-11-10.md). Aún faltan el CSV del 10/11, el segundo corte térmico confirmado y el segundo volumen de surtidor antes de ajustar una curva operativa definitiva.
 
 ## Cómo interpretar la reserva
 
