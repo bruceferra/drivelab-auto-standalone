@@ -52,6 +52,13 @@
 - Techo 2008 y señales desconocidas quedan en modo de observación.
 - UI completa tipo launcher, navegación multimedia por volante y sustitución de Android Auto requieren diseño/validación adicionales.
 
+## Receptor experimental 0.2.11-MIRROR-QA (10/11/2026)
+
+- **Compilación firmada:** GitHub Actions [run 42817695751](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42817695751) **PASÓ**. Archivo de prueba firmado y SHA-256 en [prerelease](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.11-mirror-qa). Sender v0.2.10 y Receiver estable v0.2.10 no se cambiaron.
+- **Prueba en vehículo:** **NO PROBADO**. Requiere P, velocidad OEM legible ~0 km/h y confirmación manual. El código mueve el espejo por un solo pulso de 120 ms (ID 2069 con 1 o 2) y solicita liberar con 0. Dirección y lado **PENDIENTES**. Puede no moverse si las lecturas OEM son inaccesibles o no coinciden.
+- **Prohibiciones:** no testear en circulación, no confiar en topes mecánicos como parada, no activar movimiento automático en reversa, no reemplazar la 0.2.10 estable en el canal de actualizaciones hasta validación. Si falla STOP o hay movimiento inesperado, detener y usar los controles de fábrica; no seguir circulando hasta verificar.
+- [Instrucciones detalladas y criterios PASS/FAIL](https://github.com/bruceferra/drivelab-auto-standalone/blob/feature/receiver-espejos-qa-20261110/docs/RECEIVER_ESPEJOS_QA_0_2_11.md).
+
 ## Cuándo retirar los componentes viejos
 
 **No ahora.** Antes de eliminar DriveLab T1 de laboratorio o puente original, deben cumplirse: todas las funciones que realmente se usan están presentes y probadas en Receiver, mapa en clúster robusto, recuperabilidad de APK/firma, respaldos de CSV e historial, y ningún viaje de tanque activo afectado. Solo después se puede desinstalar por paquete e identificar servicios conflictivos. No borrar en bloque historiales personales, canales ni firmas.
