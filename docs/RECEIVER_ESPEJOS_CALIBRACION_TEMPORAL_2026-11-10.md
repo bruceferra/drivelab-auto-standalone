@@ -91,6 +91,14 @@ Al observar `getInt == 2` **establemente con el mando suelto** y contrastarlo co
 
 **Estado en producción:** Receiver 0.2.14 ofrece **lectura RAW y movimientos de ensayo**, pero **NO** implementa posiciones 0/8–8/8, calibración automática, ni D/R automáticos. Este apartado es **diseño**, no una funcionalidad entregada. Sender y mapa/viajes/consumo no se tocan.
 
+## Ensayo físico 10/11 — comandos 500/1.000/2.000 ms equivalentes
+
+El propietario comparó desplazamientos contra una **marca fija visible en un árbol** y confirmó que, al mandar el mismo sentido de espejo, los movimientos de **500, 1.000 y 2.000 ms son indistinguibles**. Es una observación física **CONFIRMADA** (no un registro de cronometraje del motor), por lo que **se rechaza** la hipótesis previa de que la orden `setIntData(2069,1/2)` se sostenga proporcionalmente al tiempo en el protocolo actual. La explicación candidata es que el OEM interpreta cada `0→1/2→0` como **un solo paso/movimiento discreto**, pero aún no se ha demostrado el funcionamiento eléctrico interno.
+
+**Decisión de implementación:** dejar solo botones de ensayo de **500 ms** para ambos espejos (izquierdo todavía sin sentido físico validado), sin botones redundantes de 1/2 segundos. No calibrar la carrera sumando milisegundos nominales de órdenes que producen idéntico movimiento. Para una automatización futura habrá que **medir desplazamiento por transición válida, repetibilidad y extremos mediante getter**, o investigar el mecanismo distinto de mantener pulsado del control OEM; no incrementar artificialmente la duración ni enviar secuencias automáticamente.
+
+**Corrección UX 0.2.16:** `LEER ESTADO RAW 2068/2069` muestra la lectura **inmediatamente debajo del botón** y no al final del bloque de plegado. Marcha/velocidad y HAL tienen sus propios resultados adyacentes. Accionamientos de espejos y plegado dejan de abrir cuadros de confirmación y responden a un toque; se conservan en el piloto OEM la exigencia de P/velocidad cero, temporización acotada, exclusión de comandos simultáneos y `release=0`. El intento de plegado estándar sigue bloqueado por permiso privilegiado conforme a la prueba del propietario; no se eluden permisos ni se envían códigos vendor desconocidos.
+
 ## Próximo resultado que necesitamos del usuario
 
 Para el espejo derecho, registrar lectura **antes, mientras está a mitad y después de soltar**; comparar si `getInt(2069)` continúa reportando 2/0/1 en extremos una vez liberado. Luego ensayo único de 1.000 ms y de 2.000 ms. Esto decide si se puede calibrar con límites detectados o solo medir tiempos aproximados.
