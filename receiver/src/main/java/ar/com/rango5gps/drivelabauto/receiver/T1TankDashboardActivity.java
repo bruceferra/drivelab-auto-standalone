@@ -254,7 +254,11 @@ public final class T1TankDashboardActivity extends Activity {
                     " L indicador · SOC="+(soc==null?"--":fmt(soc,1))+
                     "% · velocidad OEM="+(speed==null?"--":fmt(speed,1))+
                     " · 1048="+fmt(s.counter1048,2)+
-                    " /1049="+fmt(s.counter1049,2));
+                    " /1049="+fmt(s.counter1049,2)+
+                    "\nOEM ÚLTIMOS 50 KM (ventana móvil, NO este TRIP): "+
+                    "1085 nafta="+fmt(s.oemFuelRolling50,1)+" L/100 km · "+
+                    "1084 eléctrica neta="+fmt(s.oemElectricRolling50,1)+
+                    " kWh/100 km");
                 updateRange();
             });
         },"T1-Instrument-ReadOnly").start();
