@@ -6,8 +6,8 @@
 
 **DESCARTAR EL CÁLCULO VIEJO DE NAFTA DEL T1LAUNCHER.** No utilizar el estimador antiguo de consumo en comparaciones, promedios, calibraciones, validaciones ni indicadores. Se prioriza:
 1. Volumen físico cargado por surtidor y distancia del período correspondiente.
-2. Lecturas independientes de tanque, menú OEM, CSV y sensores crudos con hora y procedencia.
-3. **Cálculo nuevo de nafta usada / medida del tanque** del launcher, como dato independiente por contrastar, nunca confundido con surtidor ni con litros OEM.
+2. Lecturas de tanque, menú OEM, CSV y sensores crudos con hora y procedencia; **CI186, menú chino y app externa suelen reflejar la misma fuente OEM y NO son tres mediciones físicas independientes**.
+3. **Cálculo nuevo de nafta usada / medida del tanque** del launcher, como procesamiento externo del cambio de nivel para contrastar; **no independiente físicamente del sensor OEM** ni equivalente a litros certificados de surtidor.
 4. Estimaciones derivadas, solo cuando indiquen fuente, fórmula, límites de incertidumbre y estado de calibración.
 
 El nuevo cálculo de T1Launcher T1N134 se describe como medición por **variación del nivel de combustible**. El análisis estático no demuestra pulsos de inyección ni cuánto combustible generó electricidad; **no asumir medición de inyectores**. La versión medida puede filtrar, cuantizar o compensar nivel del flotante y debe contrastarse.
@@ -51,7 +51,7 @@ Al crear el tablero, presentar aparte “nivel informado”, “utilizables esti
 
 El sensor variable **no parece lineal en todo el recorrido**: satura cerca de 56 Ω antes de completar el repostaje y el 0% de la T1 ocurre con varios litros todavía informados. Conservar pares (Ω, litros, fuente, timestamp, temperatura, repostaje, estado P/EV/HEV) y construir tabla monótona a partir de puntos reales. No extrapolar linealmente a 0/70 desde solo 2 o 3 puntos y no tratar 500 Ω constante como “reserva” sin prueba física.
 
-Validación mínima: al menos varias cargas y descensos de nivel, con datos de surtidor, CI186/menú OEM, lectura resistiva cuando esté disponible, nuevo contador de nafta usada y distancia por mismo tramo temporal; comparar error y saturaciones. El aforo podría variar por inclinación o filtrado del BMS/ECU.
+Validación mínima: cerrar el **segundo ciclo** actualmente en curso con corte natural y surtidor; luego aprovechar repostajes normales y descensos de nivel, sin exigir más vaciados deliberados. Alinear por timestamp surtidor, CI186/menú OEM, resistencia, nuevo contador de nafta usada y distancia por el mismo período; comparar errores y saturaciones. El aforo podría variar por inclinación o filtrado del BMS/ECU.
 
 ## Híbrido enchufable: cómo no distorsionar el cálculo
 
@@ -102,7 +102,7 @@ Vista propuesta:
 - Litros OEM / porcentaje OEM / litros reales estimados / reserva operativa estimada, cada uno con su etiqueta.
 - Última carga y litros de surtidor; nafta usada nueva desde el inicio de ese ciclo, con correcciones por repostajes parciales.
 - Autonomía conservadora, normal y optimista, calculadas a partir de consumo **real del período** y litros **utilizables** con rango de confianza.
-- Distancia total, EV, HEV, L/100 km, km/L, SOC interno/visible, corriente/tensión/potencia HV si están validados, energías cargada/recuperada y modo de operación.
+- **TRIP A del tanque (persistente) y TRIP B parcial (reiniciable sin borrar A)**: distancia, duración total/en movimiento, EV, HEV, L/100 km, km/L, SOC interno/visible, corriente/tensión/potencia HV si están validados, energías cargada/recuperada y modo de operación.
 
 Se generaron dos maquetas de tablero con ~21,6 L, ~22,7 L, 659 km, 15,3 km/L y proyecciones de autonomía; **no concuerdan** en “reserva”/“total”: una usa ~5,3 L de reserva y ~26,9 L total, otra ~3 L y ~25 L. Son **diseños ilustrativos e hipótesis**, no calibración final ni especificación de pantalla.
 
