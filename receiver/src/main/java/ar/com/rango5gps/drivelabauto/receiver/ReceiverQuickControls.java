@@ -102,8 +102,8 @@ final class ReceiverQuickControls {
         if(config==null||status==null)return;
         android.content.SharedPreferences m=mirrorPrefs();
         android.content.SharedPreferences a=hvacPrefs();
-        int l=Math.max(1,Math.min(10,m.getInt(MirrorAutomationService.LEFT,2)));
-        int r=Math.max(1,Math.min(10,m.getInt(MirrorAutomationService.RIGHT,2)));
+        int l=Math.max(1,Math.min(MirrorParkingPolicy.MAX_PULSES_PER_SIDE,m.getInt(MirrorAutomationService.LEFT,2)));
+        int r=Math.max(1,Math.min(MirrorParkingPolicy.MAX_PULSES_PER_SIDE,m.getInt(MirrorAutomationService.RIGHT,2)));
         boolean on=m.getBoolean(MirrorAutomationService.AUTO,false);
         boolean interior=RecirculationGuardService.MODE_INTERIOR.equals(
             a.getString(RecirculationGuardService.MODE,
@@ -175,7 +175,7 @@ final class ReceiverQuickControls {
             message("Primero cambiá a MANUAL para modificar pasos");return;
         }
         int old=mirrorPrefs().getInt(key,2);
-        int value=Math.max(1,Math.min(10,old+delta));
+        int value=Math.max(1,Math.min(MirrorParkingPolicy.MAX_PULSES_PER_SIDE,old+delta));
         mirrorPrefs().edit().putInt(key,value).apply();
         refresh();message((MirrorAutomationService.LEFT.equals(key)?"Izquierdo":"Derecho")+
             " configurado a "+value+" movimientos por ciclo");
