@@ -250,7 +250,7 @@ public final class T1TankDashboardActivity extends Activity {
                     s.speed:null;
                 instruments.setTelemetry(speed,fuel,soc);
                 lastFuel=fuel==null?Double.NaN:fuel;
-                liveStatus.setText("CI186="+(fuel==null?"SIN LECTURA":fmt(fuel,1))+
+                liveStatus.setText("CI186="+(fuel==null?"SIN LECTURA":T1FuelDisplay.liters(fuel))+
                     " L indicador · SOC="+(soc==null?"--":fmt(soc,1))+
                     "% · velocidad OEM="+(speed==null?"--":fmt(speed,1))+
                     " · 1048="+fmt(s.counter1048,2)+
@@ -396,7 +396,7 @@ public final class T1TankDashboardActivity extends Activity {
         try{
             T1FuelCalibration.markFull(this,lastFuel);
             formStatus.setText("Referencia tanque lleno guardada con lectura OEM "+
-                fmt(lastFuel,1));
+                T1FuelDisplay.liters(lastFuel));
             updateRange();
         }catch(Exception ex){
             formStatus.setText("No se registró tanque lleno: "+ex.getMessage());
