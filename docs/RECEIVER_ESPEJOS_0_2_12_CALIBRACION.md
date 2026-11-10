@@ -2,6 +2,10 @@
 
 **Fecha:** 2026-11-10 · **Estado:** versión de ensayo en desarrollo/QA, publicación OTA solo tras compilar y validar firma. Sender v0.2.10 no se modifica.
 
+## Publicación verificada de la prueba OTA
+
+**Publicado y firmado:** [Receiver 0.2.12 OTA release](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.12), v0.2.12/code13. [GitHub Actions 42824306707](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42824306707) **PASÓ**; verificada continuidad del certificado Receiver respecto de v0.2.11. Es `latest` y contiene `receiver.json` (firma/hash/identidad). El archivo `sender.json` conserva **idéntico SHA-256** que v0.2.11: Sender permanece 0.2.10. Instalar únicamente desde el botón de actualizaciones **del Receiver**, con confirmación Android. **Todavía NO hay validación física de funciones nuevas de 0.2.12.**
+
 ## Evidencia de campo (CONFIRMADA por usuario, 10/11)
 
 - En T1 argentina, desde Receiver 0.2.11 instalado **por el actualizador interno**, `2069=2` mueve **abajo** el espejo **derecho** y `2069=1` mueve **arriba**. Se hicieron **4 pulsos en cada sentido**. No se observó bloqueo del motor en esos ensayos.
