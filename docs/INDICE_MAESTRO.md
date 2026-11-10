@@ -115,6 +115,10 @@ También observó **2003: desplegar 0→1, plegar 1→0**. Es una **transición 
 
 El propietario confirmó capacidad de **proyección a pantalla completa e importación ZIP de skins** desde T1Launcher. El objetivo del tablero es una vista dinámica propia, independiente de mapas, con agujas animadas basadas en señales OEM verificadas y autonomía estimada usando **solo surtidor/CSV/Ω/CI186**; no usar cálculo viejo T1Launcher. La proyección arbitraria está observada, pero la integración técnica del ZIP y sus datos **sigue por validar**.
 
+## Receiver 0.2.18 publicada (10/11/2026)
+
+Confirmado: [release Receiver 0.2.18/latest](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.18), [QA 42854161716 exitoso](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42854161716) y [publicación OTA firmada 42854161957 exitosa](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42854161957). Se conserva Sender v0.2.13, mismo `sender.json`. Receiver code19 se instala por su actualizador incorporado. Incluye grabación de 35 s para leer el código R pese a la cámara y prueba manual `2003=0` plegar / `2003=1` desplegar con lectura previa, P/0 y resultado inline. Ninguna escritura 2003 ni detección automática de R está **validada físicamente aún**. [Expediente](PRUEBA_MARCHA_CAMARA_Y_PLEGADO_2003_2026-11-10.md).
+
 ## Próxima integración## Próxima integración## Próxima integración## Próxima integración## Próxima integración
 
 El módulo hoy llamado **ENERGÍA / CODE** en Receiver crecerá hasta **TABLERO T1** con litros reales estimados, autonomía contrastada, SOC, corriente, energía y consumo. Su modelo deberá almacenar observaciones originales y cálculos reproducibles por separado. El tratamiento del consumo continúa en el documento de tablero; no inventar señales ni convertir mediciones de otro proyecto en valores OEM verificados.
