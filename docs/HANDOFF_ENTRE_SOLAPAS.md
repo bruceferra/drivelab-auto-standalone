@@ -47,6 +47,8 @@ Sender y Receiver deben comprobar automáticamente su respectivo manifiesto `sen
 
 Observación del propietario (10/11): `2068` izquierdo; `2069` derecho. En la interfaz observó valores **2 arriba, 1 abajo, 0 en el medio**, todavía pendiente de comprobar si son **readback de posición persistente con mando suelto** o estado de mando. **NO confundir con escrituras:** `setIntData(2069,1)` sube y `(2069,2)` baja físicamente. Propone 1.000–2.000 ms por accionamiento; **10 × 1.000 ms = 10 s es ejemplo, no tiempo completo medido**. Se deben medir recorridos arriba→abajo y abajo→arriba separadamente, y no declarar media carrera por cinco pulsos sin repetibilidad. Código experimental en Receiver 0.2.14 con lectores OEM RAW y comandos manuales, no automáticos. [Informe](RECEIVER_ESPEJOS_CALIBRACION_TEMPORAL_2026-11-10.md). El plegado estándar de Automotive `287312709` requiere privilegio OEM; botones se bloquean si falta permiso.
 
+**OTA 0.2.14 confirmado:** [release latest Receiver 0.2.14](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.14) y [workflow firmado exitoso 42832582917](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42832582917). Sender permanece 0.2.13 (manifest sin cambios). No hay confirmación de instalación en T1. El usuario debe actualizar desde el botón integrado u oferta de actualización al abrir. Incluye pruebas de 1/2s, getter RAW estados y plegado condicionado; NO movimiento automático en R/D ni tiempo total medido. [Doc](RECEIVER_ESPEJOS_CALIBRACION_TEMPORAL_2026-11-10.md).
+
 ## Qué aportar al expediente desde la solapa de consumo
 
 Registrar cada ensayo nuevo como:
