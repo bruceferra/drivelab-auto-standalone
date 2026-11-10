@@ -61,6 +61,10 @@ La antigua [pre-release v0.2.11-mirror-qa](https://github.com/bruceferra/drivela
 
 **Instalación:** única vía recomendada al usuario: `DriveLab Auto Receiver → ACTUALIZAR RECEIVER · INSTALACIÓN DIRECTA`, confirmación nativa de Android. **No entregar APK por separado** y no desinstalar Receiver. Esta publicación no equivale a que el usuario ya la haya instalado ni validado físicamente. Funciones: derecho 2069 con órdenes de hasta 500 ms, izquierdo 2068 candidato, consulta de marcha/velocidad, lectura de posición/rangos HAL sin escritura, instantáneas D/R (no auto-reversa). [Procedimiento](RECEIVER_ESPEJOS_0_2_12_CALIBRACION.md).
 
+## Actualización de experiencia Sender/Receiver v0.2.13 (10/11/2026)
+
+Se implementó comprobación automática del manifiesto al abrir Sender o Receiver (solo consulta; **ofrece** instalar con consentimiento), aviso visible al tocar actualización manual cuando es la última versión, y conservación de scroll tras cada interacción en ambas pantallas y panel VEHÍCULO. El usuario informó en Receiver 0.2.12 **P/velocidad 0** correctos y **ninguna de las propiedades HAL de posición de espejo en la lista accesible**; eso no demuestra permiso denegado ni ausencia de sensor. Véase [especificación y pruebas 0.2.13](ACTUALIZADOR_Y_SCROLL_0_2_13_2026-11-10.md).
+
 ## Próxima integración
 
 El módulo hoy llamado **ENERGÍA / CODE** en Receiver crecerá hasta **TABLERO T1** con litros reales estimados, autonomía contrastada, SOC, corriente, energía y consumo. Su modelo deberá almacenar observaciones originales y cálculos reproducibles por separado. El tratamiento del consumo continúa en el documento de tablero; no inventar señales ni convertir mediciones de otro proyecto en valores OEM verificados.
