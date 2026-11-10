@@ -235,9 +235,8 @@ public final class ReceiverVehicleActivity extends Activity {
                 updateMirror("No se pudo intentar liberar: panel no visible");
             else updateMirror("Solicitando liberación OEM del último espejo…");
         });
-        label(body,"NO hay cambio automático a R/D ni desplazamiento a topes. "+
-            "La respuesta Binder no prueba parada física. Si algo se mueve de "+
-            "forma anormal, usá el mando OEM y suspendé la prueba.",12);
+        label(body,"Auto R: una bajada al entrar en R; vuelta sólo con D >10 km/h. "+
+            "La política está preparada, pero sin actuación hasta validar D/velocidad.",12);
         section(body,"VENTANILLAS · CONTROLES MANUALES");
         label(body,"Accionamientos OEM para 2004–2007. Una operación por vez, "+
             "con lectura anterior/posterior. Probar detenido, en P y sin obstáculos.",13);
