@@ -32,6 +32,14 @@ Mostrar desde DriveLab Auto Receiver un **tablero comprobable** de consumo PHEV 
 
 **Canal OTA requerido:** `publish-receiver-ota.yml` debe producir **Receiver v0.2.15 versionCode 16** con su firma anterior, publicar `receiver.json` en la release latest y **mantener `sender.json` de Sender 0.2.13 bit a bit sin cambios**. Usuario actualiza solamente mediante el botón incorporado u oferta automática al abrir Receiver; **nunca descargar APK externa ni desinstalar**. No declarar versión publicada antes de que GitHub Actions termine y se verifiquen los assets.
 
+## Publicación verificada en GitHub
+
+- **Receiver v0.2.15 / versionCode 16** publicado como release [v0.2.15/latest](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.15).
+- **GitHub Actions OTA firmado [42838320184](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42838320184) PASÓ**, incluida la comparación de certificado contra Receiver v0.2.14 y la validación del paquete/versión; QA de compilación de la PR [19](https://github.com/bruceferra/drivelab-auto-standalone/pull/19) también pasó.
+- Release contiene `DriveLab-Auto-Receiver-v0.2.15.apk`, `receiver.json`, `receiver.sha256` y `sender.json`. **Digest SHA-256 APK Receiver:** `c95a25adec4aea42d8425b7ee18c5597b06e9477f1b295b1f5def2125a2a3eed`.
+- **Sender v0.2.13 sigue SIN cambios**: el digest de `sender.json` coincide exactamente con la release v0.2.14 (SHA-256 `9c6a0a084a21d8c5ab98b183764c906fba89e3688fba1f7003b6799b7d11ee9d`). No se publica APK Sender nueva.
+- **Forma de actualización única:** desde la aplicación Receiver instalada, mediante `ACTUALIZAR RECEIVER · INSTALACIÓN DIRECTA` u oferta automática de su actualizador. No entregar APK manual. **Todavía no está confirmada instalación física ni lectura CI186 en esta versión del auto.**
+
 ## Pruebas de aceptación en T1
 
 1. Actualizar Receiver con el botón interno. Abrir **TABLERO T1** desde inicio o **VEHÍCULO → ENERGÍA**.
