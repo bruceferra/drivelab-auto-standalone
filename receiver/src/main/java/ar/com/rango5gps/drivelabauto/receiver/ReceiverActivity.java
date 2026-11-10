@@ -72,9 +72,11 @@ public final class ReceiverActivity extends Activity {
         body.setPadding(22,20,22,35);scroll.addView(body);
         SharedPreferences p=prefs();
         label(body,"DRIVELAB AUTO · RECEIVER",23);
-        label(body,"v0.2.14 · Mapas y puente · Jetour T1",13);
+        label(body,"v0.2.15 · Mapas y puente · Jetour T1",13);
         button(body,"VEHÍCULO · VENTANILLAS / ENERGÍA / CODE",()->
             startActivity(new Intent(this,ReceiverVehicleActivity.class)));
+        button(body,"TABLERO T1 · TANQUES / CONSUMO / TELEMETRÍA",()->
+            startActivity(new Intent(this,T1TankDashboardActivity.class)));
         label(body,"Jetour T1 · Receptor cifrado independiente",14);
         label(body,"IP de T1: "+ReceiverService.localIp()+" · Puertos 48391 / 48392",15);
         label(body,"ESTADO: "+p.getString("status","Sin iniciar")+
