@@ -5,6 +5,9 @@
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- GPS is optional: TRIP falls back to flagged OEM-speed distance. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <!-- Standard Automotive MIRROR_FOLD requires OEM-granted signature privilege. -->
     <uses-permission android:name="android.car.permission.CONTROL_CAR_MIRRORS" />
@@ -30,6 +33,12 @@
         <!-- User-triggered, 35-second OEM 1033 read-only sampler; independent of navigation. -->
         <service android:name=".GearCaptureService" android:exported="false"
             android:foregroundServiceType="dataSync" />
+        <service android:name=".MirrorAutomationService" android:exported="false"
+            android:foregroundServiceType="dataSync" />
+        <service android:name=".RecirculationGuardService" android:exported="false"
+            android:foregroundServiceType="dataSync" />
+        <service android:name=".T1TripRecorderService" android:exported="false"
+            android:foregroundServiceType="location|dataSync" />
         <receiver android:name=".BootReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

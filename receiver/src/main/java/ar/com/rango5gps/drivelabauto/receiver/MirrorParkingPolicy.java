@@ -3,10 +3,10 @@ package ar.com.rango5gps.drivelabauto.receiver;
 /**
  * Standalone decision policy for the proposed reverse-mirror feature.
  *
- * NO vehicle access and NO actuation: it must not be connected to an OEM
- * writer until R/non-R mapping, speed units, directions and stop
- * behaviour are validated in the actual T1. Gear is supplied by a
- * validated OEM adapter and NEVER guessed from a raw gear number.
+ * Hardware-independent FSM for optional mirror parking automation. Raw gear
+ * mapping is confirmed by driver (P1/R2/N3/D4). Speed units and pulse timing
+ * still require verification with physical tests; OEM commands belong in a
+ * separate bounded controller, not here.
  *
  * Mirrors are relative to the driver's personally adjusted D pose.
  * One R maneuver tilts once; R/non-R shuffling at parking speed does nothing.
@@ -22,19 +22,23 @@ public final class MirrorParkingPolicy {
     public static final long RETURN_DWELL_MS=800;
     public static final int MAX_PULSES_PER_SIDE=10;
 
-    private final int requestedPulses;
+    private final int requestedLeft,requestedRight;
     private Phase phase=Phase.NORMAL;
     private Gear previousGear=Gear.UNKNOWN;
     private long forwardSince=-1;
     private int leftIssued=0,rightIssued=0;
 
-    public MirrorParkingPolicy(int steps){
-        if(steps<1||steps>MAX_PULSES_PER_SIDE)
+    public MirrorParkingPolicy(int steps){this(steps,steps);}
+    public MirrorParkingPolicy(int left,int right){
+        if(left<1||left>MAX_PULSES_PER_SIDE||
+                right<1||right>MAX_PULSES_PER_SIDE)
             throw new IllegalArgumentException("Pasos fuera del rango 1-10");
-        requestedPulses=steps;
+        requestedLeft=left;requestedRight=right;
     }
     public Phase phase(){return phase;}
-    public int requestedPulses(){return requestedPulses;}
+    public int requestedPulses(){return requestedLeft;}
+    public int requestedLeft(){return requestedLeft;}
+    public int requestedRight(){return requestedRight;}
     public int leftIssued(){return leftIssued;}
     public int rightIssued(){return rightIssued;}
 
@@ -80,10 +84,10 @@ public final class MirrorParkingPolicy {
     public void completeTilt(int leftCommands,int rightCommands){
         if(phase!=Phase.TILTING)throw new IllegalStateException("No se inició inclinación");
         if(leftCommands<0||rightCommands<0||
-                leftCommands>requestedPulses||rightCommands>requestedPulses)
+                leftCommands>requestedLeft||rightCommands>requestedRight)
             throw new IllegalArgumentException("Recuento inválido");
         leftIssued=leftCommands;rightIssued=rightCommands;
-        phase=(leftCommands==requestedPulses && rightCommands==requestedPulses)?
+        phase=(leftCommands==requestedLeft && rightCommands==requestedRight)?
             Phase.TILTED:Phase.UNKNOWN_POSITION;
     }
 

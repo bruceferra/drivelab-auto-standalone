@@ -126,7 +126,7 @@ public final class ReceiverVehicleActivity extends Activity {
         LinearLayout root=column();root.setPadding(16,10,16,26);
         scroll.addView(root);
         label(root,"DRIVELAB AUTO · T1",23);
-        label(root,"v0.2.18 · Registro de marchas con cámara de reversa",12);
+        label(root,"v0.2.19 · Controles rápidos en pantalla principal",12);
         button(root,"← VOLVER A MAPAS Y PUENTE",this::finish);
         LinearLayout menu=new LinearLayout(this);
         menu.setOrientation(LinearLayout.HORIZONTAL);
@@ -171,8 +171,8 @@ public final class ReceiverVehicleActivity extends Activity {
         });
         mirrorGearView=status(body,mirrorGearStatus);
         section(body,"REGISTRO DE MARCHAS · AUNQUE APAREZCA LA CÁMARA");
-        label(body,"P=1, N=3, D=4 observados. Falta confirmar R=2. "+
-            "Grabación OEM de 35 segundos: solo lectura, sin mover espejos.",12);
+        label(body,"P=1, R=2, N=3 y D=4 confirmados físicamente. "+
+            "La grabación OEM puede seguir disponible como diagnóstico.",12);
         button(body,"GRABAR MARCHAS 35 S · SOLO LECTURA",this::startGearCapture);
         button(body,"VER RESULTADO GRABADO",this::refreshGearCaptureView);
         button(body,"DETENER REGISTRO",this::stopGearCapture);
@@ -237,8 +237,8 @@ public final class ReceiverVehicleActivity extends Activity {
         leftRow.addView(leftTwo,new LinearLayout.LayoutParams(0,64,1));
         body.addView(leftRow);
         section(body,"PLEGADO OEM · 2003 EXPERIMENTAL");
-        label(body,"Observación con control original: 0 PLEGADO / 1 DESPLEGADO. "+
-            "La escritura 2003 todavía no fue probada físicamente.",12);
+        label(body,"Plegado y despliegue 2003=0/1 confirmados físicamente. "+
+            "Disponibles como accesos rápidos en inicio.",12);
         button(body,"LEER ESTADO DE PLEGADO · 2003",()->{
             if(vehicleBusy()){updateFold2003("Otra consulta OEM en curso");return;}
             if(!mirror.readFold2003(this::updateFold2003))
@@ -263,8 +263,9 @@ public final class ReceiverVehicleActivity extends Activity {
                 updateMirror("No se pudo intentar liberar: panel no visible");
             else updateMirror("Solicitando liberación OEM del último espejo…");
         });
-        label(body,"Auto R aún desactivado: bajada una vez en R, regreso con "+
-            "marcha no-R y velocidad >10 km/h. Requiere validar R y velocidad.",12);
+        label(body,"AUTO R disponible desde la pantalla principal: pasos "+
+            "ajustables, al entrar en R baja una vez; marcha no-R y >10 km/h "+
+            "estable 800 ms restaura. Desactivado por defecto.",12);
         section(body,"VENTANILLAS · CONTROLES MANUALES");
         label(body,"Accionamientos OEM para 2004–2007. Una operación por vez, "+
             "con lectura anterior/posterior. Probar detenido, en P y sin obstáculos.",13);
@@ -299,6 +300,10 @@ public final class ReceiverVehicleActivity extends Activity {
     }
     /** One tap = one attempt. OEM validation is enforced in MirrorPulsePilot. */
     private void confirmMirrorPulse(int mirrorId,int direction,int durationMs){
+        if(getSharedPreferences(MirrorAutomationService.PREFS,MODE_PRIVATE)
+            .getBoolean(MirrorAutomationService.AUTO,false)){
+            updateMirror("Poné ESPEJOS MANUAL antes de moverlos aquí");return;
+        }
         if(vehicleBusy()){
             updateMirror("Otra operación OEM está en curso");return;
         }
@@ -349,6 +354,10 @@ public final class ReceiverVehicleActivity extends Activity {
             mirrorGearView.setText(value);
     }
     private void testFold2003(boolean unfold){
+        if(getSharedPreferences(MirrorAutomationService.PREFS,MODE_PRIVATE)
+            .getBoolean(MirrorAutomationService.AUTO,false)){
+            updateFold2003("Elegí ESPEJOS MANUAL antes de plegar");return;
+        }
         if(vehicleBusy()){updateFold2003("Otra operación OEM está en curso");return;}
         if(!mirror.testFold2003(unfold,this::updateFold2003))
             updateFold2003("No se inició el ensayo 2003");

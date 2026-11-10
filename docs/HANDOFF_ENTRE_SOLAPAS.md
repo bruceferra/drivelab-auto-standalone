@@ -75,6 +75,17 @@ Además, el usuario confirma en su T1 proyección de cualquier app al clúster y
 
 **Receiver 0.2.18 OTA publicada:** [última release](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.18), [QA con éxito](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42854161716), [publicador firmado con éxito](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42854161957); Sender intacto v0.2.13. Pantalla VEHÍCULO incorpora registro de 35 segundos de 1033 aunque la cámara de retroceso tape Receiver, getter 2003 y prueba manual de una sola orden 2003=0/1 (guardia P/velocidad cero), sin auto R ni interferir navegación/tablero. [Evidencia y pruebas físicas pendientes](PRUEBA_MARCHA_CAMARA_Y_PLEGADO_2003_2026-11-10.md).
 
+## Handoff del nuevo Receiver v0.2.19 · controles, tablero y TRIP
+
+Nuevas confirmaciones del propietario: `1033 R=2`, mapa completo P=1/R=2/N=3/D=4; **2003 0 PLEGAR y 1 DESPLEGAR funcionando físicamente** en la T1; HVAC `1004=1 recirculación interior ON, 1004=2 OFF` (observado cambio manual), señal `2101` solo aviso de cambio 1→0, **no escribir 2101**. La escritura 1004=1 desde Receiver sigue pendiente de prueba física.
+
+Se desarrollan tres capacidades separadas de navegación:
+- barra rápida en pantalla principal ancha con controles 2003, AUTO/MANUAL R, pulsos por lado, ventanas, alarma peatón y modo HVAC SIEMPRE INTERIOR/AUTO;
+- tablero nativo con agujas OEM de velocidad/CI186/SOC, estimador de autonomía por surtidor real, límite superior 56 Ω/60,5 OEM y piso térmico 5,3 OEM;
+- grabador TRIP cada ~3 s de señales OEM crudas + GPS opcional, tarifas ARS/L y ARS/kWh, costo nafta histórico estimado y HV bruto provisional, CSV privado exportable.
+
+**El cálculo viejo T1Launcher no se usa jamás.** No afirmar que el consumo proxy de nafta es caudal real o que HV bruto es kWh facturado. No se afecta Sender 0.2.13, Waze, mapas, viajes DriveLab históricos ni archivos originales. [Documento y QA](RECEIVER_0_2_19_CONTROLES_TABLERO_TRIP_2026-11-10.md).
+
 ## Qué aportar al expediente desde la solapa de consumo## Qué aportar al expediente desde la solapa de consumo## Qué aportar al expediente desde la solapa de consumo## Qué aportar al expediente desde la solapa de consumo
 
 Registrar cada ensayo nuevo como:

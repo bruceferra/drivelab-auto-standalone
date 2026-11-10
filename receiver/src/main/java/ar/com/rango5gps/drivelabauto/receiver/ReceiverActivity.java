@@ -10,10 +10,11 @@ import android.widget.*;
 import java.util.*;
 import ar.com.rango5gps.drivelabauto.common.Updater;
 
-/** Small Receiver UI. No telemetry, OEM commands, CAN or launcher dependency. */
+/** Receiver hub with separate quick-control pilots; navigation service unchanged. */
 public final class ReceiverActivity extends Activity {
     private static volatile boolean visible;
     private String message="";
+    private ReceiverQuickControls quickControls;
     private final Handler pairUiHandler=new Handler(Looper.getMainLooper());
     private String pairUiSnapshot="";
     private ScrollView currentScroll;
@@ -33,9 +34,11 @@ public final class ReceiverActivity extends Activity {
     };
     public static boolean isVisible(){return visible;}
     private SharedPreferences prefs(){return getSharedPreferences(ReceiverService.PREFS,MODE_PRIVATE);}
-    @Override public void onCreate(Bundle state){super.onCreate(state);render();}
+    @Override public void onCreate(Bundle state){
+        super.onCreate(state);quickControls=new ReceiverQuickControls(this);render();
+    }
     @Override protected void onResume(){
-        super.onResume();visible=true;render();
+        super.onResume();visible=true;quickControls.onResume();render();
         pairUiHandler.removeCallbacks(pairUiRefresh);
         pairUiHandler.postDelayed(pairUiRefresh,450);
         Updater.onResume(this,this::report);
@@ -47,6 +50,7 @@ public final class ReceiverActivity extends Activity {
     }
     @Override protected void onPause(){
         visible=false;
+        quickControls.onPause();
         pairUiHandler.removeCallbacks(pairUiRefresh);
         super.onPause();
     }
@@ -71,8 +75,9 @@ public final class ReceiverActivity extends Activity {
         LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);
         body.setPadding(22,20,22,35);scroll.addView(body);
         SharedPreferences p=prefs();
+        quickControls.attach(body); // FIRST and always visible above menus
         label(body,"DRIVELAB AUTO · RECEIVER",23);
-        label(body,"v0.2.18 · Mapas y puente · Jetour T1",13);
+        label(body,"v0.2.19 · Tablero/TRIP y controles rápidos · Jetour T1",13);
         button(body,"VEHÍCULO · VENTANILLAS / ENERGÍA / CODE",()->
             startActivity(new Intent(this,ReceiverVehicleActivity.class)));
         button(body,"TABLERO T1 · TANQUES / CONSUMO / TELEMETRÍA",()->
