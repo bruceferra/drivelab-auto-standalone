@@ -121,7 +121,7 @@ public final class ReceiverVehicleActivity extends Activity {
         LinearLayout root=column();root.setPadding(16,10,16,26);
         scroll.addView(root);
         label(root,"DRIVELAB AUTO · T1",23);
-        label(root,"v0.2.14 QA · Espejos 1–2 s y lectura de estados",12);
+        label(root,"v0.2.15 QA · Espejos y tablero de consumo",12);
         button(root,"← VOLVER A MAPAS Y PUENTE",this::finish);
         LinearLayout menu=new LinearLayout(this);
         menu.setOrientation(LinearLayout.HORIZONTAL);
@@ -362,6 +362,11 @@ public final class ReceiverVehicleActivity extends Activity {
             alertView.setText(s);
     }
     private void renderEnergy(LinearLayout body){
+        section(body,"TABLERO T1 · HISTORIAL Y DATOS OEM");
+        button(body,"ABRIR TABLERO T1 · CONSUMO REAL POR SURTIDOR",()->
+            startActivity(new android.content.Intent(this,T1TankDashboardActivity.class)));
+        label(body,"Compara los dos tanques de surtidor con lecturas CI186 en vivo. "+
+            "No utiliza la fórmula antigua del launcher.",12);
         section(body,"LECTURA OEM · COMBUSTIBLE");
         label(body,"CI186: litros informados por el firmware. No equivale "+
             "necesariamente a litros utilizables ni a autonomía calculada.",13);
