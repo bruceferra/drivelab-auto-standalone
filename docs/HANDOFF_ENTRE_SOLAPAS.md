@@ -61,7 +61,13 @@ Observación del propietario (10/11): `2068` izquierdo; `2069` derecho. En la in
 
 **Receiver OTA v0.2.16 publicado (10/11)**: [release latest](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.16); lector RAW de espejo bajo el mismo botón, resultados de marcha/HAL separados, sin cuadros modales al accionar espejos o plegado y solo botón 500 ms (usuario confirmó que 500/1.000/2.000 ms producen el mismo recorrido). Se mantienen P/velocidad cero, cooldown y liberación al finalizar; **no hay control continuo ni auto-R/D**. `receiver.json` actualizado, `sender.json` byte a byte idéntico al anterior: Sender v0.2.13, tablero/consumo/viajes intactos. [QA](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42842438931), [publicación OTA](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42842439213). Instalación real en vehículo pendiente de confirmación.
 
-## Qué aportar al expediente desde la solapa de consumo## Qué aportar al expediente desde la solapa de consumo## Qué aportar al expediente desde la solapa de consumo
+## Políticas de espejos y UX 0.2.17 (10/11)
+
+Confirmados con usuario: **izquierdo 2068 y derecho 2069 se mueven**; segundas pulsaciones rápidas a veces no registran (existía cooldown artificial 1800ms que se retira en código). Plegado/desplegado por `MIRROR_FOLD` sigue inaccesible por permiso OEM (botones retirados); `GUARDAR REFERENCIA D/R` solo guardaba texto HAL, no posición, por tanto también retirado. Ventilación/cierre de ventanas funcionan y permanecen intactos. AVAS 2074 con un toque, guardia OEM de P y velocidad cero.
+
+La regla auto-reversa queda definida: **una bajada al entrar en R**, no repetir durante maniobras R↔otra marcha lenta; **restaurar si marcha conocida !=R y velocidad >10 km/h estable 800ms** (incluye N móvil; nunca suponer N=0), una sola vez. `MirrorParkingPolicy` es lógica aislada y probada, **NO conectada a hardware ni operativa automáticamente** hasta validar valores OEM de R, velocidad y repetibilidad de pulsos. [Especificación](ESPEJOS_AUTO_R_NO_R_10KMH_2026-11-10.md). Se propone Receiver v0.2.17; verificar publicación OTA, preservar Sender 0.2.13 y tablero T1.
+
+## Qué aportar al expediente desde la solapa de consumo## Qué aportar al expediente desde la solapa de consumo## Qué aportar al expediente desde la solapa de consumo## Qué aportar al expediente desde la solapa de consumo
 
 Registrar cada ensayo nuevo como:
 1. Fecha/hora y condición (EV/HEV, conectado o no, carga/repostaje, nivel, km).
