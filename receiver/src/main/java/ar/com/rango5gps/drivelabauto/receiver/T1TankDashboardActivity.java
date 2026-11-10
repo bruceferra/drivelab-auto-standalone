@@ -249,6 +249,10 @@ public final class T1TankDashboardActivity extends Activity {
                 fmt(l100,2)+" L/100 km"+
                 (T1TripMath.floatUpperSaturated(Double.isFinite(lastFuel)?
                     lastFuel:null)?"\nZona alta: flotante saturado cerca de 56 Ω":"")+
+                (Double.isFinite(lastFuel)&&lastFuel>5.3&&lastFuel<60.5?
+                    "\nReferencia secundaria por nivel OEM (baja confianza): ~"+
+                    fmt(T1TripMath.rawGaugeRangeLowConfidence(lastFuel),0)+
+                    " km, sin curva física validada":"")+
                 (Double.isFinite(lastFuel)&&lastFuel<=5.3?
                     "\nCORTE OEM 5,3 L: 0 km nafta hasta corte":""));
         }else{
