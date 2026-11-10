@@ -39,3 +39,14 @@ El conductor configura manualmente la posición normal de espejos (equivalente a
 ## Siguiente ensayo útil y corto
 
 Con vehículo inmóvil y freno, sin mover espejos, pulsar **LEER MARCHA Y VELOCIDAD** en P, R y otro estado (D o N) para anotar códigos crudos OEM. El control manual de espejos continúa limitado a P; **no probar órdenes de espejo en R/D**. Asegurar el vehículo y no consultar pantalla mientras circula. Luego probar cada lado y contar cuántos pulsos realmente necesita la inclinación deseada desde la posición normal fijada por el conductor.
+
+## Pendiente mínimo para habilitar movimiento real al seleccionar R (10/11/2026)
+
+**Observación nueva del propietario:** probó el lector de marcha con el selector en **D** y el Receiver mostró «marcha no mapeada (posible D/N)». **No probó aún R.** Eso no identifica el valor D ni demuestra R=2 en su unidad; el APK T1Launcher usa 1033=2 como candidato de reversa.
+
+**Prueba inmediata en versión 0.2.17, sin cambiar software ni mover espejos:** vehículo inmóvil, pie en el freno, abrir VEHÍCULO → LEER MARCHA Y VELOCIDAD, seleccionar R, leer y anotar el valor **numérico crudo 1033**; se espera 2 pero **debe observarse**. Después volver a P. No probarlo manejando ni asumir qué hará la marcha por un texto descriptivo.
+
+**Condición de activación planificada:** solo una entrada NUEVA a R validada dispara la secuencia de bajada configurada en ambos espejos. **R↔D/N/P a ≤10 km/h** no repite ninguna bajada ni subida. La vuelta de los espejos se disparará solo si **la marcha OEM conocida es distinta de R y la velocidad comprobada es >10 km/h de forma sostenida 800 ms**. Sin lectura fiable o con secuencia interrumpida, no emitir nuevas órdenes y registrar error. Las órdenes manuales actuales solo están autorizadas en P y quieto; **no reutilizarlas en R con el bloqueo deshabilitado**. Hará falta un controlador separado con lecturas frescas entre cada paso y parada segura.
+
+**Estado entrega v0.2.17:** política `MirrorParkingPolicy` ya definida y compilada, **no ejecuta comandos sobre el auto**. La nueva compilación no debe considerarse auto-R terminado hasta validar R/velocidad y el actuador secuencial. No repetir ciclos de 10 golpes automáticamente sin ensayar número efectivo y sentido por espejo, ni adivinar posición absoluta.
+
