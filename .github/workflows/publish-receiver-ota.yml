@@ -53,12 +53,12 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'bruceferra/drivelab-auto-standalone'
           test "$GITHUB_REF_NAME" = 'main'
-          if gh release view 'v0.2.11' >/dev/null 2>&1; then
-            echo 'Release v0.2.11 already exists: no APK overwrite'
+          if gh release view 'v0.2.12' >/dev/null 2>&1; then
+            echo 'Release v0.2.12 already exists: no APK overwrite'
             exit 1
           fi
           mkdir -p /tmp/previous output
-          gh release download v0.2.10 --pattern 'DriveLab-Auto-Receiver-v0.2.10.apk' --dir /tmp/previous
+          gh release download v0.2.11 --pattern 'DriveLab-Auto-Receiver-v0.2.11.apk' --dir /tmp/previous
           gh release download v0.2.10 --pattern 'sender.json' --dir output
           gradle --no-daemon :receiver:assembleRelease
           apk='receiver/build/outputs/apk/release/receiver-release.apk'
@@ -66,16 +66,16 @@ jobs:
           aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
           sig="$ANDROID_HOME/build-tools/35.0.0/apksigner"
           "$sig" verify --print-certs "$apk"
-          "$sig" verify --print-certs /tmp/previous/DriveLab-Auto-Receiver-v0.2.10.apk
+          "$sig" verify --print-certs /tmp/previous/DriveLab-Auto-Receiver-v0.2.11.apk
           oldcert=$("$sig" verify --print-certs /tmp/previous/DriveLab-Auto-Receiver-v0.2.10.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
           newcert=$("$sig" verify --print-certs "$apk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
           test -n "$oldcert" && test "$oldcert" = "$newcert"
           badge=$("$aapt" dump badging "$apk" | head -1)
           echo "$badge"
           echo "$badge" | grep -F "package: name='ar.com.rango5gps.drivelabauto.receiver'"
-          echo "$badge" | grep -F "versionCode='12'"
-          echo "$badge" | grep -F "versionName='0.2.11'"
-          name='DriveLab-Auto-Receiver-v0.2.11.apk'
+          echo "$badge" | grep -F "versionCode='13'"
+          echo "$badge" | grep -F "versionName='0.2.12'"
+          name='DriveLab-Auto-Receiver-v0.2.12.apk'
           cp "$apk" "output/$name"
           sha=$(sha256sum "output/$name" | awk '{print $1}')
           export RECEIVER_SHA="$sha"
@@ -84,10 +84,10 @@ jobs:
           repo=os.environ['GITHUB_REPOSITORY']
           manifest={
             'packageName':'ar.com.rango5gps.drivelabauto.receiver',
-            'versionName':'0.2.11',
-            'versionCode':12,
+            'versionName':'0.2.12',
+            'versionCode':13,
             'sha256':os.environ['RECEIVER_SHA'],
-            'apkUrl':f'https://github.com/{repo}/releases/download/v0.2.11/DriveLab-Auto-Receiver-v0.2.11.apk',
+            'apkUrl':f'https://github.com/{repo}/releases/download/v0.2.12/DriveLab-Auto-Receiver-v0.2.12.apk',
           }
           with open('output/receiver.json','w',encoding='utf-8') as f:
             json.dump(manifest,f,indent=2)
@@ -103,13 +103,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh release create v0.2.11 \
-            output/DriveLab-Auto-Receiver-v0.2.11.apk \
+          gh release create v0.2.12 \
+            output/DriveLab-Auto-Receiver-v0.2.12.apk \
             output/receiver.json output/sender.json output/receiver.sha256 \
             --target "$GITHUB_SHA" --latest \
-            --title 'DriveLab Auto Receiver 0.2.11 - espejo manual experimental OTA' \
-            --notes 'Receiver SOLO: actualización desde botón interno, mismo paquete y certificado que 0.2.10. Prueba manual de espejos ID 2069 exclusivamente en P y detenido; no se activa automáticamente. Sin cambios de Sender 0.2.10, mapas, bridge ni datos. Función física SIN VALIDAR. Android solicita confirmación de instalación.'
+            --title 'DriveLab Auto Receiver 0.2.12 - espejos 500 ms y diagnóstico HAL OTA' \
+            --notes 'Receiver SOLO: actualización desde botón interno, mismo paquete y certificado que 0.2.10. Prueba manual de espejos 2069 derecho (validado) y 2068 izquierdo (no validado), orden maxima 500ms en P y detenido; lector HAL solo lectura, sin automatizacion R/D. Sin cambios de Sender 0.2.10, mapas, bridge ni datos. Función física SIN VALIDAR. Android solicita confirmación de instalación.'
           tag=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
-          test "$tag" = 'v0.2.11'
-          gh release view v0.2.11 --json assets --jq '.assets[].name'
-          echo 'OTA v0.2.11 published as latest with receiver.json and preserved sender.json'
+          test "$tag" = 'v0.2.12'
+          gh release view v0.2.12 --json assets --jq '.assets[].name'
+          echo 'OTA v0.2.12 published as latest with receiver.json and preserved sender.json'
