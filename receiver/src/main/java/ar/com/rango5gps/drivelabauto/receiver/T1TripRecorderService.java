@@ -136,6 +136,8 @@ public final class T1TripRecorderService extends Service {
         File path=currentFile(this);
         if(path==null){cleanup("TRIP sin identificador");return;}
         long lastTick=SystemClock.elapsedRealtime();
+        boolean anchored=T1FuelCalibration.p(this).getBoolean(T1FuelCalibration.ANCHORED,false);
+        double baselineKm=T1FuelCalibration.p(this).getFloat(T1FuelCalibration.SINCE_KM,0f);
         try(FileOutputStream out=new FileOutputStream(path,false)){
             out.write(("timestamp_epoch_ms,gear_1033,speed_oem_raw,fuel_ci186_oem_l,"+
                 "soc_1042_raw,soc_1062_raw,volt_1063_raw,amp_1064_raw,"+
@@ -155,7 +157,9 @@ public final class T1TripRecorderService extends Service {
                 hvOut+=T1TripMath.grossHvDischargeKwh(s.voltage,s.current,dt);
                 hvIn+=T1TripMath.grossHvChargeKwh(s.voltage,s.current,dt);
                 double km=Math.max(0,distanceKm);
-                double liters=T1TripMath.gasolineProxyLiters(km);
+                double liters=km*T1FuelCalibration.latestL100(this)/100.0;
+                if(anchored)T1FuelCalibration.p(this).edit()
+                    .putFloat(T1FuelCalibration.SINCE_KM,(float)(baselineKm+km)).apply();
                 double gasPrice=p().getFloat(FUEL_PRICE,2129f);
                 double kwhPrice=p().getFloat(KWH_PRICE,0f);
                 double gasCost=liters*gasPrice,evCost=hvOut*kwhPrice;
