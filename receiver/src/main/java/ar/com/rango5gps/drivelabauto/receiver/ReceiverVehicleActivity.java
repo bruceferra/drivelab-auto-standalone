@@ -145,6 +145,7 @@ public final class ReceiverVehicleActivity extends Activity {
         else renderCode(root);
         label(root,"Sin root ni ADB. No reemplaza los controles OEM de seguridad. "+
             "Esta versión no convierte DriveLab en launcher HOME.",11);
+        Receiver3DButtons.apply(root);
         setContentView(scroll);
         currentScroll=scroll;
         if(restoreY>0)scroll.post(()->{
