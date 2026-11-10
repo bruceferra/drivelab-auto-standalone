@@ -143,6 +143,97 @@ public final class MirrorPulsePilot {
         return true;
     }
 
+    /**
+     * OEM-safe fold attempt via standard Android Automotive MIRROR_FOLD.
+     * Only if the privileged permission and a supported Boolean property exist.
+     * Does not use any guessed vendor setters.
+     */
+    public boolean requestFold(boolean folded,Callback callback){
+        if(!foreground || !busy.compareAndSet(false,true))return false;
+        stop.set(false);
+        new Thread(()->{
+            Connection c=null;
+            String status;
+            try{
+                requireReady();
+                c=connect();
+                int gear=readInt(c.binder,GEAR_ID);
+                double speed=readSpeed(c.binder);
+                if(gear!=GEAR_P || !Double.isFinite(speed) || speed<0 || speed>0.5)
+                    throw new IllegalStateException("Plegado permitido solo en P/velocidad 0");
+                if(app.checkSelfPermission("android.car.permission.CONTROL_CAR_MIRRORS")!=
+                        android.content.pm.PackageManager.PERMISSION_GRANTED)
+                    throw new SecurityException("Permiso OEM privilegiado NO concedido; "+
+                        "no se envió comando de plegado");
+                requireReady();
+                status=foldStandard(folded);
+            }catch(Exception ex){
+                status="PLEGADO NO EJECUTADO · "+ex.getClass().getSimpleName()+
+                    " · "+String.valueOf(ex.getMessage());
+            }finally{
+                if(c!=null)c.close();
+                busy.set(false);
+            }
+            emit(callback,status);
+        },"T1-Mirror-Fold-Guarded").start();
+        return true;
+    }
+
+    private String foldStandard(boolean fold)throws Exception{
+        Class<?> carType=Class.forName("android.car.Car");
+        Object car=carType.getMethod("createCar",Context.class).invoke(null,app);
+        if(car==null)throw new IllegalStateException("CarService no accesible");
+        try{
+            boolean connected=false;
+            try{connected=(Boolean)carType.getMethod("isConnected").invoke(car);}
+            catch(NoSuchMethodException ignored){}
+            if(!connected)carType.getMethod("connect").invoke(car);
+            Object manager=carType.getMethod("getCarManager",String.class)
+                .invoke(car,"property");
+            if(manager==null)throw new IllegalStateException("CarPropertyManager ausente");
+            final int id=287312709; // standard Android Automotive MIRROR_FOLD
+            Object configs=manager.getClass().getMethod("getPropertyList").invoke(manager);
+            boolean supported=false;
+            if(configs instanceof java.util.List){
+                for(Object item:(java.util.List<?>)configs){
+                    int property=(Integer)item.getClass().getMethod("getPropertyId")
+                        .invoke(item);
+                    if(property!=id)continue;
+                    Class<?> type=(Class<?>)item.getClass().getMethod("getPropertyType")
+                        .invoke(item);
+                    if(type!=Boolean.class)
+                        throw new SecurityException("Tipo MIRROR_FOLD no Boolean");
+                    supported=true;
+                    break;
+                }
+            }
+            if(!supported)
+                throw new SecurityException("MIRROR_FOLD 287312709 no está "+
+                    "en el catálogo HAL accesible; no se escribió nada");
+            java.lang.reflect.Method getter=manager.getClass().getMethod(
+                "getProperty",Class.class,int.class,int.class);
+            Object before=getter.invoke(manager,Boolean.class,id,0);
+            if(before==null)throw new SecurityException("Sin estado previo; cancelado");
+            Object raw=before.getClass().getMethod("getValue").invoke(before);
+            if(!(raw instanceof Boolean))
+                throw new SecurityException("Estado anterior desconocido; cancelado");
+            if(((Boolean)raw).booleanValue()==fold)
+                return fold?"Ya figura plegado, no se escribió":"Ya figura desplegado, no se escribió";
+            requireReady();
+            manager.getClass().getMethod(
+                "setProperty",Class.class,int.class,int.class,Object.class)
+                .invoke(manager,Boolean.class,id,0,Boolean.valueOf(fold));
+            Object after=getter.invoke(manager,Boolean.class,id,0);
+            Object readback=after==null?null:after.getClass()
+                .getMethod("getValue").invoke(after);
+            return "MIRROR_FOLD solicitado: "+(fold?"PLEGAR":"DESPLEGAR")+
+                ". Estado HAL="+String.valueOf(readback)+
+                ". Verificar visualmente: confirmación HAL no prueba movimiento.";
+        }finally{
+            try{carType.getMethod("disconnect").invoke(car);}catch(Exception ignored){}
+        }
+    }
+
     private void emit(Callback callback,String status){
         main.post(()->callback.done(status));
     }
