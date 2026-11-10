@@ -30,12 +30,14 @@ public final class ReceiverVehicleActivity extends Activity {
     private final String[] tabNames={"VEHÍCULO","ENERGÍA","CODE"};
     private int activeTab=0;
     private VehicleWindowGroup windows;
+    private MirrorPulsePilot mirror;
     private PedestrianAlertControl pedestrian;
     private VehicleReadOnly reader;
     private VehicleChangeScanner changeScanner;
     private VehicleBatchReader batchReader;
-    private TextView operationView,alertView,scannerView,scannerValuesView,scannerEventsView;
+    private TextView operationView,alertView,scannerView,scannerValuesView,scannerEventsView,mirrorView;
     private String windowStatus="Sin órdenes enviadas";
+    private String mirrorStatus="Espejos · sin prueba todavía";
     private String pedestrianStatus="SIN CONSULTAR · alarma de peatones";
     private String fuelStatus="Sin lectura actual";
     private String energyStatus="Sin lectura";
@@ -50,6 +52,7 @@ public final class ReceiverVehicleActivity extends Activity {
     @Override public void onCreate(Bundle saved){
         super.onCreate(saved);
         windows=new VehicleWindowGroup(this);
+        mirror=new MirrorPulsePilot(this);
         pedestrian=new PedestrianAlertControl(this);
         reader=new VehicleReadOnly(this);
         changeScanner=new VehicleChangeScanner(this);
@@ -67,13 +70,20 @@ public final class ReceiverVehicleActivity extends Activity {
     @Override protected void onResume(){
         super.onResume();
         windows.setForeground(true);
+        mirror.setForeground(true);
         pedestrian.setForeground(true);
     }
     @Override protected void onPause(){
         windows.setForeground(false);
+        mirror.setForeground(false);
+        mirror.cancel();
         pedestrian.setForeground(false);
         changeScanner.stop();
         super.onPause();
+    }
+    @Override protected void onDestroy(){
+        if(mirror!=null)mirror.cancel();
+        super.onDestroy();
     }
     private LinearLayout column(){
         LinearLayout l=new LinearLayout(this);
@@ -104,7 +114,7 @@ public final class ReceiverVehicleActivity extends Activity {
         LinearLayout root=column();root.setPadding(16,10,16,26);
         scroll.addView(root);
         label(root,"DRIVELAB AUTO · T1",23);
-        label(root,"v0.2.10 · Controles manuales y diagnóstico OEM",12);
+        label(root,"v0.2.11 QA · Prueba experimental de espejos",12);
         button(root,"← VOLVER A MAPAS Y PUENTE",this::finish);
         LinearLayout menu=new LinearLayout(this);
         menu.setOrientation(LinearLayout.HORIZONTAL);
@@ -126,10 +136,34 @@ public final class ReceiverVehicleActivity extends Activity {
         setContentView(scroll);
     }
     private boolean vehicleBusy(){
-        return windows.busy()||pedestrian.busy()||
+        return windows.busy()||mirror.busy()||pedestrian.busy()||
             changeScanner.isRunning()||batchReader.busy();
     }
     private void renderVehicle(LinearLayout body){
+        section(body,"ESPEJO EN REVERSA · PRUEBA MANUAL EXPERIMENTAL");
+        label(body,"Código 2069 identificado en T1N134. Esta prueba NO inclina automáticamente " +
+            "al poner R: solo envía un pulso de 120 ms tras confirmar que la marcha OEM " +
+            "es P y la velocidad OEM es 0. Valores 1/2: sentido y lado SIN VALIDAR. " +
+            "Probar en P, detenido, espejo despejado, mirando el movimiento.",13);
+        LinearLayout mirrorRow=new LinearLayout(this);
+        mirrorRow.setOrientation(LinearLayout.HORIZONTAL);
+        Button m1=new Button(this);m1.setText("PULSO 1");m1.setAllCaps(false);
+        m1.setOnClickListener(v->confirmMirrorPulse(1));
+        mirrorRow.addView(m1,new LinearLayout.LayoutParams(0,60,1));
+        Button m2=new Button(this);m2.setText("PULSO 2");m2.setAllCaps(false);
+        m2.setOnClickListener(v->confirmMirrorPulse(2));
+        mirrorRow.addView(m2,new LinearLayout.LayoutParams(0,60,1));
+        body.addView(mirrorRow);
+        button(body,"LIBERAR MANDO · 2069=0",()->{
+            mirror.cancel();
+            if(!mirror.release(this::updateMirror))
+                updateMirror("No se pudo intentar liberar: panel no visible");
+            else updateMirror("Solicitando liberación OEM 2069=0…");
+        });
+        mirrorView=status(body,mirrorStatus);
+        label(body,"No hay posición absoluta ni restauración de espejo validada. " +
+            "La respuesta Binder no confirma movimiento ni parada física. " +
+            "Si el espejo no se detiene, usar el control OEM; no circular hasta verificar.",12);
         section(body,"VENTANILLAS · CONTROLES MANUALES");
         label(body,"Accionamientos OEM para 2004–2007. Una operación por vez, "+
             "con lectura anterior/posterior. Probar detenido, en P y sin obstáculos.",13);
@@ -161,6 +195,28 @@ public final class ReceiverVehicleActivity extends Activity {
             "Es una alerta de seguridad: mantenerla activa para circular.",13);
         button(body,"ALARMA PEATÓN · CAMBIAR ON/OFF",this::confirmPedestrian);
         alertView=status(body,pedestrianStatus);
+    }
+    private void confirmMirrorPulse(int direction){
+        if(vehicleBusy()){
+            updateMirror("Otra operación OEM está en curso");return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("ESPEJO · PRUEBA 2069="+direction)
+            .setMessage("Solo con la Jetour detenida y en P. Un pulso de 120 ms; " +
+                "el sentido y el espejo afectado aún NO están confirmados. " +
+                "Mirá el espejo antes de continuar y tené disponible el mando físico OEM. " +
+                "¿Enviar una sola orden experimental?")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("UN PULSO",(d,w)->{
+                if(!mirror.pulse(direction,this::updateMirror))
+                    updateMirror("Orden no iniciada: panel oculto, cooldown o control ocupado");
+                else updateMirror("Consultando marcha/velocidad y, si es seguro, emitiendo pulso…");
+            }).show();
+    }
+    private void updateMirror(String value){
+        mirrorStatus=value;
+        if(mirrorView!=null&&!isFinishing()&&!isDestroyed())
+            mirrorView.setText(value);
     }
     private void startWindows(int id,int operation){
         if(vehicleBusy()){updateOperation("Hay otra operación OEM en curso");return;}
