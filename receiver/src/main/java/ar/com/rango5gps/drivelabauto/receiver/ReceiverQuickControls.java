@@ -6,6 +6,8 @@ import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.StateListDrawable;
+import android.view.MotionEvent;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -49,27 +51,69 @@ final class ReceiverQuickControls {
     private void message(String value){
         if(status!=null)status.setText(value);
     }
+    // Three visually distinct states: raised / selected (sunken) / touch-down.
+    // All colors are calculated locally; no images, API or extra resources.
+    private static int blend(int base,int other,float part){
+        return Color.rgb(
+            (int)(Color.red(base)*(1-part)+Color.red(other)*part),
+            (int)(Color.green(base)*(1-part)+Color.green(other)*part),
+            (int)(Color.blue(base)*(1-part)+Color.blue(other)*part));
+    }
+    private GradientDrawable bevel(int base,boolean selected,boolean pressed){
+        int upper=pressed?blend(base,Color.BLACK,.32f):
+            selected?blend(base,Color.BLACK,.14f):blend(base,Color.WHITE,.20f);
+        int lower=pressed?blend(base,Color.BLACK,.12f):
+            selected?blend(base,Color.BLACK,.30f):blend(base,Color.BLACK,.22f);
+        GradientDrawable bg=new GradientDrawable(
+            GradientDrawable.Orientation.TOP_BOTTOM,new int[]{upper,lower});
+        bg.setCornerRadius(17);
+        bg.setStroke(selected?5:2,selected?0xFFFFD86B:0xFFD1E3EC);
+        return bg;
+    }
+    private void styleSurface(Button b,int base){
+        StateListDrawable backgrounds=new StateListDrawable();
+        backgrounds.addState(new int[]{android.R.attr.state_pressed},
+            bevel(base,b.isSelected(),true));
+        backgrounds.addState(new int[]{android.R.attr.state_selected},
+            bevel(base,true,false));
+        backgrounds.addState(new int[]{},
+            bevel(base,false,false));
+        b.setBackgroundTintList(null);
+        b.setBackground(backgrounds);
+        b.setElevation(b.isSelected()?2f:7f);
+        b.setTranslationY(b.isSelected()?2f:0f);
+        b.setTextColor(Color.WHITE);
+        b.setTypeface(null,b.isSelected()?
+            android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
+    }
     private Button button(LinearLayout parent,String text,int color,Runnable cb){
         Button b=new Button(activity);b.setText(text);b.setAllCaps(false);
         b.setTextSize(14);b.setTextColor(Color.WHITE);
-        b.setBackgroundTintList(ColorStateList.valueOf(color));
+        styleSurface(b,color);
+        // Return false to preserve native clicks, long-press and accessibility.
+        b.setOnTouchListener((view,event)->{
+            int a=event.getActionMasked();
+            if(a==MotionEvent.ACTION_DOWN){
+                b.setElevation(1f);b.setTranslationY(3f);
+                b.setScaleX(.985f);b.setScaleY(.96f);
+            }else if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL){
+                b.setElevation(b.isSelected()?2f:7f);
+                b.setTranslationY(b.isSelected()?2f:0f);
+                b.setScaleX(1f);b.setScaleY(1f);
+            }
+            return false;
+        });
         b.setOnClickListener(v->cb.run());
         parent.addView(b,new LinearLayout.LayoutParams(0,68,1));
         return b;
     }
-    /** Distinct pressed/unpressed styling on actual persisted selected state. */
+    /** Persisted modes remain visibly depressed; transient actions only on touch. */
     private void styleSelected(Button button,boolean selected,int base){
         if(button==null)return;
-        GradientDrawable bg=new GradientDrawable();
-        bg.setCornerRadius(17);
-        bg.setColor(selected?base:0xFF7A8690);
-        bg.setStroke(selected?6:2,selected?0xFFFFE08A:0xFFC4CED6);
-        button.setBackgroundTintList(null);
-        button.setBackground(bg);
-        button.setTextColor(Color.WHITE);
-        button.setTypeface(null,selected?
-            android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
-        button.setSelected(selected);
+        if(button.isSelected()!=selected){
+            button.setSelected(selected);
+            styleSurface(button,base);
+        }
     }
     private LinearLayout row(LinearLayout root){
         LinearLayout r=new LinearLayout(activity);
@@ -108,6 +152,9 @@ final class ReceiverQuickControls {
         leftPlus=button(d,"IZQ +",TEAL,()->adjust(MirrorAutomationService.LEFT,1));
         rightMinus=button(d,"DER −",GREY,()->adjust(MirrorAutomationService.RIGHT,-1));
         rightPlus=button(d,"DER +",TEAL,()->adjust(MirrorAutomationService.RIGHT,1));
+
+        LinearLayout e=row(root);
+        button(e,"RECUPERAR ESPEJOS · 10 PASOS ARRIBA",ORANGE,this::restoreMirrors);
 
         config=new TextView(activity);config.setTextSize(14);
         config.setPadding(8,8,8,4);root.addView(config);
@@ -193,6 +240,16 @@ final class ReceiverQuickControls {
                 "MANUAL seleccionado: sin movimientos automáticos");
             refresh();
         }catch(Exception ex){message("Modo espejo rechazado: "+ex.getMessage());}
+    }
+    private void restoreMirrors(){
+        try{
+            activity.startForegroundService(new Intent(activity,
+                MirrorAutomationService.class)
+                .setAction(MirrorAutomationService.ACTION_RECOVER));
+            message("Recuperación manual solicitada: 10 pasos arriba por lado. "+
+                "Solo detenido; posición final no medida. Verificar visualmente.");
+            refresh();
+        }catch(Exception ex){message("Recuperación: "+ex.getMessage());}
     }
     private void move(boolean up){
         try{
