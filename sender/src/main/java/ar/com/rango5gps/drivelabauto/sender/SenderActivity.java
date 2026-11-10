@@ -14,8 +14,19 @@ import ar.com.rango5gps.drivelabauto.common.Updater;
 public final class SenderActivity extends Activity {
     private static final int NAVY=0xFF111821,TEAL=0xFF108A80;
     private String status="";
+    private ScrollView currentScroll;
+    private long lastAutoCheckElapsed=0;
     @Override public void onCreate(Bundle state){super.onCreate(state);render();}
-    @Override public void onResume(){super.onResume();render();Updater.onResume(this,this::info);}
+    @Override public void onResume(){
+        super.onResume();
+        render();
+        Updater.onResume(this,this::info);
+        long now=android.os.SystemClock.elapsedRealtime();
+        if(lastAutoCheckElapsed==0||now-lastAutoCheckElapsed>120000){
+            lastAutoCheckElapsed=now;
+            Updater.checkOnOpen(this,"sender",this::info);
+        }
+    }
     private void title(LinearLayout body,String s,int size){
         TextView t=new TextView(this);t.setText(s);t.setTextSize(size);
         t.setTextColor(NAVY);t.setPadding(8,12,8,12);body.addView(t);
@@ -26,6 +37,7 @@ public final class SenderActivity extends Activity {
     }
     private void info(String text){status=text;render();}
     private void render(){
+        final int restoreY=currentScroll==null?0:currentScroll.getScrollY();
         ScrollView scroll=new ScrollView(this);
         LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);
         body.setPadding(25,25,25,40);scroll.addView(body);
@@ -45,14 +57,18 @@ public final class SenderActivity extends Activity {
         button(body,"Probar envío real a La Plata",this::test);
         button(body,"Pegar enlace de Google Maps / WhatsApp",this::paste);
         button(body,"ACTUALIZAR SENDER · INSTALACIÓN DIRECTA",()->Updater.check(this,"sender",this::info));
+        if(!status.isEmpty())title(body,"Actualizador / estado: "+status,14);
         button(body,"Desvincular Receiver",()->new AlertDialog.Builder(this)
             .setMessage("¿Desvincular? La próxima vez tendrás que comparar los 6 dígitos.")
             .setNegativeButton("CANCELAR",null)
             .setPositiveButton("DESVINCULAR",(d,w)->{SenderClient.unpair(this);render();}).show());
         title(body,"En Uber: si Android muestra un selector, elegí DriveLab Auto Sender. "+
             "El modo Solo clúster no abre Waze en el teléfono si la T1 confirma recepción.",13);
-        if(!status.isEmpty())title(body,status,14);
         setContentView(scroll);
+        currentScroll=scroll;
+        if(restoreY>0)scroll.post(()->{
+            if(currentScroll==scroll)scroll.scrollTo(0,restoreY);
+        });
     }
     private void pair(){
         EditText field=new EditText(this);field.setSingleLine(true);
