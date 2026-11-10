@@ -46,18 +46,19 @@
 - El enlace de Maps por nombre puede abrir el primer resultado en Waze; usuario debe verificar el pin.
 - La ROM T1 puede bloquear actividad desde segundo plano y Binder de lectura/escritura según UID.
 - CI186 puede contener valor OEM filtrado; no sustituir cálculo de surtidor.
-- **Espejos/reversa:** la inspección estática del APK T1N134 halló `EspejoRService`, el getter **1033** de marcha, el setter por pulsos **2069** y velocidades **2148/1089**. **No** están validados en la T1 ni habilitados en Receiver; el algoritmo de tercero guarda una posición estimada local en lugar de leer ángulo físico. Investigar especialmente restauración y cancelación; no migrar setters ni ejecutarlos automáticamente. Véase [extracción T1N134](EXTRACCION_T1LAUNCHER_T1N134_2026-11-10.md).
+- **Espejos/reversa:** la inspección estática del APK T1N134 halló `EspejoRService`, el getter **1033** de marcha, el setter por pulsos **2069** y velocidades **2148/1089**. **NO** están validados en la T1; Receiver v0.2.11 incluye únicamente una prueba **manual** y acotada del setter 2069 (no auto-reversa). El algoritmo de tercero guarda una posición estimada local en lugar de leer ángulo físico. Investigar especialmente restauración y cancelación; no migrar setters ni ejecutarlos automáticamente. Véase [extracción T1N134](EXTRACCION_T1LAUNCHER_T1N134_2026-11-10.md).
 - **Lectura candidata de acumulados PHEV:** investigar en modo lectura y en P los códigos HAL **559964335** (`PHEV SUM FUEL`) y **559964336** (`PHEV SUM CHRG EGY`). Unidades, acceso y relación con litros/energía siguen **PENDIENTES**.
 - Reclinado/asientos continúa sin códigos verificados. Techo 2008 y señales desconocidas quedan en modo observación.
 - Techo 2008 y señales desconocidas quedan en modo de observación.
 - UI completa tipo launcher, navegación multimedia por volante y sustitución de Android Auto requieren diseño/validación adicionales.
 
-## Receptor experimental 0.2.11-MIRROR-QA (10/11/2026)
+## Receiver 0.2.11 · OTA de espejos de ensayo (10/11/2026)
 
-- **Compilación firmada:** GitHub Actions [run 42817695751](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42817695751) **PASÓ**. Archivo de prueba firmado y SHA-256 en [prerelease](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.11-mirror-qa). Sender v0.2.10 y Receiver estable v0.2.10 no se cambiaron.
-- **Prueba en vehículo:** **NO PROBADO**. Requiere P, velocidad OEM legible ~0 km/h y confirmación manual. El código mueve el espejo por un solo pulso de 120 ms (ID 2069 con 1 o 2) y solicita liberar con 0. Dirección y lado **PENDIENTES**. Puede no moverse si las lecturas OEM son inaccesibles o no coinciden.
-- **Prohibiciones:** no testear en circulación, no confiar en topes mecánicos como parada, no activar movimiento automático en reversa, no reemplazar la 0.2.10 estable en el canal de actualizaciones hasta validación. Si falla STOP o hay movimiento inesperado, detener y usar los controles de fábrica; no seguir circulando hasta verificar.
-- [Instrucciones detalladas y criterios PASS/FAIL](https://github.com/bruceferra/drivelab-auto-standalone/blob/feature/receiver-espejos-qa-20261110/docs/RECEIVER_ESPEJOS_QA_0_2_11.md).
+- **Build/certificado/publicación:** [Action 42819862706](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42819862706) **PASÓ**; el proceso verificó que el certificado de Receiver 0.2.11 coincide con 0.2.10. [Release v0.2.11 (latest)](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.11) incorpora `receiver.json` y conserva `sender.json` 0.2.10 sin cambios, contrastados por digest SHA-256.
+- **Método de actualización:** pulsar **ACTUALIZAR RECEIVER · INSTALACIÓN DIRECTA** en la propia app. Debe detectar 0.2.11, descargar, validar hash/certificado y pedir autorización de Android. **NO entregar ni instalar una APK manual, ni cambiar Sender**. El éxito del proceso de publicación no implica que el sistema Android ya haya completado la instalación en T1.
+- **Prueba de espejo:** **NO PROBADO EN VEHÍCULO.** Requiere marcha P 1033=1 y velocidad OEM ~0; confirma cada operación manual; un pulso ID 2069=1/2 de 120 ms y liberación candidata 2069=0. Sentido, lado y parada física están **PENDIENTES**. Si los getters no responden, el piloto cancela el movimiento. Si se mueve anormalmente, usar controles OEM y suspender.
+- **Fuera de alcance:** no HOLD continuo, no activación automática al engranar R, no memorias ni uso al arrancar; no confiar en topes mecánicos como parada. Sender, mapas, Waze, servicios del puente, controles de ventanas/AVAS y viajes quedan sin modificaciones funcionales.
+- [Guía y criterios de aceptación](RECEIVER_ESPEJOS_QA_0_2_11.md).
 
 ## Cuándo retirar los componentes viejos
 
