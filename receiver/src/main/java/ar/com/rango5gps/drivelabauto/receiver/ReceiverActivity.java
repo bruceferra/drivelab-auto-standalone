@@ -16,6 +16,8 @@ public final class ReceiverActivity extends Activity {
     private String message="";
     private final Handler pairUiHandler=new Handler(Looper.getMainLooper());
     private String pairUiSnapshot="";
+    private ScrollView currentScroll;
+    private long lastAutoCheckElapsed=0;
     private final Runnable pairUiRefresh=new Runnable(){
         @Override public void run(){
             if(!visible||isFinishing()||isDestroyed())return;
@@ -37,6 +39,11 @@ public final class ReceiverActivity extends Activity {
         pairUiHandler.removeCallbacks(pairUiRefresh);
         pairUiHandler.postDelayed(pairUiRefresh,450);
         Updater.onResume(this,this::report);
+        long now=SystemClock.elapsedRealtime();
+        if(lastAutoCheckElapsed==0||now-lastAutoCheckElapsed>120000){
+            lastAutoCheckElapsed=now;
+            Updater.checkOnOpen(this,"receiver",this::report);
+        }
     }
     @Override protected void onPause(){
         visible=false;
@@ -53,6 +60,7 @@ public final class ReceiverActivity extends Activity {
     }
     private void report(String text){message=text;render();}
     private void render(){
+        final int restoreY=currentScroll==null?0:currentScroll.getScrollY();
         SharedPreferences pairState=prefs();
         pairUiSnapshot=pairState.getString("pair_status","")+"|"+
             pairState.getString("pair_code","")+"|"+
@@ -120,6 +128,7 @@ public final class ReceiverActivity extends Activity {
         button(body,"PRUEBA DIRECTA A MAR DEL PLATA",()->direct("-38.0055,-57.5426"));
         button(body,"ACTUALIZAR RECEIVER · INSTALACIÓN DIRECTA",
             ()->Updater.check(this,"receiver",this::report));
+        if(!message.isEmpty())label(body,"Actualizador / estado: "+message,14);
         label(body,"Estado instalador T1: "+
             getSharedPreferences("drivelab_native_update",MODE_PRIVATE)
                 .getString("last_install_status","Aún no hay instalación solicitada"),14);
@@ -135,8 +144,11 @@ public final class ReceiverActivity extends Activity {
         label(body,"El servicio sigue activo aunque cierres esta pantalla. "+
             "No fuerza Wi-Fi ni modifica Android Auto o T1Launcher. "+
             "La apertura en clúster depende de la ROM de la camioneta.",13);
-        if(!message.isEmpty())label(body,message,14);
         setContentView(scroll);
+        currentScroll=scroll;
+        if(restoreY>0)scroll.post(()->{
+            if(currentScroll==scroll)scroll.scrollTo(0,restoreY);
+        });
     }
     private void start(String action){
         Intent service=new Intent(this,ReceiverService.class).setAction(action);
