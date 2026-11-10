@@ -34,8 +34,9 @@ public final class MirrorPulsePilot {
     private static final int GEAR_ID=1033, GEAR_P=1, RIGHT_ID=2069, LEFT_ID=2068;
     private static final int SPEED_FLOAT_ID=2148, SPEED_INT_ID=1089;
     private static final long COOLDOWN_MS=1800;
-    // Manual controlled test: at most 500 ms per verified P/stationary command. No automatic reversing.
-    public static final int SHORT_MS=120, SMOOTH_TEST_MS=500;
+    // Manual timed tests only. 2 s is a hard maximum; no auto reversing or sweep.
+    public static final int SHORT_MS=120, SMOOTH_TEST_MS=500,
+        CALIBRATE_MS=1000, LONG_TEST_MS=2000;
     private final Context app;
     private final Handler main=new Handler(Looper.getMainLooper());
     private final AtomicBoolean busy=new AtomicBoolean(false);
@@ -60,7 +61,8 @@ public final class MirrorPulsePilot {
     public boolean pulse(int mirrorId,int direction,int durationMs,Callback callback){
         if(!foreground||(mirrorId!=RIGHT_ID&&mirrorId!=LEFT_ID)||
                 (direction!=1&&direction!=2)||
-                (durationMs!=SHORT_MS&&durationMs!=SMOOTH_TEST_MS))return false;
+                (durationMs!=SHORT_MS&&durationMs!=SMOOTH_TEST_MS&&
+                 durationMs!=CALIBRATE_MS&&durationMs!=LONG_TEST_MS))return false;
         if(!busy.compareAndSet(false,true))return false;
         long now=SystemClock.elapsedRealtime();
         if(now-lastAttemptAt<COOLDOWN_MS){
@@ -101,6 +103,43 @@ public final class MirrorPulsePilot {
             }
             emit(callback,result);
         },"T1-Mirror-Gear-ReadOnly").start();
+        return true;
+    }
+
+    /**
+     * Diagnostic only: distinguish actual readback of 2068/2069 from the
+     * setter used to drive motors. Codes 0/1/2 are not treated as angle.
+     */
+    public boolean readMirrorStates(Callback callback){
+        if(!foreground || !busy.compareAndSet(false,true))return false;
+        stop.set(false);
+        new Thread(()->{
+            Connection c=null;
+            String result;
+            try{
+                requireReady();
+                c=connect();
+                int gear=readInt(c.binder,GEAR_ID);
+                double speed=readSpeed(c.binder);
+                if(gear!=GEAR_P || !Double.isFinite(speed) || speed>0.5 || speed<0)
+                    throw new IllegalStateException("Lectura habilitada solo en P y detenido");
+                String left, right;
+                try{left=String.valueOf(readInt(c.binder,LEFT_ID));}
+                catch(Exception ex){left="NO DISPONIBLE ("+ex.getClass().getSimpleName()+")";}
+                try{right=String.valueOf(readInt(c.binder,RIGHT_ID));}
+                catch(Exception ex){right="NO DISPONIBLE ("+ex.getClass().getSimpleName()+")";}
+                result="LECTURA OEM RAW con mando suelto: 2068 izquierdo="+left+
+                    " · 2069 derecho="+right+
+                    ". Comparar extremos 2/1 e intermedio 0; no implica ángulo real.";
+            }catch(Exception ex){
+                result="SIN LECTURA DE ESPEJOS · "+ex.getClass().getSimpleName()+
+                    " · "+String.valueOf(ex.getMessage());
+            }finally{
+                if(c!=null)c.close();
+                busy.set(false);
+            }
+            emit(callback,result);
+        },"T1-Mirror-State-ReadOnly").start();
         return true;
     }
 
@@ -202,7 +241,8 @@ public final class MirrorPulsePilot {
     }
 
     private static int readInt(IBinder binder,int id)throws Exception{
-        if(id!=GEAR_ID&&id!=SPEED_INT_ID)throw new SecurityException("ID lectura inválido");
+        if(id!=GEAR_ID&&id!=SPEED_INT_ID&&id!=LEFT_ID&&id!=RIGHT_ID)
+            throw new SecurityException("ID lectura inválido");
         Parcel data=Parcel.obtain(),reply=Parcel.obtain();
         try{
             data.writeInterfaceToken(TOKEN);
