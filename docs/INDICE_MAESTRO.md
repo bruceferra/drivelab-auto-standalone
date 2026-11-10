@@ -55,6 +55,12 @@ La antigua [pre-release v0.2.11-mirror-qa](https://github.com/bruceferra/drivela
 
 **Receiver 0.2.12 (QA inicialmente):** agrega órdenes manuales de hasta 500 ms por lado, lectura de marcha/velocidad y un **diagnóstico HAL estrictamente de lectura** para `MIRROR_Z_POS`, `MIRROR_Y_POS` y propiedades vendor candidatas, mostrando área/rango/valor o error de acceso. Referencias D/R son **instantáneas crudas**, no memorias para auto-inclinación. No se implementan `IR VALOR INICIAL/FINAL` ni auto-R/D sin comprobar un getter de posición real. [Plan de pruebas](RECEIVER_ESPEJOS_0_2_12_CALIBRACION.md). Publicación por **actualizador incorporado de Receiver**, nunca APK aparte; Sender permanece en 0.2.10.
 
+## Estado de publicación de Receiver 0.2.12 (10/11/2026)
+
+**PUBLICADO Y FIRMADO, FUNCIONES NUEVAS SIN PRUEBA FÍSICA:** [release OTA oficial v0.2.12](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.12) es ahora `latest` y contiene `receiver.json` con `versionName=0.2.12`, `versionCode=13` y APK canónica; [GitHub Actions 42824306707](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42824306707) **PASÓ** incluyendo comparación de firma contra 0.2.11. **El SHA-256 de `sender.json` en v0.2.12 es idéntico al de v0.2.11**, que apunta a Sender v0.2.10: no hay actualización de Sender.
+
+**Instalación:** única vía recomendada al usuario: `DriveLab Auto Receiver → ACTUALIZAR RECEIVER · INSTALACIÓN DIRECTA`, confirmación nativa de Android. **No entregar APK por separado** y no desinstalar Receiver. Esta publicación no equivale a que el usuario ya la haya instalado ni validado físicamente. Funciones: derecho 2069 con órdenes de hasta 500 ms, izquierdo 2068 candidato, consulta de marcha/velocidad, lectura de posición/rangos HAL sin escritura, instantáneas D/R (no auto-reversa). [Procedimiento](RECEIVER_ESPEJOS_0_2_12_CALIBRACION.md).
+
 ## Próxima integración
 
 El módulo hoy llamado **ENERGÍA / CODE** en Receiver crecerá hasta **TABLERO T1** con litros reales estimados, autonomía contrastada, SOC, corriente, energía y consumo. Su modelo deberá almacenar observaciones originales y cálculos reproducibles por separado. El tratamiento del consumo continúa en el documento de tablero; no inventar señales ni convertir mediciones de otro proyecto en valores OEM verificados.
