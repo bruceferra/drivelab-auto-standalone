@@ -148,10 +148,11 @@ final class ReceiverQuickControls {
     }
     private void setMirrorMode(boolean auto){
         try{
-            activity.startForegroundService(new Intent(activity,
-                MirrorAutomationService.class).setAction(auto?
-                MirrorAutomationService.ACTION_AUTO:
-                MirrorAutomationService.ACTION_MANUAL));
+            Intent intent=new Intent(activity,MirrorAutomationService.class)
+                .setAction(auto?MirrorAutomationService.ACTION_AUTO:
+                    MirrorAutomationService.ACTION_MANUAL);
+            if(auto)activity.startForegroundService(intent);
+            else activity.startService(intent);
             message(auto?"AUTO armado: espejo normal ajustado por el conductor. "+
                 "Al entrar en R bajará una sola vez.":
                 "MANUAL seleccionado: sin movimientos automáticos");
@@ -181,10 +182,11 @@ final class ReceiverQuickControls {
     }
     private void setAir(boolean auto){
         try{
-            activity.startForegroundService(new Intent(activity,
-                RecirculationGuardService.class).setAction(auto?
-                RecirculationGuardService.ACTION_AUTO:
-                RecirculationGuardService.ACTION_INTERIOR));
+            Intent intent=new Intent(activity,RecirculationGuardService.class)
+                .setAction(auto?RecirculationGuardService.ACTION_AUTO:
+                    RecirculationGuardService.ACTION_INTERIOR);
+            if(auto)activity.startService(intent);
+            else activity.startForegroundService(intent);
             message(auto?"Aire AUTO: el climatizador decide":"Modo interior: "+
                 "Receiver mantendrá 1004=1 y vigilará cambios OEM");
             refresh();
