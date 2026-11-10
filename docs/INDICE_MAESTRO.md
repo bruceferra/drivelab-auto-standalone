@@ -39,6 +39,12 @@ Las notas antiguas en README y en las carpetas de continuidad son **históricas*
 - No sumar automatización Spotify hasta aislar por qué pierde la fuente y muestra NOT PROVIDED.
 - No borrar, actualizar a ciegas ni limpiar la app estable mientras existan viajes de tanque/historial sin respaldo comprobado.
 
+## Prerelease experimental de espejos (10/11/2026)
+
+**Receiver v0.2.11-MIRROR-QA** fue compilado y firmado correctamente desde la rama `feature/receiver-espejos-qa-20261110`, sin modificar Sender, el puente ni la release estable v0.2.10. **NO VALIDADO físicamente en la T1; NO es actualización estable.** Descarga/registro de compilación: https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.11-mirror-qa . Es el mismo package de Receiver con versionCode 12; se construye utilizando la clave de firma Receiver configurada en Actions. Se entrega únicamente como instalación manual supervisada.
+
+La función muestra `PULSO 1`, `PULSO 2` (ID OEM 2069, dirección/lado **sin validar**) y liberación `2069=0`, con consentimiento por operación, ~120 ms de pulso, control previo de `1033=1` (P candidata) y velocidad OEM próxima a cero. **No hay HOLD continuo, auto-tilt al engranar R, memoria ni actuación durante el arranque.** Ninguna garantía de parada física ante fallo de Android/OEM; si ocurre movimiento anormal, detener ensayo con los mandos de fábrica y no circular. [Instrucciones de QA en rama de prueba](https://github.com/bruceferra/drivelab-auto-standalone/blob/feature/receiver-espejos-qa-20261110/docs/RECEIVER_ESPEJOS_QA_0_2_11.md). Conservamos la versión 0.2.10 estable en main; no se fusionó el prototipo hasta validar en vehículo.
+
 ## Próxima integración
 
 El módulo hoy llamado **ENERGÍA / CODE** en Receiver crecerá hasta **TABLERO T1** con litros reales estimados, autonomía contrastada, SOC, corriente, energía y consumo. Su modelo deberá almacenar observaciones originales y cálculos reproducibles por separado. El tratamiento del consumo continúa en el documento de tablero; no inventar señales ni convertir mediciones de otro proyecto en valores OEM verificados.
