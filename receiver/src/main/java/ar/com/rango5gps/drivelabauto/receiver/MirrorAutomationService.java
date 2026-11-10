@@ -24,6 +24,8 @@ import android.os.SystemClock;
  * Default 2 pulses per side, editable 1..10. No absolute angle claim.
  */
 public final class MirrorAutomationService extends Service {
+    // OEM 2068/2069 bursts and fold 2003 must never write concurrently.
+    static final Object OEM_MIRROR_MUTEX = new Object();
     public static final String PREFS="t1_mirror_auto";
     public static final String AUTO="auto", STATUS="status",LEFT="steps_left",
         RIGHT="steps_right",POSITION="position",LAST_GEAR="last_gear",LAST_SPEED="last_speed";
@@ -195,6 +197,7 @@ public final class MirrorAutomationService extends Service {
      */
     private int[] runPulses(MirrorAutomationOem oem,boolean down,
                             int left,int right,boolean automatic)throws Exception{
+        synchronized(OEM_MIRROR_MUTEX){
         int[] counts={0,0};
         int max=Math.max(left,right);
         for(int step=0;step<max;step++){
@@ -232,6 +235,7 @@ public final class MirrorAutomationService extends Service {
             }
         }
         return counts;
+        }
     }
     @Override public void onDestroy(){
         stop=true;if(worker!=null)worker.interrupt();
