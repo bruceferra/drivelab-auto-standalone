@@ -79,7 +79,11 @@ El Receiver experimental 0.2.14 incluye lectura directa RAW `getInt(2068/2069)`,
 
 **Publicado y firmado:** [v0.2.14/latest](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.14), [Action 42832582917 exitosa](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42832582917). `receiver.json` apunta a v0.2.14/code15; `sender.json` es idéntico al de v0.2.13. Solo actualiza Receiver por su **actualizador interno**. Pantalla experimental incluye comandos manuales 1.000/2.000ms, lectura RAW 2068/2069 con mandos sueltos y plegado Android Automotive **condicionado a permiso OEM**. Sin prueba física aún, sin auto-R/D ni homing. [Procedimiento de calibración](RECEIVER_ESPEJOS_CALIBRACION_TEMPORAL_2026-11-10.md).
 
-## Próxima integración
+## Diseño de calibración de espejos por tiempo (10/11/2026)
+
+El propietario propuso una alternativa más simple que las ocho posiciones virtuales: **calibrar duración total real en milisegundos y asignar marcas ¼, ½ y ¾ por tiempo**. Si como *ejemplo* una carrera tarda 20.000 ms, los objetivos serían 5.000, 10.000 y 15.000 ms. **No se ha medido que la carrera de la T1 dure 20 segundos.** Registrar dos tiempos por espejo, uno para subir y otro para bajar, y guardar D/R como tiempos respecto de un extremo verificado. Solo es autocalibración si los getters 2068/2069 distinguen de modo persistente extremos físicos; si no, la referencia depende de una calibración guiada. No forzar el motor contra topes para adivinar posiciones. [Diseño y cautelas](RECEIVER_ESPEJOS_CALIBRACION_TEMPORAL_2026-11-10.md). Receiver 0.2.14 sigue siendo experimental y **no** contiene automatismo de D/R ni carrera autocalibrada.
+
+## Próxima integración## Próxima integración
 
 El módulo hoy llamado **ENERGÍA / CODE** en Receiver crecerá hasta **TABLERO T1** con litros reales estimados, autonomía contrastada, SOC, corriente, energía y consumo. Su modelo deberá almacenar observaciones originales y cálculos reproducibles por separado. El tratamiento del consumo continúa en el documento de tablero; no inventar señales ni convertir mediciones de otro proyecto en valores OEM verificados.
 
