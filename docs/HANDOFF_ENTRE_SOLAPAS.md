@@ -35,6 +35,8 @@ El propietario confirmó en Receiver 0.2.11: **derecho `2069=1` sube, `2069=2` b
 
 Se preparó un Receiver 0.2.12 con botón de lectura de propiedades **HAL** (`MIRROR_Z_POS`, área/rangos, vendor) usando reflexión Android Car en **solo lectura**, más controles manuales 500 ms **solo en P**, sin ir a topes, sin cambio automático R/D. La posibilidad de leer valores físicos **NO se deduce** de que el setter 2069 funcione. [Documento de QA y calibración](RECEIVER_ESPEJOS_0_2_12_CALIBRACION.md). Esta versión debe distribuirse **solo por el actualizador incorporado**; Sender/puente no cambia. No declarar auto-reversa, control de ángulos ni memoria D/R operativa hasta ensayos físicos.
 
+**Nuevo canal OTA 0.2.12 verificado:** `releases/latest` es [v0.2.12](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.12); `receiver.json` ofrece Receiver `0.2.12/code13` y el workflow de firma/paquete [42824306707](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42824306707) **pasó**. Sender sigue en v0.2.10 y `sender.json` conservó el SHA-256 idéntico de la release previa. **Usuario actualiza dentro de Receiver**, nunca con APK aparte; no se confirmó todavía instalación de 0.2.12 en el auto. Guía: [espejos 500ms/HAL 0.2.12](RECEIVER_ESPEJOS_0_2_12_CALIBRACION.md).
+
 ## Qué aportar al expediente desde la solapa de consumo
 
 Registrar cada ensayo nuevo como:
