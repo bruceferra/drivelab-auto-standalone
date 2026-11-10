@@ -93,11 +93,16 @@ public final class T1TripRecorderService extends Service {
         PendingIntent open=PendingIntent.getActivity(this,NOTIF_ID,
             new Intent(this,T1TankDashboardActivity.class),
             PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
-        startForeground(NOTIF_ID,new Notification.Builder(this,CHANNEL)
+        Notification notification=new Notification.Builder(this,CHANNEL)
             .setSmallIcon(android.R.drawable.ic_menu_compass)
             .setContentTitle("DriveLab · TRIP grabando")
             .setContentText("OEM, GPS y costos estimados · abrir para detener")
-            .setContentIntent(open).setOngoing(true).build());
+            .setContentIntent(open).setOngoing(true).build();
+        int type=checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)==
+            PackageManager.PERMISSION_GRANTED?
+            android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION:
+            android.content.pm.ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC;
+        startForeground(NOTIF_ID,notification,type);
     }
     private void attachGps(){
         if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=
