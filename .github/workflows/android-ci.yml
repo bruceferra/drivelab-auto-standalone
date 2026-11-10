@@ -38,6 +38,15 @@ jobs:
             common/src/main/java/ar/com/rango5gps/drivelabauto/common/MapLinks.java \
             common/tests/MapLinksTest.java
           java -cp /tmp/bridge-test MapLinksTest
+      - name: T1 tank two-cycle evidence regression (pure JVM)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/tank-evidence-test
+          javac -encoding UTF-8 -d /tmp/tank-evidence-test \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TankEvidence.java \
+            receiver/tests/T1TankEvidenceTest.java
+          java -cp /tmp/tank-evidence-test T1TankEvidenceTest
       - name: Separate apps and Android APK builds
         run: gradle --no-daemon :sender:assembleDebug :receiver:assembleDebug
       - name: Verify independent identities, permissions and no telemetry
