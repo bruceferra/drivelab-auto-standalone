@@ -56,6 +56,18 @@ jobs:
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/MirrorParkingPolicy.java \
             receiver/tests/MirrorParkingPolicyTest.java
           java -cp /tmp/mirror-parking-policy-test MirrorParkingPolicyTest
+      - name: T1 fuel autonomy and recirculation regressions (pure JVM)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-trip-test
+          javac -encoding UTF-8 -d /tmp/t1-trip-test \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripMath.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/RecirculationPolicy.java \
+            receiver/tests/T1TripMathTest.java \
+            receiver/tests/RecirculationPolicyTest.java
+          java -cp /tmp/t1-trip-test T1TripMathTest
+          java -cp /tmp/t1-trip-test RecirculationPolicyTest
       - name: Separate apps and Android APK builds
         run: gradle --no-daemon :sender:assembleDebug :receiver:assembleDebug
       - name: Verify independent identities, permissions and no telemetry
