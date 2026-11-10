@@ -75,6 +75,10 @@ La observación nueva sobre `2068` (izquierdo) / `2069` (derecho) y lecturas pos
 
 El Receiver experimental 0.2.14 incluye lectura directa RAW `getInt(2068/2069)`, pruebas manuales de **1.000 y 2.000 ms** en P/velocidad cero, y botones de plegar/desplegar basados solo en Android Automotive `MIRROR_FOLD` con permiso privilegiado y getter validado; si faltan, **no envía comando**. No hay automatismo R/D ni homing contra topes. [Procedimiento de calibración temporal y estado](RECEIVER_ESPEJOS_CALIBRACION_TEMPORAL_2026-11-10.md). Sender 0.2.13, mapas, puente, viajes y consumo permanecen intactos.
 
+## Receiver 0.2.14 · ensayo de carrera temporal disponible por OTA
+
+**Publicado y firmado:** [v0.2.14/latest](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.14), [Action 42832582917 exitosa](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42832582917). `receiver.json` apunta a v0.2.14/code15; `sender.json` es idéntico al de v0.2.13. Solo actualiza Receiver por su **actualizador interno**. Pantalla experimental incluye comandos manuales 1.000/2.000ms, lectura RAW 2068/2069 con mandos sueltos y plegado Android Automotive **condicionado a permiso OEM**. Sin prueba física aún, sin auto-R/D ni homing. [Procedimiento de calibración](RECEIVER_ESPEJOS_CALIBRACION_TEMPORAL_2026-11-10.md).
+
 ## Próxima integración
 
 El módulo hoy llamado **ENERGÍA / CODE** en Receiver crecerá hasta **TABLERO T1** con litros reales estimados, autonomía contrastada, SOC, corriente, energía y consumo. Su modelo deberá almacenar observaciones originales y cálculos reproducibles por separado. El tratamiento del consumo continúa en el documento de tablero; no inventar señales ni convertir mediciones de otro proyecto en valores OEM verificados.
