@@ -72,7 +72,7 @@ public final class ReceiverActivity extends Activity {
         body.setPadding(22,20,22,35);scroll.addView(body);
         SharedPreferences p=prefs();
         label(body,"DRIVELAB AUTO · RECEIVER",23);
-        label(body,"v0.2.16 · Mapas y puente · Jetour T1",13);
+        label(body,"v0.2.17 · Mapas y puente · Jetour T1",13);
         button(body,"VEHÍCULO · VENTANILLAS / ENERGÍA / CODE",()->
             startActivity(new Intent(this,ReceiverVehicleActivity.class)));
         button(body,"TABLERO T1 · TANQUES / CONSUMO / TELEMETRÍA",()->
