@@ -42,7 +42,7 @@ public final class MirrorAutomationService extends Service {
     @Override public IBinder onBind(Intent ignored){return null;}
     private SharedPreferences prefs(){return getSharedPreferences(PREFS,MODE_PRIVATE);}
     private int steps(String key){
-        return Math.max(1,Math.min(10,prefs().getInt(key,2)));
+        return Math.max(1,Math.min(MirrorParkingPolicy.MAX_PULSES_PER_SIDE,prefs().getInt(key,2)));
     }
     @Override public int onStartCommand(Intent intent,int flags,int startId){
         // A restarted process cannot know the actual manual D pose.
