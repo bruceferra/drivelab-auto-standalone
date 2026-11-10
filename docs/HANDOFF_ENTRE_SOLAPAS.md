@@ -6,12 +6,12 @@
 
 El objetivo ya acordado es consolidar gradualmente:
 - **DriveLab Auto Sender 0.2.10 en Xiaomi**: envíos de destinos/Maps/Uber y vinculación por LAN.
-- **DriveLab Auto Receiver 0.2.10 en Jetour T1**: navegación a Waze/clúster, arranque opcional, controles manuales de ventanillas/AVAS, lecturas OEM y explorador CODE.
+- **DriveLab Auto Receiver 0.2.11 OTA disponible (instalación real aún no confirmada) en Jetour T1**: mantiene Waze/clúster, arranque opcional, ventanas/AVAS, lecturas OEM y CODE; suma piloto **manual no validado** de espejos 2069 en P. 0.2.10 es versión anterior.
 - **Módulo TABLERO T1 futuro en Receiver**: combustible real/estimado, autonomía, SOC y energía a partir del análisis de consumo aún en progreso.
 - **DriveLab GPS estable**: conservar registro de viajes, kilómetros, mapas de recorridos e historial. **No modificar ni borrar datos de tanque en curso.**
 - **DriveLab T1 separado y puente antiguo**: mantener como diagnóstico/respaldo hasta que Receiver 0.2.10 pase pruebas físicas.
 
-Código/release principal: https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.10
+Release de actualización Receiver: https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.11 (latest; Action 42819862706 PASÓ). Sender sigue 0.2.10, sin actualización. **Método de usuario: botón interno «ACTUALIZAR RECEIVER · INSTALACIÓN DIRECTA»**, que lee `releases/latest/download/receiver.json`, verifica hash y certificado y solicita confirmación de Android. No entregar APK aparte. El `sender.json` servido por latest es idéntico al de v0.2.10. Espejos sin prueba física.
 
 ## Regla de combustible que no se puede perder
 
