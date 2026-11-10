@@ -51,6 +51,17 @@ En las clases `mainthor.MainthorRepo` y corutinas de lectura se encontraron prop
 
 En el mismo archivo, `MainthorRepo$litrosNafta$2` invoca `CiLink.litrosNafta()`: coincide con la lectura de combustible OEM **CI186** ya contrastada con el menú oculto. **No constituye una segunda fuente física independiente**. El **cálculo VIEJO de nafta del launcher sigue completamente DESCARTADO**: no utilizarlo en ninguna fórmula ni comparación.
 
+### Trazado de uso: ¿participa PHEV SUM FUEL en el viaje?
+
+En el **análisis de llamadas directas del DEX**:
+
+- `MainthorRepo$acumulados$2` consulta **559964336** y **559964335** por `leerHalCrudo`.
+- La única invocación directa identificada de `MainthorRepo.acumulados()` desde los módulos de aplicación fue `MainthorScreenKt$MainthorScreen$4.invokeSuspend`: **pantalla de Mainthor**.
+- `ViajeService.bucle` sí llama directamente a `MainthorRepo.litrosNafta()`, y esa ruta invoca `CiLink.litrosNafta()` (CI186).
+- **Conclusión acotada:** en el código recorrido, el acumulador 559964335 aparece como **lectura de interfaz/diagnóstico**, NO como la entrada directa de combustible consumido de `ViajeService`. El dato nuevo de nafta del viaje **parece depender de la variación CI186** y no de una validación independiente por el HAL `PHEV SUM FUEL`. Análisis estático: no excluye rutas indirectas/reflexión, pero no hay evidencia para afirmar que el contador sea el dato físico real del viaje.
+
+Esto refuerza la decisión de **no promediar** `litros_real` del launcher con el descenso de CI186 como si fueran sensores independientes. Se debe comprobar contra surtidor.
+
 ### Prueba propuesta, solo lectura y estacionado
 
 1. Verificar que los getters HAL permitidos de Receiver puedan leer 559964335 y 559964336 **sin setter ni comandos genéricos**, y registrar errores de permiso si no.
