@@ -55,6 +55,8 @@ Observación del propietario (10/11): `2068` izquierdo; `2069` derecho. En la in
 
 [Receiver v0.2.15 TABLERO T1 experimental](TABLERO_T1_RECEIVER_V0_2_15.md) es una pantalla de lectura aislada con históricos, tres odómetros, CI186/SOC puntuales y CSV local/exportable. Sin cambios de Sender, mapas, viajes o espejos. No afirmar que mide kWh/consumo del térmico real ni que ya tiene TRIP A/B. Toda publicación debe ser por **actualizador incorporado** del Receiver, conservando firma.
 
+**Release Receiver 0.2.15 publicada:** [v0.2.15/latest](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.15) y [GitHub Actions 42838320184 completada con éxito](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42838320184), misma firma que Receiver v0.2.14, con `receiver.json` para instalar por el actualizador interno. Sender continúa v0.2.13 y `sender.json` mantuvo digest idéntico al anterior. Nuevo [TABLERO T1](TABLERO_T1_RECEIVER_V0_2_15.md) agrega tarjetas de dos tanques completos, triple distancia y CI186/SOC lectura manual con CSV privado exportable. Pendiente confirmar uso físico en auto y ampliar TRIP A/B; no modifica espejo/ventanas, mapa ni viajes.
+
 ## Qué aportar al expediente desde la solapa de consumo
 
 Registrar cada ensayo nuevo como:
