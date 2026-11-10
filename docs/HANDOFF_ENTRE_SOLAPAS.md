@@ -43,6 +43,10 @@ Sender y Receiver deben comprobar automáticamente su respectivo manifiesto `sen
 
 **Publicación 0.2.13:** [release latest con Sender + Receiver](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.13) y [workflow 42826440626 exitoso](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42826440626). Los dos manifiestos OTA apuntan a APK propias v0.2.13/code14 firmadas con el mismo certificado anterior; instalación real en auto/teléfono pendiente. Esta entrega agrega check al abrir, aviso explícito «Esta es la última versión» al consultar manualmente, scroll estable en ambas apps y panel T1; NO agrega lectura real de espejos. Ver [documento de actualización](ACTUALIZADOR_Y_SCROLL_0_2_13_2026-11-10.md).
 
+## Medición nueva de extremos: 2068/2069 y tiempo de carrera
+
+Observación del propietario (10/11): `2068` izquierdo; `2069` derecho. En la interfaz observó valores **2 arriba, 1 abajo, 0 en el medio**, todavía pendiente de comprobar si son **readback de posición persistente con mando suelto** o estado de mando. **NO confundir con escrituras:** `setIntData(2069,1)` sube y `(2069,2)` baja físicamente. Propone 1.000–2.000 ms por accionamiento; **10 × 1.000 ms = 10 s es ejemplo, no tiempo completo medido**. Se deben medir recorridos arriba→abajo y abajo→arriba separadamente, y no declarar media carrera por cinco pulsos sin repetibilidad. Código experimental en Receiver 0.2.14 con lectores OEM RAW y comandos manuales, no automáticos. [Informe](RECEIVER_ESPEJOS_CALIBRACION_TEMPORAL_2026-11-10.md). El plegado estándar de Automotive `287312709` requiere privilegio OEM; botones se bloquean si falta permiso.
+
 ## Qué aportar al expediente desde la solapa de consumo
 
 Registrar cada ensayo nuevo como:
