@@ -34,8 +34,8 @@ public final class MirrorPulsePilot {
     private static final int GEAR_ID=1033, GEAR_P=1, RIGHT_ID=2069, LEFT_ID=2068;
     private static final int SPEED_FLOAT_ID=2148, SPEED_INT_ID=1089;
     private static final long COOLDOWN_MS=1800;
-    // Early manual experiment only: no 3-second movements or automatic reversing.
-    public static final int SHORT_MS=120, SMOOTH_TEST_MS=300;
+    // Manual controlled test: at most 500 ms per verified P/stationary command. No automatic reversing.
+    public static final int SHORT_MS=120, SMOOTH_TEST_MS=500;
     private final Context app;
     private final Handler main=new Handler(Looper.getMainLooper());
     private final AtomicBoolean busy=new AtomicBoolean(false);
