@@ -150,13 +150,23 @@ final class ReceiverQuickControls {
         return fold.busy()||windows.busy()||avas.busy();
     }
     private void fold(boolean unfold){
-        if(mirrorPrefs().getBoolean(MirrorAutomationService.AUTO,false)){
-            message("Elegí ESPEJOS MANUAL antes de plegar: evita que AUTO "+
-                "mueva los cristales mientras están plegados");return;
-        }
         if(busy()){message("Otra orden de control sigue en curso");return;}
+        // A fold/unfold tap is also an explicit request to stop automatic
+        // mirror tilting: never ask the driver to change modes first.
+        if(mirrorPrefs().getBoolean(MirrorAutomationService.AUTO,false)){
+            try{
+                mirrorPrefs().edit().putBoolean(MirrorAutomationService.AUTO,false)
+                    .putString(MirrorAutomationService.STATUS,
+                        "AUTO detenido por plegado/desplegado manual").commit();
+                activity.startService(new Intent(activity,MirrorAutomationService.class)
+                    .setAction(MirrorAutomationService.ACTION_MANUAL));
+            }catch(Exception ex){
+                message("No se pudo detener AUTO: "+ex.getMessage());return;
+            }
+        }
+        refresh();
         if(!fold.testFold2003(unfold,this::message))
-            message("No se inició plegado: comprobá la marcha y la velocidad baja");
+            message("No se inició plegado: comprobá marcha/velocidad y conexión OEM");
         else message("Verificando 2003 y enviando una orden si hace falta…");
     }
     private void windows(int operation){
