@@ -108,7 +108,15 @@ El propietario comparó desplazamientos contra una **marca fija visible en un á
 - Por la observación visual del usuario (**500 ≈ 1.000 ≈ 2.000 ms en desplazamiento**), se retiran de la interfaz los botones redundantes de 1.000/2.000 ms y se mantiene el ensayo único de 500 ms. **No interpretar 500 ms como duración física proporcional de movimiento**.
 - **Instalación:** solo con el actualizador incorporado de Receiver (botón o aviso al abrir), nunca APK suelta. **No se confirma instalación real en T1 hasta que lo indique el propietario.**
 
-## Próximo resultado que necesitamos del usuario
+## Hallazgo: izquierdo validado y condiciones nuevas de retorno R/no-R
+
+El usuario confirmó físicamente que el espejo **izquierdo ID 2068** sube y baja con un toque; para derecho ID 2069 ya estaban validados 1 subir / 2 bajar. A veces el segundo toque inmediato no produce movimiento: el piloto incluía **espera artificial 1800 ms**, eliminada del código experimental v0.2.17. No se garantiza que el OEM acepte pulsos sin intervalo propio; solo se elimina la restricción de la app, manteniendo espera hasta finalizar el pulso anterior y liberación. **500ms/1000ms/2000ms se observaron equivalentes en desplazamiento**.
+
+Los botones **Guardar D/R** no servían como memorias de ángulo, solo persistían la salida HAL; eliminados. Botones de plegado/desplegado sin permiso OEM, eliminados. Alarma de peatones pasa a **un toque** con verificación OEM estacionada en P, velocidad 0; ventilación/cierre totalmente probados y sin cambios.
+
+Para estacionamiento, se prefiere **una bajada en la primera R** (pasos relativos configurados), sin subir durante maniobras lentas. La restauración se ordenará **cuando 1033 no sea R y velocidad OEM >10 km/h mantenida 800ms**, sin necesidad de distinguir D/N. Si se encuentra en N y rueda, también hay velocidad: **N no equivale a 0 km/h**. Algoritmo en [ESPEJOS_AUTO_R_NO_R_10KMH_2026-11-10.md](ESPEJOS_AUTO_R_NO_R_10KMH_2026-11-10.md), **solo política lógica sin automatización física**.
+
+## Próximo resultado que necesitamos del usuario## Próximo resultado que necesitamos del usuario
 
 Para el espejo derecho, registrar lectura **antes, mientras está a mitad y después de soltar**; comparar si `getInt(2069)` continúa reportando 2/0/1 en extremos una vez liberado. Luego ensayo único de 1.000 ms y de 2.000 ms. Esto decide si se puede calibrar con límites detectados o solo medir tiempos aproximados.
 
