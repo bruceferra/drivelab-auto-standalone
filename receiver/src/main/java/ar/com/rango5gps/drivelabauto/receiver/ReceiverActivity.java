@@ -29,6 +29,7 @@ public final class ReceiverActivity extends Activity {
                 getSharedPreferences("drivelab_native_update",MODE_PRIVATE)
                     .getString("last_install_status","");
             if(!latest.equals(pairUiSnapshot))render();
+            if(quickControls!=null)quickControls.refresh();
             pairUiHandler.postDelayed(this,750);
         }
     };
