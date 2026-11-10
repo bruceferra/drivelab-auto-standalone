@@ -41,6 +41,8 @@ Se preparó un Receiver 0.2.12 con botón de lectura de propiedades **HAL** (`MI
 
 Sender y Receiver deben comprobar automáticamente su respectivo manifiesto `sender.json` / `receiver.json` al abrir y **ofrecer instalar** una versión nueva (sin descargar ni instalar sin autorización). El botón manual debe responder siempre `Esta es la última versión` cuando corresponda; los botones no deben llevar el scroll arriba. Se implementó en **0.2.13 code14 para ambos** y se documentó en [ACTUALIZADOR_Y_SCROLL_0_2_13_2026-11-10.md](ACTUALIZADOR_Y_SCROLL_0_2_13_2026-11-10.md). El propietario instaló Receiver 0.2.12 y observó P/velocidad cero; todas las propiedades HAL de posición consultadas no figuran en la lista accesible. No atribuirles ángulo ni final de carrera.
 
+**Publicación 0.2.13:** [release latest con Sender + Receiver](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.13) y [workflow 42826440626 exitoso](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42826440626). Los dos manifiestos OTA apuntan a APK propias v0.2.13/code14 firmadas con el mismo certificado anterior; instalación real en auto/teléfono pendiente. Esta entrega agrega check al abrir, aviso explícito «Esta es la última versión» al consultar manualmente, scroll estable en ambas apps y panel T1; NO agrega lectura real de espejos. Ver [documento de actualización](ACTUALIZADOR_Y_SCROLL_0_2_13_2026-11-10.md).
+
 ## Qué aportar al expediente desde la solapa de consumo
 
 Registrar cada ensayo nuevo como:
