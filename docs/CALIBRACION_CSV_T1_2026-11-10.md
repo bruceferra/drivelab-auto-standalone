@@ -39,6 +39,7 @@
 | 763 km | 14,0 L | 160 km | Observación 09/11; CI186 = menú chino en comparación inmediata |
 | 790 km | 11,8 L | 119 km | Observación 09/11 (captura/CSV cercana, no misma muestra garantizada) |
 | 868,5 km | 6,8 L | «--» luego de los últimos 50 km | Observación 10/11, pendiente CSV de ese día |
+| **885,0 km** | **6,0 L** | «--» (permanece oculto) | **Observación del usuario 10/11, ~09:28 hora Argentina, pendiente CSV**; no se informó bloqueo definitivo del térmico |
 
 Entre **790 km / 11,8 L** y **868,5 km / 6,8 L**: diferencia **78,5 km**, descenso OEM **5,0 L** ⇒ **6,37 L/100 km indicados**, **NO consumo físico exacto**. El usuario puso otro parcial a cero cuando el clúster mostraba los últimos 50 km y recorrió 33,3 km; cálculo aritmético 50−33,3=16,7 km y 868,5+16,7=**885,2 km**, únicamente **cero extrapolado de la indicación antigua**, no fecha/km de corte confirmado. El clúster recalcula autonomía y oculta la cifra al llegar a «--».
 
@@ -49,6 +50,16 @@ El usuario observó SOC pasar por **21% al salir de autopista y 18% en ciudad**,
 - Primer ciclo previo: **~950 km** entre referencias de corte operativo y **~67 L** cargados, sin recarga externa de batería reportada. Referencia de **7,05 L/100 km = 14,18 km/L** para ese ciclo, no para todos los trayectos.
 - Repostaje documentado el 03/11: **66,865 L al primer corte** de pistola, **~67,0 L completados**. El próximo repostaje se hará idealmente mismo surtidor y primer corte, sin sobrellenar, para comparar condiciones. **No afirmar una segunda carga de 67 L hasta recibir el dato**.
 - El tanque declarado es 70 L, pero **70−67≈3 L no demuestra por sí solo una reserva física de exactamente 3 L**. Tampoco implica restar siempre 5,3 L de `litros_display`. Se trata de cantidades diferentes.
+
+### Avance del 10/11/2026 ~09:28 ART: 885 km y 6,0 L OEM
+
+**OBSERVADO / relato del propietario:** después del punto de 868,5 km con 6,8 L OEM, se recorrieron **16,5 km adicionales** (total **885,0 km**). La lectura de combustible descendió a **6,0 L**; diferencia de **0,8 L indicados**. El usuario indicó que parte del avance fue eléctrico, y aún no reportó el bloqueo definitivo del térmico.
+
+- **Diferencia calculada:** (0,8 / 16,5) × 100 = **4,85 L/100 km OEM indicados**; inversa **20,63 km/L** solo como relación aritmética entre descenso OEM y kilometraje del tramo. **No etiquetar como consumo de combustible físico medido** ni añadirlo al balance como caudal real de inyección.
+- Hasta el piso de **5,3 L OEM** observado en el ciclo anterior restarían **0,7 L indicados**, NO un litro exacto; si *hipotéticamente* se repitiera la pendiente de los últimos 16,5 km, representarían ~**14,4 km**, equivalentes a **899,4 km acumulados**. Esta extrapolación es **HIPÓTESIS**, no autonomía garantizada. Los kilómetros EV y los retardos de actualización pueden cambiar el resultado.
+- El cero de autonomía **extrapolado** desde el último «50 km» visible en el clúster era **885,2 km**; el vehículo alcanzó **885,0 km** sin evidencia de corte térmico definitivo, prueba adicional de que **ese cero no equivale al límite operativo del combustible**. No atribuir un «cero real» a un display que ya muestra rayitas.
+- **PENDIENTES:** CSV 10/11; valores de resistencia variable, SOC y RPM al mismo timestamp; evento exacto de corte térmico; volumen ingresado al surtidor tras el corte. **No adelantar el final del ciclo ni incorporar ajustes de firmware/Receiver** en función de este único tramo.
+- Mantener el historial del segundo tanque y seguir separando energía eléctrica de combustible. Aun si una relación local de litros OEM/km mejora en ciudad, no demuestra eficiencia instantánea de gasolina para el motor, porque el híbrido alterna energía de batería.
 
 ## Calidad de distancia: no promediar sensores incompatibles
 
