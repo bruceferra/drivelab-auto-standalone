@@ -16,7 +16,7 @@ public final class T1TripMathTest {
         near(T1TripMath.estimatedRangeKm(2000,30.0),0,0.001);
         yes(T1TripMath.floatUpperSaturated(60.5));
         yes(!T1TripMath.floatUpperSaturated(60.4));
-        near(T1TripMath.cost(7.46674182638,2129),15896.89,0.1);
+        near(T1TripMath.cost(7.46674182638,2129),15896.69,0.1);
         near(T1TripMath.grossHvDischargeKwh(400,20,1000),8.0/3600,0.000001);
         near(T1TripMath.grossHvChargeKwh(400,-20,1000),8.0/3600,0.000001);
         near(T1TripMath.grossHvDischargeKwh(400,-20,1000),0,0.000001);
