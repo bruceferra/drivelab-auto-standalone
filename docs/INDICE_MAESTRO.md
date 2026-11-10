@@ -6,7 +6,7 @@
 
 **Unificar gradualmente en DriveLab Auto Receiver (Jetour T1) la navegación, el control manual del vehículo, el diagnóstico OEM y un futuro tablero de combustible/energía.** Mantener DriveLab Auto Sender en Xiaomi solo para compartir destinos y administrar la vinculación. Conservar DriveLab estable para registrar viajes, GPS e historial.
 
-La primera versión integrada es **DriveLab Auto Sender + Receiver v0.2.10**, publicada y firmada el 2026-11-09:
+La primera versión integrada conjunta fue **Sender + Receiver v0.2.10**, publicada y firmada el 2026-11-09:
 https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.10
 
 **Estado correcto:** compilación y pruebas automáticas del código v0.2.10 aprobadas; **no** confundir con validación física en la Jetour. El uso real de los nuevos controles OEM desde el paquete Receiver todavía debe probarse. No se han fusionado las apps antiguas ni eliminado datos.
@@ -39,11 +39,15 @@ Las notas antiguas en README y en las carpetas de continuidad son **históricas*
 - No sumar automatización Spotify hasta aislar por qué pierde la fuente y muestra NOT PROVIDED.
 - No borrar, actualizar a ciegas ni limpiar la app estable mientras existan viajes de tanque/historial sin respaldo comprobado.
 
-## Prerelease experimental de espejos (10/11/2026)
+## Actualización Receiver v0.2.11 desde la app (10/11/2026)
 
-**Receiver v0.2.11-MIRROR-QA** fue compilado y firmado correctamente desde la rama `feature/receiver-espejos-qa-20261110`, sin modificar Sender, el puente ni la release estable v0.2.10. **NO VALIDADO físicamente en la T1; NO es actualización estable.** Descarga/registro de compilación: https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.11-mirror-qa . Es el mismo package de Receiver con versionCode 12; se construye utilizando la clave de firma Receiver configurada en Actions. Se entrega únicamente como instalación manual supervisada.
+**CONFIRMADO (publicación, no prueba física):** Receiver `0.2.11 / versionCode 12` está en la [release oficial v0.2.11](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.11) marcada como **latest**, con `receiver.json` y APK firmada con la **misma identidad de certificado de v0.2.10**. [GitHub Actions OTA 42819862706](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42819862706) **PASÓ**. Fue integrada mediante [PR 15](https://github.com/bruceferra/drivelab-auto-standalone/pull/15). Se preservó **exactamente** el archivo `sender.json` de v0.2.10 (mismo SHA-256), apuntando al Sender 0.2.10: el usuario NO actualiza Sender para este ensayo.
 
-La función muestra `PULSO 1`, `PULSO 2` (ID OEM 2069, dirección/lado **sin validar**) y liberación `2069=0`, con consentimiento por operación, ~120 ms de pulso, control previo de `1033=1` (P candidata) y velocidad OEM próxima a cero. **No hay HOLD continuo, auto-tilt al engranar R, memoria ni actuación durante el arranque.** Ninguna garantía de parada física ante fallo de Android/OEM; si ocurre movimiento anormal, detener ensayo con los mandos de fábrica y no circular. [Instrucciones de QA en rama de prueba](https://github.com/bruceferra/drivelab-auto-standalone/blob/feature/receiver-espejos-qa-20261110/docs/RECEIVER_ESPEJOS_QA_0_2_11.md). Conservamos la versión 0.2.10 estable en main; no se fusionó el prototipo hasta validar en vehículo.
+**Flujo requerido:** en la propia Jetour, `DriveLab Auto Receiver → ACTUALIZAR RECEIVER · INSTALACIÓN DIRECTA`. El actualizador en `common/Updater.java` consulta `releases/latest/download/receiver.json`, compara versionCode, descarga desde la URL canónica y verifica SHA-256, paquete y certificado antes de solicitar la instalación nativa Android. **No** se requiere bajar APK a mano, desinstalar ni cambiar el Sender. Requiere confirmación de Android y prueba física del flujo en la T1.
+
+**Funcionalidad agregada, físicamente NO PROBADA:** sección de espejo con `PULSO 1` / `PULSO 2` del ID 2069, liberación 0, confirmación y prelectura de marcha P/velocidad cero. Sin HOLD ni auto-inclinación en reversa. Probar exclusivamente con vehículo estacionado, mandos de fábrica accesibles; no confiar en topes mecánicos. [Protocolo de QA](RECEIVER_ESPEJOS_QA_0_2_11.md).
+
+La antigua [pre-release v0.2.11-mirror-qa](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.11-mirror-qa) fue un artefacto previo de laboratorio: **NO es el canal de actualización** ni el enlace para el usuario. El canal correcto es v0.2.11 latest.
 
 ## Próxima integración
 
