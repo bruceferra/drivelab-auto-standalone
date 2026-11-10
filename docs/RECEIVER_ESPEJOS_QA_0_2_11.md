@@ -1,6 +1,6 @@
 # Receiver v0.2.11 QA — prueba manual de retrovisor, sin automatización
 
-**Estado:** compilación experimental desde rama `feature/receiver-espejos-qa-20261110`, **NO VALIDADA EN VEHÍCULO**. El APK debe ser de **Receiver** (mismo paquete y certificado de firma que 0.2.10); Sender continúa 0.2.10 y no se cambia. **No usar en circulación**.
+**Estado:** Receiver 0.2.11 (versionCode 12) firmado y publicado en [release latest OTA](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.11); [workflow de publicación exitoso](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42819862706) comparó el certificado con 0.2.10. **NO VALIDADA FÍSICAMENTE EN VEHÍCULO**. Sender permanece 0.2.10. **No usar controles experimentales en circulación**.
 
 ## Objetivo del ensayo
 
@@ -19,7 +19,7 @@ Validar el ID OEM `2069` extraído estáticamente del `EspejoRService` del APK T
 
 ## Instrucciones de prueba física
 
-1. Instalar sobre **Receiver 0.2.10**, usando APK **release firmada de prueba**, no debug. Conservar Sender 0.2.10. Respaldar configuración y APK estable antes de reemplazar.
+1. Con la T1 estacionada, abrir **Receiver 0.2.10 → ACTUALIZAR RECEIVER · INSTALACIÓN DIRECTA**. La app detecta 0.2.11 mediante `releases/latest/download/receiver.json`, descarga y comprueba hash/firma antes de pedir la instalación Android. **No descargar APK a mano, no desinstalar y no actualizar Sender 0.2.10.**
 2. Estacionar en superficie plana, marcha **P**, velocidad 0, entorno despejado. Dejar el espejo en una posición intermedia alejada de los topes mecánicos; no usar el extremo para calibrar.
 3. Abrir **Receiver → VEHÍCULO → ESPEJO**. Dejar el mando físico accesible y observar el espejo desde un punto seguro.
 4. Elegir **PULSO 1**. Anotar si Receiver rechaza por marcha/velocidad/permiso, si se mueve algún espejo, cuál, en qué dirección, cuánto y si se detiene al concluir. **Si sigue moviéndose, no mandar PULSO 2; intentar liberar y usar el control OEM.**
@@ -36,4 +36,4 @@ Validar el ID OEM `2069` extraído estáticamente del `EspejoRService` del APK T
 
 Si los pulsos controlan físicamente el motor y la detención es confiable, diseñar pulsación sostenida con límite temporal, parada en `ACTION_UP/CANCEL` y guardia de seguridad, siempre sin basarse en topes físicos. No anunciar como funcional antes del registro de aceptación del usuario.
 
-**Compilación:** el flujo `.github/workflows/receiver-mirror-qa.yml` genera exclusivamente **Receiver firmado** en rama experimental. Publica un **pre-release** aislado, sin tocar el release estable ni los manifiestos de actualización automática.
+**Compilación/publicación actual:** `.github/workflows/publish-receiver-ota.yml` publica exclusivamente **Receiver firmado 0.2.11**, `receiver.json` y copia **sender.json de v0.2.10** sin cambios en el canal latest. La publicación es oficial para el mecanismo OTA; la **función de espejos sigue experimental** hasta prueba física. La pre-release separada anterior es histórica y no debe utilizarse para actualizar.
