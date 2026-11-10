@@ -1,0 +1,88 @@
+name: DriveLab Auto Receiver mirror QA signed
+on:
+  push:
+    branches: ['feature/receiver-espejos-qa-20261110']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: drivelab-receiver-mirror-qa
+  cancel-in-progress: false
+jobs:
+  signed-receiver:
+    runs-on: ubuntu-24.04
+    env:
+      RECEIVER_STORE_PASSWORD: ${{ secrets.RECEIVER_STORE_PASSWORD }}
+      RECEIVER_KEY_ALIAS: ${{ secrets.RECEIVER_KEY_ALIAS }}
+      RECEIVER_KEY_PASSWORD: ${{ secrets.RECEIVER_KEY_PASSWORD }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Android SDK 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool=$(command -v sdkmanager || find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)
+          "$tool" 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Restore receiver signing key from Actions secrets
+        shell: bash
+        env:
+          RECEIVER_KEYSTORE_B64: ${{ secrets.RECEIVER_KEYSTORE_B64 }}
+        run: |
+          set -euo pipefail
+          test -n "$RECEIVER_KEYSTORE_B64"
+          test -n "$RECEIVER_STORE_PASSWORD"
+          test -n "$RECEIVER_KEY_ALIAS"
+          test -n "$RECEIVER_KEY_PASSWORD"
+          printf %s "$RECEIVER_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/receiver.p12"
+          chmod 600 "$RUNNER_TEMP/receiver.p12"
+          echo "RECEIVER_KEYSTORE=$RUNNER_TEMP/receiver.p12" >> "$GITHUB_ENV"
+      - name: Compile signed Receiver QA only
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'bruceferra/drivelab-auto-standalone'
+          test "$GITHUB_REF_NAME" = 'feature/receiver-espejos-qa-20261110'
+          gradle --no-daemon :receiver:assembleRelease
+          apk='receiver/build/outputs/apk/release/receiver-release.apk'
+          test -s "$apk"
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$apk"
+          badge=$("$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" | head -1)
+          echo "$badge"
+          echo "$badge" | grep "package: name='ar.com.rango5gps.drivelabauto.receiver'"
+          echo "$badge" | grep "versionCode='12'"
+          echo "$badge" | grep "versionName='0.2.11'"
+          mkdir -p output
+          cp "$apk" output/DriveLab-Auto-Receiver-v0.2.11-MIRROR-QA.apk
+          sha256sum output/*.apk > output/Receiver-MIRROR-QA.sha256
+      - name: Upload signed receiver for QA
+        uses: actions/upload-artifact@v4
+        with:
+          name: DriveLab-Auto-Receiver-v0.2.11-MIRROR-QA-SIGNED
+          path: |
+            output/DriveLab-Auto-Receiver-v0.2.11-MIRROR-QA.apk
+            output/Receiver-MIRROR-QA.sha256
+          if-no-files-found: error
+          retention-days: 21
+      - name: Publish isolated prerelease for manual test (not latest)
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag='v0.2.11-mirror-qa'
+          if gh release view "$tag" >/dev/null 2>&1; then
+            echo 'Prerelease already exists; keep stable artifact; no overwrite.'
+            exit 0
+          fi
+          gh release create "$tag" \
+            output/DriveLab-Auto-Receiver-v0.2.11-MIRROR-QA.apk \
+            output/Receiver-MIRROR-QA.sha256 \
+            --target "$GITHUB_SHA" --prerelease --latest=false \
+            --title 'Receiver 0.2.11 espejo experimental (NO PROBADO)' \
+            --notes 'Solo Receiver firmado para ensayo MANUAL 2069; P y 0 km/h requeridos, pulso único 120 ms y liberación 0. Sin espejo automático en R. Sender no cambia. No es actualización estable. Mantener controles OEM disponibles.'
