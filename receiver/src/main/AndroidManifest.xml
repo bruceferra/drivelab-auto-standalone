@@ -53,6 +53,8 @@
             </intent-filter>
         </activity>
         <activity android:name=".ReceiverVehicleActivity" android:exported="false" />
+        <!-- Isolated historical/read-only T1 fuel dashboard; no OEM writes. -->
+        <activity android:name=".T1TankDashboardActivity" android:exported="false" />
         <activity android:name=".ReceiverActivity" android:exported="true">
             <intent-filter><action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" /></intent-filter>
