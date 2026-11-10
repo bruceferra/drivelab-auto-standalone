@@ -77,6 +77,7 @@ public final class T1TripRecorderService extends Service {
             .putFloat(DISTANCE,0).putFloat(GAS_L,0).putFloat(EV_KWH,0)
             .putFloat(CHARGE_KWH,0).putInt(SAMPLES,0)
             .putString(STATUS,"TRIP iniciado · esperando primeras muestras").apply();
+        T1TripSync.trigger(this,false);
         return startRecording();
     }
     private int startRecording(){
@@ -149,7 +150,8 @@ public final class T1TripRecorderService extends Service {
                 "counter_1048_raw,counter_1049_raw,recirc_1004,change_2101,"+
                 "mirror_fold_2003,gps_lat,gps_lon,gps_accuracy_m,"+
                 "distance_km_est,hv_gross_discharge_kwh_est,hv_charge_kwh_est,"+
-                "gas_l_proxy,gas_cost_est,ev_cost_hv_proxy,notes\n")
+                "gas_l_proxy,gas_cost_est,ev_cost_hv_proxy,notes,"+
+                "rpm_1035_candidate,motor_on_rpm_candidate\n")
                 .getBytes(StandardCharsets.UTF_8));
             T1TripTelemetry oem=new T1TripTelemetry(this);
             while(!stop){
@@ -179,10 +181,12 @@ public final class T1TripRecorderService extends Service {
                     s.recirc+","+s.recircChange+","+s.fold+","+loc+
                     n(km)+","+n(hvOut)+","+n(hvIn)+","+
                     n(liters)+","+n(gasCost)+","+n(evCost)+","+
-                    (gpsMode?"GPS":"OEM_SPEED_UNIT_CANDIDATE")+"\n";
+                    (gpsMode?"GPS":"OEM_SPEED_UNIT_CANDIDATE")+","+
+                    n(s.rpm)+","+s.motorOn+"\n";
                 out.write(line.getBytes(StandardCharsets.UTF_8));
                 sampleCount++;
                 if(sampleCount%5==0)out.flush();
+                if(sampleCount%20==0)T1TripSync.trigger(this,false);
                 p().edit().putFloat(DISTANCE,(float)km)
                     .putFloat(GAS_L,(float)liters).putFloat(EV_KWH,(float)hvOut)
                     .putFloat(CHARGE_KWH,(float)hvIn)
@@ -193,6 +197,7 @@ public final class T1TripRecorderService extends Service {
                 try{Thread.sleep(3000);}catch(InterruptedException e){if(stop)break;}
             }
             out.flush();
+            T1TripSync.trigger(this,true);
         }catch(Exception ex){
             finalStatus="TRIP interrumpido · "+ex.getClass().getSimpleName();
         }finally{cleanup(finalStatus);}

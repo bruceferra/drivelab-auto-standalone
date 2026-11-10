@@ -5,6 +5,9 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.StateListDrawable;
+import android.view.MotionEvent;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -21,6 +24,8 @@ final class ReceiverQuickControls {
     private final VehicleWindowGroup windows;
     private final PedestrianAlertControl avas;
     private TextView status,config;
+    private Button mirrorAuto,mirrorManual,interiorMode,airAuto;
+    private Button leftMinus,leftPlus,rightMinus,rightPlus;
     ReceiverQuickControls(Activity a){
         activity=a;fold=new MirrorPulsePilot(a);
         windows=new VehicleWindowGroup(a);
@@ -46,13 +51,70 @@ final class ReceiverQuickControls {
     private void message(String value){
         if(status!=null)status.setText(value);
     }
+    // Three visually distinct states: raised / selected (sunken) / touch-down.
+    // All colors are calculated locally; no images, API or extra resources.
+    private static int blend(int base,int other,float part){
+        return Color.rgb(
+            (int)(Color.red(base)*(1-part)+Color.red(other)*part),
+            (int)(Color.green(base)*(1-part)+Color.green(other)*part),
+            (int)(Color.blue(base)*(1-part)+Color.blue(other)*part));
+    }
+    private GradientDrawable bevel(int base,boolean selected,boolean pressed){
+        int upper=pressed?blend(base,Color.BLACK,.32f):
+            selected?blend(base,Color.BLACK,.14f):blend(base,Color.WHITE,.20f);
+        int lower=pressed?blend(base,Color.BLACK,.12f):
+            selected?blend(base,Color.BLACK,.30f):blend(base,Color.BLACK,.22f);
+        GradientDrawable bg=new GradientDrawable(
+            GradientDrawable.Orientation.TOP_BOTTOM,new int[]{upper,lower});
+        bg.setCornerRadius(17);
+        bg.setStroke(selected?5:2,selected?0xFFFFD86B:0xFFD1E3EC);
+        return bg;
+    }
+    private void styleSurface(Button b,int base){
+        StateListDrawable backgrounds=new StateListDrawable();
+        backgrounds.addState(new int[]{android.R.attr.state_pressed},
+            bevel(base,b.isSelected(),true));
+        backgrounds.addState(new int[]{android.R.attr.state_selected},
+            bevel(base,true,false));
+        backgrounds.addState(new int[]{},
+            bevel(base,false,false));
+        b.setBackgroundTintList(null);
+        b.setBackground(backgrounds);
+        b.setElevation(b.isSelected()?2f:7f);
+        b.setTranslationY(b.isSelected()?2f:0f);
+        b.setTextColor(Color.WHITE);
+        b.setTypeface(null,b.isSelected()?
+            android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
+    }
     private Button button(LinearLayout parent,String text,int color,Runnable cb){
         Button b=new Button(activity);b.setText(text);b.setAllCaps(false);
         b.setTextSize(14);b.setTextColor(Color.WHITE);
-        b.setBackgroundTintList(ColorStateList.valueOf(color));
+        styleSurface(b,color);
+        b.setTag(Receiver3DButtons.QUICK_TAG);
+        // Return false to preserve native clicks, long-press and accessibility.
+        b.setOnTouchListener((view,event)->{
+            int a=event.getActionMasked();
+            if(a==MotionEvent.ACTION_DOWN){
+                b.setElevation(1f);b.setTranslationY(3f);
+                b.setScaleX(.985f);b.setScaleY(.96f);
+            }else if(a==MotionEvent.ACTION_UP||a==MotionEvent.ACTION_CANCEL){
+                b.setElevation(b.isSelected()?2f:7f);
+                b.setTranslationY(b.isSelected()?2f:0f);
+                b.setScaleX(1f);b.setScaleY(1f);
+            }
+            return false;
+        });
         b.setOnClickListener(v->cb.run());
         parent.addView(b,new LinearLayout.LayoutParams(0,68,1));
         return b;
+    }
+    /** Persisted modes remain visibly depressed; transient actions only on touch. */
+    private void styleSelected(Button button,boolean selected,int base){
+        if(button==null)return;
+        if(button.isSelected()!=selected){
+            button.setSelected(selected);
+            styleSurface(button,base);
+        }
     }
     private LinearLayout row(LinearLayout root){
         LinearLayout r=new LinearLayout(activity);
@@ -70,8 +132,8 @@ final class ReceiverQuickControls {
         LinearLayout a=row(root);
         button(a,"PLEGAR ESPEJOS",PURPLE,()->fold(false));
         button(a,"DESPLEGAR ESPEJOS",BLUE,()->fold(true));
-        button(a,"ESPEJOS AUTO",GREEN,()->setMirrorMode(true));
-        button(a,"ESPEJOS MANUAL",ORANGE,()->setMirrorMode(false));
+        mirrorAuto=button(a,"ESPEJOS AUTO",GREEN,()->setMirrorMode(true));
+        mirrorManual=button(a,"ESPEJOS MANUAL",ORANGE,()->setMirrorMode(false));
 
         LinearLayout b=row(root);
         button(b,"BAJAR ESPEJOS",BLUE,()->move(false));
@@ -81,16 +143,19 @@ final class ReceiverQuickControls {
 
         LinearLayout c=row(root);
         button(c,"ALARMA PEATÓN ON/OFF",RED,()->avas());
-        button(c,"SIEMPRE AIRE INTERIOR",GREEN,()->setAir(false));
-        button(c,"AIRE AUTO",GREY,()->setAir(true));
+        interiorMode=button(c,"SIEMPRE AIRE INTERIOR",GREEN,()->setAir(false));
+        airAuto=button(c,"AIRE AUTO",GREY,()->setAir(true));
         button(c,"TABLERO / TRIP",BLUE,()->activity.startActivity(
             new Intent(activity,T1TankDashboardActivity.class)));
 
         LinearLayout d=row(root);
-        button(d,"IZQ −",GREY,()->adjust(MirrorAutomationService.LEFT,-1));
-        button(d,"IZQ +",TEAL,()->adjust(MirrorAutomationService.LEFT,1));
-        button(d,"DER −",GREY,()->adjust(MirrorAutomationService.RIGHT,-1));
-        button(d,"DER +",TEAL,()->adjust(MirrorAutomationService.RIGHT,1));
+        leftMinus=button(d,"IZQ −",GREY,()->adjust(MirrorAutomationService.LEFT,-1));
+        leftPlus=button(d,"IZQ +",TEAL,()->adjust(MirrorAutomationService.LEFT,1));
+        rightMinus=button(d,"DER −",GREY,()->adjust(MirrorAutomationService.RIGHT,-1));
+        rightPlus=button(d,"DER +",TEAL,()->adjust(MirrorAutomationService.RIGHT,1));
+
+        LinearLayout e=row(root);
+        button(e,"RECUPERAR ESPEJOS · 10 PASOS ARRIBA",ORANGE,this::restoreMirrors);
 
         config=new TextView(activity);config.setTextSize(14);
         config.setPadding(8,8,8,4);root.addView(config);
@@ -102,12 +167,20 @@ final class ReceiverQuickControls {
         if(config==null||status==null)return;
         android.content.SharedPreferences m=mirrorPrefs();
         android.content.SharedPreferences a=hvacPrefs();
-        int l=Math.max(1,Math.min(10,m.getInt(MirrorAutomationService.LEFT,2)));
-        int r=Math.max(1,Math.min(10,m.getInt(MirrorAutomationService.RIGHT,2)));
+        int l=Math.max(1,Math.min(MirrorParkingPolicy.MAX_PULSES_PER_SIDE,m.getInt(MirrorAutomationService.LEFT,2)));
+        int r=Math.max(1,Math.min(MirrorParkingPolicy.MAX_PULSES_PER_SIDE,m.getInt(MirrorAutomationService.RIGHT,2)));
         boolean on=m.getBoolean(MirrorAutomationService.AUTO,false);
         boolean interior=RecirculationGuardService.MODE_INTERIOR.equals(
             a.getString(RecirculationGuardService.MODE,
                 RecirculationGuardService.MODE_AUTO));
+        styleSelected(mirrorAuto,on,GREEN);
+        styleSelected(mirrorManual,!on,ORANGE);
+        styleSelected(interiorMode,interior,GREEN);
+        styleSelected(airAuto,!interior,GREY);
+        if(leftMinus!=null)leftMinus.setText("IZQ − ("+l+")");
+        if(leftPlus!=null)leftPlus.setText("IZQ + ("+l+")");
+        if(rightMinus!=null)rightMinus.setText("DER − ("+r+")");
+        if(rightPlus!=null)rightPlus.setText("DER + ("+r+")");
         config.setText("Espejos: "+(on?"AUTO":"MANUAL")+
             "  · pasos por lado: IZQ "+l+" / DER "+r+
             "  · aire: "+(interior?"SIEMPRE INTERIOR":"AUTO")+
@@ -125,13 +198,23 @@ final class ReceiverQuickControls {
         return fold.busy()||windows.busy()||avas.busy();
     }
     private void fold(boolean unfold){
-        if(mirrorPrefs().getBoolean(MirrorAutomationService.AUTO,false)){
-            message("Elegí ESPEJOS MANUAL antes de plegar: evita que AUTO "+
-                "mueva los cristales mientras están plegados");return;
-        }
         if(busy()){message("Otra orden de control sigue en curso");return;}
+        // A fold/unfold tap is also an explicit request to stop automatic
+        // mirror tilting: never ask the driver to change modes first.
+        if(mirrorPrefs().getBoolean(MirrorAutomationService.AUTO,false)){
+            try{
+                mirrorPrefs().edit().putBoolean(MirrorAutomationService.AUTO,false)
+                    .putString(MirrorAutomationService.STATUS,
+                        "AUTO detenido por plegado/desplegado manual").commit();
+                activity.startService(new Intent(activity,MirrorAutomationService.class)
+                    .setAction(MirrorAutomationService.ACTION_MANUAL));
+            }catch(Exception ex){
+                message("No se pudo detener AUTO: "+ex.getMessage());return;
+            }
+        }
+        refresh();
         if(!fold.testFold2003(unfold,this::message))
-            message("No se inició plegado: comprobá P y velocidad cero");
+            message("No se inició plegado: comprobá marcha/velocidad y conexión OEM");
         else message("Verificando 2003 y enviando una orden si hace falta…");
     }
     private void windows(int operation){
@@ -144,7 +227,7 @@ final class ReceiverQuickControls {
         if(busy()){message("Otra operación está en curso");return;}
         if(!avas.toggle(r->message(r.summary())))
             message("Alarma peatón: espera OEM/no se inició");
-        else message("Verificando P/0 antes de cambiar alarma peatonal…");
+        else message("Verificando si se puede cambiar alarma peatonal…");
     }
     private void setMirrorMode(boolean auto){
         try{
@@ -158,6 +241,16 @@ final class ReceiverQuickControls {
                 "MANUAL seleccionado: sin movimientos automáticos");
             refresh();
         }catch(Exception ex){message("Modo espejo rechazado: "+ex.getMessage());}
+    }
+    private void restoreMirrors(){
+        try{
+            activity.startForegroundService(new Intent(activity,
+                MirrorAutomationService.class)
+                .setAction(MirrorAutomationService.ACTION_RECOVER));
+            message("Recuperación manual solicitada: 10 pasos arriba por lado. "+
+                "Solo detenido; posición final no medida. Verificar visualmente.");
+            refresh();
+        }catch(Exception ex){message("Recuperación: "+ex.getMessage());}
     }
     private void move(boolean up){
         try{
@@ -175,7 +268,7 @@ final class ReceiverQuickControls {
             message("Primero cambiá a MANUAL para modificar pasos");return;
         }
         int old=mirrorPrefs().getInt(key,2);
-        int value=Math.max(1,Math.min(10,old+delta));
+        int value=Math.max(1,Math.min(MirrorParkingPolicy.MAX_PULSES_PER_SIDE,old+delta));
         mirrorPrefs().edit().putInt(key,value).apply();
         refresh();message((MirrorAutomationService.LEFT.equals(key)?"Izquierdo":"Derecho")+
             " configurado a "+value+" movimientos por ciclo");

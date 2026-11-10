@@ -53,12 +53,12 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'bruceferra/drivelab-auto-standalone'
           test "$GITHUB_REF_NAME" = 'main'
-          if gh release view 'v0.2.19' >/dev/null 2>&1; then
-            echo 'Release v0.2.19 already exists: no APK overwrite'
+          if gh release view 'v0.2.20' >/dev/null 2>&1; then
+            echo 'Release v0.2.20 already exists: no APK overwrite'
             exit 1
           fi
           mkdir -p /tmp/previous output
-          gh release download v0.2.18 --pattern 'DriveLab-Auto-Receiver-v0.2.18.apk' --dir /tmp/previous
+          gh release download v0.2.19 --pattern 'DriveLab-Auto-Receiver-v0.2.19.apk' --dir /tmp/previous
           gh release download v0.2.13 --pattern 'sender.json' --dir output
           gradle --no-daemon :receiver:assembleRelease
           apk='receiver/build/outputs/apk/release/receiver-release.apk'
@@ -66,16 +66,16 @@ jobs:
           aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
           sig="$ANDROID_HOME/build-tools/35.0.0/apksigner"
           "$sig" verify --print-certs "$apk"
-          "$sig" verify --print-certs /tmp/previous/DriveLab-Auto-Receiver-v0.2.18.apk
-          oldcert=$("$sig" verify --print-certs /tmp/previous/DriveLab-Auto-Receiver-v0.2.18.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          "$sig" verify --print-certs /tmp/previous/DriveLab-Auto-Receiver-v0.2.19.apk
+          oldcert=$("$sig" verify --print-certs /tmp/previous/DriveLab-Auto-Receiver-v0.2.19.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
           newcert=$("$sig" verify --print-certs "$apk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
           test -n "$oldcert" && test "$oldcert" = "$newcert"
           badge=$("$aapt" dump badging "$apk" | head -1)
           echo "$badge"
           echo "$badge" | grep -F "package: name='ar.com.rango5gps.drivelabauto.receiver'"
-          echo "$badge" | grep -F "versionCode='20'"
-          echo "$badge" | grep -F "versionName='0.2.19'"
-          name='DriveLab-Auto-Receiver-v0.2.19.apk'
+          echo "$badge" | grep -F "versionCode='21'"
+          echo "$badge" | grep -F "versionName='0.2.20'"
+          name='DriveLab-Auto-Receiver-v0.2.20.apk'
           cp "$apk" "output/$name"
           sha=$(sha256sum "output/$name" | awk '{print $1}')
           export RECEIVER_SHA="$sha"
@@ -84,10 +84,10 @@ jobs:
           repo=os.environ['GITHUB_REPOSITORY']
           manifest={
             'packageName':'ar.com.rango5gps.drivelabauto.receiver',
-            'versionName':'0.2.19',
-            'versionCode':20,
+            'versionName':'0.2.20',
+            'versionCode':21,
             'sha256':os.environ['RECEIVER_SHA'],
-            'apkUrl':f'https://github.com/{repo}/releases/download/v0.2.19/DriveLab-Auto-Receiver-v0.2.19.apk',
+            'apkUrl':f'https://github.com/{repo}/releases/download/v0.2.20/DriveLab-Auto-Receiver-v0.2.20.apk',
           }
           with open('output/receiver.json','w',encoding='utf-8') as f:
             json.dump(manifest,f,indent=2)
@@ -103,13 +103,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh release create v0.2.19 \
-            output/DriveLab-Auto-Receiver-v0.2.19.apk \
+          gh release create v0.2.20 \
+            output/DriveLab-Auto-Receiver-v0.2.20.apk \
             output/receiver.json output/sender.json output/receiver.sha256 \
             --target "$GITHUB_SHA" --latest \
-            --title 'DriveLab Auto Receiver 0.2.19 - controles rápidos, espejos AUTO, recirculación y tablero TRIP' \
-            --notes 'Receiver SOLO: instalación OTA firmada con el mismo certificado de Receiver v0.2.18. Barra rápida en inicio con plegar/desplegar 2003 probados, espejo AUTO opt-in por R=2 y retorno a marcha no-R >10km/h estable 800ms, modo MANUAL con pasos por lado y pulsos acotados. Recirculación opt-in AUTO o SIEMPRE INTERIOR (1004=1; 2101 solo aviso) con pausa ante errores/overrides OEM. Tablero T1 con agujas en vivo, autonomía anclada a surtidor 66.230L/887km y TRIP privado con GPS/OEM, valores crudos y costos de nafta/HV explícitamente estimados, tarifas editables, CSV exportable. Primer uso de estas funciones NUEVAS no validado físicamente; empezar con pasos 1 y sin circular. Sender 0.2.13, ReceiverService de mapas/Waze, viajes DriveLab anteriores y controles OEM existentes sin cambios. No se usa el cálculo viejo del T1Launcher.'
+            --title 'DriveLab Auto Receiver 0.2.20 - botones 3D, recuperación de espejos y TRIP privado' \
+            --notes 'Receiver SOLO. Firma comparada con Receiver v0.2.19; versionCode 21. Controles rápidos y menús 3D con selección hundida, recuperación de cristales de espejos 10 pasos arriba solo con vehículo detenido; plegado/desplegado 2003 sin pasar por MANUAL, AUTO se desactiva al tocar. Diagnóstico dual OEM 2148/1089 para retorno R->D; aún requiere validación física, por seguridad no confiar en retorno automático hasta probarlo estacionado y en ruta segura. TRIP añade RPM 1035 candidata y sincronización privada opt-in con PIN hacia Supabase (sin enviar GPS/VIN), conservando CSV local. Sender 0.2.13 sin cambios. Nafta proxy sigue siendo estimación histórica, no consumo real. No reusa consumo viejo de T1Launcher.'
           tag=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
-          test "$tag" = 'v0.2.19'
-          gh release view v0.2.19 --json assets --jq '.assets[].name'
-          echo 'OTA v0.2.19 published as latest with receiver.json and preserved sender.json'
+          test "$tag" = 'v0.2.20'
+          gh release view v0.2.20 --json assets --jq '.assets[].name'
+          echo 'OTA v0.2.20 published as latest with receiver.json and preserved sender.json'

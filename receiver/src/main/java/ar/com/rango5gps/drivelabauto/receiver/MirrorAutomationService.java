@@ -21,9 +21,11 @@ import android.os.SystemClock;
  * DISARM auto to avoid stale relative-position bookkeeping.
  *
  * Commands: 2068/2069=2 down, =1 up, always release each with =0.
- * Default 2 pulses per side, editable 1..10. No absolute angle claim.
+ * Default 2 pulses per side, editable 1..20. No absolute angle claim.
  */
 public final class MirrorAutomationService extends Service {
+    // OEM 2068/2069 bursts and fold 2003 must never write concurrently.
+    static final Object OEM_MIRROR_MUTEX = new Object();
     public static final String PREFS="t1_mirror_auto";
     public static final String AUTO="auto", STATUS="status",LEFT="steps_left",
         RIGHT="steps_right",POSITION="position",LAST_GEAR="last_gear",LAST_SPEED="last_speed";
@@ -31,18 +33,19 @@ public final class MirrorAutomationService extends Service {
     public static final String ACTION_MANUAL="t1.mirror.MANUAL";
     public static final String ACTION_DOWN="t1.mirror.MANUAL_DOWN";
     public static final String ACTION_UP="t1.mirror.MANUAL_UP";
+    public static final String ACTION_RECOVER="t1.mirror.RECOVER_TEN_UP";
     public static final String ACTION_STOP="t1.mirror.STOP";
     private static final String CHANNEL="t1_mirror_parking";
     private static final int NOTIF_ID=7526;
     private static final long POLL_MS=250L, PULSE_MS=500L, PAUSE_MS=180L;
     private volatile boolean running,stop;
-    private volatile int pendingManual; // 1=down, 2=up
+    private volatile int pendingManual; // 1=down, 2=up, 3=manual 10-up recovery
     private Thread worker;
 
     @Override public IBinder onBind(Intent ignored){return null;}
     private SharedPreferences prefs(){return getSharedPreferences(PREFS,MODE_PRIVATE);}
     private int steps(String key){
-        return Math.max(1,Math.min(10,prefs().getInt(key,2)));
+        return Math.max(1,Math.min(MirrorParkingPolicy.MAX_PULSES_PER_SIDE,prefs().getInt(key,2)));
     }
     @Override public int onStartCommand(Intent intent,int flags,int startId){
         // A restarted process cannot know the actual manual D pose.
@@ -65,10 +68,13 @@ public final class MirrorAutomationService extends Service {
             prefs().edit().putBoolean(AUTO,true)
                 .putString(POSITION,"D · referencia ajustada por conductor")
                 .putString(STATUS,"AUTO armado · esperando transición nueva a R").apply();
-        }else if(ACTION_DOWN.equals(action)||ACTION_UP.equals(action)){
+        }else if(ACTION_DOWN.equals(action)||ACTION_UP.equals(action)||
+                ACTION_RECOVER.equals(action)){
             // Explicit manual control always overrides auto.
-            prefs().edit().putBoolean(AUTO,false).apply();
-            pendingManual=ACTION_DOWN.equals(action)?1:2;
+            prefs().edit().putBoolean(AUTO,false)
+                .putString(STATUS,"AUTO detenido por operación manual").apply();
+            pendingManual=ACTION_RECOVER.equals(action)?3:
+                (ACTION_DOWN.equals(action)?1:2);
         }
         boolean armed=prefs().getBoolean(AUTO,false);
         if(!armed && pendingManual==0){stopSelf();return START_NOT_STICKY;}
@@ -111,32 +117,51 @@ public final class MirrorAutomationService extends Service {
                 if(!auto&&manual==0)break;
                 try(MirrorAutomationOem oem=new MirrorAutomationOem(this)){
                     int rawGear=oem.gear();
-                    double speed=oem.speedKmh();
+                    MirrorAutomationOem.SpeedSample speedRead=oem.speedSample();
+                    double speed=speedRead.kmh;
                     if(!Double.isFinite(speed)||speed<0||speed>200)
                         throw new IllegalStateException("Velocidad inválida");
                     MirrorParkingPolicy.Gear gear=mapGear(rawGear);
                     if(gear==MirrorParkingPolicy.Gear.UNKNOWN)
                         throw new IllegalStateException("Marcha desconocida="+rawGear);
                     prefs().edit().putInt(LAST_GEAR,rawGear)
-                        .putString(LAST_SPEED,String.format(java.util.Locale.US,"%.1f",speed))
-                        .apply();
+                        .putString(LAST_SPEED,String.format(java.util.Locale.US,
+                            "%.1f (%s; 2148=%.1f; 1089=%.1f)",
+                            speed,speedRead.source,speedRead.raw2148,
+                            speedRead.raw1089)).apply();
                     errors=0;
                     if(manual!=0){
                         pendingManual=0;
                         // No movement at speed; P/R/N/D allowed when stopped.
                         if(speed>0.5)
                             throw new IllegalStateException("Manual solo detenido: "+speed+" km/h");
-                        int l=steps(LEFT),r=steps(RIGHT);
+                        int l=manual==3?10:steps(LEFT);
+                        int r=manual==3?10:steps(RIGHT);
                         int[] counts=runPulses(oem,manual==1,l,r,false);
                         if(counts[0]!=l||counts[1]!=r)
                             throw new IllegalStateException("Movimiento manual incompleto");
                         prefs().edit().putString(STATUS,
-                            "MANUAL "+(manual==1?"BAJAR":"SUBIR")+
-                            " · izq="+l+" der="+r+" órdenes enviadas")
+                            (manual==3?"RECUPERAR 10 ARRIBA":
+                                "MANUAL "+(manual==1?"BAJAR":"SUBIR"))+
+                            " · izq="+l+" der="+r+" órdenes enviadas; "+
+                            "posición física no confirmada")
                             .putString(POSITION,"Manual: posición sin medir").apply();
                     }else if(auto){
                         MirrorParkingPolicy.Action action=policy.observe(gear,speed,
                             SystemClock.elapsedRealtime(),true);
+                        // Expose live diagnostics for field issue: R tilt succeeds,
+                        // but restore sometimes never starts when entering D.
+                        if(policy.phase()==MirrorParkingPolicy.Phase.TILTED &&
+                                action==MirrorParkingPolicy.Action.NONE &&
+                                gear!=MirrorParkingPolicy.Gear.R){
+                            prefs().edit().putString(STATUS,
+                                String.format(java.util.Locale.US,
+                                    "AUTO esperando retorno · marcha %s "+
+                                    "· velocidad %.1f (%s; 2148=%.1f / 1089=%.1f) "+
+                                    "· exige >10 km/h sostenidos",
+                                    gear,speed,speedRead.source,
+                                    speedRead.raw2148,speedRead.raw1089)).apply();
+                        }
                         if(action==MirrorParkingPolicy.Action.TILT_ON_R){
                             prefs().edit().putString(STATUS,
                                 "AUTO · bajando espejos al entrar en R").apply();
@@ -195,6 +220,7 @@ public final class MirrorAutomationService extends Service {
      */
     private int[] runPulses(MirrorAutomationOem oem,boolean down,
                             int left,int right,boolean automatic)throws Exception{
+        synchronized(OEM_MIRROR_MUTEX){
         int[] counts={0,0};
         int max=Math.max(left,right);
         for(int step=0;step<max;step++){
@@ -232,6 +258,7 @@ public final class MirrorAutomationService extends Service {
             }
         }
         return counts;
+        }
     }
     @Override public void onDestroy(){
         stop=true;if(worker!=null)worker.interrupt();

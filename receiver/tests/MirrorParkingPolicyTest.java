@@ -87,7 +87,10 @@ public final class MirrorParkingPolicyTest {
         m.invalidate();
         eq(m.phase(),Phase.UNKNOWN_POSITION);
         invalid(()->new MirrorParkingPolicy(0));
-        invalid(()->new MirrorParkingPolicy(11));
+        invalid(()->new MirrorParkingPolicy(21));
+        MirrorParkingPolicy cap=new MirrorParkingPolicy(20,15);
+        eq(cap.requestedLeft(),20);
+        eq(cap.requestedRight(),15);
     }
     public static void main(String[] args){
         testParkingShuffle();

@@ -20,7 +20,7 @@ public final class MirrorParkingPolicy {
     public enum Action { NONE, TILT_ON_R, RESTORE_AFTER_NON_R_SPEED }
     public static final double RETURN_THRESHOLD_KMH=10.0;
     public static final long RETURN_DWELL_MS=800;
-    public static final int MAX_PULSES_PER_SIDE=10;
+    public static final int MAX_PULSES_PER_SIDE=20;
 
     private final int requestedLeft,requestedRight;
     private Phase phase=Phase.NORMAL;
@@ -32,7 +32,7 @@ public final class MirrorParkingPolicy {
     public MirrorParkingPolicy(int left,int right){
         if(left<1||left>MAX_PULSES_PER_SIDE||
                 right<1||right>MAX_PULSES_PER_SIDE)
-            throw new IllegalArgumentException("Pasos fuera del rango 1-10");
+            throw new IllegalArgumentException("Pasos fuera del rango 1-20");
         requestedLeft=left;requestedRight=right;
     }
     public Phase phase(){return phase;}

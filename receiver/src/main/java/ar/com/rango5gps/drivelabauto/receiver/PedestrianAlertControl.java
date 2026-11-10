@@ -17,8 +17,8 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * Explicit manual toggle of the existing OEM pedestrian-warning setting 2074.
  * No boot receiver, no background automation and no writes on startup.
- * The alert is safety-relevant: no modal dialogs, but the OEM P/0 check
- * prevents unintended changes when the vehicle is moving.
+ * The pedestrian warning may be activated in motion; disabling it requires
+ * a verified stationary vehicle in any known gear (no modal dialogs).
  */
 public final class PedestrianAlertControl {
     public interface Callback{void done(Result result);}
@@ -75,16 +75,15 @@ public final class PedestrianAlertControl {
                 IBinder b=ref.get();
                 if(b==null||!TOKEN.equals(b.getInterfaceDescriptor()))
                     throw new SecurityException("Interfaz OEM inesperada");
-                // No modal popup: enforce parking and speed guard on the OEM
-                // binder before considering *either* direction of the toggle.
-                verifyParked(b);
                 before=read(b);
                 if(before==null)
                     throw new IllegalStateException("Lectura 2074 no es 0 ni 1");
                 if(!foreground||coolingDown())
                     throw new IllegalStateException("Aplicación no activa o intervalo de seguridad");
-                // Toggle only: current ON -> OFF, current OFF -> ON.
+                // Enable may be requested in motion; do not disable an audible
+                // pedestrian warning while the car is moving.
                 final int command=before==ON?OFF:ON;
+                verifyCommandSafety(b,command);
                 lastAttemptAt=SystemClock.elapsedRealtime();
                 Parcel data=Parcel.obtain(),reply=Parcel.obtain();
                 try{
@@ -115,21 +114,22 @@ public final class PedestrianAlertControl {
         },"T1-Pedestrian-ManualToggle").start();
         return true;
     }
-    private static void verifyParked(IBinder b)throws Exception{
+    private static void verifyCommandSafety(IBinder b,int command)throws Exception{
         int gear=readInt(b,1033);
-        if(gear!=1)
-            throw new IllegalStateException("Alarma peatonal: se exige P, marcha="+gear);
+        if(gear<1||gear>4)
+            throw new IllegalStateException("Marcha desconocida: "+gear);
         double speed;
         try{
             float f=readFloat(b,2148);
             if(!Float.isFinite(f)||f<0||f>300)
                 throw new IllegalStateException("Velocidad float inválida");
             speed=f;
-        }catch(Exception ex){
-            speed=readInt(b,1089);
-        }
-        if(!Double.isFinite(speed)||speed<0||speed>0.5)
-            throw new IllegalStateException("Alarma peatonal: velocidad no es 0,="+speed);
+        }catch(Exception ex){speed=readInt(b,1089);}
+        if(!Double.isFinite(speed)||speed<0||speed>250)
+            throw new IllegalStateException("Velocidad inválida: "+speed);
+        if(command==OFF&&speed>0.5)
+            throw new IllegalStateException("No se desactiva la alerta de "+
+                "peatones en movimiento; detenido se permite P/N/D/R");
     }
     private static int readInt(IBinder b,int id)throws Exception{
         if(id!=1033&&id!=1089)throw new SecurityException("Lectura no autorizada");

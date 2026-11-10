@@ -18,8 +18,8 @@ import java.util.concurrent.atomic.AtomicReference;
 final class T1TripTelemetry {
     static final class Sample {
         long timestamp;
-        int gear=-1,recirc=-1,recircChange=-1,fold=-1;
-        double speed=Double.NaN,fuel=Double.NaN,
+        int gear=-1,recirc=-1,recircChange=-1,fold=-1,motorOn=-1;
+        double speed=Double.NaN,fuel=Double.NaN,rpm=Double.NaN,
             socInternal=Double.NaN,socDisplay=Double.NaN,
             voltage=Double.NaN,current=Double.NaN,
             counter1048=Double.NaN,counter1049=Double.NaN;
@@ -101,6 +101,12 @@ final class T1TripTelemetry {
         try{
             withService(VEHICLE_PKG,VEHICLE_CLS,VEHICLE_TOKEN,b->{
                 s.gear=safeInt(()->intValue(b,1033));
+                // RPM 1035 is an OEM candidate, not a proven motor state.
+                s.rpm=safeFloat(()->floatValue(b,1035));
+                if(!Double.isFinite(s.rpm)||s.rpm<0||s.rpm>12000)
+                    s.rpm=safeFloat(()->intValue(b,1035));
+                if(Double.isFinite(s.rpm)&&s.rpm>=0&&s.rpm<=12000)
+                    s.motorOn=s.rpm>0?1:0;
                 s.speed=safeFloat(()->floatValue(b,2148));
                 if(!Double.isFinite(s.speed)||s.speed<0||s.speed>220)
                     s.speed=safeFloat(()->intValue(b,1089));

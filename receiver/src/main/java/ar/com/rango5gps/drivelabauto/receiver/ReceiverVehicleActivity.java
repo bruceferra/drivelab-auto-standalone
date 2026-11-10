@@ -145,6 +145,7 @@ public final class ReceiverVehicleActivity extends Activity {
         else renderCode(root);
         label(root,"Sin root ni ADB. No reemplaza los controles OEM de seguridad. "+
             "Esta versión no convierte DriveLab en launcher HOME.",11);
+        Receiver3DButtons.apply(root);
         setContentView(scroll);
         currentScroll=scroll;
         if(restoreY>0)scroll.post(()->{
@@ -237,8 +238,9 @@ public final class ReceiverVehicleActivity extends Activity {
         leftRow.addView(leftTwo,new LinearLayout.LayoutParams(0,64,1));
         body.addView(leftRow);
         section(body,"PLEGADO OEM · 2003 EXPERIMENTAL");
-        label(body,"Plegado y despliegue 2003=0/1 confirmados físicamente. "+
-            "Disponibles como accesos rápidos en inicio.",12);
+        label(body,"Plegar 2003=0 / desplegar 2003=1 validados. "+
+            "Permitidos en marchas conocidas solo a 5 km/h o menos. "+
+            "Accesos rápidos en inicio.",12);
         button(body,"LEER ESTADO DE PLEGADO · 2003",()->{
             if(vehicleBusy()){updateFold2003("Otra consulta OEM en curso");return;}
             if(!mirror.readFold2003(this::updateFold2003))
@@ -293,7 +295,8 @@ public final class ReceiverVehicleActivity extends Activity {
             ()->{windows.cancel();windowStatus="Cancelación solicitada; no detiene un motor ya activo";
                  if(operationView!=null)operationView.setText(windowStatus);});
         section(body,"ALARMA DE PEATONES · ID 2074");
-        label(body,"Un toque cambia el estado solamente en P y velocidad cero. "+
+        label(body,"Un toque: activar alerta en cualquier marcha conocida. "+
+            "Desactivar únicamente con el vehículo detenido, incluso en D/N. "+
             "No se desactiva automáticamente al arrancar.",13);
         button(body,"ALARMA PEATÓN · CAMBIAR ON/OFF",this::confirmPedestrian);
         alertView=status(body,pedestrianStatus);
