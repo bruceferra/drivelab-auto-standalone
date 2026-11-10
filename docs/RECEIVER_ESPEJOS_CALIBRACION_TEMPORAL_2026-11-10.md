@@ -66,6 +66,16 @@ Para una prueba **hipotética** donde `T_down = 10.000 ms` y `T_up = 9.000 ms`:
 - ir de 8/8 a 4/8 serían ~5 s de comandos hacia abajo, **solo estimación** hasta verificar visualmente;
 - si se usan comandos de 1.000 o 2.000 ms, ajustar el último movimiento al tiempo restante **solo luego de verificar que el mando puede detenerse con seguridad**.
 
+### Alternativa equivalente propuesta: calibración directamente en milisegundos (10/11/2026)
+
+**Aclaración del propietario:** no hace falta mostrar posiciones numeradas 0/8 a 8/8. La UI puede presentar **duración de movimiento acumulada respecto de un extremo comprobado** y marcas de 25%, 50%, 75%. Ejemplo exclusivamente aritmético: **si** la carrera completa medida fuera de **20.000 ms**, desde arriba hacia abajo los objetivos serían **5.000 ms (¼), 10.000 ms (½), 15.000 ms (¾)**, y abajo 20.000 ms. **NO está medido que la T1 tarde 20 segundos** y no debe mostrarse como calibración real.
+
+El algoritmo guardará `T_down_ms` y `T_up_ms` **por separado y por espejo**, así como el tiempo de movimiento realmente comandado (excluyendo pausas y respuesta de la app). Para ir de una referencia a otra: `duracion_objetivo = fraccion_objetivo * T_direccion_ms`, con compensaciones de ensayo si las posiciones resultan no lineales. Para una posición normal D o retroceso R elegida por el usuario, guardar su **duración equivalente desde un extremo** (además de versión y validez de la calibración); las duraciones de dirección opuesta deben calibrarse individualmente.
+
+**Importante:** el programa NO puede «detectar cuántos milisegundos dura toda la carrera» solo por leer 2068/2069 mientras envía órdenes. Primero debe verificarse que un getter indique de forma estable el **extremo alcanzado y no la última orden de motor**. Sin esa señal, la duración de carrera se obtiene únicamente mediante calibración **guiada y observación humana**, no por homing automático contra topes. Una duración de 2.000 ms es el máximo del ensayo manual actual, no evidencia del recorrido total ni un permiso para enviar diez comandos consecutivos automáticamente.
+
+Las marcas de cuartos y octavos son estimaciones de tiempo; motor, tensión, rozamiento y diferencias subir/bajar pueden producir posiciones angulares distintas a igual duración. Comparar visualmente ida y vuelta y corregir deriva antes de habilitar memorias o automatismo R/D.
+
 ### Reanclaje automático por extremo — solo si hay confirmación real
 
 Al observar `getInt == 2` **establemente con el mando suelto** y contrastarlo con el espejo físicamente arriba, fijar la referencia a **8/8**. Al observar `getInt == 1` en las mismas condiciones y espejo abajo, fijarla a **0/8**. Un `getInt == 0` intermedio **no corrige ninguna deriva**: la app puede seguir estimando la fracción por tiempo, pero no sabe el ángulo real.
