@@ -90,3 +90,12 @@ Los datos de TRIP se almacenan bajo el directorio privado `files/t1_trips/trip_Y
 7. Verificar mapas/puente LAN, Sender, Waze, ventanas, alarma peatonal y el registro GPS anterior sin regresiones.
 
 **Todo resultado nuevo de pruebas reales se anexará al índice y a este documento, sin publicar CSV con rutas personales ni VIN.**
+
+## Incidencia de campo 10/11 · «espejos no andan»
+
+Tras la release v0.2.19, el propietario informó **«espejos no andan»**, sin identificar todavía si se refiere a 2003 plegar/desplegar, controles manuales BAJAR/SUBIR, o AUTO en R. **No asumir que la compilación/QA demuestra movimiento físico.**
+
+**Diagnóstico de código inmediato:** plegar/desplegar en la barra de inicio sigue llamando al `MirrorPulsePilot.testFold2003` que estaba físicamente validado en 0.2.18; ese acceso rápido se bloquea explícitamente si `t1_mirror_auto.auto=true`. En cambio los controles manuales BAJAR/SUBIR y el modo AUTO usan la ruta NUEVA `MirrorAutomationService`/`MirrorAutomationOem`, no el `MirrorPulsePilot` validado en P. Los errores del servicio se guardan en SharedPreferences (`t1_mirror_auto.status`), **pero ReceiverQuickControls actualmente no sondea ese estado periódicamente**, así que una falla puede dejar la barra sin diagnóstico visible. Este es un defecto de usabilidad que habrá que corregir sin asumir que es la causa del rechazo OEM.
+
+**Reproducir sin circular:** poner `ESPEJOS MANUAL`, vehículo estacionado en P a 0 km/h, probar **PLEGAR / DESPLEGAR** y luego manual **BAJAR / SUBIR** con un paso por lado; comparar con los botones individuales de la pestaña VEHÍCULO que usan la ruta anterior. Registrar el resultado debajo de los botones y el mensaje `MANUAL NO COMPLETADO` o `AUTO DETENIDO` si aparece. **No activar AUTO ni probar retorno a >10 km/h hasta aislar la falla**. No publicar otra versión afirmando corrección física sin reproducir causa y validar.
+
