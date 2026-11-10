@@ -19,7 +19,9 @@ Código/release principal: https://github.com/bruceferra/drivelab-auto-standalon
 
 En una muestra: 21,6 L de tablero, 22,7 L de CSV, ~231 Ω; el cálculo NUEVO informó ~40,93 L usados. Capturas de distinto momento no deben mezclarse. El otro tanque reportó ~950 km con ~67 L y sin enchufar. El híbrido usa parte de energía térmica para tracción y parte para generación; no imputar litros solo a kilómetros HEV ni sumar energía regenerada dos veces.
 
-La guía detallada para implementar el tablero está en [Tablero consumo y telemetría T1](TABLERO_CONSUMO_Y_TELEMETRIA_T1.md).
+La guía detallada está en [Tablero consumo y telemetría T1](TABLERO_CONSUMO_Y_TELEMETRIA_T1.md). **Actualización 10/11:** [auditoría de 13 CSV originales, 52.880 registros únicos y especificación de calibración](CALIBRACION_CSV_T1_2026-11-10.md), que además registra el último punto informado **868,5 km / 6,8 L OEM**, pendiente del CSV del día. El corte operativo definitivo y el segundo repostaje siguen sin confirmar.
+
+**Corrección documentada:** el salto de nivel 67,0 → 63,4 L del 03/11 ocurrió **en movimiento**, entre 26,46 y 30,52 km/h, no parado. **CI186 / menú oculto / otra app comparten la misma fuente OEM**, no son tres mediciones independientes. La lectura de 5,3 L aparece primero con RPM positivas, así que la etiqueta de corte requiere confirmar el evento completo. **Nunca** convertir la diferencia entre odómetros distintos en una corrección automática ni promediar el cálculo viejo de T1Launcher.
 
 ## Qué aportar al expediente desde la solapa de consumo
 
