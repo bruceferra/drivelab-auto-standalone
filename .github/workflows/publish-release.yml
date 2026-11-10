@@ -1,11 +1,14 @@
 name: DriveLab Auto · APK release firmadas y actualizador
 on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-release.yml']
   workflow_dispatch:
     inputs:
       tag:
         description: 'Release tag, e.g. v0.2.0 (must match both Gradle versionName)'
         required: true
-        default: 'v0.2.0'
+        default: 'v0.2.13'
 permissions:
   contents: write
 concurrency:
@@ -56,13 +59,15 @@ jobs:
       - name: Compile and verify signed independent production APKs
         shell: bash
         env:
-          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || 'v0.2.13' }}
         run: |
           set -euo pipefail
           [[ "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]
           test "$GITHUB_REPOSITORY" = 'bruceferra/drivelab-auto-standalone'
           ! gh release view "$RELEASE_TAG" >/dev/null 2>&1
-          mkdir -p /tmp/bridge-test
+          mkdir -p /tmp/bridge-test /tmp/old-sender /tmp/old-receiver
+          gh release download v0.2.10 --pattern 'DriveLab-Auto-Sender-v0.2.10.apk' --dir /tmp/old-sender
+          gh release download v0.2.12 --pattern 'DriveLab-Auto-Receiver-v0.2.12.apk' --dir /tmp/old-receiver
           javac -encoding UTF-8 -d /tmp/bridge-test \
             common/src/main/java/ar/com/rango5gps/drivelabauto/common/BridgeCrypto.java \
             common/tests/BridgeCryptoTest.java \
@@ -79,7 +84,14 @@ jobs:
           for app in sender receiver; do
             apk="$app/build/outputs/apk/release/$app-release.apk"
             test -s "$apk"
-            "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --print-certs "$apk"
+            sig="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+            "$sig" verify --print-certs "$apk"
+            if [[ "$app" = sender ]]; then old_apk=/tmp/old-sender/DriveLab-Auto-Sender-v0.2.10.apk
+            else old_apk=/tmp/old-receiver/DriveLab-Auto-Receiver-v0.2.12.apk
+            fi
+            old_certificate=$("$sig" verify --print-certs "$old_apk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+            new_certificate=$("$sig" verify --print-certs "$apk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+            test -n "$old_certificate" && test "$old_certificate" = "$new_certificate"
             "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" > "output/$app.badging"
             display=$(sed -n '1p' "output/$app.badging")
             echo "APK metadata: $display"
@@ -110,7 +122,7 @@ jobs:
       - name: Publish both signed APKs and both updater manifests atomically in one release
         shell: bash
         env:
-          RELEASE_TAG: ${{ inputs.tag }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.tag || 'v0.2.13' }}
         run: |
           set -euo pipefail
           gh release create "$RELEASE_TAG" \
@@ -118,6 +130,6 @@ jobs:
             output/DriveLab-Auto-Receiver-"$RELEASE_TAG".apk \
             output/sender.json output/receiver.json \
             --title "DriveLab Auto $RELEASE_TAG (Sender + Receiver)" \
-            --notes "Dos aplicaciones independientes con firma estable; actualización manual verificada por SHA-256." \
+            --notes "Sender y Receiver 0.2.13: búsqueda automática al abrir, confirmación de instalación y scroll preservado. APKs firmadas con sus certificados anteriores y verificación SHA-256. No altera Sender bridge ni controles OEM." \
             --latest
           gh release view "$RELEASE_TAG" --json assets --jq '.assets[].name'

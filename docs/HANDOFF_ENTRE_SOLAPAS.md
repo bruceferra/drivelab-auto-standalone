@@ -37,6 +37,10 @@ Se preparó un Receiver 0.2.12 con botón de lectura de propiedades **HAL** (`MI
 
 **Nuevo canal OTA 0.2.12 verificado:** `releases/latest` es [v0.2.12](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.12); `receiver.json` ofrece Receiver `0.2.12/code13` y el workflow de firma/paquete [42824306707](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42824306707) **pasó**. Sender sigue en v0.2.10 y `sender.json` conservó el SHA-256 idéntico de la release previa. **Usuario actualiza dentro de Receiver**, nunca con APK aparte; no se confirmó todavía instalación de 0.2.12 en el auto. Guía: [espejos 500ms/HAL 0.2.12](RECEIVER_ESPEJOS_0_2_12_CALIBRACION.md).
 
+## UX solicitada: actualización al abrir y scroll inmóvil (10/11/2026)
+
+Sender y Receiver deben comprobar automáticamente su respectivo manifiesto `sender.json` / `receiver.json` al abrir y **ofrecer instalar** una versión nueva (sin descargar ni instalar sin autorización). El botón manual debe responder siempre `Esta es la última versión` cuando corresponda; los botones no deben llevar el scroll arriba. Se implementó en **0.2.13 code14 para ambos** y se documentó en [ACTUALIZADOR_Y_SCROLL_0_2_13_2026-11-10.md](ACTUALIZADOR_Y_SCROLL_0_2_13_2026-11-10.md). El propietario instaló Receiver 0.2.12 y observó P/velocidad cero; todas las propiedades HAL de posición consultadas no figuran en la lista accesible. No atribuirles ángulo ni final de carrera.
+
 ## Qué aportar al expediente desde la solapa de consumo
 
 Registrar cada ensayo nuevo como:

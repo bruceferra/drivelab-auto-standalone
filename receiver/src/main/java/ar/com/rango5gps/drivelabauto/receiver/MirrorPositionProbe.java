@@ -113,7 +113,7 @@ public final class MirrorPositionProbe {
             }
             for(int id:CANDIDATES){
                 if(!found.contains(id))lines.add(name(id)+" "+id+
-                    " · NO EXPUESTA/NO AUTORIZADA en lista de propiedades");
+                    " · NO EN LISTA ACCESIBLE (soporte o permiso indeterminado)");
             }
             lines.add("Compará lecturas ANTES y DESPUÉS de un pequeño ajuste con control OEM.");
             lines.add("Un mismo valor en ambos puntos NO demuestra posición física.");

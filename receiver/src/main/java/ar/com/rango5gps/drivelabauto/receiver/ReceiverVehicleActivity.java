@@ -29,6 +29,7 @@ import java.util.Map;
 public final class ReceiverVehicleActivity extends Activity {
     private final String[] tabNames={"VEHÍCULO","ENERGÍA","CODE"};
     private int activeTab=0;
+    private ScrollView currentScroll;
     private VehicleWindowGroup windows;
     private MirrorPulsePilot mirror;
     private MirrorPositionProbe mirrorProbe;
@@ -115,6 +116,7 @@ public final class ReceiverVehicleActivity extends Activity {
         label(parent,name,19);
     }
     private void render(){
+        final int restoreY=currentScroll==null?0:currentScroll.getScrollY();
         ScrollView scroll=new ScrollView(this);
         LinearLayout root=column();root.setPadding(16,10,16,26);
         scroll.addView(root);
@@ -139,6 +141,10 @@ public final class ReceiverVehicleActivity extends Activity {
         label(root,"Sin root ni ADB. No reemplaza los controles OEM de seguridad. "+
             "Esta versión no convierte DriveLab en launcher HOME.",11);
         setContentView(scroll);
+        currentScroll=scroll;
+        if(restoreY>0)scroll.post(()->{
+            if(currentScroll==scroll)scroll.scrollTo(0,restoreY);
+        });
     }
     private boolean vehicleBusy(){
         return windows.busy()||mirror.busy()||mirrorProbe.busy()||pedestrian.busy()||
