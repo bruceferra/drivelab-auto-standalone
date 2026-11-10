@@ -73,6 +73,8 @@ La regla auto-reversa queda definida: **una bajada al entrar en R**, no repetir 
 
 Además, el usuario confirma en su T1 proyección de cualquier app al clúster y soporte de **ZIP de dibujos de instrumentos** en T1Launcher con modo pantalla completa, relojes OEM ocultables. Diseño objetivo: panel DriveLab de relojes dinámicos a partir de OEM, con autonomía propia calculada por los **dos surtidores/CSV/flotante/Ω**. Esto no autoriza suponer API del ZIP ni omitir advertencias de seguridad del panel OEM. No mezclar el cálculo antiguo descartado. Sender, Waze/puente, viajes y controles existentes permanecen intactos.
 
+**Receiver 0.2.18 OTA publicada:** [última release](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.18), [QA con éxito](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42854161716), [publicador firmado con éxito](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42854161957); Sender intacto v0.2.13. Pantalla VEHÍCULO incorpora registro de 35 segundos de 1033 aunque la cámara de retroceso tape Receiver, getter 2003 y prueba manual de una sola orden 2003=0/1 (guardia P/velocidad cero), sin auto R ni interferir navegación/tablero. [Evidencia y pruebas físicas pendientes](PRUEBA_MARCHA_CAMARA_Y_PLEGADO_2003_2026-11-10.md).
+
 ## Qué aportar al expediente desde la solapa de consumo## Qué aportar al expediente desde la solapa de consumo## Qué aportar al expediente desde la solapa de consumo## Qué aportar al expediente desde la solapa de consumo
 
 Registrar cada ensayo nuevo como:
