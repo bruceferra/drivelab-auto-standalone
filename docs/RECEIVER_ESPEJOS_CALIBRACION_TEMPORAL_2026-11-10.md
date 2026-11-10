@@ -31,6 +31,13 @@ Una vez confirmados el significado y persistencia de estados de extremo:
 - Se permite un botón que *compruebe disponibilidad*, y que rechace con mensaje claro si no figura o no tiene permiso. **Nunca** emitir escrituras arbitrarias a los candidatos vendor `VC.MIRROR FLIP`, `SETTINGS REAR MIRROR FOLD`, ni adivinar sus valores sin contrato OEM.
 - Cualquier movimiento manual queda restringido a **P/velocidad 0**, confirmación explícita y un único accionamiento. No recurrir a Bluetooth, root ni al cierre de sesión del vehículo para forzarlo.
 
+## Publicación OTA verificable — Receiver 0.2.14
+
+- [Release v0.2.14](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.14) **latest** con `receiver.json`, APK Receiver firmada y `sender.json` preservado desde la 0.2.13 (digest idéntico).
+- [Workflow de firma OTA 42832582917](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42832582917) **PASÓ**. Code de Receiver `15`, versión `0.2.14`. Sender sigue `0.2.13`.
+- Nuevos botones: **LEER ESTADO RAW 2068/2069**, pruebas manuales del derecho **1.000/2.000 ms** y del izquierdo **1.000 ms**; botones **PLEGAR / DESPLEGAR** que verifican autorización y propiedad estándar `MIRROR_FOLD`, si falta se niegan sin actuación. No hay búsqueda automática de topes ni automatismo R/D.
+- Instalación **solo desde Receiver → ACTUALIZAR RECEIVER · INSTALACIÓN DIRECTA** o la oferta automática al abrir si está disponible. **No entregar APK separada**. Ninguna prueba en vehículo de las funciones 0.2.14 está confirmada todavía.
+
 ## Próximo resultado que necesitamos del usuario
 
 Para el espejo derecho, registrar lectura **antes, mientras está a mitad y después de soltar**; comparar si `getInt(2069)` continúa reportando 2/0/1 en extremos una vez liberado. Luego ensayo único de 1.000 ms y de 2.000 ms. Esto decide si se puede calibrar con límites detectados o solo medir tiempos aproximados.
