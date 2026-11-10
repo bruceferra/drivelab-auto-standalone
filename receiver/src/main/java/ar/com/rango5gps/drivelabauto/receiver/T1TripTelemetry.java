@@ -22,7 +22,8 @@ final class T1TripTelemetry {
         double speed=Double.NaN,fuel=Double.NaN,rpm=Double.NaN,
             socInternal=Double.NaN,socDisplay=Double.NaN,
             voltage=Double.NaN,current=Double.NaN,
-            counter1048=Double.NaN,counter1049=Double.NaN;
+            counter1048=Double.NaN,counter1049=Double.NaN,
+            oemElectricRolling50=Double.NaN,oemFuelRolling50=Double.NaN;
     }
     private final Context app;
     T1TripTelemetry(Context context){app=context.getApplicationContext();}
@@ -116,6 +117,11 @@ final class T1TripTelemetry {
                 s.current=safeFloat(()->floatValue(b,1064));
                 s.counter1048=safeFloat(()->floatValue(b,1048));
                 s.counter1049=safeFloat(()->floatValue(b,1049));
+                // OEM 50-km moving averages, independently confirmed against
+                // the stock Jetour cluster. NOT instantaneous consumption nor
+                // cumulative trip liters/kWh. Preserve as read-only observations.
+                s.oemElectricRolling50=safeFloat(()->floatValue(b,1084));
+                s.oemFuelRolling50=safeFloat(()->floatValue(b,1085));
                 s.recirc=safeInt(()->intValue(b,1004));
                 s.recircChange=safeInt(()->intValue(b,2101));
                 s.fold=safeInt(()->intValue(b,2003));
