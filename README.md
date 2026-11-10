@@ -1,3 +1,7 @@
+> **DOCUMENTACIÓN MAESTRA / UNIFICACIÓN (10/11/2026):** [Índice maestro DriveLab Auto + Jetour T1](docs/INDICE_MAESTRO.md) — [Auditoría de versiones](docs/AUDITORIA_APPS_Y_CONSOLIDACION.md) — [Arquitectura Sender/Receiver](docs/ARQUITECTURA_SENDER_RECEIVER.md) — [Tablero consumo y telemetría](docs/TABLERO_CONSUMO_Y_TELEMETRIA_T1.md) — [Pruebas y limpieza](docs/PRUEBAS_PENDIENTES_Y_DEPURACION.md) — [Handoff a otra solapa](docs/HANDOFF_ENTRE_SOLAPAS.md).
+>
+> **ALERTA DE HISTÓRICO:** los apartados antiguos que dicen “Receiver no tiene OEM/telemetría” corresponden a versiones anteriores a 0.2.10. En 0.2.10 existen lectores y controles de prueba compilados, **pendientes de validación física en Jetour**. La función TABLERO de consumo continúa en diseño, sin incorporarse aún a la APK.
+
 # DriveLab Auto v0.2.10 — puente + controles OEM T1
 
 ## Cambios preparados
