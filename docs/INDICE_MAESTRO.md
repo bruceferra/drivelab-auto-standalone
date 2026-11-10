@@ -97,7 +97,11 @@ El propietario propuso una alternativa más simple que las ocho posiciones virtu
 
 Prueba visual con una marca fija: **500, 1.000 y 2.000 ms producen el mismo desplazamiento** del espejo en las órdenes OEM actuales. No se puede calibrar el recorrido acumulando esos milisegundos como desplazamiento proporcional; es probable que cada transición envíe un paso discreto. La UI nueva deja solo movimiento de **500 ms**, quita las confirmaciones modales para controles de espejo/plegado, y muestra la lectura **RAW 2068/2069 justo debajo del botón** correspondiente, no al final. Las condiciones OEM de **P, velocidad cero, liberación 0 y cooldown** permanecen en código. El plegado vía API Android Automotive está denegado por permiso OEM, sin bypass. [Evidencia y restricciones](RECEIVER_ESPEJOS_CALIBRACION_TEMPORAL_2026-11-10.md). Los cambios no afectan Sender, viajes, mapas, tablero de consumo ni ventanas.
 
-## Próxima integración## Próxima integración## Próxima integración
+## Corrección publicada Receiver 0.2.16 (10/11/2026)
+
+La [release v0.2.16/latest](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.16) contiene Receiver code17 firmado con el certificado anterior, `receiver.json` para actualizador incorporado y `sender.json` idéntico al previo (Sender sigue 0.2.13). [QA run 42842438931 EXITOSO](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42842438931) y [OTA run 42842439213](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42842439213). Corrige resultado RAW inmediatamente bajo su botón, sin popups de confirmación de espejos/plegado y sin 1.000/2.000 ms redundantes. Sigue protegida la exigencia OEM P/velocidad cero y liberación 0. La observación del usuario con marca fija confirmó igual recorrido para 500/1.000/2.000 ms, de modo que la calibración temporal continua **no está validada**. [Detalle](RECEIVER_ESPEJOS_CALIBRACION_TEMPORAL_2026-11-10.md).
+
+## Próxima integración## Próxima integración## Próxima integración## Próxima integración
 
 El módulo hoy llamado **ENERGÍA / CODE** en Receiver crecerá hasta **TABLERO T1** con litros reales estimados, autonomía contrastada, SOC, corriente, energía y consumo. Su modelo deberá almacenar observaciones originales y cálculos reproducibles por separado. El tratamiento del consumo continúa en el documento de tablero; no inventar señales ni convertir mediciones de otro proyecto en valores OEM verificados.
 
