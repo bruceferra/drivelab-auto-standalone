@@ -152,6 +152,7 @@ public final class ReceiverActivity extends Activity {
         label(body,"El servicio sigue activo aunque cierres esta pantalla. "+
             "No fuerza Wi-Fi ni modifica Android Auto o T1Launcher. "+
             "La apertura en clúster depende de la ROM de la camioneta.",13);
+        Receiver3DButtons.apply(body);
         setContentView(scroll);
         currentScroll=scroll;
         if(restoreY>0)scroll.post(()->{
