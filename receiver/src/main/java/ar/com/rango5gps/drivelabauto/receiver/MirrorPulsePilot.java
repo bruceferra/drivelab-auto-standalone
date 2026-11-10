@@ -239,7 +239,7 @@ public final class MirrorPulsePilot {
             try{
                 requireReady();
                 c=connect();
-                requireParked(c.binder);
+                requireSlowManeuver(c.binder);
                 int value=readInt(c.binder,2003);
                 status="LECTURA 2003="+value+" · "+
                     (value==0?"candidato PLEGADO":value==1?
@@ -270,7 +270,7 @@ public final class MirrorPulsePilot {
             try{
                 requireReady();
                 c=connect();
-                requireParked(c.binder);
+                requireSlowManeuver(c.binder);
                 int beforeState=readInt(c.binder,2003);
                 if(beforeState!=0&&beforeState!=1)
                     throw new IllegalStateException("Estado 2003 desconocido: "+
@@ -302,13 +302,19 @@ public final class MirrorPulsePilot {
         return true;
     }
 
-    private void requireParked(IBinder binder)throws Exception{
+    /**
+     * Folding 2003 is used during narrow entrance manoeuvres, so P is not
+     * required. Keep an explicit low-speed guard; folded mirrors must not
+     * be treated as suitable for ordinary road driving.
+     */
+    private void requireSlowManeuver(IBinder binder)throws Exception{
         int gear=readInt(binder,GEAR_ID);
-        if(gear!=GEAR_P)
-            throw new IllegalStateException("Se exige P (1033=1); actual="+gear);
+        if(gear<1||gear>4)
+            throw new IllegalStateException("Marcha OEM no reconocida: "+gear);
         double speed=readSpeed(binder);
-        if(!Double.isFinite(speed)||speed<0||speed>0.5)
-            throw new IllegalStateException("Se exige velocidad 0, actual="+speed);
+        if(!Double.isFinite(speed)||speed<0||speed>5)
+            throw new IllegalStateException(
+                "Plegado solo detenido o maniobrando a 5 km/h o menos; velocidad="+speed);
     }
 
     private void writeFold2003(IBinder binder,int target)throws Exception{
