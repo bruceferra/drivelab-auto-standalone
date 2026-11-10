@@ -15,14 +15,14 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Experimental, foreground-only, ONE SHORT PULSE mirror test from T1N134 DEX.
+ * Foreground-only, ONE SHORT PULSE mirror control via validated T1 OEM service.
  * NEVER used by BootReceiver/ReceiverService. No reverse auto-tilt.
  *
  * 1033: reverse-gear candidate (T1N134 uses 1 for P, 2 for R).
  * 2069: command from EspejoRService (1/2 = opposite motions, 0 = release).
  * 2148 float / 1089 int: candidate speed readbacks (units to validate).
  *
- * This feature is UNVERIFIED in the Jetour Receiver UID. Only test while the
+ * Both left and right motion physically confirmed by the user. Only use while the
  * vehicle is physically in P, stationary, on level ground and supervised.
  * Android cannot guarantee motor stop after a crash or a dead Binder link.
  */
@@ -33,7 +33,7 @@ public final class MirrorPulsePilot {
     private static final String TOKEN="com.autolink.app.vehicleservice.IVehicleControl";
     private static final int GEAR_ID=1033, GEAR_P=1, RIGHT_ID=2069, LEFT_ID=2068;
     private static final int SPEED_FLOAT_ID=2148, SPEED_INT_ID=1089;
-    // Manual timed tests only. 2 s is a hard maximum; no auto reversing or sweep.
+    // One manually triggered motion at a time. No auto reversing or sweep.
     public static final int SHORT_MS=120, SMOOTH_TEST_MS=500,
         CALIBRATE_MS=1000, LONG_TEST_MS=2000;
     private final Context app;
