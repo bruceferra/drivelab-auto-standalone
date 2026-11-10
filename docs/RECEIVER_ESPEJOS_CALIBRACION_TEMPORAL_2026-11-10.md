@@ -38,6 +38,49 @@ Una vez confirmados el significado y persistencia de estados de extremo:
 - Nuevos botones: **LEER ESTADO RAW 2068/2069**, pruebas manuales del derecho **1.000/2.000 ms** y del izquierdo **1.000 ms**; botones **PLEGAR / DESPLEGAR** que verifican autorización y propiedad estándar `MIRROR_FOLD`, si falta se niegan sin actuación. No hay búsqueda automática de topes ni automatismo R/D.
 - Instalación **solo desde Receiver → ACTUALIZAR RECEIVER · INSTALACIÓN DIRECTA** o la oferta automática al abrir si está disponible. **No entregar APK separada**. Ninguna prueba en vehículo de las funciones 0.2.14 está confirmada todavía.
 
+## Modelo propuesto: ocho posiciones virtuales con reanclaje a extremos (10/11/2026)
+
+**Propuesta del propietario / HIPÓTESIS a verificar.** En vez de almacenar solamente número de impulsos sin referencia, construir un **codificador virtual temporal** para cada espejo independiente, que se reancle siempre que una lectura **real y estable** confirme un extremo físico:
+
+- **Lectura extrema inferior** `getInt(2068/2069)==1` → índice virtual **0/8** (abajo).
+- **Lectura extrema superior** `getInt(2068/2069)==2` → índice virtual **8/8** (arriba).
+- **Lectura intermedia** `==0` → **zona entre extremos**, NO índice 0 ni ángulo cero y NO indica un octavo particular.
+
+**Advertencia decisiva:** estas tres interpretaciones de **GETTER** provienen de la observación del usuario y **aún no están validadas mediante lectura persistente con el mando físico liberado**. Las **órdenes de SETTER** se interpretan separadamente: para 2069 derecho, `setIntData(2069,1)` sube; `setIntData(2069,2)` baja; `setIntData(2069,0)` libera. **NUNCA** confundir el 2 del GETTER (supuesto «arriba») con el 2 del SETTER (orden de bajar).
+
+### Escala de posiciones virtuales
+
+`0/8 (inferior)` · `1/8` · `2/8=1/4` · `3/8` · `4/8=1/2` · `5/8` · `6/8=3/4` · `7/8` · `8/8 (superior)`
+
+Son **nueve marcas, ocho intervalos iguales estimados**. **No se garantiza distancia angular equidistante** con motores cuyo desplazamiento por tiempo varía; validar visualmente y añadir correcciones.
+
+Cada espejo lleva por separado:
+- `T_down_ms`: tiempo comandado **medido** entre extremo superior confirmado y extremo inferior confirmado;
+- `T_up_ms`: tiempo comandado **medido** en sentido contrario;
+- `virtual_index` o fracción [0,1], `reference_valid`, `reference_timestamp`, estado de marcha, y posición objetivo `D`/`R` elegida por usuario;
+- secuencia cruda de **orden/duración/lectura previa/posterior/estado de liberación**, sin sustituirla por una posición supuesta.
+
+Para una prueba **hipotética** donde `T_down = 10.000 ms` y `T_up = 9.000 ms`:
+- paso hacia abajo ≈ **1.250 ms** por octavo;
+- paso hacia arriba ≈ **1.125 ms** por octavo;
+- ir de 8/8 a 4/8 serían ~5 s de comandos hacia abajo, **solo estimación** hasta verificar visualmente;
+- si se usan comandos de 1.000 o 2.000 ms, ajustar el último movimiento al tiempo restante **solo luego de verificar que el mando puede detenerse con seguridad**.
+
+### Reanclaje automático por extremo — solo si hay confirmación real
+
+Al observar `getInt == 2` **establemente con el mando suelto** y contrastarlo con el espejo físicamente arriba, fijar la referencia a **8/8**. Al observar `getInt == 1` en las mismas condiciones y espejo abajo, fijarla a **0/8**. Un `getInt == 0` intermedio **no corrige ninguna deriva**: la app puede seguir estimando la fracción por tiempo, pero no sabe el ángulo real.
+
+**No ejecutar «buscar extremo» enviando órdenes hasta que choque al tope.** Si el sensor de extremo no está confirmado, si el motor deja de responder, si un movimiento falla o si se detecta acción manual de un control externo, marcar `reference_valid=false`. Pedir una recalibración **guiada con control OEM**, registrar fin de carrera observable y evitar sostener corriente contra el motor. No usar la limitación mecánica como mecanismo de detección.
+
+### Requisitos previos a inclinación automática en R
+
+1. Confirmar lecturas `getInt(2068/2069)` y que **1 y 2 permanezcan** con mando liberado en sus extremos durante varias tomas (no meramente el estado transitorio de una orden).
+2. Medir recorridos completos **de subida y bajada por separado**, sin tiempos inventados, con repetibilidad y parada segura. En ausencia de ángulo real, fracción es estimada.
+3. Guardar D/R dentro del rango calibrado; validar regreso real tras varias idas/vueltas y tras apagar/reabrir la app.
+4. Confirmar 1033 para las marchas R y D en la T1; automatizar solo cuando haya referencia válida y parada/restauración comprobadas. Si se pierde la referencia en tránsito **no realizar homing automático** ni mover espejos inesperadamente.
+
+**Estado en producción:** Receiver 0.2.14 ofrece **lectura RAW y movimientos de ensayo**, pero **NO** implementa posiciones 0/8–8/8, calibración automática, ni D/R automáticos. Este apartado es **diseño**, no una funcionalidad entregada. Sender y mapa/viajes/consumo no se tocan.
+
 ## Próximo resultado que necesitamos del usuario
 
 Para el espejo derecho, registrar lectura **antes, mientras está a mitad y después de soltar**; comparar si `getInt(2069)` continúa reportando 2/0/1 en extremos una vez liberado. Luego ensayo único de 1.000 ms y de 2.000 ms. Esto decide si se puede calibrar con límites detectados o solo medir tiempos aproximados.
