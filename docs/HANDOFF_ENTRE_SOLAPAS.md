@@ -23,6 +23,12 @@ La guía detallada está en [Tablero consumo y telemetría T1](TABLERO_CONSUMO_Y
 
 **Corrección documentada:** el salto de nivel 67,0 → 63,4 L del 03/11 ocurrió **en movimiento**, entre 26,46 y 30,52 km/h, no parado. **CI186 / menú oculto / otra app comparten la misma fuente OEM**, no son tres mediciones independientes. La lectura de 5,3 L aparece primero con RPM positivas, así que la etiqueta de corte requiere confirmar el evento completo. **Nunca** convertir la diferencia entre odómetros distintos en una corrección automática ni promediar el cálculo viejo de T1Launcher.
 
+## Actualización 10/11: APK original T1N134 recuperado
+
+Se verificó el SHA-256 del APK recibido: `6765a8fcc0645a98424de43c1e122ce771883dd46d6d6ca7264cbe47c94fd480`. La [inspección estática documentada](EXTRACCION_T1LAUNCHER_T1N134_2026-11-10.md) encontró que el módulo real de retrovisor de reversa es `espejor.EspejoRService`, **no** `espejo.EspejoService` (duplicación de pantalla). IDs de aplicación: **1033** marcha, **2069** mando por pulsos, **2148/1089** velocidad; falta probar significado/valores físicamente y no se implementaron nuevos setters. Para consumo, candidatos HAL **559964335 PHEV SUM FUEL** y **559964336 PHEV SUM CHRG EGY**, solo etiquetas+llamadas del APK, todavía **sin lectura ni unidad verificadas**. La lectura de litros `CiLink.litrosNafta()` coincide con CI186 y no es independiente.
+
+**No modificar las funciones del Receiver v0.2.10 ni introducir control de espejos hasta verificar lectura, readback y restauración.** El cálculo viejo de T1Launcher permanece descartado.
+
 ## Qué aportar al expediente desde la solapa de consumo
 
 Registrar cada ensayo nuevo como:
