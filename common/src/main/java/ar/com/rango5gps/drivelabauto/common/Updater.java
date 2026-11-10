@@ -63,6 +63,50 @@ public final class Updater {
         }
     }
 
+    /**
+     * Search for an update when the user opens Sender or Receiver.
+     * Only the manifest is fetched automatically. A download/installer is
+     * started exclusively AFTER the user confirms the offer in this dialog.
+     */
+    public static void checkOnOpen(Activity a,String app,Reporter reporter){
+        String proper;
+        if("sender".equals(app))proper="Sender";
+        else if("receiver".equals(app))proper="Receiver";
+        else return;
+        if(!a.getPackageName().equals("ar.com.rango5gps.drivelabauto."+app)
+                ||busy||permissionRecovery)return;
+        busy=true;
+        notify(a,reporter,"Buscando actualizaciones de "+proper+"…");
+        new Thread(()->{
+            try{
+                Offer offer=latest(a,app,proper);
+                if(offer==null){
+                    notify(a,reporter,"Esta es la última versión de DriveLab Auto "+proper+".");
+                    return;
+                }
+                notify(a,reporter,"Actualización "+offer.name+" disponible para "+proper+".");
+                a.runOnUiThread(()->{
+                    if(a.isFinishing()||a.isDestroyed())return;
+                    new AlertDialog.Builder(a)
+                        .setTitle("Actualización disponible · "+proper)
+                        .setMessage("Versión nueva: "+offer.name+
+                            "\\n¿Querés descargarla e instalarla desde DriveLab Auto?")
+                        .setNegativeButton("AHORA NO",null)
+                        .setPositiveButton("DESCARGAR E INSTALAR",
+                            (dialog,which)->check(a,app,reporter))
+                        .show();
+                });
+            }catch(Exception ex){
+                String detail=ex.getMessage()==null?
+                    ex.getClass().getSimpleName():ex.getMessage();
+                if(detail.length()>140)detail=detail.substring(0,140);
+                notify(a,reporter,"No se pudo comprobar la actualización: "+detail);
+            }finally{
+                busy=false;
+            }
+        },"DriveLab-Update-Check-On-Open").start();
+    }
+
     public static void check(Activity a,String app,Reporter reporter){
         String proper;
         if("sender".equals(app))proper="Sender";
@@ -75,14 +119,20 @@ public final class Updater {
             reporter.report("La aplicación no corresponde a este canal");
             return;
         }
-        if(busy){reporter.report("Ya se está ejecutando una actualización");return;}
+        if(busy){reporter.report("Ya se está comprobando una actualización. El resultado aparecerá aquí.");return;}
         busy=true;
         notify(a,reporter,"Buscando actualización de "+proper+"…");
         new Thread(()->{
             try{
                 Offer offer=latest(a,app,proper);
                 if(offer==null){
-                    notify(a,reporter,"Ya tenés la última versión de DriveLab Auto "+proper);
+                    notify(a,reporter,"Esta es la última versión de DriveLab Auto "+proper+".");
+                    a.runOnUiThread(()->{
+                        if(!a.isFinishing()&&!a.isDestroyed())
+                            android.widget.Toast.makeText(a,
+                                "Esta es la última versión de DriveLab Auto "+proper+".",
+                                android.widget.Toast.LENGTH_LONG).show();
+                    });
                     return;
                 }
                 notify(a,reporter,"Nueva versión "+offer.name+" · descargando dentro de la app…");
