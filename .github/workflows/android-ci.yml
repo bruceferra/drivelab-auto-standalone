@@ -47,6 +47,15 @@ jobs:
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TankEvidence.java \
             receiver/tests/T1TankEvidenceTest.java
           java -cp /tmp/tank-evidence-test T1TankEvidenceTest
+      - name: Mirror parking R/D policy regression (pure JVM)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/mirror-parking-policy-test
+          javac -encoding UTF-8 -d /tmp/mirror-parking-policy-test \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/MirrorParkingPolicy.java \
+            receiver/tests/MirrorParkingPolicyTest.java
+          java -cp /tmp/mirror-parking-policy-test MirrorParkingPolicyTest
       - name: Separate apps and Android APK builds
         run: gradle --no-daemon :sender:assembleDebug :receiver:assembleDebug
       - name: Verify independent identities, permissions and no telemetry

@@ -17,8 +17,8 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * Explicit manual toggle of the existing OEM pedestrian-warning setting 2074.
  * No boot receiver, no background automation and no writes on startup.
- * The alert is safety-relevant: operator must confirm the vehicle is parked;
- * the app cannot verify gear or speed through this interface.
+ * The alert is safety-relevant: no modal dialogs, but the OEM P/0 check
+ * prevents unintended changes when the vehicle is moving.
  */
 public final class PedestrianAlertControl {
     public interface Callback{void done(Result result);}
@@ -75,6 +75,9 @@ public final class PedestrianAlertControl {
                 IBinder b=ref.get();
                 if(b==null||!TOKEN.equals(b.getInterfaceDescriptor()))
                     throw new SecurityException("Interfaz OEM inesperada");
+                // No modal popup: enforce parking and speed guard on the OEM
+                // binder before considering *either* direction of the toggle.
+                verifyParked(b);
                 before=read(b);
                 if(before==null)
                     throw new IllegalStateException("Lectura 2074 no es 0 ni 1");
@@ -111,6 +114,42 @@ public final class PedestrianAlertControl {
             }
         },"T1-Pedestrian-ManualToggle").start();
         return true;
+    }
+    private static void verifyParked(IBinder b)throws Exception{
+        int gear=readInt(b,1033);
+        if(gear!=1)
+            throw new IllegalStateException("Alarma peatonal: se exige P, marcha="+gear);
+        double speed;
+        try{
+            float f=readFloat(b,2148);
+            if(!Float.isFinite(f)||f<0||f>300)
+                throw new IllegalStateException("Velocidad float inválida");
+            speed=f;
+        }catch(Exception ex){
+            speed=readInt(b,1089);
+        }
+        if(!Double.isFinite(speed)||speed<0||speed>0.5)
+            throw new IllegalStateException("Alarma peatonal: velocidad no es 0,="+speed);
+    }
+    private static int readInt(IBinder b,int id)throws Exception{
+        if(id!=1033&&id!=1089)throw new SecurityException("Lectura no autorizada");
+        Parcel data=Parcel.obtain(),reply=Parcel.obtain();
+        try{
+            data.writeInterfaceToken(TOKEN);
+            data.writeInt(id);
+            if(!b.transact(5,data,reply,0))throw new IllegalStateException("Getter int rechazado");
+            reply.readException();return reply.readInt();
+        }finally{data.recycle();reply.recycle();}
+    }
+    private static float readFloat(IBinder b,int id)throws Exception{
+        if(id!=2148)throw new SecurityException("Lectura no autorizada");
+        Parcel data=Parcel.obtain(),reply=Parcel.obtain();
+        try{
+            data.writeInterfaceToken(TOKEN);
+            data.writeInt(id);
+            if(!b.transact(6,data,reply,0))throw new IllegalStateException("Getter float rechazado");
+            reply.readException();return reply.readFloat();
+        }finally{data.recycle();reply.recycle();}
     }
     private static Integer read(IBinder b){
         Parcel data=Parcel.obtain(),reply=Parcel.obtain();
