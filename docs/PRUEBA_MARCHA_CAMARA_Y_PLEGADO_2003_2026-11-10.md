@@ -16,6 +16,15 @@
 4. No se conecta la lógica futura `MirrorParkingPolicy` de R/no-R a motores. El bloqueo de movimiento manual de espejo 2068/2069 fuera de P sigue activo. Sin cambios de Sender, Waze, puente de navegación, viajes, controles de ventanas/AVAS, tablero de combustible y prueba de segundo tanque.
 5. Release 0.2.18/code19 prevista para actualizarse mediante **actualizador incorporado** de Receiver, firmada con el mismo certificado de 0.2.17. `sender.json` debe continuar en versión 0.2.13.
 
+## Publicación OTA comprobada
+
+La release [Receiver v0.2.18/latest](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.18) se publicó el 10/11/2026: **code19**, `receiver.json`, APK firmada y `sender.json` conservado. [QA Android, run 42854161716](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42854161716) y [publicación OTA, run 42854161957](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42854161957) terminaron con **éxito**. La firma se verificó contra Receiver v0.2.17.
+
+- **APK Receiver SHA-256:** `a191c28290724cfee7136c87293eed374bf32ad52a9aebbafa3e60fb5f8a50bb`.
+- **Sender SIN cambios**: `sender.json` tiene digest idéntico al de la release 0.2.17, Sender v0.2.13.
+- **Instalación:** solo por oferta automática o **ACTUALIZAR RECEIVER · INSTALACIÓN DIRECTA**. No enviar APK aparte.
+- **No hay pruebas físicas de 2003 ni confirmación de grabación R al momento de publicar**. QA y firma correctas no equivalen a funcionamiento validado en la T1.
+
 ## Pasos de prueba en vehículo
 
 **Ensayo de marcha con cámara:**
