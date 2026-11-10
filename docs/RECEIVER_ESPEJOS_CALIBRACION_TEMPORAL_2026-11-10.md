@@ -99,6 +99,15 @@ El propietario comparó desplazamientos contra una **marca fija visible en un á
 
 **Corrección UX 0.2.16:** `LEER ESTADO RAW 2068/2069` muestra la lectura **inmediatamente debajo del botón** y no al final del bloque de plegado. Marcha/velocidad y HAL tienen sus propios resultados adyacentes. Accionamientos de espejos y plegado dejan de abrir cuadros de confirmación y responden a un toque; se conservan en el piloto OEM la exigencia de P/velocidad cero, temporización acotada, exclusión de comandos simultáneos y `release=0`. El intento de plegado estándar sigue bloqueado por permiso privilegiado conforme a la prueba del propietario; no se eluden permisos ni se envían códigos vendor desconocidos.
 
+## Receiver v0.2.16 — corrección de interfaz publicada por OTA
+
+- [Release oficial v0.2.16/latest](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.16), con `receiver.json`, APK firmada, SHA-256 y `sender.json` **idéntico al de 0.2.15**. Sender sigue v0.2.13.
+- [QA Android y pruebas de regresión exitosas, run 42842438931](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42842438931); [publicador OTA de Receiver, run 42842439213](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42842439213) verificó continuidad de firma con Receiver v0.2.15 antes de publicar.
+- La pantalla VEHÍCULO presenta el resultado de **LEER ESTADO RAW 2068/2069 inmediatamente debajo de ese botón**, con resultados independientes para marcha y posición HAL. Actualiza los `TextView` sin reconstruir ni desplazar la pantalla.
+- Los botones de movimiento de espejo y plegado **no muestran diálogos modales**; un toque intenta la acción, conservando P/velocidad 0, cooldown, duración máxima y `release=0` bajo el controlador Binder. No se habilita el plegado no autorizado; el permiso OEM continúa bloqueado.
+- Por la observación visual del usuario (**500 ≈ 1.000 ≈ 2.000 ms en desplazamiento**), se retiran de la interfaz los botones redundantes de 1.000/2.000 ms y se mantiene el ensayo único de 500 ms. **No interpretar 500 ms como duración física proporcional de movimiento**.
+- **Instalación:** solo con el actualizador incorporado de Receiver (botón o aviso al abrir), nunca APK suelta. **No se confirma instalación real en T1 hasta que lo indique el propietario.**
+
 ## Próximo resultado que necesitamos del usuario
 
 Para el espejo derecho, registrar lectura **antes, mientras está a mitad y después de soltar**; comparar si `getInt(2069)` continúa reportando 2/0/1 en extremos una vez liberado. Luego ensayo único de 1.000 ms y de 2.000 ms. Esto decide si se puede calibrar con límites detectados o solo medir tiempos aproximados.
