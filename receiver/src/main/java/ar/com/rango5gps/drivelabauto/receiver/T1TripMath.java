@@ -30,6 +30,16 @@ public final class T1TripMath {
                 oemLiter<=CUTOFF_OEM)return 0;
         return Math.max(0,initialRangeKm()-kmSinceFull);
     }
+    /**
+     * SECONDARY sanity check from CI186 only. This linear proxy is explicitly
+     * uncalibrated; 56-ohm top saturation makes it unusable above 60.5 OEM.
+     */
+    public static double rawGaugeRangeLowConfidence(double oemLiter){
+        if(!Double.isFinite(oemLiter)||oemLiter<CUTOFF_OEM||
+                oemLiter>=OHM_SATURATION_OEM)return Double.NaN;
+        return Math.max(0,Math.min(1,
+            (oemLiter-CUTOFF_OEM)/(FULL_OEM-CUTOFF_OEM)))*LAST_TANK_KM;
+    }
     public static boolean floatUpperSaturated(Double oemLiter){
         return oemLiter!=null&&Double.isFinite(oemLiter)&&
             oemLiter>=OHM_SATURATION_OEM;
