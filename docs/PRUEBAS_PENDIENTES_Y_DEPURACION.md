@@ -60,6 +60,13 @@
 - **Fuera de alcance:** no HOLD continuo, no activación automática al engranar R, no memorias ni uso al arrancar; no confiar en topes mecánicos como parada. Sender, mapas, Waze, servicios del puente, controles de ventanas/AVAS y viajes quedan sin modificaciones funcionales.
 - [Guía y criterios de aceptación](RECEIVER_ESPEJOS_QA_0_2_11.md).
 
+## Prueba física pendiente: Receiver 0.2.12 (OTA, 10/11)
+
+- [Release v0.2.12](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.12) está publicada como `latest`; workflow de firma/actualización [42824306707](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42824306707) **PASÓ**. `sender.json` conserva el mismo hash que la release anterior, Sender sigue 0.2.10.
+- **No probado en el vehículo**: movimiento sostenido de 500 ms en espejo derecho 2069; comandos experimentales izquierdo 2068; lectura HAL `MIRROR_Z_POS` y propiedades de posición vendor. El derecho **sí** estaba validado con pulsos de 120 ms, `1` arriba/`2` abajo.
+- Actualizar exclusivamente por **ACTUALIZAR RECEIVER · INSTALACIÓN DIRECTA** de la propia aplicación. No instalar APK separada.
+- [Plan detallado para registrar valores, permisos y sentidos](RECEIVER_ESPEJOS_0_2_12_CALIBRACION.md). Sin auto-tilt de R ni regreso D hasta validar posición, parada y lectura de marcha.
+
 ## Cuándo retirar los componentes viejos
 
 **No ahora.** Antes de eliminar DriveLab T1 de laboratorio o puente original, deben cumplirse: todas las funciones que realmente se usan están presentes y probadas en Receiver, mapa en clúster robusto, recuperabilidad de APK/firma, respaldos de CSV e historial, y ningún viaje de tanque activo afectado. Solo después se puede desinstalar por paquete e identificar servicios conflictivos. No borrar en bloque historiales personales, canales ni firmas.
