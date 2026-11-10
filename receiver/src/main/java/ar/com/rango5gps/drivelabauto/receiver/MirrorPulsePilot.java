@@ -31,15 +31,18 @@ public final class MirrorPulsePilot {
     private static final String PKG="com.autolink.app.vehicleservice";
     private static final String CLS="com.autolink.app.vehicleservice.VehicleService";
     private static final String TOKEN="com.autolink.app.vehicleservice.IVehicleControl";
-    private static final int GEAR_ID=1033, GEAR_P=1, MIRROR_ID=2069;
+    private static final int GEAR_ID=1033, GEAR_P=1, RIGHT_ID=2069, LEFT_ID=2068;
     private static final int SPEED_FLOAT_ID=2148, SPEED_INT_ID=1089;
-    private static final long PULSE_MS=120, COOLDOWN_MS=1800;
+    private static final long COOLDOWN_MS=1800;
+    // Manual controlled test: at most 500 ms per verified P/stationary command. No automatic reversing.
+    public static final int SHORT_MS=120, SMOOTH_TEST_MS=500;
     private final Context app;
     private final Handler main=new Handler(Looper.getMainLooper());
     private final AtomicBoolean busy=new AtomicBoolean(false);
     private final AtomicBoolean stop=new AtomicBoolean(false);
     private volatile boolean foreground=false;
     private volatile long lastAttemptAt=0;
+    private volatile int activeMirrorId=RIGHT_ID;
 
     public MirrorPulsePilot(Context context){app=context.getApplicationContext();}
     public void setForeground(boolean enabled){
@@ -49,9 +52,15 @@ public final class MirrorPulsePilot {
     public boolean busy(){return busy.get();}
     public void cancel(){stop.set(true);}
 
-    /** Single press triggers ONE 120ms pulse. There is deliberately no HOLD yet. */
+    /** Legacy 120ms RIGHT command kept for existing callers. */
     public boolean pulse(int direction,Callback callback){
-        if(!foreground||(direction!=1&&direction!=2))return false;
+        return pulse(RIGHT_ID,direction,SHORT_MS,callback);
+    }
+    /** One user-confirmed, time-bounded command. LEFT mapping is only a candidate. */
+    public boolean pulse(int mirrorId,int direction,int durationMs,Callback callback){
+        if(!foreground||(mirrorId!=RIGHT_ID&&mirrorId!=LEFT_ID)||
+                (direction!=1&&direction!=2)||
+                (durationMs!=SHORT_MS&&durationMs!=SMOOTH_TEST_MS))return false;
         if(!busy.compareAndSet(false,true))return false;
         long now=SystemClock.elapsedRealtime();
         if(now-lastAttemptAt<COOLDOWN_MS){
@@ -60,7 +69,38 @@ public final class MirrorPulsePilot {
         }
         lastAttemptAt=now;
         stop.set(false);
-        new Thread(()->executePulse(direction,callback),"T1-Mirror-OnePulse").start();
+        activeMirrorId=mirrorId;
+        new Thread(()->executePulse(mirrorId,direction,durationMs,callback),
+            "T1-Mirror-OneTimedCommand").start();
+        return true;
+    }
+
+    /** Read P/R/D raw gear and speed without any actuator write; foreground only. */
+    public boolean readGearOnce(Callback callback){
+        if(!foreground||!busy.compareAndSet(false,true))return false;
+        stop.set(false);
+        new Thread(()->{
+            Connection c=null;
+            String result;
+            try{
+                requireReady();
+                c=connect();
+                int gear=readInt(c.binder,GEAR_ID);
+                double speed=readSpeed(c.binder);
+                String interpretation=gear==1?"P candidata":gear==2?"R candidata":
+                    "marcha no mapeada (posible D/N)";
+                result="LECTURA OEM · 1033="+gear+" ("+interpretation+
+                    ") · velocidad="+speed+
+                    " (unidad candidata km/h). Sin orden de movimiento.";
+            }catch(Exception e){
+                result="SIN LECTURA OEM · "+e.getClass().getSimpleName()+
+                    " · "+String.valueOf(e.getMessage());
+            }finally{
+                if(c!=null)c.close();
+                busy.set(false);
+            }
+            emit(callback,result);
+        },"T1-Mirror-Gear-ReadOnly").start();
         return true;
     }
 
@@ -68,7 +108,7 @@ public final class MirrorPulsePilot {
         main.post(()->callback.done(status));
     }
 
-    private void executePulse(int direction,Callback callback){
+    private void executePulse(int mirrorId,int direction,int durationMs,Callback callback){
         Connection c=null;
         boolean motionAttempted=false,releaseOk=false;
         String status="Sin operación";
@@ -84,28 +124,29 @@ public final class MirrorPulsePilot {
                 throw new IllegalStateException("Velocidad no confirmada en 0 km/h: "+speed);
             requireReady();
             // A release command BEFORE motion is a conservative neutralization.
-            write(c.binder,0);
+            write(c.binder,mirrorId,0);
             requireReady();
             // Never repeat this command; STOP in finally even on exceptions.
             motionAttempted=true;
-            write(c.binder,direction);
-            long until=SystemClock.elapsedRealtime()+PULSE_MS;
+            write(c.binder,mirrorId,direction);
+            long until=SystemClock.elapsedRealtime()+durationMs;
             while(SystemClock.elapsedRealtime()<until && !stop.get() && foreground){
                 SystemClock.sleep(10);
             }
-            status="Se envió un pulso breve (2069="+direction+"). "+
-                "Confirmar visualmente dirección/espejo y que se detenga.";
+            status="Se envió una orden experimental "+mirrorId+"="+direction+
+                " durante hasta "+durationMs+" ms, seguida de liberación 0. "+
+                "Comprobar físicamente lado, sentido y parada.";
         }catch(Exception ex){
             String detail=ex.getMessage()==null?ex.getClass().getSimpleName():ex.getMessage();
             status="NO COMPLETADO · "+detail;
         }finally{
             if(c!=null && c.binder!=null){
                 try{
-                    // Safe-release candidate from T1N134; still needs physical proof.
-                    write(c.binder,0);
+                    // Release candidate from T1N134. Binder success != physical proof.
+                    write(c.binder,mirrorId,0);
                     releaseOk=true;
                 }catch(Exception releaseError){
-                    status+=" · ALERTA: no se confirmó liberación 2069=0";
+                    status+=" · ALERTA: no se confirmó liberación "+mirrorId+"=0";
                 }
             }
             if(c!=null)c.close();
@@ -123,16 +164,17 @@ public final class MirrorPulsePilot {
     public boolean release(Callback callback){
         if(!foreground)return false;
         stop.set(true);
+        final int mirrorId=activeMirrorId;
         new Thread(()->{
             String status;
             Connection c=null;
             try{
                 c=connect();
-                write(c.binder,0);
-                status="Liberación 2069=0 enviada. Comprobar físicamente: "+
-                    "la respuesta Binder NO prueba la parada del motor.";
+                write(c.binder,mirrorId,0);
+                status="Liberación "+mirrorId+"=0 enviada. Comprobar físicamente: "+
+                    "respuesta Binder NO prueba parada mecánica.";
             }catch(Exception ex){
-                status="ALERTA: no se pudo enviar liberación 2069=0: "+
+                status="ALERTA: no se pudo enviar liberación "+mirrorId+"=0: "+
                     ex.getClass().getSimpleName();
             }finally{
                 if(c!=null)c.close();
@@ -185,17 +227,18 @@ public final class MirrorPulsePilot {
         }finally{data.recycle();reply.recycle();}
     }
 
-    private void write(IBinder binder,int value)throws Exception{
-        if(value!=0&&value!=1&&value!=2)
+    private void write(IBinder binder,int mirrorId,int value)throws Exception{
+        if((mirrorId!=RIGHT_ID&&mirrorId!=LEFT_ID)||
+                (value!=0&&value!=1&&value!=2))
             throw new SecurityException("Valor de espejo no permitido");
         Parcel data=Parcel.obtain(),reply=Parcel.obtain();
         try{
             data.writeInterfaceToken(TOKEN);
-            data.writeInt(MIRROR_ID);
+            data.writeInt(mirrorId);
             data.writeInt(value);
             data.writeString(app.getPackageName());
             if(!binder.transact(15,data,reply,0))
-                throw new IllegalStateException("OEM rechazó escritura 2069="+value);
+                throw new IllegalStateException("OEM rechazó escritura "+mirrorId+"="+value);
             reply.readException();
         }finally{data.recycle();reply.recycle();}
     }
