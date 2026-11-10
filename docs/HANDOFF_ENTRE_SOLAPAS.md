@@ -67,6 +67,12 @@ Confirmados con usuario: **izquierdo 2068 y derecho 2069 se mueven**; segundas p
 
 La regla auto-reversa queda definida: **una bajada al entrar en R**, no repetir durante maniobras R↔otra marcha lenta; **restaurar si marcha conocida !=R y velocidad >10 km/h estable 800ms** (incluye N móvil; nunca suponer N=0), una sola vez. `MirrorParkingPolicy` es lógica aislada y probada, **NO conectada a hardware ni operativa automáticamente** hasta validar valores OEM de R, velocidad y repetibilidad de pulsos. [Especificación](ESPEJOS_AUTO_R_NO_R_10KMH_2026-11-10.md). Se propone Receiver v0.2.17; verificar publicación OTA, preservar Sender 0.2.13 y tablero T1.
 
+## Nuevos hallazgos: 2003 plegado y captura 1033 bajo cámara
+
+**10/11:** el usuario observó `1033`: P=1, N=3, D=4; R sin lectura porque cámara de reversa tapa Receiver. Solución experimental v0.2.18: **grabar 35 s de cambios de marcha mediante servicio read-only**, reabrir y leer historial; sin apagar cámara, sin actuadores automáticos. Para plegado, el usuario vio **2003=0 plegado, 2003=1 desplegado** con transiciones **1→0** al plegar y **0→1** al desplegar. Se agrega getter 2003 y ensayo manual protegido de escrituras únicas 0/1 en P/0, sin mandar 0 como liberación. La escritura **no está validada** físicamente. La documentación canónica es [prueba de marcha y plegado](PRUEBA_MARCHA_CAMARA_Y_PLEGADO_2003_2026-11-10.md).
+
+Además, el usuario confirma en su T1 proyección de cualquier app al clúster y soporte de **ZIP de dibujos de instrumentos** en T1Launcher con modo pantalla completa, relojes OEM ocultables. Diseño objetivo: panel DriveLab de relojes dinámicos a partir de OEM, con autonomía propia calculada por los **dos surtidores/CSV/flotante/Ω**. Esto no autoriza suponer API del ZIP ni omitir advertencias de seguridad del panel OEM. No mezclar el cálculo antiguo descartado. Sender, Waze/puente, viajes y controles existentes permanecen intactos.
+
 ## Qué aportar al expediente desde la solapa de consumo## Qué aportar al expediente desde la solapa de consumo## Qué aportar al expediente desde la solapa de consumo## Qué aportar al expediente desde la solapa de consumo
 
 Registrar cada ensayo nuevo como:
