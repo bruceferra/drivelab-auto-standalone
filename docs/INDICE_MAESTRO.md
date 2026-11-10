@@ -17,6 +17,7 @@ https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.10
 2. [Arquitectura Sender / Receiver](ARQUITECTURA_SENDER_RECEIVER.md): flujo de mapas, puertos, seguridad, controles, arranque, actualizaciones y evolución prevista.
 3. [Tablero de combustible, consumo y telemetría](TABLERO_CONSUMO_Y_TELEMETRIA_T1.md): reglas de cálculo, señales y diseño del tablero.
    - [Auditoría y calibración de CSV 03–10/11](CALIBRACION_CSV_T1_2026-11-10.md): 52.880 muestras únicas de CSV (03–09/11), corrección de saturación, distancias comparadas y nueva observación del 10/11, con hashes de originales privados.
+   - [Extracción APK T1N134 — espejos, reversa y contadores PHEV](EXTRACCION_T1LAUNCHER_T1N134_2026-11-10.md): inspección estática del archivo original recibido, IDs 1033/2069 y posibles acumuladores 559964335/336; **no habilitados ni validados físicamente**.
 4. [Matriz de pruebas, problemas y limpieza](PRUEBAS_PENDIENTES_Y_DEPURACION.md): pruebas en vehículo, Spotify, control de cambios, criterios de retiro.
 5. [Handoff para otra conversación](HANDOFF_ENTRE_SOLAPAS.md): contexto breve y protocolo para incorporar nuevos descubrimientos del análisis de consumo.
 
