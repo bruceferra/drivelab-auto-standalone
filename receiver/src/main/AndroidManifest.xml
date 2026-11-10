@@ -6,6 +6,8 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- Standard Automotive MIRROR_FOLD requires OEM-granted signature privilege. -->
+    <uses-permission android:name="android.car.permission.CONTROL_CAR_MIRRORS" />
     <queries>
         <package android:name="com.autolink.app.vehicleservice" />
         <package android:name="com.autolink.carservice" />

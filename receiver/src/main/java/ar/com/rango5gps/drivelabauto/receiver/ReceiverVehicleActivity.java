@@ -121,7 +121,7 @@ public final class ReceiverVehicleActivity extends Activity {
         LinearLayout root=column();root.setPadding(16,10,16,26);
         scroll.addView(root);
         label(root,"DRIVELAB AUTO · T1",23);
-        label(root,"v0.2.12 QA · Espejos 500 ms y lectura de posición",12);
+        label(root,"v0.2.14 QA · Espejos 1–2 s y lectura de estados",12);
         button(root,"← VOLVER A MAPAS Y PUENTE",this::finish);
         LinearLayout menu=new LinearLayout(this);
         menu.setOrientation(LinearLayout.HORIZONTAL);
@@ -176,6 +176,16 @@ public final class ReceiverVehicleActivity extends Activity {
         label(body,"Estas referencias conservan la lectura cruda, NO un ángulo validado. "+
             "Si la HAL no entrega posición, no podemos detectar extremos ni ordenar "+
             "IR AL VALOR INICIAL/FINAL con seguridad.",12);
+        button(body,"LEER ESTADO RAW 2068 / 2069 · MANDO SUELTO",()->{
+            if(vehicleBusy()){updateMirror("Otra consulta OEM está en curso");return;}
+            if(!mirror.readMirrorStates(this::updateMirror))
+                updateMirror("No se inició lectura 2068/2069");
+            else updateMirror("Consultando los estados de ambos espejos…");
+        });
+        label(body,"HIPÓTESIS del usuario: lectura 2 extremo superior, 1 extremo "+
+            "inferior y 0 zona intermedia. Eso NO es lo mismo que la orden "+
+            "2069=1 subir / 2069=2 bajar / 2069=0 liberar. "+
+            "Comparar varias lecturas con el botón SUELTO antes de confiar en extremos.",12);
         section(body,"DERECHO · CONTROL PROBADO");
         LinearLayout rightRow=new LinearLayout(this);
         rightRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -188,6 +198,14 @@ public final class ReceiverVehicleActivity extends Activity {
         downRight.setOnClickListener(v->confirmMirrorPulse(2069,2,500));
         rightRow.addView(downRight,new LinearLayout.LayoutParams(0,64,1));
         body.addView(rightRow);
+        button(body,"DERECHO · BAJAR 1.000 ms · UN SOLO MOVIMIENTO",()->
+            confirmMirrorPulse(2069,2,1000));
+        button(body,"DERECHO · SUBIR 1.000 ms · UN SOLO MOVIMIENTO",()->
+            confirmMirrorPulse(2069,1,1000));
+        button(body,"DERECHO · BAJAR 2.000 ms · ENSAYO LIMITADO",()->
+            confirmMirrorPulse(2069,2,2000));
+        button(body,"DERECHO · SUBIR 2.000 ms · ENSAYO LIMITADO",()->
+            confirmMirrorPulse(2069,1,2000));
         button(body,"DERECHO · PULSO CORTO 120 ms PARA COMPARAR",()->
             confirmMirrorPulse(2069,2,120));
         section(body,"IZQUIERDO · 2068 SIN VALIDACIÓN FÍSICA");
@@ -205,6 +223,16 @@ public final class ReceiverVehicleActivity extends Activity {
         leftTwo.setOnClickListener(v->confirmMirrorPulse(2068,2,500));
         leftRow.addView(leftTwo,new LinearLayout.LayoutParams(0,64,1));
         body.addView(leftRow);
+        button(body,"IZQUIERDO · ORDEN 1 · 1.000 ms (NO VALIDADO)",()->
+            confirmMirrorPulse(2068,1,1000));
+        button(body,"IZQUIERDO · ORDEN 2 · 1.000 ms (NO VALIDADO)",()->
+            confirmMirrorPulse(2068,2,1000));
+        section(body,"PLEGADO DE ESPEJOS · OEM PERMISO PRIVILEGIADO");
+        label(body,"Solo si Android habilita MIRROR_FOLD 287312709 de tipo Boolean "+
+            "y Receiver posee el permiso OEM. Si falta, se informa sin mover nada. "+
+            "No se utilizan los IDs vendor desconocidos del launcher.",12);
+        button(body,"PLEGAR ESPEJOS · PROBAR OEM",()->confirmMirrorFold(true));
+        button(body,"DESPLEGAR ESPEJOS · PROBAR OEM",()->confirmMirrorFold(false));
         button(body,"LIBERAR ÚLTIMO ESPEJO · VALOR 0",()->{
             mirror.cancel();
             if(!mirror.release(this::updateMirror))
@@ -246,6 +274,23 @@ public final class ReceiverVehicleActivity extends Activity {
             "Es una alerta de seguridad: mantenerla activa para circular.",13);
         button(body,"ALARMA PEATÓN · CAMBIAR ON/OFF",this::confirmPedestrian);
         alertView=status(body,pedestrianStatus);
+    }
+    private void confirmMirrorFold(boolean folded){
+        if(vehicleBusy()){
+            updateMirror("Otra operación OEM está en curso");return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle(folded?"PLEGAR ESPEJOS":"DESPLEGAR ESPEJOS")
+            .setMessage("Solo estacionado en P y velocidad cero, mirando ambos "+
+                "retrovisores. Se intenta exclusivamente la propiedad oficial "+
+                "MIRROR_FOLD con permiso OEM; si no está disponible no hace nada. "+
+                "¿Intentar?")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("PROBAR",(d,w)->{
+                if(!mirror.requestFold(folded,this::updateMirror))
+                    updateMirror("Consulta de plegado no iniciada");
+                else updateMirror("Comprobando permiso y capacidad MIRROR_FOLD…");
+            }).show();
     }
     private void confirmMirrorPulse(int mirrorId,int direction,int durationMs){
         if(vehicleBusy()){

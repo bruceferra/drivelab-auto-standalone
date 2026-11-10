@@ -53,29 +53,29 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'bruceferra/drivelab-auto-standalone'
           test "$GITHUB_REF_NAME" = 'main'
-          if gh release view 'v0.2.12' >/dev/null 2>&1; then
-            echo 'Release v0.2.12 already exists: no APK overwrite'
+          if gh release view 'v0.2.14' >/dev/null 2>&1; then
+            echo 'Release v0.2.14 already exists: no APK overwrite'
             exit 1
           fi
           mkdir -p /tmp/previous output
-          gh release download v0.2.11 --pattern 'DriveLab-Auto-Receiver-v0.2.11.apk' --dir /tmp/previous
-          gh release download v0.2.10 --pattern 'sender.json' --dir output
+          gh release download v0.2.13 --pattern 'DriveLab-Auto-Receiver-v0.2.13.apk' --dir /tmp/previous
+          gh release download v0.2.13 --pattern 'sender.json' --dir output
           gradle --no-daemon :receiver:assembleRelease
           apk='receiver/build/outputs/apk/release/receiver-release.apk'
           test -s "$apk"
           aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
           sig="$ANDROID_HOME/build-tools/35.0.0/apksigner"
           "$sig" verify --print-certs "$apk"
-          "$sig" verify --print-certs /tmp/previous/DriveLab-Auto-Receiver-v0.2.11.apk
-          oldcert=$("$sig" verify --print-certs /tmp/previous/DriveLab-Auto-Receiver-v0.2.11.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          "$sig" verify --print-certs /tmp/previous/DriveLab-Auto-Receiver-v0.2.13.apk
+          oldcert=$("$sig" verify --print-certs /tmp/previous/DriveLab-Auto-Receiver-v0.2.13.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
           newcert=$("$sig" verify --print-certs "$apk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
           test -n "$oldcert" && test "$oldcert" = "$newcert"
           badge=$("$aapt" dump badging "$apk" | head -1)
           echo "$badge"
           echo "$badge" | grep -F "package: name='ar.com.rango5gps.drivelabauto.receiver'"
-          echo "$badge" | grep -F "versionCode='13'"
-          echo "$badge" | grep -F "versionName='0.2.12'"
-          name='DriveLab-Auto-Receiver-v0.2.12.apk'
+          echo "$badge" | grep -F "versionCode='15'"
+          echo "$badge" | grep -F "versionName='0.2.14'"
+          name='DriveLab-Auto-Receiver-v0.2.14.apk'
           cp "$apk" "output/$name"
           sha=$(sha256sum "output/$name" | awk '{print $1}')
           export RECEIVER_SHA="$sha"
@@ -84,18 +84,18 @@ jobs:
           repo=os.environ['GITHUB_REPOSITORY']
           manifest={
             'packageName':'ar.com.rango5gps.drivelabauto.receiver',
-            'versionName':'0.2.12',
-            'versionCode':13,
+            'versionName':'0.2.14',
+            'versionCode':15,
             'sha256':os.environ['RECEIVER_SHA'],
-            'apkUrl':f'https://github.com/{repo}/releases/download/v0.2.12/DriveLab-Auto-Receiver-v0.2.12.apk',
+            'apkUrl':f'https://github.com/{repo}/releases/download/v0.2.14/DriveLab-Auto-Receiver-v0.2.14.apk',
           }
           with open('output/receiver.json','w',encoding='utf-8') as f:
             json.dump(manifest,f,indent=2)
           with open('output/sender.json',encoding='utf-8') as f:
             sender=json.load(f)
           assert sender['packageName']=='ar.com.rango5gps.drivelabauto.sender'
-          assert sender['versionName']=='0.2.10' and sender['versionCode']==11
-          assert sender['apkUrl']==f'https://github.com/{repo}/releases/download/v0.2.10/DriveLab-Auto-Sender-v0.2.10.apk'
+          assert sender['versionName']=='0.2.13' and sender['versionCode']==14
+          assert sender['apkUrl']==f'https://github.com/{repo}/releases/download/v0.2.13/DriveLab-Auto-Sender-v0.2.13.apk'
           PY
           cat output/receiver.json
           sha256sum output/*.apk > output/receiver.sha256
@@ -103,13 +103,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh release create v0.2.12 \
-            output/DriveLab-Auto-Receiver-v0.2.12.apk \
+          gh release create v0.2.14 \
+            output/DriveLab-Auto-Receiver-v0.2.14.apk \
             output/receiver.json output/sender.json output/receiver.sha256 \
             --target "$GITHUB_SHA" --latest \
-            --title 'DriveLab Auto Receiver 0.2.12 - espejos 500 ms y diagnóstico HAL OTA' \
-            --notes 'Receiver SOLO: actualización desde botón interno, mismo paquete y certificado que 0.2.10. Prueba manual de espejos 2069 derecho (validado) y 2068 izquierdo (no validado), orden maxima 500ms en P y detenido; lector HAL solo lectura, sin automatizacion R/D. Sin cambios de Sender 0.2.10, mapas, bridge ni datos. Función física SIN VALIDAR. Android solicita confirmación de instalación.'
+            --title 'DriveLab Auto Receiver 0.2.14 - espejos 1000/2000ms, estados y plegado condicionado OTA' \
+            --notes 'Receiver SOLO: OTA desde app, mismo certificado que Receiver 0.2.13. Espejos manuales 1000/2000ms en P y 0 km/h, lectura de estados 2068/2069, plegado estandar MIRROR_FOLD solo si tiene permiso OEM. No hay automatismo R/D ni barrido a topes. Sender 0.2.13 sin cambios. Sin modificaciones de mapas, bridge ni viajes. Funciones nuevas sin prueba fisica; Android solicita confirmacion.'
           tag=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
-          test "$tag" = 'v0.2.12'
-          gh release view v0.2.12 --json assets --jq '.assets[].name'
-          echo 'OTA v0.2.12 published as latest with receiver.json and preserved sender.json'
+          test "$tag" = 'v0.2.14'
+          gh release view v0.2.14 --json assets --jq '.assets[].name'
+          echo 'OTA v0.2.14 published as latest with receiver.json and preserved sender.json'

@@ -69,6 +69,12 @@ Se implementó comprobación automática del manifiesto al abrir Sender o Receiv
 
 La [release oficial v0.2.13](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.13) está marcada como `latest` y contiene `sender.json`, `receiver.json` y las dos APK firmadas. [GitHub Actions 42826440626](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42826440626) **PASÓ** con continuidad de certificados. **No asumir instalación completada en los dispositivos**: usuario debe pulsar actualizador incorporado en Sender/Receiver una sola vez para incorporar 0.2.13. Posteriormente las apps comprobarán actualizaciones automáticamente al abrir, mostrarán estado explícito si no hay nueva versión y preservarán el scroll. [Especificación](ACTUALIZADOR_Y_SCROLL_0_2_13_2026-11-10.md).
 
+## Próxima prueba de espejos: Receiver 0.2.14 (10/11/2026)
+
+La observación nueva sobre `2068` (izquierdo) / `2069` (derecho) y lecturas posibles `2` arriba, `1` abajo, `0` intermedio es **HIPÓTESIS DE ESTADO**, distinta de las **órdenes verificadas** `2069=1` subir/`2069=2` bajar/`2069=0` liberar. Todavía no se ha observado de forma reproducible el getter con el mando suelto. No inferir ángulo ni tiempo total de carrera.
+
+El Receiver experimental 0.2.14 incluye lectura directa RAW `getInt(2068/2069)`, pruebas manuales de **1.000 y 2.000 ms** en P/velocidad cero, y botones de plegar/desplegar basados solo en Android Automotive `MIRROR_FOLD` con permiso privilegiado y getter validado; si faltan, **no envía comando**. No hay automatismo R/D ni homing contra topes. [Procedimiento de calibración temporal y estado](RECEIVER_ESPEJOS_CALIBRACION_TEMPORAL_2026-11-10.md). Sender 0.2.13, mapas, puente, viajes y consumo permanecen intactos.
+
 ## Próxima integración
 
 El módulo hoy llamado **ENERGÍA / CODE** en Receiver crecerá hasta **TABLERO T1** con litros reales estimados, autonomía contrastada, SOC, corriente, energía y consumo. Su modelo deberá almacenar observaciones originales y cálculos reproducibles por separado. El tratamiento del consumo continúa en el documento de tablero; no inventar señales ni convertir mediciones de otro proyecto en valores OEM verificados.
