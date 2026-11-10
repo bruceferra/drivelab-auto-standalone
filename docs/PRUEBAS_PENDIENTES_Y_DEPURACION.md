@@ -46,7 +46,9 @@
 - El enlace de Maps por nombre puede abrir el primer resultado en Waze; usuario debe verificar el pin.
 - La ROM T1 puede bloquear actividad desde segundo plano y Binder de lectura/escritura según UID.
 - CI186 puede contener valor OEM filtrado; no sustituir cálculo de surtidor.
-- Los códigos de espejos y reclinación/asientos existen como líneas de investigación en T1Launcher; **no migrar comandos a Receiver sin extraer contratos y validar cada acción**. Espejo al retroceder es objetivo futuro, no tarea de v0.2.10.
+- **Espejos/reversa:** la inspección estática del APK T1N134 halló `EspejoRService`, el getter **1033** de marcha, el setter por pulsos **2069** y velocidades **2148/1089**. **No** están validados en la T1 ni habilitados en Receiver; el algoritmo de tercero guarda una posición estimada local en lugar de leer ángulo físico. Investigar especialmente restauración y cancelación; no migrar setters ni ejecutarlos automáticamente. Véase [extracción T1N134](EXTRACCION_T1LAUNCHER_T1N134_2026-11-10.md).
+- **Lectura candidata de acumulados PHEV:** investigar en modo lectura y en P los códigos HAL **559964335** (`PHEV SUM FUEL`) y **559964336** (`PHEV SUM CHRG EGY`). Unidades, acceso y relación con litros/energía siguen **PENDIENTES**.
+- Reclinado/asientos continúa sin códigos verificados. Techo 2008 y señales desconocidas quedan en modo observación.
 - Techo 2008 y señales desconocidas quedan en modo de observación.
 - UI completa tipo launcher, navegación multimedia por volante y sustitución de Android Auto requieren diseño/validación adicionales.
 
