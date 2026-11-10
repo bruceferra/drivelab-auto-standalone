@@ -63,15 +63,36 @@ final class MirrorAutomationOem implements AutoCloseable{
             r.readException();return r.readInt();
         }finally{d.recycle();r.recycle();}
     }
-    double speedKmh()throws Exception{
-        try{
-            float f=readFloat2148();
-            if(Float.isFinite(f)&&f>=0&&f<250)return f;
-        }catch(Exception ignored){}
-        int s=readInt(1089);
-        if(s<0||s>250)throw new IllegalStateException("Velocidad fuera de rango");
-        return s;
+    // Capture both candidate vehicle-speed getters. Some firmware builds
+    // return a valid but stale 0 on 2148; previously that suppressed 1089
+    // completely, preventing a non-R restoration above 10 km/h.
+    static final class SpeedSample {
+        final double raw2148,raw1089,kmh;
+        final String source;
+        SpeedSample(double a,double b,double k,String s){
+            raw2148=a;raw1089=b;kmh=k;source=s;
+        }
     }
+    SpeedSample speedSample()throws Exception{
+        double a=Double.NaN,b=Double.NaN;
+        try{a=readFloat2148();}catch(Exception ignored){}
+        try{b=readInt(1089);}catch(Exception ignored){}
+        boolean va=Double.isFinite(a)&&a>=0&&a<=220;
+        boolean vb=Double.isFinite(b)&&b>=0&&b<=220;
+        if(!va&&!vb)throw new IllegalStateException("Ambas velocidades OEM inválidas");
+        if(va&&vb){
+            if(a<=0.5&&b>10.0)
+                return new SpeedSample(a,b,b,"1089 (2148=0)");
+            // When both are moving but disagree, the lower candidate is
+            // deliberately conservative; do not accelerate restore early.
+            if(a>0.5&&b>0.5&&Math.abs(a-b)>5)
+                return new SpeedSample(a,b,Math.min(a,b),"mínima 2148/1089");
+            return new SpeedSample(a,b,a,"2148");
+        }
+        return va?new SpeedSample(a,b,a,"2148"):
+            new SpeedSample(a,b,b,"1089");
+    }
+    double speedKmh()throws Exception{return speedSample().kmh;}
     private float readFloat2148()throws Exception{
         Parcel d=Parcel.obtain(),r=Parcel.obtain();
         try{
