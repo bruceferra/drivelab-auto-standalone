@@ -4,19 +4,20 @@ package ar.com.rango5gps.drivelabauto.receiver;
  * Standalone decision policy for the proposed reverse-mirror feature.
  *
  * NO vehicle access and NO actuation: it must not be connected to an OEM
- * writer until P/R/D codes, speed units, direction for EACH side and stop
- * behaviour are validated in the actual T1. D is an EXPLICIT enum input,
- * NEVER guessed from a raw gear number.
+ * writer until R/non-R mapping, speed units, directions and stop
+ * behaviour are validated in the actual T1. Gear is supplied by a
+ * validated OEM adapter and NEVER guessed from a raw gear number.
  *
  * Mirrors are relative to the driver's personally adjusted D pose.
- * One R maneuver tilts once; D/R shuffling at parking speed does nothing.
- * The only planned restore trigger is stable forward travel in D above
- * 10 km/h, with debouncing and no automatic homing against hard stops.
+ * One R maneuver tilts once; R/non-R shuffling at parking speed does nothing.
+ * Restore requires VERIFIED non-R (D/N/P) and >10 km/h continuously
+ * for 800 ms; N can move and must not be interpreted as zero speed.
+ * No automatic homing against hard stops.
  */
 public final class MirrorParkingPolicy {
     public enum Gear { P, R, N, D, UNKNOWN }
     public enum Phase { NORMAL, TILTING, TILTED, RESTORING, UNKNOWN_POSITION }
-    public enum Action { NONE, TILT_ON_R, RESTORE_AFTER_FORWARD_SPEED }
+    public enum Action { NONE, TILT_ON_R, RESTORE_AFTER_NON_R_SPEED }
     public static final double RETURN_THRESHOLD_KMH=10.0;
     public static final long RETURN_DWELL_MS=800;
     public static final int MAX_PULSES_PER_SIDE=10;
@@ -47,6 +48,7 @@ public final class MirrorParkingPolicy {
         if(!armed || !Double.isFinite(speedKmh) || speedKmh<0 ||
                 speedKmh>250 || elapsedMs<0){
             forwardSince=-1;
+            previousGear=Gear.UNKNOWN; // rearm only after fresh, valid gear samples
             return Action.NONE;
         }
         Gear was=previousGear;
@@ -61,12 +63,13 @@ public final class MirrorParkingPolicy {
             return Action.NONE;
         }
         if(phase==Phase.TILTED){
-            if(gear==Gear.D && speedKmh>RETURN_THRESHOLD_KMH){
+            if(gear!=Gear.R && gear!=Gear.UNKNOWN &&
+                    speedKmh>RETURN_THRESHOLD_KMH){
                 if(forwardSince<0)forwardSince=elapsedMs;
                 if(elapsedMs-forwardSince>=RETURN_DWELL_MS){
                     phase=Phase.RESTORING;
                     forwardSince=-1;
-                    return Action.RESTORE_AFTER_FORWARD_SPEED;
+                    return Action.RESTORE_AFTER_NON_R_SPEED;
                 }
             }else forwardSince=-1;
         }
