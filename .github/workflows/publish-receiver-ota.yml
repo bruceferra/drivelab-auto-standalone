@@ -67,7 +67,7 @@ jobs:
           sig="$ANDROID_HOME/build-tools/35.0.0/apksigner"
           "$sig" verify --print-certs "$apk"
           "$sig" verify --print-certs /tmp/previous/DriveLab-Auto-Receiver-v0.2.11.apk
-          oldcert=$("$sig" verify --print-certs /tmp/previous/DriveLab-Auto-Receiver-v0.2.10.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          oldcert=$("$sig" verify --print-certs /tmp/previous/DriveLab-Auto-Receiver-v0.2.11.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
           newcert=$("$sig" verify --print-certs "$apk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
           test -n "$oldcert" && test "$oldcert" = "$newcert"
           badge=$("$aapt" dump badging "$apk" | head -1)
