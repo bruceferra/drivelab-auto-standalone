@@ -43,8 +43,10 @@ public final class MirrorParkingPolicyTest {
         eq(m.observe(Gear.P,0,0,true),Action.NONE);
         eq(m.observe(Gear.R,1,200,true),Action.NONE); // not stopped
         eq(m.observe(Gear.D,0,300,true),Action.NONE);
-        eq(m.observe(Gear.R,0,400,false),Action.NONE); // unarmed
-        eq(m.observe(Gear.R,0,450,true),Action.TILT_ON_R);
+        eq(m.observe(Gear.R,0,400,false),Action.NONE); // unarmed invalidates edge
+        eq(m.observe(Gear.R,0,450,true),Action.NONE); // R at startup not enough
+        eq(m.observe(Gear.D,0,455,true),Action.NONE);
+        eq(m.observe(Gear.R,0,460,true),Action.TILT_ON_R);
         m.completeTilt(4,4);
         eq(m.observe(Gear.R,16,1300,true),Action.NONE); // reversing fast must NOT restore
         eq(m.observe(Gear.N,18,1600,true),Action.NONE);
