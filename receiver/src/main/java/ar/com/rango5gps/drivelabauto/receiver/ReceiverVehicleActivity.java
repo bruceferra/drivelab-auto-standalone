@@ -38,8 +38,11 @@ public final class ReceiverVehicleActivity extends Activity {
     private VehicleChangeScanner changeScanner;
     private VehicleBatchReader batchReader;
     private TextView operationView,alertView,scannerView,scannerValuesView,scannerEventsView,mirrorView;
+    private TextView mirrorGearView,mirrorRawView,mirrorHalView;
     private String windowStatus="Sin órdenes enviadas";
     private String mirrorStatus="Validado en la T1: derecho 2069=1 sube, 2069=2 baja. Izquierdo 2068 pendiente.";
+    private String mirrorGearStatus="Marcha y velocidad: sin consultar";
+    private String mirrorRawStatus="Estados RAW 2068/2069: sin consultar";
     private String mirrorPositionStatus="Posiciones HAL aún no consultadas";
     private String pedestrianStatus="SIN CONSULTAR · alarma de peatones";
     private String fuelStatus="Sin lectura actual";
@@ -121,7 +124,7 @@ public final class ReceiverVehicleActivity extends Activity {
         LinearLayout root=column();root.setPadding(16,10,16,26);
         scroll.addView(root);
         label(root,"DRIVELAB AUTO · T1",23);
-        label(root,"v0.2.15 QA · Espejos y tablero de consumo",12);
+        label(root,"v0.2.16 · Resultado de espejos junto a cada lector",12);
         button(root,"← VOLVER A MAPAS Y PUENTE",this::finish);
         LinearLayout menu=new LinearLayout(this);
         menu.setOrientation(LinearLayout.HORIZONTAL);
@@ -154,38 +157,48 @@ public final class ReceiverVehicleActivity extends Activity {
         section(body,"ESPEJOS · ENSAYO MANUAL SOLO EN P");
         label(body,"Validado físicamente: derecho 2069=1 SUBE, 2069=2 BAJA "+
             "(cuatro pulsos y retorno). Izquierdo ID 2068: candidato SIN validar. "+
-            "Las órdenes siguientes duran como máximo 500 ms y se liberan con valor 0. "+
+            "Las órdenes manuales duran hasta 2.000 ms y se liberan con valor 0. "+
             "Vehículo estacionado en P, velocidad 0, observando el retrovisor.",13);
         button(body,"LEER MARCHA Y VELOCIDAD · SIN MOVER",()->{
-            if(vehicleBusy()){updateMirror("Otra consulta OEM en curso");return;}
-            if(!mirror.readGearOnce(this::updateMirror))
-                updateMirror("No se inició lectura de marcha");
-            else updateMirror("Leyendo marcha 1033 y velocidad…");
+            if(vehicleBusy()){
+                updateMirrorGear("Otra consulta OEM está en curso");return;
+            }
+            if(!mirror.readGearOnce(this::updateMirrorGear))
+                updateMirrorGear("No se inició lectura de marcha");
+            else updateMirrorGear("Consultando marcha 1033 y velocidad…");
         });
+        mirrorGearView=status(body,mirrorGearStatus);
+
+        section(body,"LECTOR DE ESTADO · DERECHO 2069 / IZQUIERDO 2068");
+        button(body,"LEER ESTADO RAW 2068 / 2069 · MANDO SUELTO",()->{
+            if(vehicleBusy()){
+                updateMirrorRaw("Otra consulta OEM está en curso");return;
+            }
+            if(!mirror.readMirrorStates(this::updateMirrorRaw))
+                updateMirrorRaw("No se inició lectura 2068/2069");
+            else updateMirrorRaw("Leyendo estados RAW 2068/2069…");
+        });
+        // Always show the real readback HERE, immediately under its button.
+        // A callback changes this TextView without rerendering or scrolling.
+        mirrorRawView=status(body,mirrorRawStatus);
+        label(body,"La lectura 0/1/2 debe contrastarse con extremos físicos. "+
+            "No confundir el valor LEÍDO con el comando de SUBIR/BAJAR.",12);
+
+        section(body,"OTRAS POSICIONES · HAL SOLO LECTURA");
         button(body,"LEER POSICIONES Y RANGOS HAL · SOLO LECTURA",()->{
-            if(vehicleBusy()){updateMirror("Otra operación OEM en curso");return;}
-            if(!mirrorProbe.readOnce(value->{
-                mirrorPositionStatus=value;
-                if(activeTab==0&&!isFinishing())render();
-            }))updateMirror("No se pudo iniciar lectura HAL");
-            else {mirrorPositionStatus="Consultando CarPropertyManager…";render();}
+            if(vehicleBusy()){
+                updateMirrorHal("Otra operación OEM está en curso");return;
+            }
+            if(!mirrorProbe.readOnce(this::updateMirrorHal))
+                updateMirrorHal("No se pudo iniciar lectura HAL");
+            else updateMirrorHal("Consultando CarPropertyManager…");
         });
-        status(body,mirrorPositionStatus);
+        mirrorHalView=status(body,mirrorPositionStatus);
         button(body,"GUARDAR LECTURA ACTUAL COMO REFERENCIA D",()->saveMirrorSnapshot("D"));
         button(body,"GUARDAR LECTURA ACTUAL COMO REFERENCIA R",()->saveMirrorSnapshot("R"));
-        label(body,"Estas referencias conservan la lectura cruda, NO un ángulo validado. "+
-            "Si la HAL no entrega posición, no podemos detectar extremos ni ordenar "+
-            "IR AL VALOR INICIAL/FINAL con seguridad.",12);
-        button(body,"LEER ESTADO RAW 2068 / 2069 · MANDO SUELTO",()->{
-            if(vehicleBusy()){updateMirror("Otra consulta OEM está en curso");return;}
-            if(!mirror.readMirrorStates(this::updateMirror))
-                updateMirror("No se inició lectura 2068/2069");
-            else updateMirror("Consultando los estados de ambos espejos…");
-        });
-        label(body,"HIPÓTESIS del usuario: lectura 2 extremo superior, 1 extremo "+
-            "inferior y 0 zona intermedia. Eso NO es lo mismo que la orden "+
-            "2069=1 subir / 2069=2 bajar / 2069=0 liberar. "+
-            "Comparar varias lecturas con el botón SUELTO antes de confiar en extremos.",12);
+        label(body,"La HAL puede no estar accesible. Estas instantáneas NO son "+
+            "memorias de ángulo verificadas ni habilitan movimientos automáticos.",12);
+
         section(body,"DERECHO · CONTROL PROBADO");
         LinearLayout rightRow=new LinearLayout(this);
         rightRow.setOrientation(LinearLayout.HORIZONTAL);
@@ -322,6 +335,21 @@ public final class ReceiverVehicleActivity extends Activity {
             .apply();
         updateMirror("Referencia "+position+" guardada como instantánea HAL "+
             "(NO prueba ángulo ni permite auto-reversa).");
+    }
+    private void updateMirrorGear(String value){
+        mirrorGearStatus=value;
+        if(mirrorGearView!=null&&!isFinishing()&&!isDestroyed())
+            mirrorGearView.setText(value);
+    }
+    private void updateMirrorRaw(String value){
+        mirrorRawStatus=value;
+        if(mirrorRawView!=null&&!isFinishing()&&!isDestroyed())
+            mirrorRawView.setText(value);
+    }
+    private void updateMirrorHal(String value){
+        mirrorPositionStatus=value;
+        if(mirrorHalView!=null&&!isFinishing()&&!isDestroyed())
+            mirrorHalView.setText(value);
     }
     private void updateMirror(String value){
         mirrorStatus=value;
