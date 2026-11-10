@@ -22,6 +22,14 @@
 - Antes de publicar, compara el **certificado SHA-256** de Sender nuevo contra Sender v0.2.10 y el de Receiver nuevo contra Receiver v0.2.12; también comprueba versión/paquete Android y ejecuta pruebas de seguridad del puente.
 - El usuario instala exclusivamente desde el **actualizador incorporado** de cada app. No enviar APK manual. No afirmar que la app instalada se actualizó sin confirmación del dispositivo.
 
+## Publicación confirmada
+
+- **CONFIRMADO** el 10/11/2026: [release v0.2.13](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.13) quedó como `latest`, con APK Receiver, APK Sender, `receiver.json` y `sender.json` en la misma release.
+- [Workflow de publicación y firma 42826440626](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42826440626) **PASÓ**; la compilación verificó identidad de paquetes, versión y continuidad de certificados respecto de Sender 0.2.10 y Receiver 0.2.12.
+- SHA-256 APK Sender: `c12dbc352abceee8a767641cf95448e1d4536f6970a5c0dca1ae1f9862833f97`.
+- SHA-256 APK Receiver: `3b903c6b08abd573c52678d675c8721503aada29e43c23f66dfe91f27ef37b3f`.
+- **Instalación en Xiaomi/T1 aún no confirmada**: deben usar los botones internos **ACTUALIZAR SENDER / ACTUALIZAR RECEIVER** de sus versiones antiguas.
+
 ## Validación real pendiente
 
 1. En la T1, abrir Receiver 0.2.12; pulsar botón interno **ACTUALIZAR RECEIVER** para pasar a 0.2.13.
