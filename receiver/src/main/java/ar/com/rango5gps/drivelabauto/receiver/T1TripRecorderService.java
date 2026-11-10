@@ -1,0 +1,207 @@
+package ar.com.rango5gps.drivelabauto.receiver;
+
+import android.Manifest;
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.app.Service;
+import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.content.pm.PackageManager;
+import android.location.Location;
+import android.location.LocationListener;
+import android.location.LocationManager;
+import android.os.IBinder;
+import android.os.SystemClock;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+
+/**
+ * User-started trip: append-only private CSV every ~3 seconds, with OEM raw
+ * readings and GPS (if permitted) or estimated OEM-speed distance.
+ * Does not modify the stable DriveLab GPS database or Sender.
+ */
+public final class T1TripRecorderService extends Service {
+    public static final String ACTION_START="t1.trip.START";
+    public static final String ACTION_STOP="t1.trip.STOP";
+    public static final String PREFS="t1_trip_recording";
+    public static final String RUNNING="running", STATUS="status", ID="trip_id",
+        DISTANCE="distance_km", GAS_L="gas_l_est", EV_KWH="hv_out_kwh",
+        CHARGE_KWH="hv_in_kwh", LAST_FUEL="last_oem_fuel", SAMPLES="samples",
+        DIST_SOURCE="distance_source", START_TIME="start_time", END_TIME="end_time",
+        FUEL_PRICE="fuel_price", KWH_PRICE="kwh_price";
+    private static final String CHANNEL="t1_trip_recorder";
+    private static final int NOTIF_ID=7527;
+    private volatile boolean stop,running;
+    private Thread worker;
+    private LocationManager locationManager;
+    private LocationListener locationListener;
+    private Location lastGood;
+    private volatile double gpsKm=0;
+    private volatile double distanceKm=0;
+    private volatile boolean gpsMode=false;
+
+    @Override public IBinder onBind(Intent intent){return null;}
+    private SharedPreferences p(){return getSharedPreferences(PREFS,MODE_PRIVATE);}
+    public static File tripDir(Context context){
+        File dir=new File(context.getFilesDir(),"t1_trips");
+        if(!dir.exists())dir.mkdirs();
+        return dir;
+    }
+    public static File currentFile(Context context){
+        String id=context.getSharedPreferences(PREFS,MODE_PRIVATE).getString(ID,"");
+        if(!id.matches("[0-9]{8}_[0-9]{6}"))return null;
+        return new File(tripDir(context),"trip_"+id+".csv");
+    }
+    @Override public int onStartCommand(Intent intent,int flags,int id){
+        String action=intent==null?null:intent.getAction();
+        if(ACTION_STOP.equals(action)){
+            stop=true;
+            if(worker!=null)worker.interrupt();
+            if(!running)stopSelf();
+            return START_NOT_STICKY;
+        }
+        if(!ACTION_START.equals(action))return START_NOT_STICKY;
+        if(running)return START_NOT_STICKY;
+        stop=false;running=true;distanceKm=0;gpsKm=0;lastGood=null;
+        String name=new SimpleDateFormat("yyyyMMdd_HHmmss",
+            Locale.ROOT).format(new Date());
+        p().edit().putString(ID,name).putBoolean(RUNNING,true)
+            .putLong(START_TIME,System.currentTimeMillis()).remove(END_TIME)
+            .putFloat(DISTANCE,0).putFloat(GAS_L,0).putFloat(EV_KWH,0)
+            .putFloat(CHARGE_KWH,0).putInt(SAMPLES,0)
+            .putString(STATUS,"TRIP iniciado · esperando primeras muestras").apply();
+        return startRecording();
+    }
+    private int startRecording(){
+        foreground();
+        attachGps();
+        worker=new Thread(this::record,"T1-Trip-Samples");
+        worker.start();
+        return START_NOT_STICKY;
+    }
+    private void foreground(){
+        NotificationManager nm=getSystemService(NotificationManager.class);
+        nm.createNotificationChannel(new NotificationChannel(CHANNEL,
+            "Grabación de viajes T1",NotificationManager.IMPORTANCE_LOW));
+        PendingIntent open=PendingIntent.getActivity(this,NOTIF_ID,
+            new Intent(this,T1TankDashboardActivity.class),
+            PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+        startForeground(NOTIF_ID,new Notification.Builder(this,CHANNEL)
+            .setSmallIcon(android.R.drawable.ic_menu_compass)
+            .setContentTitle("DriveLab · TRIP grabando")
+            .setContentText("OEM, GPS y costos estimados · abrir para detener")
+            .setContentIntent(open).setOngoing(true).build());
+    }
+    private void attachGps(){
+        if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=
+            PackageManager.PERMISSION_GRANTED)return;
+        try{
+            locationManager=(LocationManager)getSystemService(LOCATION_SERVICE);
+            if(locationManager==null||!locationManager.isProviderEnabled(
+                    LocationManager.GPS_PROVIDER))return;
+            gpsMode=true;
+            locationListener=new LocationListener(){
+                @Override public void onLocationChanged(Location location){
+                    if(location==null||!location.hasAccuracy()||
+                            location.getAccuracy()>40)return;
+                    if(lastGood!=null){
+                        float meters=lastGood.distanceTo(location);
+                        long dt=location.getElapsedRealtimeNanos()-
+                            lastGood.getElapsedRealtimeNanos();
+                        if(dt>1000000000L&&dt<30000000000L&&meters>=0&&
+                                meters<=(dt/1000000000.0)*55)
+                            gpsKm+=meters/1000.0;
+                    }
+                    lastGood=location;
+                    distanceKm=gpsKm;
+                }
+            };
+            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER,
+                1000L,1.0f,locationListener,getMainLooper());
+        }catch(Exception ex){gpsMode=false;}
+    }
+    private static String n(double x){
+        return Double.isFinite(x)?String.format(Locale.US,"%.5f",x):"";
+    }
+    private void record(){
+        int sampleCount=0;double hvOut=0,hvIn=0;
+        String finalStatus="TRIP terminado";
+        File path=currentFile(this);
+        if(path==null){cleanup("TRIP sin identificador");return;}
+        long lastTick=SystemClock.elapsedRealtime();
+        try(FileOutputStream out=new FileOutputStream(path,false)){
+            out.write(("timestamp_epoch_ms,gear_1033,speed_oem_raw,fuel_ci186_oem_l,"+
+                "soc_1042_raw,soc_1062_raw,volt_1063_raw,amp_1064_raw,"+
+                "counter_1048_raw,counter_1049_raw,recirc_1004,change_2101,"+
+                "mirror_fold_2003,gps_lat,gps_lon,gps_accuracy_m,"+
+                "distance_km_est,hv_gross_discharge_kwh_est,hv_charge_kwh_est,"+
+                "gas_l_proxy,gas_cost_est,ev_cost_hv_proxy,notes\n")
+                .getBytes(StandardCharsets.UTF_8));
+            T1TripTelemetry oem=new T1TripTelemetry(this);
+            while(!stop){
+                T1TripTelemetry.Sample s=oem.snapshot();
+                long tick=SystemClock.elapsedRealtime(),dt=tick-lastTick;
+                lastTick=tick;
+                if(!gpsMode&&dt>0&&dt<=10000&&Double.isFinite(s.speed)&&
+                        s.speed>=0&&s.speed<220)
+                    distanceKm+=s.speed*dt/3600000.0; // unit OEM needs road validation
+                hvOut+=T1TripMath.grossHvDischargeKwh(s.voltage,s.current,dt);
+                hvIn+=T1TripMath.grossHvChargeKwh(s.voltage,s.current,dt);
+                double km=Math.max(0,distanceKm);
+                double liters=T1TripMath.gasolineProxyLiters(km);
+                double gasPrice=p().getFloat(FUEL_PRICE,2129f);
+                double kwhPrice=p().getFloat(KWH_PRICE,0f);
+                double gasCost=liters*gasPrice,evCost=hvOut*kwhPrice;
+                Location latest=lastGood;
+                String loc=latest==null?",,,":
+                    n(latest.getLatitude())+","+n(latest.getLongitude())+","+
+                        n(latest.getAccuracy())+",";
+                String line=s.timestamp+","+s.gear+","+n(s.speed)+","+
+                    n(s.fuel)+","+n(s.socInternal)+","+n(s.socDisplay)+","+
+                    n(s.voltage)+","+n(s.current)+","+
+                    n(s.counter1048)+","+n(s.counter1049)+","+
+                    s.recirc+","+s.recircChange+","+s.fold+","+loc+
+                    n(km)+","+n(hvOut)+","+n(hvIn)+","+
+                    n(liters)+","+n(gasCost)+","+n(evCost)+","+
+                    (gpsMode?"GPS":"OEM_SPEED_UNIT_CANDIDATE")+"\n";
+                out.write(line.getBytes(StandardCharsets.UTF_8));
+                sampleCount++;
+                if(sampleCount%5==0)out.flush();
+                p().edit().putFloat(DISTANCE,(float)km)
+                    .putFloat(GAS_L,(float)liters).putFloat(EV_KWH,(float)hvOut)
+                    .putFloat(CHARGE_KWH,(float)hvIn)
+                    .putFloat(LAST_FUEL,(float)s.fuel)
+                    .putInt(SAMPLES,sampleCount)
+                    .putString(DIST_SOURCE,gpsMode?"GPS":"VELOCIDAD_OEM_ESTIMADA")
+                    .putString(STATUS,"Grabando TRIP · "+sampleCount+" muestras").apply();
+                try{Thread.sleep(3000);}catch(InterruptedException e){if(stop)break;}
+            }
+            out.flush();
+        }catch(Exception ex){
+            finalStatus="TRIP interrumpido · "+ex.getClass().getSimpleName();
+        }finally{cleanup(finalStatus);}
+    }
+    private void cleanup(String message){
+        running=false;
+        if(locationManager!=null&&locationListener!=null){
+            try{locationManager.removeUpdates(locationListener);}catch(Exception ignored){}
+        }
+        p().edit().putBoolean(RUNNING,false)
+            .putLong(END_TIME,System.currentTimeMillis())
+            .putString(STATUS,message).apply();
+        stopForeground(STOP_FOREGROUND_REMOVE);
+        stopSelf();
+    }
+    @Override public void onDestroy(){
+        stop=true;
+        if(worker!=null)worker.interrupt();
+        super.onDestroy();
+    }
+}
