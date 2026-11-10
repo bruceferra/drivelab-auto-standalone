@@ -57,7 +57,9 @@ Observación del propietario (10/11): `2068` izquierdo; `2069` derecho. En la in
 
 **Release Receiver 0.2.15 publicada:** [v0.2.15/latest](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.15) y [GitHub Actions 42838320184 completada con éxito](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/42838320184), misma firma que Receiver v0.2.14, con `receiver.json` para instalar por el actualizador interno. Sender continúa v0.2.13 y `sender.json` mantuvo digest idéntico al anterior. Nuevo [TABLERO T1](TABLERO_T1_RECEIVER_V0_2_15.md) agrega tarjetas de dos tanques completos, triple distancia y CI186/SOC lectura manual con CSV privado exportable. Pendiente confirmar uso físico en auto y ampliar TRIP A/B; no modifica espejo/ventanas, mapa ni viajes.
 
-## Qué aportar al expediente desde la solapa de consumo
+**UX espejos y ensayo de duraciones (10/11):** el usuario constató con una marca fija que **500/1.000/2.000 ms desplazan lo mismo**; por tanto la duración enviada por Binder no equivale a movimiento proporcional. La calibración por tiempo continuo queda **NO VALIDADA**: investigar paso OEM por transición o mecanismo nativo HOLD. Revisión Receiver 0.2.16: resultados RAW 2068/2069 visibles justo bajo el botón, marcha y HAL también junto a los suyos, elimina carteles modales en movimiento de espejos y plegado; mantiene bloqueo real en P, velocidad 0 y liberación, con botones 500 ms solamente. Plegado estándar no funciona por permiso privilegiado; no mandar códigos desconocidos. Sender y tablero no cambian. [Informe](RECEIVER_ESPEJOS_CALIBRACION_TEMPORAL_2026-11-10.md).
+
+## Qué aportar al expediente desde la solapa de consumo## Qué aportar al expediente desde la solapa de consumo
 
 Registrar cada ensayo nuevo como:
 1. Fecha/hora y condición (EV/HEV, conectado o no, carga/repostaje, nivel, km).
