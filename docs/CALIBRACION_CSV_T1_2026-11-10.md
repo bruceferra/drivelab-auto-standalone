@@ -61,6 +61,10 @@ El usuario observó SOC pasar por **21% al salir de autopista y 18% en ciudad**,
 - **PENDIENTES:** CSV 10/11; valores de resistencia variable, SOC y RPM al mismo timestamp; evento exacto de corte térmico; volumen ingresado al surtidor tras el corte. **No adelantar el final del ciclo ni incorporar ajustes de firmware/Receiver** en función de este único tramo.
 - Mantener el historial del segundo tanque y seguir separando energía eléctrica de combustible. Aun si una relación local de litros OEM/km mejora en ciudad, no demuestra eficiencia instantánea de gasolina para el motor, porque el híbrido alterna energía de batería.
 
+### Cierre definitivo del segundo ciclo — foto del surtidor y CSV extendido
+
+El usuario documentó el 10/11 **66,230 L al primer corte sin sobrellenado**, con **887 km** Jetour. El consumo por reposición es **7,47 L/100 km**; el primer ciclo había sido **66,865 L al primer corte / ~950 km ≈7,04 L/100 km**, con diferente precisión de distancia. El CSV extendido registra **5821** timestamps e incluye exactamente las **4938** filas del CSV anterior. Inicia recarga a las **11:29:19**; el nivel OEM pasa de 5,3 a 67,0 L a las **11:33:33**. La diferencia es **61,7 L de indicador, pero 66,230 L físicos de surtidor**. La bandera `sobrellenado=1` es una interpretación del exportador que contradice la observación de no haber sobrellenado; **NO usarla como hecho**. El histórico previo del 03/11 reportó 66,865 L al primer corte, luego ~67,0 L al completar, por lo cual la condición física del segundo corte no es idéntica. **Se completó el segundo repostaje pendiente**. Metodología, discrepancias, hashes, tres distancias y datos de costo están en el [documento canónico de cierre](CIERRE_SEGUNDO_TANQUE_T1_2026-11-10.md).
+
 ## Calidad de distancia: no promediar sensores incompatibles
 
 Un ensayo en el mismo ciclo informó Jetour **868,5 km**, DriveLab GPS **873,66 km** y app externa **848,6 km**. Las fuentes tienen errores y metodologías diferentes y no deben promediarse. Diferencias contra Jetour: +5,16 km (+0,59%) y −19,9 km (−2,29%), respectivamente.

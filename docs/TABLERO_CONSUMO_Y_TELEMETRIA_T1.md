@@ -120,6 +120,12 @@ Con el archivo original T1Launcher T1N134 entregado por el usuario (SHA-256 veri
 
 El mismo análisis localizó el comando de retrovisor **2069** y lectura de marcha **1033**, pero estas órdenes **no se integran** al Receiver hasta validación física. Detalles, fuente DEX y advertencias en [extracción del APK original](EXTRACCION_T1LAUNCHER_T1N134_2026-11-10.md).
 
+## Actualización con el segundo repostaje real y primer tablero (10/11/2026)
+
+**Evidencia cerrada:** [cierre del segundo tanque y CSV posterior a carga](CIERRE_SEGUNDO_TANQUE_T1_2026-11-10.md). El propietario aportó foto del surtidor con **66,230 L reales, primer corte SIN sobrellenado, 887 km Jetour** y corte térmico a **5,3 L OEM**. La estimación de consumo entre cortes es **7,47 L/100 km**. Comparativo histórico: **66,865 L / ~950 km / ~7,04 L/100 km**. **No** etiquetar las cifras como caudal de gasolina del motor por ser PHEV y depender del SOC y kilómetros eléctricos. CSV extendido del 10/11, 5821 filas (incluye 4938 filas del archivo previo), detecta carga **11:29:19–11:33:33**, OEM **5,3→67,0 L** (aumento **61,7 L**), mientras el surtidor registró **66,230 L** (diferencia 4,530 L). El indicador de `sobrellenado=1` es **falso positivo semántico** frente a la declaración de carga sin completar, no prueba desbordamiento.
+
+[Propuesta del TABLERO T1 en Receiver v0.2.15](TABLERO_T1_RECEIVER_V0_2_15.md): tarjetas de repostaje, contraste 887/867/895,089 km, lecturas manuales CI186/SOC y registro local exportable. **No se ha implementado TRIP A/B persistente**, distancia propia continua, kWh por origen ni curva de litros físicos validada. La decisión de calcular con **surtidor + CSV + flotante y no con algoritmo viejo de T1Launcher** sigue irrevocable.
+
 ## Fuentes para profundizar
 
 - Informe privado de análisis estático T1Launcher T1N134, 2026-11-04 (muestra SHA-256 6765a8fcc0645a98424de43c1e122ce771883dd46d6d6ca7264cbe47c94fd480).
