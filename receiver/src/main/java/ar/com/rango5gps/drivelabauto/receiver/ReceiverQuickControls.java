@@ -5,6 +5,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.TextView;
@@ -21,6 +22,8 @@ final class ReceiverQuickControls {
     private final VehicleWindowGroup windows;
     private final PedestrianAlertControl avas;
     private TextView status,config;
+    private Button mirrorAuto,mirrorManual,interiorMode,airAuto;
+    private Button leftMinus,leftPlus,rightMinus,rightPlus;
     ReceiverQuickControls(Activity a){
         activity=a;fold=new MirrorPulsePilot(a);
         windows=new VehicleWindowGroup(a);
@@ -54,6 +57,20 @@ final class ReceiverQuickControls {
         parent.addView(b,new LinearLayout.LayoutParams(0,68,1));
         return b;
     }
+    /** Distinct pressed/unpressed styling on actual persisted selected state. */
+    private void styleSelected(Button button,boolean selected,int base){
+        if(button==null)return;
+        GradientDrawable bg=new GradientDrawable();
+        bg.setCornerRadius(17);
+        bg.setColor(selected?base:0xFF7A8690);
+        bg.setStroke(selected?6:2,selected?0xFFFFE08A:0xFFC4CED6);
+        button.setBackgroundTintList(null);
+        button.setBackground(bg);
+        button.setTextColor(Color.WHITE);
+        button.setTypeface(null,selected?
+            android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
+        button.setSelected(selected);
+    }
     private LinearLayout row(LinearLayout root){
         LinearLayout r=new LinearLayout(activity);
         r.setOrientation(LinearLayout.HORIZONTAL);
@@ -70,8 +87,8 @@ final class ReceiverQuickControls {
         LinearLayout a=row(root);
         button(a,"PLEGAR ESPEJOS",PURPLE,()->fold(false));
         button(a,"DESPLEGAR ESPEJOS",BLUE,()->fold(true));
-        button(a,"ESPEJOS AUTO",GREEN,()->setMirrorMode(true));
-        button(a,"ESPEJOS MANUAL",ORANGE,()->setMirrorMode(false));
+        mirrorAuto=button(a,"ESPEJOS AUTO",GREEN,()->setMirrorMode(true));
+        mirrorManual=button(a,"ESPEJOS MANUAL",ORANGE,()->setMirrorMode(false));
 
         LinearLayout b=row(root);
         button(b,"BAJAR ESPEJOS",BLUE,()->move(false));
@@ -81,16 +98,16 @@ final class ReceiverQuickControls {
 
         LinearLayout c=row(root);
         button(c,"ALARMA PEATÓN ON/OFF",RED,()->avas());
-        button(c,"SIEMPRE AIRE INTERIOR",GREEN,()->setAir(false));
-        button(c,"AIRE AUTO",GREY,()->setAir(true));
+        interiorMode=button(c,"SIEMPRE AIRE INTERIOR",GREEN,()->setAir(false));
+        airAuto=button(c,"AIRE AUTO",GREY,()->setAir(true));
         button(c,"TABLERO / TRIP",BLUE,()->activity.startActivity(
             new Intent(activity,T1TankDashboardActivity.class)));
 
         LinearLayout d=row(root);
-        button(d,"IZQ −",GREY,()->adjust(MirrorAutomationService.LEFT,-1));
-        button(d,"IZQ +",TEAL,()->adjust(MirrorAutomationService.LEFT,1));
-        button(d,"DER −",GREY,()->adjust(MirrorAutomationService.RIGHT,-1));
-        button(d,"DER +",TEAL,()->adjust(MirrorAutomationService.RIGHT,1));
+        leftMinus=button(d,"IZQ −",GREY,()->adjust(MirrorAutomationService.LEFT,-1));
+        leftPlus=button(d,"IZQ +",TEAL,()->adjust(MirrorAutomationService.LEFT,1));
+        rightMinus=button(d,"DER −",GREY,()->adjust(MirrorAutomationService.RIGHT,-1));
+        rightPlus=button(d,"DER +",TEAL,()->adjust(MirrorAutomationService.RIGHT,1));
 
         config=new TextView(activity);config.setTextSize(14);
         config.setPadding(8,8,8,4);root.addView(config);
@@ -108,6 +125,14 @@ final class ReceiverQuickControls {
         boolean interior=RecirculationGuardService.MODE_INTERIOR.equals(
             a.getString(RecirculationGuardService.MODE,
                 RecirculationGuardService.MODE_AUTO));
+        styleSelected(mirrorAuto,on,GREEN);
+        styleSelected(mirrorManual,!on,ORANGE);
+        styleSelected(interiorMode,interior,GREEN);
+        styleSelected(airAuto,!interior,GREY);
+        if(leftMinus!=null)leftMinus.setText("IZQ − ("+l+")");
+        if(leftPlus!=null)leftPlus.setText("IZQ + ("+l+")");
+        if(rightMinus!=null)rightMinus.setText("DER − ("+r+")");
+        if(rightPlus!=null)rightPlus.setText("DER + ("+r+")");
         config.setText("Espejos: "+(on?"AUTO":"MANUAL")+
             "  · pasos por lado: IZQ "+l+" / DER "+r+
             "  · aire: "+(interior?"SIEMPRE INTERIOR":"AUTO")+
@@ -131,7 +156,7 @@ final class ReceiverQuickControls {
         }
         if(busy()){message("Otra orden de control sigue en curso");return;}
         if(!fold.testFold2003(unfold,this::message))
-            message("No se inició plegado: comprobá P y velocidad cero");
+            message("No se inició plegado: comprobá la marcha y la velocidad baja");
         else message("Verificando 2003 y enviando una orden si hace falta…");
     }
     private void windows(int operation){
