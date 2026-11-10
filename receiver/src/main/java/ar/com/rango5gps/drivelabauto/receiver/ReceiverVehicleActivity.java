@@ -156,10 +156,9 @@ public final class ReceiverVehicleActivity extends Activity {
     private void renderVehicle(LinearLayout body){
         section(body,"ESPEJOS · CONTROL MANUAL EN P");
         mirrorView=status(body,mirrorStatus);
-        label(body,"Validado físicamente: derecho 2069=1 SUBE, 2069=2 BAJA "+
-            "(cuatro pulsos y retorno). Izquierdo ID 2068: candidato SIN validar. "+
-            "Las órdenes manuales duran hasta 2.000 ms y se liberan con valor 0. "+
-            "Vehículo estacionado en P, velocidad 0, observando el retrovisor.",13);
+        label(body,"Derecho 2069: 1 SUBE, 2 BAJA. Izquierdo: 2068 en ensayo. "+
+            "Un toque ejecuta un movimiento breve y libera a 0. "+
+            "El piloto exige P y velocidad cero.",13);
         button(body,"LEER MARCHA Y VELOCIDAD · SIN MOVER",()->{
             if(vehicleBusy()){
                 updateMirrorGear("Otra consulta OEM está en curso");return;
@@ -212,16 +211,9 @@ public final class ReceiverVehicleActivity extends Activity {
         downRight.setOnClickListener(v->confirmMirrorPulse(2069,2,500));
         rightRow.addView(downRight,new LinearLayout.LayoutParams(0,64,1));
         body.addView(rightRow);
-        button(body,"DERECHO · BAJAR 1.000 ms · COMPARAR",()->
-            confirmMirrorPulse(2069,2,1000));
-        button(body,"DERECHO · SUBIR 1.000 ms · COMPARAR",()->
-            confirmMirrorPulse(2069,1,1000));
-        button(body,"DERECHO · BAJAR 2.000 ms · ENSAYO LIMITADO",()->
-            confirmMirrorPulse(2069,2,2000));
-        button(body,"DERECHO · SUBIR 2.000 ms · ENSAYO LIMITADO",()->
-            confirmMirrorPulse(2069,1,2000));
-        button(body,"DERECHO · PULSO CORTO 120 ms PARA COMPARAR",()->
-            confirmMirrorPulse(2069,2,120));
+        label(body,"Prueba física: 500, 1.000 y 2.000 ms producen el mismo "+
+            "desplazamiento observable. Se conserva solo 500 ms para no "+
+            "mandar una orden más larga sin beneficio.",12);
         section(body,"IZQUIERDO · 2068 SIN VALIDACIÓN FÍSICA");
         label(body,"Códigos candidatos. No se conoce todavía si 1/2 corresponde "+
             "a subir/bajar ni si ese ID acepta órdenes en esta unidad. "+
@@ -237,10 +229,6 @@ public final class ReceiverVehicleActivity extends Activity {
         leftTwo.setOnClickListener(v->confirmMirrorPulse(2068,2,500));
         leftRow.addView(leftTwo,new LinearLayout.LayoutParams(0,64,1));
         body.addView(leftRow);
-        button(body,"IZQUIERDO · ORDEN 1 · 1.000 ms (NO VALIDADO)",()->
-            confirmMirrorPulse(2068,1,1000));
-        button(body,"IZQUIERDO · ORDEN 2 · 1.000 ms (NO VALIDADO)",()->
-            confirmMirrorPulse(2068,2,1000));
         section(body,"PLEGADO DE ESPEJOS · OEM PERMISO PRIVILEGIADO");
         label(body,"Solo si Android habilita MIRROR_FOLD 287312709 de tipo Boolean "+
             "y Receiver posee el permiso OEM. Si falta, se informa sin mover nada. "+
