@@ -30,7 +30,8 @@ public final class MirrorAutomationService extends Service {
     public static final String PREFS="t1_mirror_auto";
     public static final String AUTO="auto", STATUS="status",LEFT="steps_left",
         RIGHT="steps_right",POSITION="position",LAST_GEAR="last_gear",LAST_SPEED="last_speed",
-        SERVICE_ACTIVE="service_active",LAST_RECONNECT="last_reconnect";
+        SERVICE_ACTIVE="service_active",LAST_RECONNECT="last_reconnect",
+        LAST_ERROR="last_error",LAST_TRANSITION="last_transition";
     public static final String ACTION_AUTO="t1.mirror.AUTO";
     public static final String ACTION_MANUAL="t1.mirror.MANUAL";
     public static final String ACTION_DOWN="t1.mirror.MANUAL_DOWN";
@@ -196,7 +197,10 @@ public final class MirrorAutomationService extends Service {
                         }
                         if(action==MirrorParkingPolicy.Action.TILT_ON_R){
                             prefs().edit().putString(STATUS,
-                                "AUTO · bajando espejos al entrar en R").apply();
+                                "AUTO · bajando espejos al entrar en R")
+                                .putString(LAST_TRANSITION,
+                                    "R detectada · iniciada bajada: "+
+                                    System.currentTimeMillis()).apply();
                             movementStarted=true;
                             int[] n=runPulses(oem,true,policy.requestedLeft(),
                                 policy.requestedRight(),true);
@@ -210,7 +214,10 @@ public final class MirrorAutomationService extends Service {
                             movementStarted=false;
                         }else if(action==MirrorParkingPolicy.Action.RESTORE_AFTER_NON_R_SPEED){
                             prefs().edit().putString(STATUS,
-                                "AUTO · recuperando posición D al superar 10 km/h").apply();
+                                "AUTO · recuperando posición D al superar 10 km/h")
+                                .putString(LAST_TRANSITION,
+                                    "No-R >10 km/h · retorno iniciado: "+
+                                    System.currentTimeMillis()).apply();
                             movementStarted=true;
                             int[] n=runPulses(oem,false,policy.leftIssued(),
                                 policy.rightIssued(),true);
@@ -233,6 +240,9 @@ public final class MirrorAutomationService extends Service {
                     if(prefs().getBoolean(AUTO,false)&&!movementStarted&&
                             pendingManual==0&&!stop){
                         readErrors++;
+                        prefs().edit().putString(LAST_ERROR,
+                            "LECTURA OEM · "+reason+" · "+
+                            System.currentTimeMillis()).apply();
                         prefs().edit().putString(STATUS,
                             "AUTO SIN DATOS OEM · reconectando servicio en segundo plano "+
                             "(fallos lectura "+readErrors+") · "+reason)
@@ -247,6 +257,8 @@ public final class MirrorAutomationService extends Service {
                         // Never automatically retry a possibly partial movement.
                         prefs().edit().putBoolean(AUTO,false)
                             .putString(POSITION,"INCIERTA · calibrar manualmente")
+                            .putString(LAST_ERROR,"AUTO DETENIDO · "+reason+
+                                " · "+System.currentTimeMillis())
                             .putString(STATUS,"AUTO DETENIDO · "+reason).apply();
                         break;
                     }
