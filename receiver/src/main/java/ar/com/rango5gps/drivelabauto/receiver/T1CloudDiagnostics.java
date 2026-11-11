@@ -9,6 +9,7 @@ import android.security.keystore.KeyProperties;
 import android.util.Base64;
 
 import org.json.JSONObject;
+import org.json.JSONArray;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -226,6 +227,23 @@ final class T1CloudDiagnostics {
             }
             return out.toByteArray();
         }
+    }
+    static JSONObject uploadTripBatch(Context c,String tripId,int offset,
+                                      JSONArray samples)throws Exception{
+        if(!active(c))throw new IllegalStateException(
+            "Primero activá nube con QR en DIAGNÓSTICO");
+        if(tripId==null||!tripId.matches("[0-9]{8}_[0-9]{6}")||
+            offset<0||samples==null||samples.length()<1||samples.length()>50)
+            throw new IllegalArgumentException("Lote TRIP inválido");
+        String[] d=device(c.getApplicationContext());
+        JSONObject body=new JSONObject();
+        body.put("tripId",tripId).put("rowOffset",offset).put("samples",samples);
+        JSONObject receipt=request("trip_batch",d[0],d[1],body);
+        if(!tripId.equals(receipt.optString("tripId",""))||
+            receipt.optInt("rowOffset",-1)!=offset||
+            receipt.optInt("count",-1)!=samples.length())
+            throw new IllegalStateException("Recibo TRIP inválido");
+        return receipt;
     }
     static void upload(Context c,File requested,Callback callback){
         Context app=c.getApplicationContext();
