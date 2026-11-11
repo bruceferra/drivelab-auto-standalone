@@ -1,0 +1,110 @@
+name: Signed Receiver 0.2.33 - experimental 500m consumption
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-receiver-0233.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: signed-drivelabauto-publication
+  cancel-in-progress: false
+jobs:
+  receiver:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    env:
+      RECEIVER_STORE_PASSWORD: ${{ secrets.RECEIVER_STORE_PASSWORD }}
+      RECEIVER_KEY_ALIAS: ${{ secrets.RECEIVER_KEY_ALIAS }}
+      RECEIVER_KEY_PASSWORD: ${{ secrets.RECEIVER_KEY_PASSWORD }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Android SDK 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool=$(command -v sdkmanager || find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)
+          "$tool" 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Restore original Receiver signing certificate
+        shell: bash
+        env:
+          RECEIVER_KEYSTORE_B64: ${{ secrets.RECEIVER_KEYSTORE_B64 }}
+        run: |
+          set -euo pipefail
+          test -n "$RECEIVER_KEYSTORE_B64"
+          test -n "$RECEIVER_STORE_PASSWORD" && test -n "$RECEIVER_KEY_ALIAS" && test -n "$RECEIVER_KEY_PASSWORD"
+          printf %s "$RECEIVER_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/receiver.p12"
+          chmod 600 "$RUNNER_TEMP/receiver.p12"
+          echo "RECEIVER_KEYSTORE=$RUNNER_TEMP/receiver.p12" >> "$GITHUB_ENV"
+      - name: Build Receiver and verify unchanged signing identity / Sender OTA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'bruceferra/drivelab-auto-standalone'
+          test "$GITHUB_REF_NAME" = main
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.32
+          ! gh release view v0.2.33 >/dev/null 2>&1
+          mkdir -p /tmp/prior output
+          gh release download v0.2.32 --pattern 'DriveLab-Auto-Receiver-v0.2.32.apk' --dir /tmp/prior
+          gh release download v0.2.32 --pattern 'sender.json' --dir /tmp/prior
+          cp /tmp/prior/sender.json output/sender.json
+          python3 - <<'PY'
+          import json
+          m=json.load(open('output/sender.json'))
+          assert m['packageName']=='ar.com.rango5gps.drivelabauto.sender'
+          assert m['versionCode']==17 and m['versionName']=='0.2.16'
+          assert m['apkUrl']=='https://github.com/bruceferra/drivelab-auto-standalone/releases/download/v0.2.16/DriveLab-Auto-Sender-v0.2.16.apk'
+          PY
+          gradle --no-daemon :receiver:assembleRelease
+          apk='receiver/build/outputs/apk/release/receiver-release.apk'
+          test -s "$apk"
+          sig="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          "$sig" verify --print-certs "$apk"
+          "$sig" verify --print-certs /tmp/prior/DriveLab-Auto-Receiver-v0.2.32.apk
+          oldcert=$("$sig" verify --print-certs /tmp/prior/DriveLab-Auto-Receiver-v0.2.32.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          newcert=$("$sig" verify --print-certs "$apk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          test -n "$oldcert" && test "$oldcert" = "$newcert"
+          badge=$("$aapt" dump badging "$apk" | head -1)
+          echo "$badge"
+          echo "$badge" | grep -F "package: name='ar.com.rango5gps.drivelabauto.receiver'"
+          echo "$badge" | grep -F "versionCode='34'"
+          echo "$badge" | grep -F "versionName='0.2.33'"
+          name='DriveLab-Auto-Receiver-v0.2.33.apk'
+          cp "$apk" "output/$name"
+          export RECEIVER_SHA=$(sha256sum "output/$name" | awk '{print $1}')
+          python3 - <<'PY'
+          import json,os
+          m={'packageName':'ar.com.rango5gps.drivelabauto.receiver',
+             'versionName':'0.2.33','versionCode':34,
+             'sha256':os.environ['RECEIVER_SHA'],
+             'apkUrl':'https://github.com/bruceferra/drivelab-auto-standalone/releases/download/v0.2.33/DriveLab-Auto-Receiver-v0.2.33.apk'}
+          with open('output/receiver.json','w') as f:json.dump(m,f,indent=2)
+          PY
+          sha256sum "output/$name" > output/receiver.sha256
+      - name: Publish Receiver 0.2.33 as latest, preserve Sender 0.2.16
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.32
+          gh release create v0.2.33 \
+            output/DriveLab-Auto-Receiver-v0.2.33.apk \
+            output/receiver.json output/sender.json output/receiver.sha256 \
+            --target "$GITHUB_SHA" --latest \
+            --title 'DriveLab Auto Receiver 0.2.33 - consumo OEM 500 m experimental' \
+            --notes 'Receiver 0.2.33: TABLERO T1 presenta suma de pares reales de 500m con litros y kWh HIPOTÉTICOS sin calibración física; audita fuente y desfase de distancia sin corregir el odómetro. Sincroniza TRIP reciente primero, con turnos entre archivos. Sin modificar funciones de control, viajes previos, Sender 0.2.16 ni vinculación QR. Requiere pruebas físicas.'
+          mkdir -p verify
+          gh release download v0.2.33 --pattern 'sender.json' --dir verify
+          gh release download v0.2.33 --pattern 'receiver.json' --dir verify
+          cmp output/sender.json verify/sender.json
+          cmp output/receiver.json verify/receiver.json
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.33
+          gh release view v0.2.33 --json assets --jq '.assets[].name'
