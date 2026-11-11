@@ -76,3 +76,13 @@ Antes de reducir DriveLab estable a viajes: definir catálogo de funcionalidades
 ## Cómo reportar cada prueba
 
 Registrar: fecha/hora, versión app, equipo/firmware, acción, estado anterior, resultado real, lectura posterior, código y tipo, archivo log/CSV, y **criterio PASÓ / FALLÓ / NO PROBADO**. No confundir “código compila”, “Binder acepta transacción”, “se mueve físicamente” y “valor útil para tablero”. No compartir IP, códigos de vinculación, VIN ni ubicación exacta en GitHub público.
+
+## Reparación de interfaz de vinculación T1/Xiaomi en Receiver 0.2.29
+
+Usuario reportó el 11/11/2026 que DriveLab Auto quedó sin conexión entre Xiaomi y la T1 y que al pulsar **VINCULAR XIAOMI · 6 DÍGITOS** parecía abrirse y cerrarse una pantalla. Sin logs ADB del equipo no es posible afirmar que fuera un crash.
+
+**Inspección del código anterior:** el botón de T1 **no tenía un diálogo modal**: enviaba `ReceiverService.ACTION_PAIR` para abrir una ventana de 120 s en el puerto TCP 48392. Solo cuando Sender desde Xiaomi iniciaba `beginPairing` por esa IP se creaba el código SAS de seis dígitos y se mostraba en la pantalla base. El `Runnable` cada 750 ms verificaba `pair_status` y hacía un `render()` **completo**, recreando la jerarquía de vistas y dando la impresión de que un panel desaparecía. El enlace ECDH guardado en `secret` en Receiver **no se borra** por iniciar `ACTION_PAIR` y una actualización de APK con misma firma/paquete conserva prefs.
+
+**Corrección Receiver 0.2.29:** se reemplazó el redibujado completo cada 750 ms por actualizaciones independientes de `TextView`: estado de vinculación, estado del listener 48392, IP T1 actual, contador de 120 s, presencia/ausencia **sin revelar** la clave instalada, y código SAS cuando llega del Xiaomi. `ReceiverService.listenPair` anota `pair_port_status` al abrir, cerrar o fallar el bind. Se muestran los tres pasos de confirmación T1/Xiaomi. No cambia la criptografía, el protocolo, los puertos, ni el orden de confirmación; se conservan TRIP, mapas y módulos OEM.
+
+**Procedimiento de recuperación:** T1 y Xiaomi en misma LAN; en Receiver tocar INICIAR RECEPTOR, anotar la IP y verificar `PUERTO 48392 ABIERTO`; luego VINCULAR XIAOMI, y dentro de 120 s en Sender introducir la IP actual y tocar MOSTRAR CÓDIGO, comparar SAS, autorizar primero en T1 y confirmar en Xiaomi. Si figura ERROR PUERTO 48392 o no aparece código, capturar texto de estado antes de borrar datos; no desinstalar. Si el Xiaomi conserva IP vieja, reemplazarla por IP nueva.
