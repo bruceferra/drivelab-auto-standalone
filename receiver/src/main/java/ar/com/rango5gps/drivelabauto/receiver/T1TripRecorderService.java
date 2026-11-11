@@ -38,7 +38,8 @@ public final class T1TripRecorderService extends Service {
         FUEL_PRICE="fuel_price", KWH_PRICE="kwh_price",
         SEG_FUEL_COUNT="seg_fuel_count", SEG_ELEC_COUNT="seg_elec_count",
         SEG_FUEL_LAST="seg_fuel_last", SEG_ELEC_LAST="seg_elec_last",
-        SEG_STATUS="seg_status";
+        SEG_STATUS="seg_status", SEG_FUEL_RAW_SUM="seg_fuel_raw_sum",
+        SEG_ELEC_RAW_SUM="seg_elec_raw_sum";
     private static final String CHANNEL="t1_trip_recorder";
     private static final int NOTIF_ID=7527;
     private volatile boolean stop,running;
@@ -100,6 +101,7 @@ public final class T1TripRecorderService extends Service {
             .putFloat(DISTANCE,0).putFloat(GAS_L,0).putFloat(EV_KWH,0)
             .putFloat(CHARGE_KWH,0).putInt(SAMPLES,0)
             .putInt(SEG_FUEL_COUNT,0).putInt(SEG_ELEC_COUNT,0)
+            .putFloat(SEG_FUEL_RAW_SUM,0f).putFloat(SEG_ELEC_RAW_SUM,0f)
             .remove(SEG_FUEL_LAST).remove(SEG_ELEC_LAST)
             .putString(SEG_STATUS,"Conectando callbacks OEM de 500 m…")
             .putString(STATUS,"TRIP iniciado · esperando primeras muestras").apply();
@@ -264,6 +266,8 @@ public final class T1TripRecorderService extends Service {
                     .putInt(SAMPLES,sampleCount)
                     .putInt(SEG_FUEL_COUNT,seg.fuelCount)
                     .putInt(SEG_ELEC_COUNT,seg.electricCount)
+                    .putFloat(SEG_FUEL_RAW_SUM,(float)seg.fuelRawSum)
+                    .putFloat(SEG_ELEC_RAW_SUM,(float)seg.electricRawSum)
                     .putString(SEG_STATUS,segments.snapshot())
                     .putString(SEG_FUEL_LAST,n(seg.fuelLast))
                     .putString(SEG_ELEC_LAST,n(seg.electricLast))
