@@ -35,7 +35,10 @@ public final class T1TripRecorderService extends Service {
         DISTANCE="distance_km", GAS_L="gas_l_est", EV_KWH="hv_out_kwh",
         CHARGE_KWH="hv_in_kwh", LAST_FUEL="last_oem_fuel", SAMPLES="samples",
         DIST_SOURCE="distance_source", START_TIME="start_time", END_TIME="end_time",
-        FUEL_PRICE="fuel_price", KWH_PRICE="kwh_price";
+        FUEL_PRICE="fuel_price", KWH_PRICE="kwh_price",
+        SEG_FUEL_COUNT="seg_fuel_count", SEG_ELEC_COUNT="seg_elec_count",
+        SEG_FUEL_LAST="seg_fuel_last", SEG_ELEC_LAST="seg_elec_last",
+        SEG_STATUS="seg_status";
     private static final String CHANNEL="t1_trip_recorder";
     private static final int NOTIF_ID=7527;
     private volatile boolean stop,running;
@@ -96,6 +99,9 @@ public final class T1TripRecorderService extends Service {
             .putLong(START_TIME,System.currentTimeMillis()).remove(END_TIME)
             .putFloat(DISTANCE,0).putFloat(GAS_L,0).putFloat(EV_KWH,0)
             .putFloat(CHARGE_KWH,0).putInt(SAMPLES,0)
+            .putInt(SEG_FUEL_COUNT,0).putInt(SEG_ELEC_COUNT,0)
+            .remove(SEG_FUEL_LAST).remove(SEG_ELEC_LAST)
+            .putString(SEG_STATUS,"Conectando callbacks OEM de 500 m…")
             .putString(STATUS,"TRIP iniciado · esperando primeras muestras").apply();
         T1TripSync.trigger(this,false);
         return startRecording();
@@ -177,6 +183,12 @@ public final class T1TripRecorderService extends Service {
         String finalStatus="TRIP terminado";
         File path=currentFile(this);
         if(path==null){cleanup("TRIP sin identificador");return;}
+        String tripId=p().getString(ID,"");
+        T1OemConsumptionCallbacks segments=new T1OemConsumptionCallbacks(this);
+        boolean segmentStarted=segments.startForTrip(tripId);
+        p().edit().putString(SEG_STATUS,segmentStarted?
+            "Grabando eventos OEM por tramo durante todo el TRIP":
+            "Listener OEM no iniciado; TRIP normal continúa").apply();
         long lastTick=SystemClock.elapsedRealtime();
         boolean anchored=T1FuelCalibration.p(this).getBoolean(T1FuelCalibration.ANCHORED,false);
         double baselineKm=T1FuelCalibration.p(this).getFloat(T1FuelCalibration.SINCE_KM,0f);
@@ -195,7 +207,10 @@ public final class T1TripRecorderService extends Service {
                 "rpm_valid_1034_raw,"+
                 "oem_1086_electric_int_raw,oem_1087_fuel_int_raw,"+
                 "hv_voltage_1063_int_raw,hv_current_1064_int_raw,"+
-                "oem_1090_float_raw,oem_1090_int_raw\n")
+                "oem_1090_float_raw,oem_1090_int_raw,"+
+                "oem_500m_fuel_event_count,oem_500m_electric_event_count,"+
+                "oem_500m_fuel_last_raw,oem_500m_electric_last_raw,"+
+                "oem_50km_fuel_callback_raw,oem_50km_electric_callback_raw\n")
                 .getBytes(StandardCharsets.UTF_8));
             T1TripTelemetry oem=new T1TripTelemetry(this);
             while(!stop){
@@ -218,6 +233,8 @@ public final class T1TripRecorderService extends Service {
                 String loc=latest==null?",,,":
                     n(latest.getLatitude())+","+n(latest.getLongitude())+","+
                         n(latest.getAccuracy())+",";
+                T1OemConsumptionCallbacks.SegmentSnapshot seg=
+                    segments.tripSegments();
                 String line=s.timestamp+","+s.gear+","+n(s.speed)+","+
                     n(s.fuel)+","+n(s.socInternal)+","+n(s.socDisplay)+","+
                     n(s.voltage)+","+n(s.current)+","+
@@ -232,7 +249,10 @@ public final class T1TripRecorderService extends Service {
                     s.rpmValid1034+","+
                     ni(s.oemElectric500mInt)+","+ni(s.oemFuel500mInt)+","+
                     ni(s.voltage1063Int)+","+ni(s.current1064Int)+","+
-                    n(s.voltageFloat1090)+","+ni(s.raw1090Int)+"\n";
+                    n(s.voltageFloat1090)+","+ni(s.raw1090Int)+","+
+                    seg.fuelCount+","+seg.electricCount+","+
+                    n(seg.fuelLast)+","+n(seg.electricLast)+","+
+                    n(seg.fuel50Last)+","+n(seg.electric50Last)+"\n";
                 out.write(line.getBytes(StandardCharsets.UTF_8));
                 sampleCount++;
                 if(sampleCount%5==0)out.flush();
@@ -242,15 +262,37 @@ public final class T1TripRecorderService extends Service {
                     .putFloat(CHARGE_KWH,(float)hvIn)
                     .putFloat(LAST_FUEL,(float)s.fuel)
                     .putInt(SAMPLES,sampleCount)
+                    .putInt(SEG_FUEL_COUNT,seg.fuelCount)
+                    .putInt(SEG_ELEC_COUNT,seg.electricCount)
+                    .putString(SEG_STATUS,segments.snapshot())
+                    .putString(SEG_FUEL_LAST,n(seg.fuelLast))
+                    .putString(SEG_ELEC_LAST,n(seg.electricLast))
                     .putString(DIST_SOURCE,gpsMode?"GPS":"VELOCIDAD_OEM_ESTIMADA")
-                    .putString(STATUS,"Grabando TRIP · "+sampleCount+" muestras").apply();
+                    .putString(STATUS,"Grabando TRIP · "+sampleCount+
+                        " muestras · tramos 500m nafta="+seg.fuelCount+
+                        " electricidad="+seg.electricCount).apply();
                 try{Thread.sleep(3000);}catch(InterruptedException e){if(stop)break;}
             }
             out.flush();
             T1TripSync.trigger(this,true);
         }catch(Exception ex){
             finalStatus="TRIP interrumpido · "+ex.getClass().getSimpleName();
-        }finally{cleanup(finalStatus);}
+        }finally{
+            segments.stop();
+            segments.awaitStopped(3500);
+            File events=segments.lastLog();
+            if(events!=null&&events.isFile()&&
+                events.getName().equals("trip_oem_"+tripId+".csv")&&
+                T1CloudDiagnostics.active(this)){
+                // Upload the tiny, GPS-free OEM segment log separately from
+                // sanitized TRIP samples. Never upload raw GPS trip CSV.
+                T1CloudDiagnostics.upload(this,events,null);
+            }
+            p().edit().putString(SEG_STATUS,
+                segments.snapshot()+"\nRegistro OEM del viaje: "+
+                (events==null?"sin archivo":events.getName())).apply();
+            cleanup(finalStatus);
+        }
     }
     private void cleanup(String message){
         running=false;
