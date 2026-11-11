@@ -66,7 +66,7 @@ public final class ReceiverActivity extends Activity {
         SharedPreferences p=prefs();
         quickControls.attach(body); // FIRST and always visible above menus
         label(body,"DRIVELAB AUTO · RECEIVER",23);
-        label(body,"v0.2.28 · eventos OEM 500 m + 50 km · Jetour T1",13);
+        label(body,"v0.2.29 · vinculación Xiaomi estable + OEM · Jetour T1",13);
         button(body,"VEHÍCULO · VENTANILLAS / ENERGÍA / CODE",()->
             startActivity(new Intent(this,ReceiverVehicleActivity.class)));
         button(body,"TABLERO T1 · TANQUES / CONSUMO / TELEMETRÍA",()->
