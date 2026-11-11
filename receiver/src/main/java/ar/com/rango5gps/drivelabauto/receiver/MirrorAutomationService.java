@@ -29,7 +29,8 @@ public final class MirrorAutomationService extends Service {
     static final Object OEM_MIRROR_MUTEX = new Object();
     public static final String PREFS="t1_mirror_auto";
     public static final String AUTO="auto", STATUS="status",LEFT="steps_left",
-        RIGHT="steps_right",POSITION="position",LAST_GEAR="last_gear",LAST_SPEED="last_speed";
+        RIGHT="steps_right",POSITION="position",LAST_GEAR="last_gear",LAST_SPEED="last_speed",
+        SERVICE_ACTIVE="service_active",LAST_RECONNECT="last_reconnect";
     public static final String ACTION_AUTO="t1.mirror.AUTO";
     public static final String ACTION_MANUAL="t1.mirror.MANUAL";
     public static final String ACTION_DOWN="t1.mirror.MANUAL_DOWN";
@@ -53,6 +54,7 @@ public final class MirrorAutomationService extends Service {
         // Require conscious re-arming before any new automatic movement.
         if(intent==null){
             prefs().edit().putBoolean(AUTO,false)
+                .putBoolean(SERVICE_ACTIVE,false)
                 .putString(STATUS,"AUTO suspendido tras reiniciar app; "+
                     "ajustá espejos D y volvé a activar AUTO").apply();
             stopSelf();return START_NOT_STICKY;
@@ -86,6 +88,7 @@ public final class MirrorAutomationService extends Service {
         if(running)return armed?START_STICKY:START_NOT_STICKY;
         stop=false;running=true;
         foreground();
+        prefs().edit().putBoolean(SERVICE_ACTIVE,true).apply();
         worker=new Thread(this::monitor,"T1-ReverseMirror-Automation");
         worker.start();
         return armed?START_STICKY:START_NOT_STICKY;
@@ -114,13 +117,19 @@ public final class MirrorAutomationService extends Service {
     }
     private void monitor(){
         MirrorParkingPolicy policy=new MirrorParkingPolicy(steps(LEFT),steps(RIGHT));
-        int errors=0;
+        int errors=0,readErrors=0;
+        boolean movementStarted=false;
+        MirrorAutomationOem oem=null;
         try{
             while(!stop){
                 boolean auto=prefs().getBoolean(AUTO,false);
                 int manual=pendingManual;
                 if(!auto&&manual==0)break;
-                try(MirrorAutomationOem oem=new MirrorAutomationOem(this)){
+                try{
+                    // ONE persistent Binder connection: do not bind/unbind
+                    // VehicleService every 250 ms. This monitor runs as a
+                    // foreground SERVICE independently of any Activity.
+                    if(oem==null)oem=new MirrorAutomationOem(this);
                     int rawGear=oem.gear();
                     MirrorAutomationOem.SpeedSample speedRead=oem.speedSample();
                     double speed=speedRead.kmh;
@@ -134,7 +143,7 @@ public final class MirrorAutomationService extends Service {
                             "%.1f (%s; 2148=%.1f; 1089=%.1f)",
                             speed,speedRead.source,speedRead.raw2148,
                             speedRead.raw1089)).apply();
-                    errors=0;
+                    errors=0;readErrors=0;
                     if(manual!=0){
                         pendingManual=0;
                         // No movement at speed; P/R/N/D allowed when stopped.
@@ -142,6 +151,7 @@ public final class MirrorAutomationService extends Service {
                             throw new IllegalStateException("Manual solo detenido: "+speed+" km/h");
                         int l=manual==3?10:steps(LEFT);
                         int r=manual==3?10:steps(RIGHT);
+                        movementStarted=true;
                         int[] counts=runPulses(oem,manual==1,l,r,false);
                         if(counts[0]!=l||counts[1]!=r)
                             throw new IllegalStateException("Movimiento manual incompleto");
@@ -167,6 +177,7 @@ public final class MirrorAutomationService extends Service {
                                     "posición física no confirmada")
                                 .putString(POSITION,"Manual: posición sin medir").apply();
                         }
+                        movementStarted=false;
                     }else if(auto){
                         MirrorParkingPolicy.Action action=policy.observe(gear,speed,
                             SystemClock.elapsedRealtime(),true);
@@ -186,6 +197,7 @@ public final class MirrorAutomationService extends Service {
                         if(action==MirrorParkingPolicy.Action.TILT_ON_R){
                             prefs().edit().putString(STATUS,
                                 "AUTO · bajando espejos al entrar en R").apply();
+                            movementStarted=true;
                             int[] n=runPulses(oem,true,policy.requestedLeft(),
                                 policy.requestedRight(),true);
                             policy.completeTilt(n[0],n[1]);
@@ -195,9 +207,11 @@ public final class MirrorAutomationService extends Service {
                                 "INCIERTA · bajada interrumpida").apply();
                             if(policy.phase()!=MirrorParkingPolicy.Phase.TILTED)
                                 throw new IllegalStateException("Bajada incompleta");
+                            movementStarted=false;
                         }else if(action==MirrorParkingPolicy.Action.RESTORE_AFTER_NON_R_SPEED){
                             prefs().edit().putString(STATUS,
                                 "AUTO · recuperando posición D al superar 10 km/h").apply();
+                            movementStarted=true;
                             int[] n=runPulses(oem,false,policy.leftIssued(),
                                 policy.rightIssued(),true);
                             policy.completeRestore(n[0],n[1]);
@@ -207,11 +221,27 @@ public final class MirrorAutomationService extends Service {
                                 "INCIERTA · retorno interrumpido").apply();
                             if(policy.phase()!=MirrorParkingPolicy.Phase.NORMAL)
                                 throw new IllegalStateException("Retorno incompleto");
+                            movementStarted=false;
                         }
                     }
                 }catch(Exception ex){
                     String reason=ex.getMessage()==null?
                         ex.getClass().getSimpleName():ex.getMessage();
+                    // On READ-only Binder errors keep the known policy state
+                    // and reconnect. Never retry an interrupted actuator run.
+                    if(oem!=null){oem.close();oem=null;}
+                    if(prefs().getBoolean(AUTO,false)&&!movementStarted&&
+                            pendingManual==0&&!stop){
+                        readErrors++;
+                        prefs().edit().putString(STATUS,
+                            "AUTO SIN DATOS OEM · reconectando servicio en segundo plano "+
+                            "(fallos lectura "+readErrors+") · "+reason)
+                            .putLong(LAST_RECONNECT,System.currentTimeMillis()).apply();
+                        try{Thread.sleep(Math.min(2500L,400L*readErrors));}
+                        catch(InterruptedException e){if(stop)break;}
+                        continue;
+                    }
+                    movementStarted=false;
                     if(pendingManual!=0)pendingManual=0;
                     if(prefs().getBoolean(AUTO,false)){
                         // Never automatically retry a possibly partial movement.
@@ -230,7 +260,9 @@ public final class MirrorAutomationService extends Service {
                 }
             }
         }finally{
+            if(oem!=null)oem.close();
             running=false;
+            prefs().edit().putBoolean(SERVICE_ACTIVE,false).apply();
             stopForeground(STOP_FOREGROUND_REMOVE);
             stopSelf();
         }
@@ -285,6 +317,7 @@ public final class MirrorAutomationService extends Service {
         stop=true;if(worker!=null)worker.interrupt();
         if(prefs().getBoolean(AUTO,false))
             prefs().edit().putBoolean(AUTO,false)
+                .putBoolean(SERVICE_ACTIVE,false)
                 .putString(STATUS,"AUTO detenido por Android; rearmar desde la app").apply();
         super.onDestroy();
     }
