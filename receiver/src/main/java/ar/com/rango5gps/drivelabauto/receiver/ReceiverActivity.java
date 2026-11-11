@@ -16,19 +16,13 @@ public final class ReceiverActivity extends Activity {
     private String message="";
     private ReceiverQuickControls quickControls;
     private final Handler pairUiHandler=new Handler(Looper.getMainLooper());
-    private String pairUiSnapshot="";
+    private TextView pairStatusView,pairCodeView,pairWindowView,pairPortView;
     private ScrollView currentScroll;
     private long lastAutoCheckElapsed=0;
     private final Runnable pairUiRefresh=new Runnable(){
         @Override public void run(){
             if(!visible||isFinishing()||isDestroyed())return;
-            SharedPreferences p=prefs();
-            String latest=p.getString("pair_status","")+"|"+
-                p.getString("pair_code","")+"|"+
-                p.getLong("approved_id",0)+"|"+
-                getSharedPreferences("drivelab_native_update",MODE_PRIVATE)
-                    .getString("last_install_status","");
-            if(!latest.equals(pairUiSnapshot))render();
+            refreshPairPanel();
             if(quickControls!=null)quickControls.refresh();
             pairUiHandler.postDelayed(this,750);
         }
@@ -66,12 +60,6 @@ public final class ReceiverActivity extends Activity {
     private void report(String text){message=text;render();}
     private void render(){
         final int restoreY=currentScroll==null?0:currentScroll.getScrollY();
-        SharedPreferences pairState=prefs();
-        pairUiSnapshot=pairState.getString("pair_status","")+"|"+
-            pairState.getString("pair_code","")+"|"+
-            pairState.getLong("approved_id",0)+"|"+
-            getSharedPreferences("drivelab_native_update",MODE_PRIVATE)
-                .getString("last_install_status","");
         ScrollView scroll=new ScrollView(this);
         LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);
         body.setPadding(22,20,22,35);scroll.addView(body);
@@ -94,11 +82,16 @@ public final class ReceiverActivity extends Activity {
             .setNegativeButton("CANCELAR",null)
             .setPositiveButton("DETENER",(d,w)->start(ReceiverService.ACTION_STOP)).show());
         button(body,"VINCULAR XIAOMI · 6 DÍGITOS",()->start(ReceiverService.ACTION_PAIR));
-        label(body,"Vinculación: "+p.getString("pair_status","Aún sin vincular"),14);
-        label(body,"El código aparece automáticamente cuando el Xiaomi "+
-            "inicia la vinculación. COMPARÁ los 6 dígitos en ambos equipos. "+
-            "Después autorizá en la T1 y confirmá en Xiaomi.",13);
-        if(p.contains("pair_code"))label(body,"CÓDIGO DE COMPARACIÓN: "+p.getString("pair_code",""),22);
+        label(body,"VINCULACIÓN · ESTA PANTALLA NO ABRE UN POPUP. "+
+            "El botón habilita 2 minutos el puerto 48392. "+
+            "Después seguí desde DriveLab Auto Sender en Xiaomi, usando la IP actual de T1.",14);
+        pairStatusView=pairLabel(body,"Vinculación: comprobando…",16);
+        pairPortView=pairLabel(body,"Puerto 48392: comprobando…",14);
+        pairWindowView=pairLabel(body,"Ventana de vinculación: no iniciada",14);
+        pairCodeView=pairLabel(body,"CÓDIGO: esperando solicitud de Xiaomi",20);
+        label(body,"PASO 1: T1 → VINCULAR (2 minutos). "+
+            "PASO 2: Xiaomi → Vincular Receiver → IP actual de T1 → MOSTRAR CÓDIGO. "+
+            "PASO 3: comparar ambos números → autorizar primero en T1 y confirmar en Xiaomi.",13);
         button(body,"AUTORIZAR CÓDIGO COINCIDENTE · PASO 1",this::approve);
         button(body,"ACTUALIZAR ESTADO",this::render);
         boolean auto=p.getBoolean("auto_boot",false);
@@ -154,10 +147,40 @@ public final class ReceiverActivity extends Activity {
             "La apertura en clúster depende de la ROM de la camioneta.",13);
         Receiver3DButtons.apply(body);
         setContentView(scroll);
+        refreshPairPanel();
         currentScroll=scroll;
         if(restoreY>0)scroll.post(()->{
             if(currentScroll==scroll)scroll.scrollTo(0,restoreY);
         });
+    }
+    private TextView pairLabel(LinearLayout parent,String value,int size){
+        TextView view=new TextView(this);
+        view.setText(value);view.setTextSize(size);
+        view.setTextIsSelectable(true);
+        view.setPadding(7,9,7,9);
+        parent.addView(view);
+        return view;
+    }
+    private void refreshPairPanel(){
+        if(pairStatusView==null||pairCodeView==null||
+            pairWindowView==null||pairPortView==null)return;
+        SharedPreferences p=prefs();
+        pairStatusView.setText("Estado de vinculación: "+
+            p.getString("pair_status","Sin solicitud registrada"));
+        pairPortView.setText("Conexión: "+p.getString("status","Sin iniciar")+
+            " | "+p.getString("pair_port_status","Puerto de vinculación: aún sin iniciar")+
+            " | IP T1: "+ReceiverService.localIp()+
+            " | Clave de T1: "+
+            (p.contains("secret")?"CONFIGURADA":"NO CONFIGURADA"));
+        long until=p.getLong("pair_until",0);
+        long ms=until-System.currentTimeMillis();
+        pairWindowView.setText(ms>0?
+            "VENTANA ABIERTA · quedan "+((ms+999)/1000)+" segundos para vincular.":
+            "Ventana cerrada. Tocá VINCULAR XIAOMI y empezá desde el teléfono.");
+        String code=p.getString("pair_code","");
+        pairCodeView.setText(code.matches("[0-9]{6}")?
+            "CÓDIGO T1: "+code+" · compará con Xiaomi":
+            "CÓDIGO: esperando que Xiaomi toque MOSTRAR CÓDIGO");
     }
     private void start(String action){
         Intent service=new Intent(this,ReceiverService.class).setAction(action);
