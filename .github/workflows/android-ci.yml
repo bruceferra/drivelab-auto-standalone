@@ -67,6 +67,23 @@ jobs:
           java -cp /tmp/oem-segment-test ar.com.rango5gps.drivelabauto.receiver.T1SegmentConsumptionTest
           grep -q 'MAX_BATCHES_PER_FILE=4' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripSync.java
           grep -q 'b.getName().compareTo(a.getName())' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripSync.java
+      - name: T1 passenger checkpoint ledger and GPS advisory regression (pure JVM)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-journey-test
+          javac -encoding UTF-8 -d /tmp/t1-journey-test \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1JourneyMetrics.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ZonePolicy.java \
+            receiver/tests/T1JourneyMetricsTest.java \
+            receiver/tests/T1ZonePolicyTest.java
+          java -cp /tmp/t1-journey-test ar.com.rango5gps.drivelabauto.receiver.T1JourneyMetricsTest
+          java -cp /tmp/t1-journey-test ar.com.rango5gps.drivelabauto.receiver.T1ZonePolicyTest
+          # The new cockpit must NEVER issue arbitrary OEM setters or mode writes.
+          ! grep -E 'transact\\(15|setInt\\(|setFloat\\(' \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ModeZoneStore.java
+          grep -q 'T1PremiumCockpitActivity' receiver/src/main/AndroidManifest.xml
       - name: Mirror parking R/D policy regression (pure JVM)
         shell: bash
         run: |
