@@ -29,7 +29,7 @@ final class T1TripSync {
     private static final String CURSOR="cursor_";
     private static final AtomicBoolean ACTIVE=new AtomicBoolean(false);
     private static volatile long lastAttempt=0;
-    private static final int BATCH=40,MAX_PER_PASS=12;
+    private static final int BATCH=40,MAX_PER_PASS=12,MAX_BATCHES_PER_FILE=4;
 
     private T1TripSync(){}
     static SharedPreferences prefs(Context c){
@@ -150,17 +150,22 @@ final class T1TripSync {
         if(files==null||files.length==0){
             prefs(c).edit().putString(STATUS,"No hay viajes CSV para subir").apply();return;
         }
-        Arrays.sort(files,(a,b)->a.getName().compareTo(b.getName()));
+        // Most recent TRIP first: a multi-thousand-row old trip must not hide
+        // a newly completed journey. Keep per-trip cursors so no history is lost.
+        Arrays.sort(files,(a,b)->b.getName().compareTo(a.getName()));
         int batches=0,uploaded=0;
         for(File file:files){
             String tripId=file.getName().substring(5,20);
             String cursorKey=CURSOR+tripId;
             int cursor=prefs(c).getInt(cursorKey,0);
-            while(batches<MAX_PER_PASS){
+            int thisFileBatches=0;
+            // Fair-share each pass across up to three pending trips; older
+            // trips continue to drain on subsequent automatic/manual passes.
+            while(batches<MAX_PER_PASS&&thisFileBatches<MAX_BATCHES_PER_FILE){
                 JSONArray batch=readBatch(file,cursor);
                 if(batch.length()==0)break;
                 post(c,tripId,cursor,batch);
-                cursor+=batch.length();uploaded+=batch.length();batches++;
+                cursor+=batch.length();uploaded+=batch.length();batches++;thisFileBatches++;
                 prefs(c).edit().putInt(cursorKey,cursor)
                     .putInt(SENT,prefs(c).getInt(SENT,0)+batch.length())
                     .putLong(LAST,System.currentTimeMillis())
