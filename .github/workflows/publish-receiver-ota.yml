@@ -53,12 +53,12 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'bruceferra/drivelab-auto-standalone'
           test "$GITHUB_REF_NAME" = 'main'
-          if gh release view 'v0.2.29' >/dev/null 2>&1; then
-            echo 'Release v0.2.29 already exists: no APK overwrite'
+          if gh release view 'v0.2.30' >/dev/null 2>&1; then
+            echo 'Release v0.2.30 already exists: no APK overwrite'
             exit 1
           fi
           mkdir -p /tmp/previous output
-          gh release download v0.2.28 --pattern 'DriveLab-Auto-Receiver-v0.2.28.apk' --dir /tmp/previous
+          gh release download v0.2.29 --pattern 'DriveLab-Auto-Receiver-v0.2.29.apk' --dir /tmp/previous
           gh release download v0.2.13 --pattern 'sender.json' --dir output
           gradle --no-daemon :receiver:assembleRelease
           apk='receiver/build/outputs/apk/release/receiver-release.apk'
@@ -66,16 +66,16 @@ jobs:
           aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
           sig="$ANDROID_HOME/build-tools/35.0.0/apksigner"
           "$sig" verify --print-certs "$apk"
-          "$sig" verify --print-certs /tmp/previous/DriveLab-Auto-Receiver-v0.2.28.apk
-          oldcert=$("$sig" verify --print-certs /tmp/previous/DriveLab-Auto-Receiver-v0.2.28.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          "$sig" verify --print-certs /tmp/previous/DriveLab-Auto-Receiver-v0.2.29.apk
+          oldcert=$("$sig" verify --print-certs /tmp/previous/DriveLab-Auto-Receiver-v0.2.29.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
           newcert=$("$sig" verify --print-certs "$apk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
           test -n "$oldcert" && test "$oldcert" = "$newcert"
           badge=$("$aapt" dump badging "$apk" | head -1)
           echo "$badge"
           echo "$badge" | grep -F "package: name='ar.com.rango5gps.drivelabauto.receiver'"
-          echo "$badge" | grep -F "versionCode='30'"
-          echo "$badge" | grep -F "versionName='0.2.29'"
-          name='DriveLab-Auto-Receiver-v0.2.29.apk'
+          echo "$badge" | grep -F "versionCode='31'"
+          echo "$badge" | grep -F "versionName='0.2.30'"
+          name='DriveLab-Auto-Receiver-v0.2.30.apk'
           cp "$apk" "output/$name"
           sha=$(sha256sum "output/$name" | awk '{print $1}')
           export RECEIVER_SHA="$sha"
@@ -84,10 +84,10 @@ jobs:
           repo=os.environ['GITHUB_REPOSITORY']
           manifest={
             'packageName':'ar.com.rango5gps.drivelabauto.receiver',
-            'versionName':'0.2.29',
-            'versionCode':30,
+            'versionName':'0.2.30',
+            'versionCode':31,
             'sha256':os.environ['RECEIVER_SHA'],
-            'apkUrl':f'https://github.com/{repo}/releases/download/v0.2.29/DriveLab-Auto-Receiver-v0.2.29.apk',
+            'apkUrl':f'https://github.com/{repo}/releases/download/v0.2.30/DriveLab-Auto-Receiver-v0.2.30.apk',
           }
           with open('output/receiver.json','w',encoding='utf-8') as f:
             json.dump(manifest,f,indent=2)
@@ -103,13 +103,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh release create v0.2.29 \
-            output/DriveLab-Auto-Receiver-v0.2.29.apk \
+          gh release create v0.2.30 \
+            output/DriveLab-Auto-Receiver-v0.2.30.apk \
             output/receiver.json output/sender.json output/receiver.sha256 \
             --target "$GITHUB_SHA" --latest \
-            --title 'DriveLab Auto Receiver 0.2.29 - vinculacion Xiaomi estable y diagnostico de puerto' \
-            --notes 'Receiver SOLO v0.2.29 (versionCode 30). Correccion de interfaz de vinculacion Xiaomi: mantiene panel visible mientras actualiza estado sin reconstruir la pantalla cada 750 ms, enseña IP actual de T1, disponibilidad del puerto 48392, contador de ventana de 2 minutos, codigo de comparacion y si la clave existente permanece configurada sin exponerla. Muestra error de bind de puerto separado de errores de autenticacion. No elimina vinculos ni borra TRIP, configuraciones ni datos OEM. Conserva lectura callbacks de 500m y 50km, radar, exportacion y todos los modulos Receiver previos. Certificado de firma verificado contra v0.2.28. Sender 0.2.13 sin cambios.'
+            --title 'DriveLab Auto Receiver 0.2.30 - modos PHEV y consumo 500m en segundo plano' \
+            --notes 'Receiver SOLO v0.2.30 (versionCode 31). Nueva pestaña DIAGNOSTICO: registro SOLO LECTURA de 3 minutos en servicio foreground de los codigos PHEV 1040/1041/1043/1045/1046, SOC, marcha, limpiaparabrisas 2125/2126, radar 2049/2107, aviso peatones 2074 y diez zonas de sensores HAL PDC delante/detras. En paralelo suscribe eventos OEM del consumo de 500 metros y 50 kilometros, persiste dos CSV crudos y permite exportarlos a Descargas/DriveLabAuto. Funciona incluso cuando la pantalla DriveLab esta cerrada y se usa el sistema original Jetour/Maps, dentro de los 3 min de prueba. Mapeos confirmados: 1043=1 EV, 2 HEV, 3 EV MAX azul; 1040=2 Smart, 4 Forzado. 1040=3 pendiente. La pagina inicial oculta botones menos frecuentes bajo Controles Avanzados y los ajustes de vinculacion/actualizacion bajo Conexion/Ajustes. Conserva servicios independientes Receiver, espejo AUTO y recirculacion al cambiar de pantalla. No automatiza apagado de AVAS ni modifica control PHEV, radar o limpiaparabrisas. No transforma promedios 50km en litros reales. Firma verificada contra v0.2.29; Sender 0.2.13 sin cambios.'
           tag=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
-          test "$tag" = 'v0.2.29'
-          gh release view v0.2.29 --json assets --jq '.assets[].name'
-          echo 'OTA v0.2.29 published as latest with receiver.json and preserved sender.json'
+          test "$tag" = 'v0.2.30'
+          gh release view v0.2.30 --json assets --jq '.assets[].name'
+          echo 'OTA v0.2.30 published as latest with receiver.json and preserved sender.json'
