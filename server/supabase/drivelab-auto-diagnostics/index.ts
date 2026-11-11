@@ -10,7 +10,7 @@ const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]
 const HEX64=/^[0-9a-f]{64}$/;
 const HEX48=/^[0-9a-f]{48}$/;
 const FILE=/^(?:phev_modes|oem_callbacks|code_diag)_[0-9]{8}_[0-9]{6}\.csv$/;
-const MAX_BODY=24500;
+const MAX_BODY=60000;
 const result=(code:number,body:object)=>new Response(JSON.stringify(body),{status:code,headers:JSON_HEADERS});
 const sha=async(x:string)=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(x))))
   .map(n=>n.toString(16).padStart(2,"0")).join("");
@@ -103,6 +103,47 @@ Deno.serve(async(req:Request)=>{
   const record=await authorized(id,token);
   if(!record)return result(401,{error:"device_not_authorized"});
   if(op==="status")return result(200,{ok:true,active:record.activated===true});
+  if(op==="trip_batch"){
+    if(record.activated!==true)return result(403,{error:"scan_qr_first"});
+    const trip=b.tripId,offset=b.rowOffset,samples=b.samples;
+    if(typeof trip!=="string"||!/^[0-9]{8}_[0-9]{6}$/.test(trip)||
+       typeof offset!=="number"||!Number.isInteger(offset)||offset<0||
+       !Array.isArray(samples)||samples.length<1||samples.length>50)
+      return result(422,{error:"bad_trip_batch"});
+    const limits:Record<string,[number,number]>={
+      ts:[1600000000000,2200000000000],gear:[-1,4],speed:[0,300],
+      fuel:[0,75],socInternal:[0,110],socDisplay:[0,110],
+      voltage:[0,1500],current:[-2000,2000],
+      rpm:[0,12000],motorOn:[-1,1],tripKm:[0,20000],
+      gasProxy:[0,1000],hvOut:[0,10000],hvIn:[0,10000],
+      oemElectricRolling50:[-200,200],oemFuelRolling50:[0,200],
+      oemElectricAverage500m:[-300,300],oemFuelAverage500m:[0,500],
+      rpmValid1034:[-1,100],
+      oemElectric500mInt:[-50000,50000],oemFuel500mInt:[-1,50000],
+      voltage1063Int:[-1,1500],current1064Int:[-2000,2000],
+      raw1090Float:[-100000,100000],raw1090Int:[-1000000000,1000000000]
+    };
+    const cleaned:Record<string,number|null>[]=[];
+    for(const sample of samples){
+      if(!sample||typeof sample!=="object"||Array.isArray(sample))
+        return result(422,{error:"bad_trip_sample"});
+      const src=sample as Record<string,unknown>;
+      const out:Record<string,number|null>={};
+      for(const [key,range] of Object.entries(limits)){
+        const value=src[key];
+        out[key]=typeof value==="number"&&Number.isFinite(value)&&
+          value>=range[0]&&value<=range[1]?value:null;
+      }
+      if(out.ts===null)return result(422,{error:"missing_trip_timestamp"});
+      cleaned.push(out);
+    }
+    await rest("drivelab_auto_trip_batches?on_conflict=trip_id,row_offset",{
+      method:"POST",headers:{"prefer":"resolution=ignore-duplicates,return=minimal"},
+      body:JSON.stringify({trip_id:trip,row_offset:offset,
+        row_count:cleaned.length,snapshot:cleaned})
+    });
+    return result(200,{ok:true,tripId:trip,rowOffset:offset,count:cleaned.length});
+  }
   if(op!=="upload")return result(422,{error:"unknown_action"});
   if(record.activated!==true)return result(403,{error:"scan_qr_first"});
   const {fileId,filename,chunkIndex,chunkTotal,sha256,content}=b;
