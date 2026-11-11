@@ -774,7 +774,21 @@ public final class ReceiverVehicleActivity extends Activity {
                 if(stream==null)throw new IllegalStateException("No se pudo abrir el archivo");
                 stream.write(b.toString().getBytes(StandardCharsets.UTF_8));
             }
-            exportStatus="CSV guardado en Descargas/DriveLabAuto: "+name;
+            exportStatus="CSV guardado en Descargas/DriveLabAuto: "+name+
+                " · enviando a nube si está activada…";
+            // Preserve local backup and make a separate bounded server copy.
+            String cloudName="code_diag_"+new SimpleDateFormat(
+                "yyyyMMdd_HHmmss",Locale.ROOT).format(new Date())+".csv";
+            java.io.File cloud=new java.io.File(
+                T1TripRecorderService.tripDir(this),cloudName);
+            try(java.io.FileOutputStream local=new java.io.FileOutputStream(cloud)){
+                local.write(b.toString().getBytes(StandardCharsets.UTF_8));
+            }
+            T1CloudDiagnostics.upload(this,cloud,(msg,url)->{
+                exportStatus="Descargas/DriveLabAuto/"+name+" · "+msg;
+                updateCloudUi(msg,url);
+                if(activeTab==2)render();
+            });
         }catch(Exception error){
             exportStatus="No se pudo exportar CSV: "+error.getClass().getSimpleName();
         }
