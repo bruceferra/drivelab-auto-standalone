@@ -24,8 +24,13 @@ final class T1TripTelemetry {
             voltage=Double.NaN,current=Double.NaN,
             counter1048=Double.NaN,counter1049=Double.NaN,
             oemElectricRolling50=Double.NaN,oemFuelRolling50=Double.NaN,
-            oemElectricAverage500m=Double.NaN,oemFuelAverage500m=Double.NaN;
-        int rpmValid1034=-1;
+            oemElectricAverage500m=Double.NaN,oemFuelAverage500m=Double.NaN,
+            voltageFloat1090=Double.NaN;
+        // Integer.MIN_VALUE means getter failed. -1 is preserved: it can be
+        // a *real OEM sentinel* rather than an Android exception.
+        int rpmValid1034=-1,oemElectric500mInt=Integer.MIN_VALUE,
+            oemFuel500mInt=Integer.MIN_VALUE,voltage1063Int=Integer.MIN_VALUE,
+            current1064Int=Integer.MIN_VALUE,raw1090Int=Integer.MIN_VALUE;
     }
     private final Context app;
     T1TripTelemetry(Context context){app=context.getApplicationContext();}
@@ -94,6 +99,9 @@ final class T1TripTelemetry {
     private static int safeInt(IntGetter f){
         try{return f.get();}catch(Exception e){return -1;}
     }
+    private static int diagnosticInt(IntGetter f){
+        try{return f.get();}catch(Exception e){return Integer.MIN_VALUE;}
+    }
     private static double safeFloat(FloatGetter f){
         try{double v=f.get();return Double.isFinite(v)?v:Double.NaN;}
         catch(Exception e){return Double.NaN;}
@@ -118,6 +126,12 @@ final class T1TripTelemetry {
                 s.socDisplay=safeFloat(()->floatValue(b,1062));
                 s.voltage=safeFloat(()->floatValue(b,1063));
                 s.current=safeFloat(()->floatValue(b,1064));
+                // Alternate typed OEM getters are diagnostics only. Do not
+                // feed unvalidated integer values into HV energy calculations.
+                s.voltage1063Int=diagnosticInt(()->intValue(b,1063));
+                s.current1064Int=diagnosticInt(()->intValue(b,1064));
+                s.voltageFloat1090=safeFloat(()->floatValue(b,1090));
+                s.raw1090Int=diagnosticInt(()->intValue(b,1090));
                 s.counter1048=safeFloat(()->floatValue(b,1048));
                 s.counter1049=safeFloat(()->floatValue(b,1049));
                 // OEM 50-km moving averages, independently confirmed against
@@ -129,6 +143,11 @@ final class T1TripTelemetry {
                 // never sum every snapshot as if each were a new segment.
                 s.oemElectricAverage500m=safeFloat(()->floatValue(b,1086));
                 s.oemFuelAverage500m=safeFloat(()->floatValue(b,1087));
+                // 1086/1087 returned -1 for an entire 177-sample 1.65 km trip.
+                // Compare int/float getters in parallel before considering
+                // callbacks. Never accumulate these values as trip litres.
+                s.oemElectric500mInt=diagnosticInt(()->intValue(b,1086));
+                s.oemFuel500mInt=diagnosticInt(()->intValue(b,1087));
                 s.recirc=safeInt(()->intValue(b,1004));
                 s.recircChange=safeInt(()->intValue(b,2101));
                 s.fold=safeInt(()->intValue(b,2003));
