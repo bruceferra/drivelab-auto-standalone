@@ -74,7 +74,8 @@ public final class ReceiverService extends Service {
             (intent==null&&prefs().getBoolean("keep_alive",false));
         if(!start)return START_NOT_STICKY;
         if(!running){
-            prefs().edit().putBoolean("keep_alive",true).apply();
+            prefs().edit().putBoolean("keep_alive",true)
+                .putString("pair_port_status","Iniciando puerto 48392…").apply();
             startForeground(7001,ongoing());
             running=true;
             prefs().edit().putString("status","Servidor iniciándose…")
@@ -185,6 +186,8 @@ public final class ReceiverService extends Service {
     private void listenPair(){
         try(ServerSocket server=new ServerSocket(BridgeCrypto.PAIR_PORT,3)){
             pairServer=server;server.setSoTimeout(1000);
+            prefs().edit().putString("pair_port_status",
+                "PUERTO 48392 ABIERTO · esperando Xiaomi").apply();
             while(running){
                 try(Socket client=server.accept()){
                     client.setSoTimeout(4500);
@@ -203,8 +206,19 @@ public final class ReceiverService extends Service {
                 }
             }
         }catch(Exception error){
-            prefs().edit().putString("pair_status","ERROR PUERTO 48392").apply();
-        }finally{pairServer=null;pending=null;}
+            prefs().edit()
+                .putString("pair_port_status",
+                    "ERROR PUERTO 48392 · "+error.getClass().getSimpleName())
+                .putString("pair_status",
+                    "NO SE PUEDE VINCULAR: puerto 48392 no disponible")
+                .apply();
+        }finally{
+            pairServer=null;pending=null;
+            // Preserve a concrete bind error if one was shown.
+            if(!prefs().getString("pair_port_status","").startsWith("ERROR"))
+                prefs().edit().putString("pair_port_status",
+                    "PUERTO 48392 CERRADO").apply();
+        }
     }
     private void reject(DataOutputStream out) throws Exception{
         out.writeInt(BridgeCrypto.PAIR_MAGIC);out.writeByte(13);out.flush();
@@ -274,7 +288,9 @@ public final class ReceiverService extends Service {
         try{if(navServer!=null)navServer.close();}catch(Exception ignored){}
         try{if(pairServer!=null)pairServer.close();}catch(Exception ignored){}
         pending=null;
-        prefs().edit().putBoolean("running",false).putString("status","DETENIDO").apply();
+        prefs().edit().putBoolean("running",false)
+            .putString("status","DETENIDO")
+            .putString("pair_port_status","PUERTO 48392 CERRADO").apply();
     }
     @Override public void onDestroy(){shutdown();super.onDestroy();}
     @Override public android.os.IBinder onBind(Intent intent){return null;}
