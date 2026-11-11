@@ -134,3 +134,24 @@ Se incorporan **sin alterar la fórmula del TRIP**, a la visualización del tabl
 **Diagnóstico:** La vía de getters `VehicleService.readInt/readFloat` ha quedado sin datos para `1086/1087` y `1090`. No repetir lecturas de 500 m por carretera esperando un cambio si devuelven centinela en ambas modalidades. El valor `1064` sí varía: preservar el float original y no reemplazarlo con el int `-1`. La potencia eléctrica y los kWh siguen sin poder calcularse de forma validada: no atribuir `V×A=0` cuando falta V.
 
 **Nueva pista del código original de los APK:** `ClusterInteraction.apk` define `IClusterInteraction.registerAvgFuCallback` y `registerAvgElecCallback` con callbacks `onAvgFuChanged` / `onAvgElecChanged`; se distinguen de `registerAvgFuCnsCallback`/`registerAvgElecCnsCallback` (promedios de 50 km). `ALVehicleService.apk` contiene listeners homólogos `ClusterManager$mAvgFuListener`, `ClusterManager$mAvgElecListener`. Es una **ruta alternativa potencial de solo suscripción** para intentar recibir datos de 500 m. Su existencia en DEX **no prueba que estén emitiendo eventos** en la variante de Argentina ni que acepten registros de terceros. Próximo desarrollo: investigar el contrato Binder de estas inscripciones, añadir un registro/desregistro controlado de eventos sin escritura del vehículo y contrastar contra el CSV de lectura, con errores explícitos. Considerar en paralelo buscar tensión HV en los callbacks OEM `IChargeVoltageCallback` y `IChargePowerInfoCallback`, distinguiendo tensión de carga de tensión del pack en movimiento.
+
+## Ensayo final: suscripción a eventos OEM de consumo, Receiver 0.2.28
+
+Análisis DEX original de ClusterInteraction.apk, contrato de IClusterInteraction$Stub:
+
+| Evento | Descriptor del callback | Registro Binder | Cancelación Binder | Transacción callback | Firma |
+|---|---|---:|---:|---:|---|
+| Nafta 500 m | IAvgFuCallback | **135** | **136** | 1 | onAvgFuChanged(float) |
+| Electricidad 500 m | IAvgElecCallback | **133** | **134** | 1 | onAvgElecChanged(float) |
+| Nafta 50 km | IAvgFuCnsCallback | **137** | **138** | 1 | onAvgFuCnsChanged(float) |
+| Electricidad 50 km | IAvgElecCnsCallback | **139** | **140** | 1 | onAvgElecCnsChanged(float) |
+
+Los cuatro métodos de registro del proxy son register...Callback(I...Callback) y devuelven void. Los callbacks reciben exactamente un float, sin parámetros extra. La interfaz del servicio sigue usando CiService y descriptor IClusterInteraction, previamente verificados para CI186. En Android se implementan objetos Binder locales con descriptor exacto, escucha onTransact(1) y responde writeNoException, sin necesidad de modificar archivos OEM ni cargar librerías OEM.
+
+**Implementación segura:** T1OemConsumptionCallbacks se enlaza a CiService con bindService de solo uso, registra cuatro callbacks, espera **como máximo 180 segundos** o hasta STOP, luego intenta desregistrar únicamente los callbacks que sí fueron aceptados, y libera el servicio. No invoca getters/setters ni manda comandos ECU. Verifica descriptor y registra errores por callback. Un rechazo no impide intentar las otras tres subscripciones. Si ninguna es aceptada, muestra error explícito.
+
+**Instrumentación:** en TABLERO / TRIP hay botones «ESCUCHAR EVENTOS OEM · 3 MIN», «DETENER ESCUCHA OEM», «EXPORTAR CSV EVENTOS OEM». Panel muestra inscripciones aceptadas y por canal número de eventos y último valor crudo. Se genera oem_callbacks_YYYYMMDD_HHMMSS.csv con marca de tiempo, canal y float recibido; la exportación a Descargas/DriveLabAuto usa MediaStore sin selector, preservando el original interno. Sin cambios en Sender, GPS, radar o fórmulas del TRIP.
+
+**Límites:** Que un registro sea aceptado no demuestra que lleguen eventos. Que no haya eventos con vehículo inmóvil no demuestra que no funcionen al circular 500 m. Los promedios de 50 km se escuchan como grupo de control, pero tampoco está garantizado que emitan cada 3 minutos. No sumar callbacks como litros; determinar si el evento representa tramo finalizado, ventana móvil o alguna otra unidad antes de utilizarlo. El voltaje HV sigue sin dato validado; la lectura de corriente 1064 no autoriza calcular kWh.
+
+**Seguridad y UX:** no tocar botones durante marcha. Iniciar la escucha estacionado y leer resultados nuevamente estacionado; no hace falta provocar maniobras ni conducir específicamente para obtener un evento.
