@@ -64,7 +64,21 @@ final class T1OemConsumptionCallbacks {
         app=context.getApplicationContext();
     }
     boolean busy(){return running.get();}
-    File lastLog(){return logFile;}
+    /**
+     * Resolve a previously finished OEM recording even after Activity recreation
+     * or switching screens. The test listener may be OFF while a CSV is still
+     * fully available for export. Only Receiver-generated CSV names are allowed.
+     */
+    File lastLog(){
+        File current=logFile;
+        if(current!=null&&current.isFile()&&current.length()>0)return current;
+        File[] saved=T1TripRecorderService.tripDir(app).listFiles(
+            f->f.isFile()&&f.getName().matches(
+                "oem_callbacks_[0-9]{8}_[0-9]{6}\\.csv"));
+        if(saved==null||saved.length==0)return null;
+        java.util.Arrays.sort(saved,(a,b)->a.getName().compareTo(b.getName()));
+        return saved[saved.length-1];
+    }
     String snapshot(){
         StringBuilder sb=new StringBuilder();
         sb.append(running.get()?
@@ -80,7 +94,13 @@ final class T1OemConsumptionCallbacks {
             }
         }
         sb.append("\nSin calibración: los eventos NO son litros ni kWh acumulados.");
-        if(logFile!=null)sb.append("\nRegistro local: ").append(logFile.getName());
+        File available=lastLog();
+        if(available!=null)
+            sb.append("\nCSV guardado: ").append(available.getName())
+                .append(running.get()?" (grabación activa)":
+                    " · disponible para EXPORTAR aunque el registro esté apagado");
+        else if(!running.get())
+            sb.append("\nSin CSV anterior; tocá ESCUCHAR EVENTOS OEM · 3 MIN para crear uno.");
         return sb.toString();
     }
     boolean start(){
