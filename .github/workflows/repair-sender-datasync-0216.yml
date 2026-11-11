@@ -1,0 +1,116 @@
+name: Signed Sender 0.2.16 fix Android FGS crash
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/repair-sender-datasync-0216.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: signed-drivelabauto-publication
+  cancel-in-progress: false
+jobs:
+  sender:
+    runs-on: ubuntu-24.04
+    env:
+      SENDER_STORE_PASSWORD: ${{ secrets.SENDER_STORE_PASSWORD }}
+      SENDER_KEY_ALIAS: ${{ secrets.SENDER_KEY_ALIAS }}
+      SENDER_KEY_PASSWORD: ${{ secrets.SENDER_KEY_PASSWORD }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Android SDK 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool=$(command -v sdkmanager || find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)
+          "$tool" 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Restore prior Sender signing certificate
+        shell: bash
+        env:
+          SENDER_KEYSTORE_B64: ${{ secrets.SENDER_KEYSTORE_B64 }}
+        run: |
+          set -euo pipefail
+          test -n "$SENDER_KEYSTORE_B64"
+          test -n "$SENDER_STORE_PASSWORD" && test -n "$SENDER_KEY_ALIAS" && test -n "$SENDER_KEY_PASSWORD"
+          printf %s "$SENDER_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/sender.p12"
+          chmod 600 "$RUNNER_TEMP/sender.p12"
+          echo "SENDER_KEYSTORE=$RUNNER_TEMP/sender.p12" >> "$GITHUB_ENV"
+      - name: Build Sender 0.2.16 and verify Android 14 FGS permissions and signer
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'bruceferra/drivelab-auto-standalone'
+          test "$GITHUB_REF_NAME" = 'main'
+          mkdir -p /tmp/previous output
+          gh release download v0.2.32 --pattern 'DriveLab-Auto-Sender-v0.2.15.apk' --dir /tmp/previous
+          gradle --no-daemon :sender:assembleRelease
+          apk='sender/build/outputs/apk/release/sender-release.apk'
+          test -s "$apk"
+          sig="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          old='/tmp/previous/DriveLab-Auto-Sender-v0.2.15.apk'
+          "$sig" verify --print-certs "$old"
+          "$sig" verify --print-certs "$apk"
+          oldcert=$("$sig" verify --print-certs "$old" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          newcert=$("$sig" verify --print-certs "$apk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          test -n "$oldcert" && test "$oldcert" = "$newcert"
+          badge=$("$aapt" dump badging "$apk" | head -1)
+          echo "$badge"
+          echo "$badge" | grep -F "package: name='ar.com.rango5gps.drivelabauto.sender'"
+          echo "$badge" | grep -F "versionCode='17'"
+          echo "$badge" | grep -F "versionName='0.2.16'"
+          "$aapt" dump permissions "$apk" | grep -F "android.permission.FOREGROUND_SERVICE_DATA_SYNC"
+          "$aapt" dump xmltree "$apk" AndroidManifest.xml | grep -F 'RouteDispatchService'
+          name='DriveLab-Auto-Sender-v0.2.16.apk'
+          cp "$apk" "output/$name"
+          sha=$(sha256sum "output/$name" | awk '{print $1}')
+          export SENDER_SHA="$sha"
+          python3 - <<'PY'
+          import os,json
+          url='https://github.com/'+os.environ['GITHUB_REPOSITORY']+'/releases/download/v0.2.16/DriveLab-Auto-Sender-v0.2.16.apk'
+          m={'packageName':'ar.com.rango5gps.drivelabauto.sender',
+             'versionName':'0.2.16','versionCode':17,
+             'sha256':os.environ['SENDER_SHA'],'apkUrl':url}
+          with open('output/sender.json','w') as f:json.dump(m,f,indent=2)
+          PY
+      - name: Publish Sender asset on historical tag; repair latest OTA manifest
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.32
+          name='DriveLab-Auto-Sender-v0.2.16.apk'
+          # v0.2.16 is an older Receiver release. Preserve its APK and manifests.
+          gh release view v0.2.16 >/dev/null
+          if gh release view v0.2.16 --json assets --jq '.assets[].name' | grep -Fxq "$name"; then
+            mkdir -p old
+            gh release download v0.2.16 --pattern "$name" --dir old
+            test "$(sha256sum "old/$name" | cut -d' ' -f1)" = "$(sha256sum "output/$name" | cut -d' ' -f1)"
+          else
+            gh release upload v0.2.16 "output/$name"
+          fi
+          gh release view v0.2.16 --json assets --jq '.assets[].name' | grep -Fx "$name"
+          # Current Sender's legacy strict updater validates tag == version.
+          # Replace only sender.json from latest Receiver tag; keep receiver.json
+          # and both APKs untouched, and preserve user pairing.
+          gh release upload v0.2.32 output/sender.json --clobber
+          gh release edit v0.2.32 --latest
+          mkdir -p verify
+          gh release download v0.2.32 --pattern 'sender.json' --dir verify
+          cmp output/sender.json verify/sender.json
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.32
+          python3 - <<'PY'
+          import pathlib,hashlib,json
+          m=json.loads(pathlib.Path('verify/sender.json').read_text())
+          assert m['versionName']=='0.2.16' and m['versionCode']==17
+          assert m['apkUrl']=='https://github.com/bruceferra/drivelab-auto-standalone/releases/download/v0.2.16/DriveLab-Auto-Sender-v0.2.16.apk'
+          assert m['sha256']==hashlib.sha256(pathlib.Path('output/DriveLab-Auto-Sender-v0.2.16.apk').read_bytes()).hexdigest()
+          print('PASS: Sender updater can verify 0.2.16, signature unchanged; Receiver 0.2.32 untouched.')
+          PY
