@@ -53,6 +53,7 @@ final class T1OemConsumptionCallbacks {
     private final AtomicBoolean running=new AtomicBoolean(false);
     private final Object dataLock=new Object();
     private final int[] count=new int[4];
+    private final double[] rawSums=new double[2]; // 500m callback sums, raw and uncalibrated
     private final String[] last={"—","—","—","—"};
     private volatile String state="Sin prueba. Registro de eventos apagado.";
     private volatile String registration="Sin registros.";
@@ -69,15 +70,18 @@ final class T1OemConsumptionCallbacks {
     static final class SegmentSnapshot {
         final int fuelCount,electricCount;
         final float fuelLast,electricLast,fuel50Last,electric50Last;
-        SegmentSnapshot(int fu,int el,float f,float e,float f50,float e50){
+        final double fuelRawSum,electricRawSum;
+        SegmentSnapshot(int fu,int el,float f,float e,float f50,float e50,
+                        double fuelSum,double electricSum){
             fuelCount=fu;electricCount=el;fuelLast=f;electricLast=e;
             fuel50Last=f50;electric50Last=e50;
+            fuelRawSum=fuelSum;electricRawSum=electricSum;
         }
     }
     SegmentSnapshot tripSegments(){
         synchronized(dataLock){
             return new SegmentSnapshot(count[0],count[1],lastRaw[0],
-                lastRaw[1],lastRaw[2],lastRaw[3]);
+                lastRaw[1],lastRaw[2],lastRaw[3],rawSums[0],rawSums[1]);
         }
     }
 
@@ -137,6 +141,7 @@ final class T1OemConsumptionCallbacks {
             for(int i=0;i<4;i++){
                 count[i]=0;last[i]="—";lastRaw[i]=Float.NaN;
             }
+            rawSums[0]=0d;rawSums[1]=0d;
         }
         tripMode=forTrip;
         tripId=id;
@@ -185,6 +190,7 @@ final class T1OemConsumptionCallbacks {
             count[channel]++;
             last[channel]=value;
             lastRaw[channel]=raw;
+            if(channel<2&&Float.isFinite(raw))rawSums[channel]+=raw;
             File file=logFile;
             if(file!=null){
                 String row=System.currentTimeMillis()+","+
