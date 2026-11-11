@@ -44,6 +44,24 @@ public final class BridgeCrypto {
         long v=((h[0]&255L)<<24)|((h[1]&255L)<<16)|((h[2]&255L)<<8)|(h[3]&255L);
         return String.format(Locale.US,"%06d",v%1000000L);
     }
+    /**
+     * The one-time QR (192 random bits shown physically on the T1) authenticates
+     * the Sender's ephemeral ECDH public key. Neither the QR token nor a PIN is
+     * sent in plaintext over LAN; only the HMAC of the public key is transmitted.
+     * Replaying this MAC with another public key cannot authorize pairing.
+     */
+    public static byte[] qrPairProof(String ticket,byte[] senderPublicKey)throws Exception{
+        if(ticket==null||!ticket.matches("[0-9a-f]{48}")||
+            senderPublicKey==null||senderPublicKey.length<70||
+            senderPublicKey.length>200)
+            throw new GeneralSecurityException("Invalid QR ticket/public key");
+        byte[] key=new byte[24];
+        for(int i=0;i<24;i++)
+            key[i]=(byte)Integer.parseInt(ticket.substring(i*2,i*2+2),16);
+        Mac hmac=Mac.getInstance("HmacSHA256");
+        hmac.init(new SecretKeySpec(key,"HmacSHA256"));
+        return hmac.doFinal(senderPublicKey);
+    }
     public static String packKey(byte[] key){return Base64.getUrlEncoder().withoutPadding().encodeToString(key);}
     public static byte[] unpackKey(String s) throws Exception {
         if(s==null||!s.matches("[A-Za-z0-9_-]{22}"))throw new GeneralSecurityException("Invalid key");
