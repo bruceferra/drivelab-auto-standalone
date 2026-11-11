@@ -46,7 +46,9 @@ public final class T1TankDashboardActivity extends Activity {
     private final AtomicBoolean sampling=new AtomicBoolean(false);
     private volatile boolean visible;
     private T1InstrumentView instruments;
-    private TextView liveStatus,rangeStatus,tripStatus,tripActionStatus,exportStatus,formStatus,syncStatus,oemEventsStatus;
+    private TextView liveStatus,rangeStatus,tripStatus,tripActionStatus,exportStatus,formStatus,syncStatus,oemEventsStatus,segmentEstimateStatus;
+    private final AtomicBoolean segmentEstimateReading=new AtomicBoolean(false);
+    private long lastSegmentEstimateRefresh=0;
     private T1OemConsumptionCallbacks oemCallbacks;
     private EditText gasolinePrice,energyPrice,refillLiters,refillKm,anchorKm;
     private File pendingCsv;
@@ -56,6 +58,7 @@ public final class T1TankDashboardActivity extends Activity {
         @Override public void run(){
             if(!visible)return;
             updateTripStatus();
+            updateSegmentEstimate();
             updateSyncStatus();
             if(oemEventsStatus!=null&&oemCallbacks!=null)
                 oemEventsStatus.setText(oemCallbacks.snapshot());
@@ -184,6 +187,10 @@ public final class T1TankDashboardActivity extends Activity {
         section(root,"TRIP · GRABACIÓN PROPIA");
         LinearLayout trip=card(root,PALE);
         tripStatus=text("No hay viaje activo",18,NAVY,true);trip.addView(tripStatus);
+        segmentEstimateStatus=text(
+            "EXPERIMENTO OEM 500 m: sin cálculo aún. Valores sin calibrar.",
+            14,TEAL,true);
+        trip.addView(segmentEstimateStatus);
         LinearLayout controls=row();
         Button start=new Button(this);start.setText("▶ INICIAR TRIP");
         start.setAllCaps(false);start.setTextColor(WHITE);
@@ -452,6 +459,76 @@ public final class T1TankDashboardActivity extends Activity {
                 "Precio kWh no configurado; costo eléctrico pendiente")+
             "\n"+p.getString(T1TripRecorderService.STATUS,"Sin viaje"));
     }
+    /**
+     * Read local CSV in a worker: never parse an active file on Android's UI thread.
+     * This is a hypothesis-only display, not a replacement for tank/cost estimates.
+     */
+    private void updateSegmentEstimate(){
+        if(segmentEstimateStatus==null)return;
+        long now=System.currentTimeMillis();
+        if(now-lastSegmentEstimateRefresh<12000L ||
+                !segmentEstimateReading.compareAndSet(false,true))return;
+        lastSegmentEstimateRefresh=now;
+        final String id=getSharedPreferences(T1TripRecorderService.PREFS,MODE_PRIVATE)
+            .getString(T1TripRecorderService.ID,"");
+        new Thread(()->{
+            String message;
+            try{
+                if(!id.matches("[0-9]{8}_[0-9]{6}")){
+                    message="EXPERIMENTO OEM 500 m: iniciá un TRIP para ver tramos.";
+                }else{
+                    File dir=T1TripRecorderService.tripDir(this);
+                    File callbacks=new File(dir,"trip_oem_"+id+".csv");
+                    File trip=new File(dir,"trip_"+id+".csv");
+                    if(!callbacks.isFile()){
+                        message="EXPERIMENTO OEM 500 m: esperando callbacks del viaje "+id;
+                    }else{
+                        T1SegmentConsumption.Summary s=
+                            T1SegmentConsumption.analyze(callbacks,trip);
+                        if(s.segments==0){
+                            message="EXPERIMENTO OEM 500 m: no hay pares completos "+
+                                "de nafta y electricidad todavía.";
+                        }else{
+                            message="ESTIMACIÓN EXPERIMENTAL · "+s.segments+
+                                " tramos OEM × 0,5 km nominales\n"+
+                                "Nafta: suma cruda "+fmt(s.fuelRawSum,1)+
+                                " ⇒ ~"+fmt(s.hypotheticalFuelLiters(),3)+
+                                " L SI la unidad fuera L/100 km\n"+
+                                "Electricidad: suma cruda "+fmt(s.electricRawSum,1)+
+                                " ⇒ "+fmt(s.hypotheticalElectricKwh(),3)+
+                                " kWh netos SI fuera kWh/100 km\n"+
+                                "Origen km: "+s.distanceSource;
+                            if(Double.isFinite(s.distanceRatio()))
+                                message+=" · distancia TRIP por intervalo OEM "+
+                                    fmt(s.observedKmPerEventInterval(),3)+
+                                    " km vs 0,500 nominal (relación "+
+                                    fmt(s.distanceRatio(),3)+"×)";
+                            if(s.unmatchedFuel>0||s.unmatchedElectric>0)
+                                message+="\nEventos sin pareja (no sumados): nafta "+
+                                    s.unmatchedFuel+" / eléctricos "+s.unmatchedElectric;
+                            message+="\nNO son litros/kWh medidos. No se corrige "+
+                                "distancia ni se reemplaza el costo PROXY.";
+                        }
+                    }
+                }
+            }catch(Exception ex){
+                message="Cálculo experimental no disponible ("+
+                    ex.getClass().getSimpleName()+"); CSV original conservado.";
+            }
+            final String shown=message;
+            runOnUiThread(()->{
+                segmentEstimateReading.set(false);
+                if(isFinishing()||isDestroyed())return;
+                String current=getSharedPreferences(
+                    T1TripRecorderService.PREFS,MODE_PRIVATE)
+                    .getString(T1TripRecorderService.ID,"");
+                if(id.equals(current)&&segmentEstimateStatus!=null)
+                    segmentEstimateStatus.setText(shown);
+                else lastSegmentEstimateRefresh=0;
+            });
+        },"T1-Segment-Hypothesis-ReadOnly").start();
+    }
+
     private void updateSyncStatus(){
         if(syncStatus==null)return;
         android.content.SharedPreferences p=T1TripSync.prefs(this);
