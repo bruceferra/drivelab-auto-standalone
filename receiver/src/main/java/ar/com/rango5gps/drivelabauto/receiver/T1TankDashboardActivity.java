@@ -1,6 +1,7 @@
 package ar.com.rango5gps.drivelabauto.receiver;
 
 import android.Manifest;
+import android.content.ContentValues;
 import android.app.Activity;
 import android.content.Intent;
 import android.content.pm.PackageManager;
@@ -8,6 +9,8 @@ import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
+import android.os.Environment;
+import android.provider.MediaStore;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -43,7 +46,7 @@ public final class T1TankDashboardActivity extends Activity {
     private final AtomicBoolean sampling=new AtomicBoolean(false);
     private volatile boolean visible;
     private T1InstrumentView instruments;
-    private TextView liveStatus,rangeStatus,tripStatus,tripActionStatus,formStatus,syncStatus;
+    private TextView liveStatus,rangeStatus,tripStatus,tripActionStatus,exportStatus,formStatus,syncStatus;
     private EditText syncPin;
     private EditText gasolinePrice,energyPrice,refillLiters,refillKm,anchorKm;
     private File pendingCsv;
@@ -166,6 +169,9 @@ public final class T1TankDashboardActivity extends Activity {
             "1048/1049, recirculación, plegado y ruta GPS disponible.",
             12,GRAY,false));
         action(root,"EXPORTAR ÚLTIMO TRIP CSV",BLUE,this::exportLastTrip);
+        exportStatus=text("Exportación directa a Descargas/DriveLabAuto (sin selector). "+
+            "El CSV original siempre se conserva.",13,NAVY,false);
+        root.addView(exportStatus);
 
         section(root,"SINCRONIZACIÓN PRIVADA · TRIP");
         LinearLayout sync=card(root,PALE);
@@ -448,23 +454,94 @@ public final class T1TankDashboardActivity extends Activity {
             updateRange();
         }catch(Exception ex){formStatus.setText("No se registró: "+ex.getMessage());}
     }
+    private void exportMessage(String message){
+        if(exportStatus!=null)exportStatus.setText(message);
+        if(formStatus!=null)formStatus.setText(message);
+    }
     private void exportLastTrip(){
         File[] all=T1TripRecorderService.tripDir(this).listFiles(
             file->file.isFile()&&file.getName().startsWith("trip_")&&
                 file.getName().endsWith(".csv"));
-        if(all==null||all.length==0){formStatus.setText("No hay TRIP para exportar");return;}
+        if(all==null||all.length==0){
+            exportMessage("No hay TRIP para exportar");return;
+        }
         Arrays.sort(all,Comparator.comparing(File::getName).reversed());
-        exportFile(all[0]);
+        final File local=all[0];
+        if(local.length()==0){
+            exportMessage("CSV vacío: cerrá DETENER TRIP y volvé a intentar");return;
+        }
+        exportMessage("Exportando "+local.getName()+" a Descargas/DriveLabAuto…");
+        // Android 11 Jetour can lack DocumentsUI. Save directly to Downloads
+        // through MediaStore (scoped storage), without any file chooser.
+        new Thread(()->{
+            String status;
+            try{
+                String exported=writeTripToDownloads(local);
+                status="CSV GUARDADO: "+exported+
+                    " · original privado conservado. Descargalo con WebADB.";
+            }catch(Exception primary){
+                // Some OEM builds also lack the standard Downloads provider.
+                // Fallback is app-owned external storage, accessible by adb pull.
+                try{
+                    File ext=getExternalFilesDir(Environment.DIRECTORY_DOCUMENTS);
+                    if(ext==null)throw new IllegalStateException("Sin almacenamiento externo");
+                    File folder=new File(ext,"DriveLabAuto");
+                    if(!folder.isDirectory()&&!folder.mkdirs())
+                        throw new IllegalStateException("No se pudo crear carpeta");
+                    File target=new File(folder,local.getName());
+                    try(InputStream in=new FileInputStream(local);
+                        OutputStream out=new FileOutputStream(target,false)){
+                        copyStream(in,out);
+                    }
+                    status="CSV GUARDADO POR RUTA ALTERNATIVA: "+
+                        target.getAbsolutePath()+
+                        " · descargalo con WebADB. Original conservado.";
+                }catch(Exception secondary){
+                    status="No se pudo exportar (Descargas: "+
+                        primary.getClass().getSimpleName()+
+                        "; alternativa: "+secondary.getClass().getSimpleName()+
+                        "). El CSV original sigue guardado.";
+                }
+            }
+            final String result=status;
+            runOnUiThread(()->{
+                if(!isFinishing()&&!isDestroyed())exportMessage(result);
+            });
+        },"T1-Trip-Export-Downloads").start();
     }
-    private void exportFile(File local){
-        pendingCsv=local;
+    private static void copyStream(InputStream in,OutputStream out)
+        throws java.io.IOException{
+        byte[] buf=new byte[8192];int n;
+        while((n=in.read(buf))!=-1)out.write(buf,0,n);
+        out.flush();
+    }
+    private String writeTripToDownloads(File local)throws Exception{
+        ContentValues info=new ContentValues();
+        info.put(MediaStore.MediaColumns.DISPLAY_NAME,local.getName());
+        info.put(MediaStore.MediaColumns.MIME_TYPE,"text/csv");
+        info.put(MediaStore.MediaColumns.RELATIVE_PATH,
+            Environment.DIRECTORY_DOWNLOADS+"/DriveLabAuto");
+        info.put(MediaStore.MediaColumns.IS_PENDING,1);
+        Uri dest=getContentResolver().insert(
+            MediaStore.Downloads.EXTERNAL_CONTENT_URI,info);
+        if(dest==null)throw new java.io.IOException("MediaStore sin respuesta");
+        boolean committed=false;
         try{
-            Intent i=new Intent(Intent.ACTION_CREATE_DOCUMENT);
-            i.setType("text/csv");
-            i.addCategory(Intent.CATEGORY_OPENABLE);
-            i.putExtra(Intent.EXTRA_TITLE,local.getName());
-            startActivityForResult(i,SAVE_CSV);
-        }catch(Exception e){formStatus.setText("Exportación no disponible: "+e.getMessage());}
+            try(InputStream in=new FileInputStream(local);
+                OutputStream out=getContentResolver().openOutputStream(dest,"w")){
+                if(out==null)throw new java.io.IOException("Destino sin escritura");
+                copyStream(in,out);
+            }
+            ContentValues done=new ContentValues();
+            done.put(MediaStore.MediaColumns.IS_PENDING,0);
+            if(getContentResolver().update(dest,done,null,null)!=1)
+                throw new java.io.IOException("No se confirmó la copia");
+            committed=true;
+            return "Descargas/DriveLabAuto/"+local.getName();
+        }finally{
+            if(!committed)try{getContentResolver().delete(dest,null,null);}
+                catch(Exception ignored){}
+        }
     }
     @Override protected void onActivityResult(int req,int code,Intent intent){
         super.onActivityResult(req,code,intent);
