@@ -159,6 +159,10 @@ public final class T1TankDashboardActivity extends Activity {
             oemEventsStatus.setText("Cerrando inscripciones… "+oemCallbacks.snapshot());
         });
         action(callbackPanel,"EXPORTAR CSV EVENTOS OEM",BLUE,this::exportOemEvents);
+        callbackPanel.addView(text("«REGISTRO APAGADO» significa que ahora no "+
+            "está escuchando, NO que se haya perdido el CSV. Si ya grabaste, "+
+            "tocá EXPORTAR para subir el último archivo. Para nuevos eventos, "+
+            "tocá ESCUCHAR y dejá finalizar los 3 minutos.",12,GRAY,false));
         oemEventsStatus=text(oemCallbacks.snapshot(),14,NAVY,false);
         callbackPanel.addView(oemEventsStatus);
 
