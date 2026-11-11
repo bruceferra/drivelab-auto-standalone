@@ -117,3 +117,20 @@ Se incorporan **sin alterar la fórmula del TRIP**, a la visualización del tabl
 - Se mantienen los 30 campos CSV anteriores, se agregan seis al final y se amplía el whitelist de subida privada; la sincronización no envía coordenadas ni VIN.
 - Las señales INT nuevas **no se emplean** para energía HV estimada ni para calcular combustible hasta validar unidades y sensor físico.
 - Si `1086/1087` responden `-1` con ambos getters, seguir investigando callbacks `onAvgFuChanged`/`onAvgElecChanged` en ClusterInteraction. No asumir que el setter 2107 modifica distancias reales.
+
+## Prueba física de comparación int/float (Receiver 0.2.27)
+
+**Fuente:** observaciones orales directas del propietario durante una prueba con vehículo en marcha (velocidad mencionada: ~14 km/h), además de una lectura con el vehículo sin circular. Aún no se recibió CSV de esta prueba.
+
+| ID OEM | float | int | Conclusión |
+|---|---|---|---|
+| **1086**, electricidad 500 m | -1 | -1 | No disponible en los dos getters por ahora; **no** es kWh |
+| **1087**, nafta 500 m | -1 | -1 | No disponible en los dos getters por ahora; **no** es litros |
+| **1063**, voltaje HV | sin lectura | sin lectura | No hay tensión utilizable por este acceso; la falla no es solo de conversión de float a int |
+| **1064**, corriente HV | **5,70 → 5,90, cambiante** | -1 | **Float responde** y tiene variación observable; signo/unidades y polaridad por validar |
+| **1090**, corriente/voltaje/potencia candidato | -1 | -1 | No disponible por ambos getters |
+| **1034**, RPM válidas | — | 1 | Señal de validez, no equivale por sí misma a motor encendido |
+
+**Diagnóstico:** La vía de getters `VehicleService.readInt/readFloat` ha quedado sin datos para `1086/1087` y `1090`. No repetir lecturas de 500 m por carretera esperando un cambio si devuelven centinela en ambas modalidades. El valor `1064` sí varía: preservar el float original y no reemplazarlo con el int `-1`. La potencia eléctrica y los kWh siguen sin poder calcularse de forma validada: no atribuir `V×A=0` cuando falta V.
+
+**Nueva pista del código original de los APK:** `ClusterInteraction.apk` define `IClusterInteraction.registerAvgFuCallback` y `registerAvgElecCallback` con callbacks `onAvgFuChanged` / `onAvgElecChanged`; se distinguen de `registerAvgFuCnsCallback`/`registerAvgElecCnsCallback` (promedios de 50 km). `ALVehicleService.apk` contiene listeners homólogos `ClusterManager$mAvgFuListener`, `ClusterManager$mAvgElecListener`. Es una **ruta alternativa potencial de solo suscripción** para intentar recibir datos de 500 m. Su existencia en DEX **no prueba que estén emitiendo eventos** en la variante de Argentina ni que acepten registros de terceros. Próximo desarrollo: investigar el contrato Binder de estas inscripciones, añadir un registro/desregistro controlado de eventos sin escritura del vehículo y contrastar contra el CSV de lectura, con errores explícitos. Considerar en paralelo buscar tensión HV en los callbacks OEM `IChargeVoltageCallback` y `IChargePowerInfoCallback`, distinguiendo tensión de carga de tensión del pack en movimiento.
