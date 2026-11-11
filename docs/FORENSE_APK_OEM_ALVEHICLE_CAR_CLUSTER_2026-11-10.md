@@ -104,3 +104,16 @@ Las cifras OEM de 50 km cambiaron simultáneamente *una vez* durante este tramo;
 2. Considerar la vía de **callbacks OEM** `onAvgFuChanged`/`onAvgElecChanged` en ClusterInteraction/VehicleService; la implementación de listener puede recibir eventos no persistidos por getter.
 3. Investigar la ausencia total del voltaje `1063` y contrastar señales HV alternativas `1090` (solo lectura), sin poner números falsos de kWh.
 4. Exportar o recibir próximos CSV, preservando origen de distancia y estado de RPM. Para consumo de tanque físico, continuar contrastando surtidor.
+
+## Siguiente diagnóstico por doble getter, Receiver 0.2.27 (en prueba)
+
+El CSV real `trip_20261110_232521.csv` contiene 177 muestras: `1086/1087=-1` sin variación y `1063` ausente. No basta llamar a este resultado 'sin cambios de ventana': el primer paso es comprobar si `1086/1087` son enteros en vez de float o datos enviados por eventos.
+
+Se incorporan **sin alterar la fórmula del TRIP**, a la visualización del tablero y al final del CSV:
+- `oem_1086_electric_int_raw` y `oem_1087_fuel_int_raw` — `VehicleService.readInt(5)` en paralelo a `readFloat(6)`.
+- `hv_voltage_1063_int_raw` y `hv_current_1064_int_raw` — candidato de tipos INT para HV. No sustituye aún la tensión HV efectiva.
+- `oem_1090_float_raw` y `oem_1090_int_raw` — prueba de propiedad OEM 1090 ('obtener corriente/voltaje/potencia'), naturaleza y escala desconocidas.
+- Getter fallido muestra **SIN LECTURA** en pantalla y campo vacío en CSV; respuesta `-1` se conserva **explícitamente** y no se interpreta como consumo negativo.
+- Se mantienen los 30 campos CSV anteriores, se agregan seis al final y se amplía el whitelist de subida privada; la sincronización no envía coordenadas ni VIN.
+- Las señales INT nuevas **no se emplean** para energía HV estimada ni para calcular combustible hasta validar unidades y sensor físico.
+- Si `1086/1087` responden `-1` con ambos getters, seguir investigando callbacks `onAvgFuChanged`/`onAvgElecChanged` en ClusterInteraction. No asumir que el setter 2107 modifica distancias reales.
