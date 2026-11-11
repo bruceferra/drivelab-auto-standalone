@@ -46,12 +46,14 @@ final class T1JourneyStore {
         }
     }
     static final class Totals {
-        int trips,charges;
+        int trips,charges,fuelKnownTrips,electricKnownTrips;
         double km,liters,electricNet,fuelCost,gridKwh,gridCost;
         void add(Entry e){
             trips++;km+=e.km;
-            if(Double.isFinite(e.liters))liters+=e.liters;
-            if(Double.isFinite(e.electricNet))electricNet+=e.electricNet;
+            if(Double.isFinite(e.liters)){liters+=e.liters;fuelKnownTrips++;}
+            if(Double.isFinite(e.electricNet)){
+                electricNet+=e.electricNet;electricKnownTrips++;
+            }
             if(Double.isFinite(e.fuelCost))fuelCost+=e.fuelCost;
         }
     }
