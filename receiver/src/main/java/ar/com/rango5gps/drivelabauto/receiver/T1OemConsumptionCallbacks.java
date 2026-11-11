@@ -103,8 +103,9 @@ final class T1OemConsumptionCallbacks {
     String snapshot(){
         StringBuilder sb=new StringBuilder();
         sb.append(running.get()?
-            "● ESCUCHANDO eventos OEM · "+
-                (Math.max(0,deadlineMs-SystemClock.elapsedRealtime())/1000)+" s restantes":
+            (tripMode?"● TRIP · escuchando eventos OEM sin límite de 3 minutos":
+                "● ESCUCHANDO eventos OEM · "+
+                (Math.max(0,deadlineMs-SystemClock.elapsedRealtime())/1000)+" s restantes"):
             "○ "+state);
         sb.append("\n").append(registration);
         synchronized(dataLock){
