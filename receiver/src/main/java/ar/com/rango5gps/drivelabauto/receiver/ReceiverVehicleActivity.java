@@ -27,7 +27,7 @@ import java.util.Map;
  * button press, and all data remain labeled as unverified OEM observations.
  */
 public final class ReceiverVehicleActivity extends Activity {
-    private final String[] tabNames={"VEHÍCULO","ENERGÍA","CODE"};
+    private final String[] tabNames={"VEHÍCULO","ENERGÍA","CODE","DIAGNÓSTICO"};
     private int activeTab=0;
     private ScrollView currentScroll;
     private VehicleWindowGroup windows;
@@ -58,6 +58,17 @@ public final class ReceiverVehicleActivity extends Activity {
     private String batchValues="";
     private String exportStatus="";
     private int batchStart=2001;
+    private TextView diagnosticsView;
+    private final android.os.Handler diagnosticHandler=
+        new android.os.Handler(android.os.Looper.getMainLooper());
+    private boolean diagnosticScreenVisible=false;
+    private final Runnable diagnosticTicker=new Runnable(){
+        @Override public void run(){
+            if(!diagnosticScreenVisible||isFinishing()||isDestroyed())return;
+            updateDiagnosticsText();
+            diagnosticHandler.postDelayed(this,1800);
+        }
+    };
 
     @Override public void onCreate(Bundle saved){
         super.onCreate(saved);
@@ -70,7 +81,7 @@ public final class ReceiverVehicleActivity extends Activity {
         changeScanner=new VehicleChangeScanner(this);
         batchReader=new VehicleBatchReader(this);
         if(saved!=null){
-            activeTab=Math.min(2,Math.max(0,saved.getInt("tab",0)));
+            activeTab=Math.min(3,Math.max(0,saved.getInt("tab",0)));
             batchStart=saved.getInt("batch",2001);
         }
         render();
@@ -86,8 +97,13 @@ public final class ReceiverVehicleActivity extends Activity {
         mirrorProbe.setForeground(true);
         pedestrian.setForeground(true);
         refreshGearCaptureView();
+        diagnosticScreenVisible=true;
+        diagnosticHandler.removeCallbacks(diagnosticTicker);
+        diagnosticHandler.postDelayed(diagnosticTicker,300);
     }
     @Override protected void onPause(){
+        diagnosticScreenVisible=false;
+        diagnosticHandler.removeCallbacks(diagnosticTicker);
         windows.setForeground(false);
         mirror.setForeground(false);
         mirrorProbe.setForeground(false);
@@ -146,8 +162,11 @@ public final class ReceiverVehicleActivity extends Activity {
         root.addView(menu);
         if(activeTab==0)renderVehicle(root);
         else if(activeTab==1)renderEnergy(root);
-        else renderCode(root);
-        label(root,"Sin root ni ADB. No reemplaza los controles OEM de seguridad. "+
+        else if(activeTab==2)renderCode(root);
+        else renderDiagnostics(root);
+        label(root,"Las lecturas de diagnóstico pueden seguir 3 minutos en segundo plano. "+ 
+            "Los controles manuales requieren intervención del usuario. "+
+            "Sin root ni ADB. No reemplaza los controles OEM de seguridad. "+
             "Esta versión no convierte DriveLab en launcher HOME.",11);
         Receiver3DButtons.apply(root);
         setContentView(scroll);
@@ -553,6 +572,124 @@ public final class ReceiverVehicleActivity extends Activity {
             "2005 delantera derecha, 2006 trasera izquierda, 2007 trasera derecha; "+
             "2054 señal general. Alarma 2074. Batería 1042/1062/1064. "+
             "Un código observado NO autoriza una escritura.",12);
+    }
+    private android.content.SharedPreferences modeProbePrefs(){
+        return getSharedPreferences(T1PhevModeCaptureService.PREFS,MODE_PRIVATE);
+    }
+    private void renderDiagnostics(LinearLayout body){
+        section(body,"DIAGNÓSTICO PHEV · 1040 / 1041 / 1043 / 1045 / 1046");
+        label(body,"Confirmado en esta T1: 1043=1 EV; 2 HEV; 3 EV MAX (azul). "+
+            "1040=2 SMART; 4 FORZADO/CHARGE. 1040=3 aún no validado. "+
+            "1041 SOC protegido (int y float crudos) y 1046 nivel de regeneración "+
+            "1/2/3. SOLO LECTURA.",13);
+        label(body,"El registro continúa en segundo plano al abrir la pantalla "+
+            "original Jetour, Waze o Maps. Se detiene automáticamente en 3 minutos "+
+            "y no cambia ningún modo ni ningún control de seguridad.",13);
+        button(body,"INICIAR DIAGNÓSTICO OEM · 3 MIN EN SEGUNDO PLANO",()->{
+            try{
+                startForegroundService(new android.content.Intent(this,
+                    T1PhevModeCaptureService.class).setAction(
+                        T1PhevModeCaptureService.ACTION_START));
+                updateDiagnosticsText();
+            }catch(Exception e){
+                if(diagnosticsView!=null)diagnosticsView.setText(
+                    "Android no inició el registro: "+e.getClass().getSimpleName());
+            }
+        });
+        button(body,"DETENER REGISTRO DE DIAGNÓSTICO",()->{
+            startService(new android.content.Intent(this,
+                T1PhevModeCaptureService.class).setAction(
+                    T1PhevModeCaptureService.ACTION_STOP));
+            updateDiagnosticsText();
+        });
+        button(body,"EXPORTAR CSV DE MODOS / SENSORES",()->exportModeEvidence(
+            T1PhevModeCaptureService.FILE));
+        button(body,"EXPORTAR CSV DE EVENTOS DE CONSUMO",()->exportModeEvidence(
+            T1PhevModeCaptureService.EVENT_FILE));
+        button(body,"LEER RADAR Y LIMPIAPARABRISAS UNA VEZ",()->{
+            if(wiperParking.busy()){
+                wiperParkingStatus="Ya está leyendo sensores OEM";updateDiagnosticsText();return;
+            }
+            if(!wiperParking.readOnce(values->{
+                StringBuilder out=new StringBuilder();
+                for(Map.Entry<String,String> e:values.entrySet())
+                    out.append(e.getKey()).append(" = ").append(e.getValue()).append("\n");
+                wiperParkingStatus=out.toString();
+                updateDiagnosticsText();
+            }))wiperParkingStatus="No pudo iniciar lectura OEM";
+            else wiperParkingStatus="Consultando radar delantero/trasero y limpias…";
+            updateDiagnosticsText();
+        });
+        diagnosticsView=status(body,"Preparando diagnóstico…");
+        updateDiagnosticsText();
+        label(body,"Sensores PDC: valores sin calibrar; nunca equivalen "+
+            "automáticamente a centímetros. Limpiaparabrisas AUTO 2126 y bandas "+
+            "de radar 2107 no están validados como controles de ajuste. "+
+            "AVAS 2074 se muestra solo como estado; sin apagado automático.",12);
+    }
+    private void updateDiagnosticsText(){
+        if(activeTab!=3||diagnosticsView==null||
+            isFinishing()||isDestroyed())return;
+        android.content.SharedPreferences p=modeProbePrefs();
+        diagnosticsView.setText(
+            (p.getBoolean(T1PhevModeCaptureService.RUNNING,false)?
+                "● GRABANDO · segundo plano":"○ DETENIDO")+
+            "\n"+p.getString(T1PhevModeCaptureService.STATUS,
+                "Todavía no se inició un diagnóstico")+
+            "\n"+p.getString(T1PhevModeCaptureService.LAST,
+                "Sin muestras PHEV")+
+            "\nEVENTOS OEM 500 m / 50 km:\n"+
+            p.getString(T1PhevModeCaptureService.EVENTS,
+                "Sin muestras de eventos")+
+            "\n\nLECTURAS SENSOR / PARABRISAS:\n"+wiperParkingStatus+
+            "\n\n"+exportStatus);
+    }
+    private void exportModeEvidence(String field){
+        if(modeProbePrefs().getBoolean(T1PhevModeCaptureService.RUNNING,false)){
+            exportStatus="Detené o completá los 3 minutos antes de exportar.";
+            updateDiagnosticsText();return;
+        }
+        String fileName=modeProbePrefs().getString(field,"");
+        try{
+            if(fileName.isEmpty())
+                throw new IllegalStateException("No hay archivo de esta prueba");
+            java.io.File source=new java.io.File(fileName).getCanonicalFile();
+            java.io.File folder=T1TripRecorderService.tripDir(this).getCanonicalFile();
+            if(!folder.equals(source.getParentFile())||
+                !source.isFile()||source.length()==0)
+                throw new IllegalStateException("Archivo de diagnóstico no disponible");
+            ContentValues metadata=new ContentValues();
+            metadata.put(MediaStore.MediaColumns.DISPLAY_NAME,source.getName());
+            metadata.put(MediaStore.MediaColumns.MIME_TYPE,"text/csv");
+            metadata.put(MediaStore.MediaColumns.RELATIVE_PATH,
+                Environment.DIRECTORY_DOWNLOADS+"/DriveLabAuto");
+            metadata.put(MediaStore.MediaColumns.IS_PENDING,1);
+            Uri uri=getContentResolver().insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                metadata);
+            if(uri==null)throw new IllegalStateException("Descargas no disponible");
+            boolean copied=false;
+            try{
+                try(java.io.InputStream in=new java.io.FileInputStream(source);
+                    OutputStream out=getContentResolver().openOutputStream(uri,"w")){
+                    if(out==null)throw new java.io.IOException("No se puede escribir");
+                    byte[] buffer=new byte[8192];int n;
+                    while((n=in.read(buffer))!=-1)out.write(buffer,0,n);
+                }
+                ContentValues ready=new ContentValues();
+                ready.put(MediaStore.MediaColumns.IS_PENDING,0);
+                if(getContentResolver().update(uri,ready,null,null)!=1)
+                    throw new java.io.IOException("No se confirmó la exportación");
+                copied=true;
+            }finally{
+                if(!copied)try{getContentResolver().delete(uri,null,null);}
+                    catch(Exception ignored){}
+            }
+            exportStatus="CSV GUARDADO en Descargas/DriveLabAuto/"+source.getName();
+        }catch(Exception e){
+            exportStatus="No se pudo exportar: "+e.getClass().getSimpleName()+
+                (e.getMessage()==null?"":(" · "+e.getMessage()));
+        }
+        updateDiagnosticsText();
     }
     private static String csv(String value){
         if(value==null)value="";
