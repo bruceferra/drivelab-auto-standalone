@@ -114,6 +114,14 @@ final class T1TripSync {
         putNumber(s,"current1064Int",f,33);
         putNumber(s,"raw1090Float",f,34);
         putNumber(s,"raw1090Int",f,35);
+        // Real OEM callback counts and most recent raw segment values.
+        // These are NOT measured liters nor kWh (sign still unverified).
+        putNumber(s,"oem500FuelCount",f,36);
+        putNumber(s,"oem500ElectricCount",f,37);
+        putNumber(s,"oem500FuelRaw",f,38);
+        putNumber(s,"oem500ElectricRaw",f,39);
+        putNumber(s,"oem50FuelCallbackRaw",f,40);
+        putNumber(s,"oem50ElectricCallbackRaw",f,41);
         return s;
     }
     private static JSONArray readBatch(File file,int offset)throws Exception{
