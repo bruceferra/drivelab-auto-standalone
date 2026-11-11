@@ -1,6 +1,6 @@
 > **VERSIÓN ACTUAL · 11/11/2026:** **Receiver 0.2.33 (Jetour T1, code 34)** + **Sender 0.2.16 (Xiaomi, code 17)**. [Release y actualización interna](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.33) · [Cambios, mediciones y pruebas pendientes](docs/RECEIVER_0_2_33_ESTIMACION_500M_DISTANCIA_SYNC.md). Consumos de 500 m todavía experimentales; no se cambian controles del vehículo ni calibración histórica.
 
-> **ESTADO RECUPERADO 11/11/2026 (vigente):** [Sender 0.2.16 Xiaomi + Receiver 0.2.32 T1, compilaciones, APK firmadas, OTA y pruebas pendientes](docs/RECUPERACION_ESTADO_2026-11-11_SENDER_0216_RECEIVER_0232.md). Los apartados con versiones anteriores son históricos.
+> **CONTEXTO HISTÓRICO RECUPERADO 11/11/2026 (previo a 0.2.33):** [Sender 0.2.16 Xiaomi + Receiver 0.2.32 T1, compilaciones, APK firmadas, OTA y pruebas pendientes](docs/RECUPERACION_ESTADO_2026-11-11_SENDER_0216_RECEIVER_0232.md). Los apartados con versiones anteriores son históricos.
 
 > **DOCUMENTACIÓN MAESTRA / UNIFICACIÓN (10/11/2026):** [Índice maestro DriveLab Auto + Jetour T1](docs/INDICE_MAESTRO.md) — [Auditoría de versiones](docs/AUDITORIA_APPS_Y_CONSOLIDACION.md) — [Arquitectura Sender/Receiver](docs/ARQUITECTURA_SENDER_RECEIVER.md) — [Tablero consumo y telemetría](docs/TABLERO_CONSUMO_Y_TELEMETRIA_T1.md) — [Pruebas y limpieza](docs/PRUEBAS_PENDIENTES_Y_DEPURACION.md) — [Handoff a otra solapa](docs/HANDOFF_ENTRE_SOLAPAS.md).
 >
