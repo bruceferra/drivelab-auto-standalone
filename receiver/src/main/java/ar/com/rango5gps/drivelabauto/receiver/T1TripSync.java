@@ -141,6 +141,11 @@ final class T1TripSync {
         // Added after the original 23 columns. Older TRIP logs are valid too.
         putNumber(s,"rpm",f,23);
         putNumber(s,"motorOn",f,24);
+        putNumber(s,"oemElectricRolling50",f,25);
+        putNumber(s,"oemFuelRolling50",f,26);
+        putNumber(s,"oemElectricAverage500m",f,27);
+        putNumber(s,"oemFuelAverage500m",f,28);
+        putNumber(s,"rpmValid1034",f,29);
         return s;
     }
     private static JSONArray readBatch(File file,int offset)throws Exception{

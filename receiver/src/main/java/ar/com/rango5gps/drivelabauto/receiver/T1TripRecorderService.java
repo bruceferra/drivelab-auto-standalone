@@ -151,7 +151,12 @@ public final class T1TripRecorderService extends Service {
                 "mirror_fold_2003,gps_lat,gps_lon,gps_accuracy_m,"+
                 "distance_km_est,hv_gross_discharge_kwh_est,hv_charge_kwh_est,"+
                 "gas_l_proxy,gas_cost_est,ev_cost_hv_proxy,notes,"+
-                "rpm_1035_candidate,motor_on_rpm_candidate\n")
+                "rpm_1035_candidate,motor_on_rpm_candidate,"+
+                "oem_1084_electric_net_kwh_per_100km_last50,"+
+                "oem_1085_gas_l_per_100km_last50,"+
+                "oem_1086_electric_average_last500m_raw,"+
+                "oem_1087_fuel_average_last500m_raw,"+
+                "rpm_valid_1034_raw\n")
                 .getBytes(StandardCharsets.UTF_8));
             T1TripTelemetry oem=new T1TripTelemetry(this);
             while(!stop){
@@ -182,7 +187,10 @@ public final class T1TripRecorderService extends Service {
                     n(km)+","+n(hvOut)+","+n(hvIn)+","+
                     n(liters)+","+n(gasCost)+","+n(evCost)+","+
                     (gpsMode?"GPS":"OEM_SPEED_UNIT_CANDIDATE")+","+
-                    n(s.rpm)+","+s.motorOn+"\n";
+                    n(s.rpm)+","+s.motorOn+","+
+                    n(s.oemElectricRolling50)+","+n(s.oemFuelRolling50)+","+
+                    n(s.oemElectricAverage500m)+","+n(s.oemFuelAverage500m)+","+
+                    s.rpmValid1034+"\n";
                 out.write(line.getBytes(StandardCharsets.UTF_8));
                 sampleCount++;
                 if(sampleCount%5==0)out.flush();
