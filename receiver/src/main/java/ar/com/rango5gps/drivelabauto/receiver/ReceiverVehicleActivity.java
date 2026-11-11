@@ -14,6 +14,7 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.ImageView;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
@@ -58,7 +59,9 @@ public final class ReceiverVehicleActivity extends Activity {
     private String batchValues="";
     private String exportStatus="";
     private int batchStart=2001;
-    private TextView diagnosticsView;
+    private TextView diagnosticsView,cloudView;
+    private ImageView cloudQrView;
+    private long lastCloudPoll=0L;
     private final android.os.Handler diagnosticHandler=
         new android.os.Handler(android.os.Looper.getMainLooper());
     private boolean diagnosticScreenVisible=false;
@@ -66,6 +69,13 @@ public final class ReceiverVehicleActivity extends Activity {
         @Override public void run(){
             if(!diagnosticScreenVisible||isFinishing()||isDestroyed())return;
             updateDiagnosticsText();
+            if(activeTab==3&&!T1CloudDiagnostics.active(ReceiverVehicleActivity.this)&&
+                    !T1CloudDiagnostics.qrUrl(ReceiverVehicleActivity.this).isEmpty()&&
+                    android.os.SystemClock.elapsedRealtime()-lastCloudPoll>6000L){
+                lastCloudPoll=android.os.SystemClock.elapsedRealtime();
+                T1CloudDiagnostics.check(ReceiverVehicleActivity.this,
+                    (message,url)->updateCloudUi(message,url));
+            }
             diagnosticHandler.postDelayed(this,1800);
         }
     };
@@ -620,12 +630,50 @@ public final class ReceiverVehicleActivity extends Activity {
             else wiperParkingStatus="Consultando radar delantero/trasero y limpias…";
             updateDiagnosticsText();
         });
+        section(body,"SUBIDA PRIVADA A SERVIDOR · SIN PIN");
+        label(body,"Una única activación: mostrás el QR en la T1 y lo escaneás "+
+            "con la cámara del Xiaomi. Después cada botón EXPORTAR guarda "+
+            "el CSV local y lo sube por HTTPS. Nadie recibe la clave del dispositivo "+
+            "en el QR. Si falla internet, siempre queda la copia local.",13);
+        button(body,"ACTIVAR SERVIDOR · MOSTRAR QR",()->{
+            updateCloudUi("Solicitando QR de un solo uso…",null);
+            T1CloudDiagnostics.beginQr(this,(message,url)->
+                updateCloudUi(message,url));
+        });
+        button(body,"COMPROBAR VINCULACIÓN DE NUBE",()->
+            T1CloudDiagnostics.check(this,(message,url)->
+                updateCloudUi(message,url)));
+        cloudView=status(body,T1CloudDiagnostics.status(this));
+        cloudQrView=new ImageView(this);
+        cloudQrView.setAdjustViewBounds(true);
+        cloudQrView.setMaxHeight(500);
+        cloudQrView.setVisibility(android.view.View.GONE);
+        body.addView(cloudQrView);
+        updateCloudUi(T1CloudDiagnostics.status(this),T1CloudDiagnostics.qrUrl(this));
         diagnosticsView=status(body,"Preparando diagnóstico…");
         updateDiagnosticsText();
         label(body,"Sensores PDC: valores sin calibrar; nunca equivalen "+
             "automáticamente a centímetros. Limpiaparabrisas AUTO 2126 y bandas "+
             "de radar 2107 no están validados como controles de ajuste. "+
             "AVAS 2074 se muestra solo como estado; sin apagado automático.",12);
+    }
+    private void updateCloudUi(String message,String url){
+        if(cloudView!=null&&!isFinishing()&&!isDestroyed())
+            cloudView.setText(message);
+        if(cloudQrView==null||isFinishing()||isDestroyed())return;
+        if(url==null||url.isEmpty()||T1CloudDiagnostics.active(this)){
+            cloudQrView.setVisibility(android.view.View.GONE);
+            cloudQrView.setImageDrawable(null);
+            return;
+        }
+        try{
+            cloudQrView.setImageBitmap(T1QrRenderer.bitmap(url));
+            cloudQrView.setVisibility(android.view.View.VISIBLE);
+        }catch(Exception e){
+            cloudQrView.setVisibility(android.view.View.GONE);
+            if(cloudView!=null)cloudView.setText(
+                "Error mostrando QR: "+e.getClass().getSimpleName());
+        }
     }
     private void updateDiagnosticsText(){
         if(activeTab!=3||diagnosticsView==null||
@@ -684,7 +732,15 @@ public final class ReceiverVehicleActivity extends Activity {
                 if(!copied)try{getContentResolver().delete(uri,null,null);}
                     catch(Exception ignored){}
             }
-            exportStatus="CSV GUARDADO en Descargas/DriveLabAuto/"+source.getName();
+            exportStatus="CSV GUARDADO en Descargas/DriveLabAuto/"+source.getName()+
+                " · enviando al servidor si la nube está activada…";
+            // Independent, asynchronous HTTPS upload. Never remove local files.
+            T1CloudDiagnostics.upload(this,source,(message,url)->{
+                exportStatus="Descargas/DriveLabAuto/"+source.getName()+
+                    " · "+message;
+                updateCloudUi(message,url);
+                updateDiagnosticsText();
+            });
         }catch(Exception e){
             exportStatus="No se pudo exportar: "+e.getClass().getSimpleName()+
                 (e.getMessage()==null?"":(" · "+e.getMessage()));
