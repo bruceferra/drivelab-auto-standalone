@@ -260,7 +260,7 @@ final class T1CloudDiagnostics {
                 File file=requested.getCanonicalFile();
                 if(!folder.equals(file.getParentFile())||
                     !file.getName().matches(
-                        "(phev_modes|oem_callbacks|code_diag)_[0-9]{8}_[0-9]{6}\\.csv"))
+                        "(phev_modes|oem_callbacks|code_diag|trip_oem)_[0-9]{8}_[0-9]{6}\\.csv"))
                     throw new IllegalArgumentException("Archivo fuera de carpeta segura");
                 byte[] raw=readFile(file);
                 String text=new String(raw,StandardCharsets.UTF_8);

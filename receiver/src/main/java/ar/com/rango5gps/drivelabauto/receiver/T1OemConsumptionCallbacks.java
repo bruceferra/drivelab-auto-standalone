@@ -59,6 +59,27 @@ final class T1OemConsumptionCallbacks {
     private volatile File logFile;
     private volatile CountDownLatch stopSignal;
     private volatile long deadlineMs;
+    private volatile boolean tripMode=false;
+    private volatile String tripId="";
+    private volatile Thread listenerThread;
+    private final float[] lastRaw={
+        Float.NaN,Float.NaN,Float.NaN,Float.NaN
+    };
+    /** Read-only snapshot of actual OEM segment callbacks. Not litres/kWh. */
+    static final class SegmentSnapshot {
+        final int fuelCount,electricCount;
+        final float fuelLast,electricLast,fuel50Last,electric50Last;
+        SegmentSnapshot(int fu,int el,float f,float e,float f50,float e50){
+            fuelCount=fu;electricCount=el;fuelLast=f;electricLast=e;
+            fuel50Last=f50;electric50Last=e50;
+        }
+    }
+    SegmentSnapshot tripSegments(){
+        synchronized(dataLock){
+            return new SegmentSnapshot(count[0],count[1],lastRaw[0],
+                lastRaw[1],lastRaw[2],lastRaw[3]);
+        }
+    }
 
     T1OemConsumptionCallbacks(Context context){
         app=context.getApplicationContext();
@@ -82,8 +103,9 @@ final class T1OemConsumptionCallbacks {
     String snapshot(){
         StringBuilder sb=new StringBuilder();
         sb.append(running.get()?
-            "● ESCUCHANDO eventos OEM · "+
-                (Math.max(0,deadlineMs-SystemClock.elapsedRealtime())/1000)+" s restantes":
+            (tripMode?"● TRIP · escuchando eventos OEM sin límite de 3 minutos":
+                "● ESCUCHANDO eventos OEM · "+
+                (Math.max(0,deadlineMs-SystemClock.elapsedRealtime())/1000)+" s restantes"):
             "○ "+state);
         sb.append("\n").append(registration);
         synchronized(dataLock){
@@ -103,18 +125,36 @@ final class T1OemConsumptionCallbacks {
             sb.append("\nSin CSV anterior; tocá ESCUCHAR EVENTOS OEM · 3 MIN para crear uno.");
         return sb.toString();
     }
-    boolean start(){
+    boolean start(){return startInternal(false,"");}
+    /** Listener lives for the entire user-started TRIP, not three minutes. */
+    boolean startForTrip(String id){
+        if(id==null||!id.matches("[0-9]{8}_[0-9]{6}"))return false;
+        return startInternal(true,id);
+    }
+    private boolean startInternal(boolean forTrip,String id){
         if(!running.compareAndSet(false,true))return false;
         synchronized(dataLock){
-            for(int i=0;i<4;i++){count[i]=0;last[i]="—";}
+            for(int i=0;i<4;i++){
+                count[i]=0;last[i]="—";lastRaw[i]=Float.NaN;
+            }
         }
+        tripMode=forTrip;
+        tripId=id;
         stopSignal=new CountDownLatch(1);
-        state="Iniciando prueba.";
+        state=forTrip?"TRIP · escuchando segmentos OEM":"Iniciando prueba.";
         registration="Conectando ClusterInteraction OEM…";
         logFile=null;
-        deadlineMs=SystemClock.elapsedRealtime()+DURATION_MS;
-        new Thread(this::listen,"T1-Avg-CI-Callbacks").start();
+        deadlineMs=forTrip?Long.MAX_VALUE:
+            SystemClock.elapsedRealtime()+DURATION_MS;
+        listenerThread=new Thread(this::listen,
+            forTrip?"T1-Trip-500m-OEM":"T1-Avg-CI-Callbacks");
+        listenerThread.start();
         return true;
+    }
+    void awaitStopped(long millis){
+        Thread t=listenerThread;
+        if(t!=null&&t!=Thread.currentThread())
+            try{t.join(Math.max(1,millis));}catch(InterruptedException ignored){}
     }
     void stop(){
         CountDownLatch latch=stopSignal;
@@ -136,8 +176,15 @@ final class T1OemConsumptionCallbacks {
     private void record(int channel,float raw){
         String value=Float.toString(raw);
         synchronized(dataLock){
+            // 50km OEM callbacks repeat the identical rolling value hundreds
+            // of times. Compact ONLY the TRIP listener; NEVER dedup 500m
+            // segments, even if two adjacent segments have the same value.
+            if(tripMode&&channel>=2 &&
+                Float.floatToIntBits(lastRaw[channel])==
+                Float.floatToIntBits(raw))return;
             count[channel]++;
             last[channel]=value;
+            lastRaw[channel]=raw;
             File file=logFile;
             if(file!=null){
                 String row=System.currentTimeMillis()+","+
@@ -184,7 +231,10 @@ final class T1OemConsumptionCallbacks {
             File dir=T1TripRecorderService.tripDir(app);
             String time=new SimpleDateFormat("yyyyMMdd_HHmmss",Locale.ROOT)
                 .format(new Date());
-            File file=new File(dir,"oem_callbacks_"+time+".csv");
+            File file=new File(dir,tripMode?
+                "trip_oem_"+tripId+".csv":"oem_callbacks_"+time+".csv");
+            if(tripMode&&file.exists())
+                throw new IllegalStateException("CSV OEM del viaje ya existe");
             try(FileOutputStream out=new FileOutputStream(file,false)){
                 out.write("timestamp_epoch_ms,channel,value_float_raw\n"
                     .getBytes(StandardCharsets.UTF_8));
@@ -227,9 +277,14 @@ final class T1OemConsumptionCallbacks {
             registration="Inscripciones aceptadas: "+ok+"/4"+
                 (errors.length()>0?" · "+errors:"");
             if(ok==0)throw new IllegalStateException("Todas las inscripciones rechazadas");
-            long remaining=deadlineMs-SystemClock.elapsedRealtime();
-            if(remaining>0)stopSignal.await(remaining,TimeUnit.MILLISECONDS);
-            state="Prueba terminada; resultados conservados.";
+            if(tripMode){
+                stopSignal.await();
+                state="TRIP finalizado; eventos de 500 m conservados.";
+            }else{
+                long remaining=deadlineMs-SystemClock.elapsedRealtime();
+                if(remaining>0)stopSignal.await(remaining,TimeUnit.MILLISECONDS);
+                state="Prueba terminada; resultados conservados.";
+            }
         }catch(Exception e){
             state="PRUEBA FALLIDA: "+e.getClass().getSimpleName()+
                 (e.getMessage()==null?"":" · "+e.getMessage());

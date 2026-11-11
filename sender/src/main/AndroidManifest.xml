@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <!-- Only user-triggered, verified signed updates; system confirmation required. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <queries>
@@ -26,8 +27,12 @@
                 <data android:scheme="drivelabauto" android:host="pair" />
             </intent-filter>
         </activity>
+        <service android:name=".RouteDispatchService" android:exported="false"
+            android:foregroundServiceType="dataSync" />
         <activity android:name=".RouteActivity" android:exported="true"
-            android:label="DriveLab Auto Sender · Navegación" android:launchMode="singleTop">
+            android:label="DriveLab Auto Sender · Navegación" android:launchMode="singleTop"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:excludeFromRecents="true" android:noHistory="true">
             <intent-filter>
                 <action android:name="android.intent.action.VIEW" />
                 <category android:name="android.intent.category.BROWSABLE" />
