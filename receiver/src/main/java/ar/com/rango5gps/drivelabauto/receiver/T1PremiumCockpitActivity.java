@@ -238,9 +238,15 @@ public final class T1PremiumCockpitActivity extends Activity {
         T1JourneyStore.Totals day=T1JourneyStore.totals(this,T1JourneyStore.today());
         T1JourneyStore.Totals month=T1JourneyStore.totals(this,T1JourneyStore.month());
         dayNow.setText(day.trips+" viajes · "+f(day.km,1)+" km\n"+
-            "$ "+f(day.fuelCost,0)+" nafta exp.");
+            (day.fuelKnownTrips>0?"$ "+f(day.fuelCost,0)+
+                " nafta exp. ("+day.fuelKnownTrips+" tramos registrados)":
+                "Nafta: sin tramo OEM válido"));
         monthNow.setText(month.trips+" viajes · "+f(month.km,1)+" km\n"+
-            "$ "+f(month.fuelCost,0)+" nafta exp.");
+            (month.fuelKnownTrips>0?"$ "+f(month.fuelCost,0)+" nafta exp.":
+                "Nafta: sin tramo OEM válido")+
+            "\nRed comprada: "+f(month.gridKwh,1)+" kWh ($"+
+            f(month.gridCost,0)+") · no imputada");
+
         ArrayList<T1JourneyStore.Entry> all=T1JourneyStore.history(this);
         StringBuilder s=new StringBuilder();
         SimpleDateFormat dt=new SimpleDateFormat("dd/MM HH:mm",Locale.getDefault());
