@@ -130,7 +130,7 @@ public final class ReceiverVehicleActivity extends Activity {
         LinearLayout root=column();root.setPadding(16,10,16,26);
         scroll.addView(root);
         label(root,"DRIVELAB AUTO · T1",23);
-        label(root,"v0.2.23 · Diagnóstico radar y barrido · solo lectura",12);
+        label(root,"v0.2.24 · Radar delantero/trasero y barrido · solo lectura",12);
         button(root,"← VOLVER A MAPAS Y PUENTE",this::finish);
         LinearLayout menu=new LinearLayout(this);
         menu.setOrientation(LinearLayout.HORIZONTAL);
@@ -161,12 +161,12 @@ public final class ReceiverVehicleActivity extends Activity {
             changeScanner.isRunning()||batchReader.busy()||wiperParking.busy();
     }
     private void renderVehicle(LinearLayout body){
-        section(body,"LIMPIAPARABRISAS Y RADAR TRASERO · DIAGNÓSTICO");
+        section(body,"LIMPIAPARABRISAS Y RADAR DELANTERO / TRASERO · DIAGNÓSTICO");
         label(body,"Lecturas OEM originales: 2126 sensibilidad de barrido AUTO, "+
             "2107 distancia de aviso por tramos, 2049 radar, 2125 limpia trasero. "+
-            "HAL PDC trasero y cuatro zonas. Sin escritura; no mide metros "+
+            "HAL PDC delantero y trasero, cuatro zonas por lado. Sin escritura; no mide metros "+
             "hasta comparar valores crudos con una distancia real.",13);
-        button(body,"LEER LIMPIAPARABRISAS Y RADAR · SIN CAMBIAR",()->{
+        button(body,"LEER LIMPIAPARABRISAS Y RADARES · SIN CAMBIAR",()->{
             if(vehicleBusy()){
                 wiperParkingStatus="Otra operación OEM está en curso";
                 if(wiperParkingView!=null)wiperParkingView.setText(wiperParkingStatus);
@@ -182,7 +182,7 @@ public final class ReceiverVehicleActivity extends Activity {
             })){
                 wiperParkingStatus="No se inició lectura OEM";
             }else{
-                wiperParkingStatus="Leyendo propiedades OEM de limpiaparabrisas y PDC…";
+                wiperParkingStatus="Leyendo propiedades OEM de limpiaparabrisas y PDC delantero/trasero…";
             }
             if(wiperParkingView!=null)wiperParkingView.setText(wiperParkingStatus);
         });
