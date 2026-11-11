@@ -9,7 +9,7 @@ const HTML_HEADERS={"content-type":"text/html; charset=utf-8","cache-control":"n
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const HEX64=/^[0-9a-f]{64}$/;
 const HEX48=/^[0-9a-f]{48}$/;
-const FILE=/^(?:phev_modes|oem_callbacks|code_diag)_[0-9]{8}_[0-9]{6}\.csv$/;
+const FILE=/^(?:phev_modes|oem_callbacks|code_diag|trip_oem)_[0-9]{8}_[0-9]{6}\.csv$/;
 const MAX_BODY=60000;
 const result=(code:number,body:object)=>new Response(JSON.stringify(body),{status:code,headers:JSON_HEADERS});
 const sha=async(x:string)=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(x))))
@@ -121,7 +121,10 @@ Deno.serve(async(req:Request)=>{
       rpmValid1034:[-1,100],
       oemElectric500mInt:[-50000,50000],oemFuel500mInt:[-1,50000],
       voltage1063Int:[-1,1500],current1064Int:[-2000,2000],
-      raw1090Float:[-100000,100000],raw1090Int:[-1000000000,1000000000]
+      raw1090Float:[-100000,100000],raw1090Int:[-1000000000,1000000000],
+      oem500FuelCount:[0,1000000],oem500ElectricCount:[0,1000000],
+      oem500FuelRaw:[-10000,10000],oem500ElectricRaw:[-10000,10000],
+      oem50FuelCallbackRaw:[-10000,10000],oem50ElectricCallbackRaw:[-10000,10000]
     };
     const cleaned:Record<string,number|null>[]=[];
     for(const sample of samples){
