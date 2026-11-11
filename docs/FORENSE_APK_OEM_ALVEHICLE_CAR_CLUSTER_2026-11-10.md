@@ -61,3 +61,17 @@ En la **rama experimental PR #26**, sin OTA pública:
 5. Solo entonces implementar TRIP A (desde llenado) y B (manual/reiniciable) con acumulados por ventanas validadas. Evitar lectura activa de HAL desconocido sin permiso/verificación de idoneidad.
 
 **No hay demostración en estos tres APK de un acumulador universal de gasolina en litros inyectados o un método resettable de consumo por viaje.**
+
+## Prueba de carretera reportada con Receiver 0.2.25 (10/11/2026)
+
+Usuario realizó cerca de 1 km de marcha normal con TRIP activo y confirmó aumento del número de muestras. En pantalla en vivo:
+
+- `1085`, promedio nafta últimos 50 km: **sí cambia**.
+- `1084`, promedio eléctrico últimos 50 km: **sí cambia**.
+- `1087`, promedio nafta de 500 m: **-1, sin cambios observados**.
+- `1086`, promedio eléctrico de 500 m: **-1, sin cambios observados**.
+- `1034`, validez de RPM: **1**. NO significa necesariamente motor térmico encendido: consultar RPM `1035` a la misma hora.
+
+Por tanto **NO sumar los códigos 1086/1087 para consumo de viaje** ni interpretarlos como -1 L o -1 kWh. Son valores aparentemente no disponibles mediante el getter FLOAT actual, o candidatos que dependen de eventos/estado de ECU. El kilometraje recorrido debería permitir cambios de valores de 500 m si fueran publicados como lectura continua; falta corroborar.
+
+Siguiente depuración: registrar en paralelo para 1086/1087 el getter `readInt` y `readFloat` en el mismo timestamp y distinguir error/centinela; verificar si `onAvgFuChanged`/`onAvgElecChanged` exponen datos por callback en lugar de propiedad persistente; comparar con el CSV original y si los eventos ocurren tras 500 m exactos, sin escribir propiedades OEM. Conservar histórico y los valores -1 crudos para reanalizar. **Todavía no hay medición real de combustible por tramos validada.**
