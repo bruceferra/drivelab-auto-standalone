@@ -258,7 +258,11 @@ public final class T1TankDashboardActivity extends Activity {
                     "\nOEM ÚLTIMOS 50 KM (ventana móvil, NO este TRIP): "+
                     "1085 nafta="+fmt(s.oemFuelRolling50,1)+" L/100 km · "+
                     "1084 eléctrica neta="+fmt(s.oemElectricRolling50,1)+
-                    " kWh/100 km");
+                    " kWh/100 km"+
+                    "\nOEM 500 METROS (crudo, para validar): 1087 nafta="+
+                    fmt(s.oemFuelAverage500m,2)+" · 1086 eléctrica="+
+                    fmt(s.oemElectricAverage500m,2)+
+                    " · RPM válidas 1034="+s.rpmValid1034);
                 updateRange();
             });
         },"T1-Instrument-ReadOnly").start();
