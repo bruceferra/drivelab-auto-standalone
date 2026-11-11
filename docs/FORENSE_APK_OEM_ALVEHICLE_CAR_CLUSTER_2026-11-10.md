@@ -75,3 +75,32 @@ Usuario realizó cerca de 1 km de marcha normal con TRIP activo y confirmó aume
 Por tanto **NO sumar los códigos 1086/1087 para consumo de viaje** ni interpretarlos como -1 L o -1 kWh. Son valores aparentemente no disponibles mediante el getter FLOAT actual, o candidatos que dependen de eventos/estado de ECU. El kilometraje recorrido debería permitir cambios de valores de 500 m si fueran publicados como lectura continua; falta corroborar.
 
 Siguiente depuración: registrar en paralelo para 1086/1087 el getter `readInt` y `readFloat` en el mismo timestamp y distinguir error/centinela; verificar si `onAvgFuChanged`/`onAvgElecChanged` exponen datos por callback en lugar de propiedad persistente; comparar con el CSV original y si los eventos ocurren tras 500 m exactos, sin escribir propiedades OEM. Conservar histórico y los valores -1 crudos para reanalizar. **Todavía no hay medición real de combustible por tramos validada.**
+
+## CSV real recibido y analizado — TRIP 2026-11-10 23:25:21 a 23:34:18 ART
+
+**Fuente:** `trip_20261110_232521.csv` aportado por el usuario. 177 muestras, ~3,05 s de frecuencia, 8 min 57 s totales, 1,65441 km **estimados por velocidad OEM** (`notes=OEM_SPEED_UNIT_CANDIDATE` en todas las filas, GPS sin datos). No publicar coordenadas privadas.
+
+| Lectura | Inicio | Fin | Observación |
+|---|---:|---:|---|
+| `1084` eléctrico últimos 50 km | -0,9 | -1,0 kWh/100km | **1 cambio** a las 23:29:34, distancia 1,10770 km |
+| `1085` nafta últimos 50 km | 4,7 | 4,9 L/100km | **1 cambio** en el mismo timestamp que 1084 |
+| `1086` eléctrica 500 m float | -1 | -1 | **-1 en las 177 muestras**; señal no disponible para uso actual |
+| `1087` nafta 500 m float | -1 | -1 | **-1 en las 177 muestras**; señal no disponible para uso actual |
+| `1034` validez RPM | 1 | 1 | Constante 1; no implica térmico encendido |
+| `1035` RPM térmico | 0 | 0 | >0 en 51 muestras; pico ~1.736 RPM. Dos sesiones: 23:27:05–23:29:07 y 23:31:21–23:31:55 (muestreo cada 3 s) |
+| `CI186` nivel nafta OEM | 62,7 | 62,5 L indicados | Saltos -0,1 L a 23:27:38 y 23:31:43. **No equivalen a volumen real consumido con alta precisión** |
+| `1042` SOC interno | 17,5 | 18,5 % | +1 punto porcentual, sin kWh físico inferible |
+| `1062` SOC tablero | 13,1 | 14,2 % | +1,1 puntos, resolución ~0,1 % |
+| `1049` energía sesión descarga | 0,0 | 0,1 (crudo) | Un incremento cerca de 23:31:21; unidad/reset no validados |
+| `1048` energía sesión carga | 0,0 | 0,0 (crudo) | Sin variación |
+| `1063` voltaje HV | NaN | NaN | **Ausente en las 177 muestras**; por esta causa `hv_gross_discharge_kwh_est=0` y `hv_charge_kwh_est=0` **no son mediciones de cero consumo** |
+| `gas_l_proxy` | 0 | 0,12353 L | Cálculo fijo 1,65441 km × 7,47 L/100 km, **no consumo real** |
+
+Las cifras OEM de 50 km cambiaron simultáneamente *una vez* durante este tramo; la actualización puede ser por evento, distancia o ventana temporal. No atribuir el cambio de 4,7 a 4,9 al consumo directo de estos 1,65 km: se trata de promedios móviles con tramos que entran y salen de la ventana. Si `1086/1087=-1`, la prueba **no aporta segmentos de 500 m sumables**. No generar TRIP/tanque a partir de esos `-1` ni reintroducir el algoritmo descartado del T1Launcher.
+
+### Próxima investigación de solo lectura
+
+1. Verificar **getter INT frente a FLOAT** para IDs `1086/1087`, guardando por separado valor crudo y errores. Los -1 obtenidos del FLOAT actual no prueban que el getter INT sea válido.
+2. Considerar la vía de **callbacks OEM** `onAvgFuChanged`/`onAvgElecChanged` en ClusterInteraction/VehicleService; la implementación de listener puede recibir eventos no persistidos por getter.
+3. Investigar la ausencia total del voltaje `1063` y contrastar señales HV alternativas `1090` (solo lectura), sin poner números falsos de kWh.
+4. Exportar o recibir próximos CSV, preservando origen de distancia y estado de RPM. Para consumo de tanque físico, continuar contrastando surtidor.
