@@ -2,30 +2,17 @@ package ar.com.rango5gps.drivelabauto.receiver;
 
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.security.keystore.KeyGenParameterSpec;
-import android.security.keystore.KeyProperties;
-import android.util.Base64;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
 import java.io.BufferedReader;
 import java.io.File;
-import java.io.FileInputStream;
 import java.io.FileReader;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.net.HttpURLConnection;
-import java.net.URL;
 import java.nio.charset.StandardCharsets;
-import java.security.KeyStore;
 import java.util.Arrays;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import javax.crypto.Cipher;
-import javax.crypto.KeyGenerator;
-import javax.crypto.SecretKey;
-import javax.crypto.spec.GCMParameterSpec;
 
 /**
  * Owner-opt-in telemetria sync. Reads only locally-recorded TRIP CSV files,
@@ -33,15 +20,12 @@ import javax.crypto.spec.GCMParameterSpec;
  * advances a durable per-file cursor ONLY after a server acknowledgement.
  *
  * Endpoint stores private batches with RLS; it reuses the independent T1
- * diagnostic owner PIN but never embeds a PIN or server secret in this APK.
+ * QR-provisioned per-device credential held in Android Keystore. No PIN.
  */
 final class T1TripSync {
     static final String PREFS="t1_trip_private_sync";
     static final String ENABLED="enabled",STATUS="status",SENT="rows_sent",
         LAST="last_success_ms",SECRET="encrypted_owner_pin";
-    private static final String ENDPOINT=
-        "https://wgqbvbzhdnkkrpkrohej.supabase.co/functions/v1/drivelab-auto-trip-upload";
-    private static final String KEY_ALIAS="drivelab_receiver_trip_sync_pin_v1";
     private static final String CURSOR="cursor_";
     private static final AtomicBoolean ACTIVE=new AtomicBoolean(false);
     private static volatile long lastAttempt=0;
@@ -51,49 +35,17 @@ final class T1TripSync {
     static SharedPreferences prefs(Context c){
         return c.getApplicationContext().getSharedPreferences(PREFS,Context.MODE_PRIVATE);
     }
-    private static SecretKey key()throws Exception{
-        KeyStore store=KeyStore.getInstance("AndroidKeyStore");
-        store.load(null);
-        KeyStore.Entry existing=store.getEntry(KEY_ALIAS,null);
-        if(existing instanceof KeyStore.SecretKeyEntry)
-            return ((KeyStore.SecretKeyEntry)existing).getSecretKey();
-        KeyGenerator g=KeyGenerator.getInstance(
-            KeyProperties.KEY_ALGORITHM_AES,"AndroidKeyStore");
-        g.init(new KeyGenParameterSpec.Builder(KEY_ALIAS,
-            KeyProperties.PURPOSE_ENCRYPT|KeyProperties.PURPOSE_DECRYPT)
-            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
-            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
-            .build());
-        return g.generateKey();
-    }
-    static void configure(Context c,String pin)throws Exception{
-        if(pin==null||!pin.matches("[0-9]{8}"))
-            throw new IllegalArgumentException("PIN T1 de 8 dígitos requerido");
-        Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");
-        cipher.init(Cipher.ENCRYPT_MODE,key());
-        String encoded=Base64.encodeToString(cipher.getIV(),Base64.NO_WRAP)+":"+
-            Base64.encodeToString(cipher.doFinal(pin.getBytes(StandardCharsets.UTF_8)),
-                Base64.NO_WRAP);
-        prefs(c).edit().putString(SECRET,encoded).putBoolean(ENABLED,true)
-            .putString(STATUS,"Sincronización activada; pendiente de primer envío")
+    static void configure(Context c){
+        if(!T1CloudDiagnostics.active(c))
+            throw new IllegalStateException(
+                "Activá la nube con QR una sola vez en VEHÍCULO → DIAGNÓSTICO");
+        prefs(c).edit().remove(SECRET).putBoolean(ENABLED,true)
+            .putString(STATUS,"TRIP sin PIN · sincronización privada por QR activa")
             .apply();
     }
     static void disable(Context c){
         prefs(c).edit().putBoolean(ENABLED,false)
             .putString(STATUS,"Sincronización pausada; CSV locales conservados").apply();
-    }
-    private static String readPin(Context c)throws Exception{
-        String stored=prefs(c).getString(SECRET,"");
-        if(stored==null||!stored.contains(":"))throw new IllegalStateException("PIN no configurado");
-        String[] parts=stored.split(":",2);
-        byte[] iv=Base64.decode(parts[0],Base64.NO_WRAP);
-        if(iv.length!=12)throw new IllegalStateException("IV inválido");
-        Cipher cipher=Cipher.getInstance("AES/GCM/NoPadding");
-        cipher.init(Cipher.DECRYPT_MODE,key(),new GCMParameterSpec(128,iv));
-        String pin=new String(cipher.doFinal(Base64.decode(parts[1],Base64.NO_WRAP)),
-            StandardCharsets.UTF_8);
-        if(!pin.matches("[0-9]{8}"))throw new IllegalStateException("PIN inválido");
-        return pin;
     }
     static void trigger(Context c,boolean force){
         Context app=c.getApplicationContext();
@@ -108,8 +60,8 @@ final class T1TripSync {
                 String reason=ex.getMessage()==null?"":ex.getMessage();
                 String status;
                 if(reason.contains("HTTP 401"))
-                    status="PIN incorrecto (HTTP 401). Verificá el PIN privado "+
-                        "de DriveLab T1; CSV locales conservados.";
+                    status="Dispositivo QR no autorizado (HTTP 401). "+
+                        "Revisá vinculación de nube; CSV locales conservados.";
                 else if(reason.contains("HTTP 429"))
                     status="Demasiados intentos (HTTP 429). "+
                         "Sincronización en pausa temporal; CSV conservados.";
@@ -177,36 +129,14 @@ final class T1TripSync {
         }
         return arr;
     }
-    private static void post(String pin,String id,int cursor,JSONArray batch)
+    private static void post(Context c,String id,int cursor,JSONArray batch)
         throws Exception{
-        JSONObject body=new JSONObject();
-        body.put("tripId",id).put("rowOffset",cursor).put("samples",batch);
-        byte[] raw=body.toString().getBytes(StandardCharsets.UTF_8);
-        HttpURLConnection connection=(HttpURLConnection)new URL(ENDPOINT).openConnection();
-        try{
-            connection.setRequestMethod("POST");
-            connection.setConnectTimeout(8000);
-            connection.setReadTimeout(12000);
-            connection.setDoOutput(true);
-            connection.setRequestProperty("Content-Type","application/json; charset=utf-8");
-            connection.setRequestProperty("X-Drivelab-T1-Key",pin);
-            connection.setFixedLengthStreamingMode(raw.length);
-            try(OutputStream out=connection.getOutputStream()){out.write(raw);}
-            int code=connection.getResponseCode();
-            if(code!=200)throw new IllegalStateException("HTTP "+code);
-            try(InputStream in=connection.getInputStream()){
-                byte[] bytes=new byte[4096];
-                int n=in.read(bytes);
-                JSONObject result=new JSONObject(n>0?
-                    new String(bytes,0,n,StandardCharsets.UTF_8):"{}");
-                if(!result.optBoolean("ok",false)||result.optInt("rowOffset",-1)!=cursor
-                        ||result.optInt("count",-1)!=batch.length())
-                    throw new IllegalStateException("Confirmación incompleta");
-            }
-        }finally{connection.disconnect();}
+        T1CloudDiagnostics.uploadTripBatch(c,id,cursor,batch);
     }
     private static void sendPending(Context c)throws Exception{
-        final String pin=readPin(c);
+        if(!T1CloudDiagnostics.active(c))
+            throw new IllegalStateException(
+                "Nube no activada por QR; TRIP y CSV locales conservados");
         File[] files=T1TripRecorderService.tripDir(c).listFiles(
             f->f.isFile()&&f.getName().matches("trip_[0-9]{8}_[0-9]{6}\\.csv"));
         if(files==null||files.length==0){
@@ -221,7 +151,7 @@ final class T1TripSync {
             while(batches<MAX_PER_PASS){
                 JSONArray batch=readBatch(file,cursor);
                 if(batch.length()==0)break;
-                post(pin,tripId,cursor,batch);
+                post(c,tripId,cursor,batch);
                 cursor+=batch.length();uploaded+=batch.length();batches++;
                 prefs(c).edit().putInt(cursorKey,cursor)
                     .putInt(SENT,prefs(c).getInt(SENT,0)+batch.length())

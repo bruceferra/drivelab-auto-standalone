@@ -9,6 +9,8 @@
     </queries>
     <application android:label="DriveLab Auto Sender" android:allowBackup="false"
         android:usesCleartextTraffic="false" android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <meta-data android:name="com.google.mlkit.vision.DEPENDENCIES"
+            android:value="barcode_ui" />
         <provider
             android:name="ar.com.rango5gps.drivelabauto.common.UpdateApkProvider"
             android:authorities="${applicationId}.updatefiles"
@@ -17,6 +19,12 @@
         <activity android:name=".SenderActivity" android:exported="true">
             <intent-filter><action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="drivelabauto" android:host="pair" />
+            </intent-filter>
         </activity>
         <activity android:name=".RouteActivity" android:exported="true"
             android:label="DriveLab Auto Sender · Navegación" android:launchMode="singleTop">

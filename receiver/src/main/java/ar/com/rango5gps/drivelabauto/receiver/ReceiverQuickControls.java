@@ -198,7 +198,10 @@ final class ReceiverQuickControls {
         if(leftPlus!=null)leftPlus.setText("IZQ + ("+l+")");
         if(rightMinus!=null)rightMinus.setText("DER − ("+r+")");
         if(rightPlus!=null)rightPlus.setText("DER + ("+r+")");
+        boolean serviceActive=m.getBoolean(MirrorAutomationService.SERVICE_ACTIVE,false);
         config.setText("Espejos: "+(on?"AUTO":"MANUAL")+
+            " · servicio de fondo: "+(serviceActive?"ACTIVO":
+                (on?"SIN SERVICIO · revisar estado":"detenido"))+
             "  · pasos por lado: IZQ "+l+" / DER "+r+
             "  · aire: "+(interior?"SIEMPRE INTERIOR":"AUTO")+
             (a.getBoolean(RecirculationGuardService.PAUSED,false)?

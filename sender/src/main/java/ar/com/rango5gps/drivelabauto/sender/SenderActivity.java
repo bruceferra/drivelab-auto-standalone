@@ -9,6 +9,9 @@ import android.view.*;
 import android.widget.*;
 import ar.com.rango5gps.drivelabauto.common.MapLinks;
 import ar.com.rango5gps.drivelabauto.common.Updater;
+import com.google.mlkit.vision.codescanner.GmsBarcodeScanning;
+import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions;
+import com.google.mlkit.vision.barcode.common.Barcode;
 
 /** User-facing Sender controls only: no vehicle telemetry or OEM access. */
 public final class SenderActivity extends Activity {
@@ -16,7 +19,12 @@ public final class SenderActivity extends Activity {
     private String status="";
     private ScrollView currentScroll;
     private long lastAutoCheckElapsed=0;
-    @Override public void onCreate(Bundle state){super.onCreate(state);render();}
+    @Override public void onCreate(Bundle state){
+        super.onCreate(state);render();acceptQrIntent(getIntent());
+    }
+    @Override protected void onNewIntent(Intent intent){
+        super.onNewIntent(intent);setIntent(intent);acceptQrIntent(intent);
+    }
     @Override public void onResume(){
         super.onResume();
         render();
@@ -53,7 +61,8 @@ public final class SenderActivity extends Activity {
         if(paired)title(body,"IP receptor: "+SenderClient.prefs(this).getString("receiver_ip",""),14);
         title(body,"Envíos confirmados: "+SenderClient.prefs(this).getInt("sent",0)+
             "\nÚltimo resultado: "+SenderClient.prefs(this).getString("last_status","Sin pruebas"),14);
-        button(body,"Vincular Receiver · código de 6 dígitos",this::pair);
+        button(body,"VINCULAR T1 POR QR · SIN CÓDIGOS",this::scanPairQr);
+        button(body,"Vincular manualmente · 6 dígitos (respaldo)",this::pair);
         button(body,"Probar envío real a La Plata",this::test);
         button(body,"Pegar enlace de Google Maps / WhatsApp",this::paste);
         button(body,"ACTUALIZAR SENDER · INSTALACIÓN DIRECTA",()->Updater.check(this,"sender",this::info));
@@ -69,6 +78,51 @@ public final class SenderActivity extends Activity {
         if(restoreY>0)scroll.post(()->{
             if(currentScroll==scroll)scroll.scrollTo(0,restoreY);
         });
+    }
+    private void acceptQrIntent(Intent intent){
+        if(intent==null||intent.getData()==null)return;
+        String qr=intent.getDataString();
+        if(qr!=null&&qr.startsWith("drivelabauto://pair?"))
+            beginPairQr(qr);
+    }
+    private void scanPairQr(){
+        try{
+            GmsBarcodeScannerOptions options=new GmsBarcodeScannerOptions.Builder()
+                .setBarcodeFormats(Barcode.FORMAT_QR_CODE)
+                .enableAutoZoom()
+                .build();
+            GmsBarcodeScanning.getClient(this,options).startScan()
+                .addOnSuccessListener(barcode->{
+                    String raw=barcode.getRawValue();
+                    if(raw==null||!raw.startsWith("drivelabauto://pair?")){
+                        info("Ese QR no corresponde a DriveLab Auto. "+
+                            "Escaneá el de VINCULAR XIAOMI de la T1.");return;
+                    }
+                    beginPairQr(raw);
+                })
+                .addOnCanceledListener(()->info("Lectura QR cancelada"))
+                .addOnFailureListener(e->info("Escáner QR no disponible: "+
+                    e.getClass().getSimpleName()+
+                    ". Probá método manual o revisá Servicios de Google Play."));
+        }catch(Exception e){
+            info("No se pudo abrir el lector QR: "+e.getClass().getSimpleName()+
+                ". Usá vinculación manual como alternativa.");
+        }
+    }
+    private void beginPairQr(String qr){
+        info("QR leído · conectando con T1 por Wi-Fi…");
+        new Thread(()->{
+            try{
+                SenderClient.Session s=SenderClient.beginPairingQr(qr);
+                SenderClient.finishPairing(this,s);
+                runOnUiThread(()->info(
+                    "T1 VINCULADA POR QR · cifrado activo · sin PIN ni códigos"));
+            }catch(Exception ex){
+                runOnUiThread(()->info("No se pudo vincular por QR: "+
+                    ex.getClass().getSimpleName()+
+                    (ex.getMessage()==null?"":" · "+ex.getMessage())));
+            }
+        },"Sender-QR-Pair").start();
     }
     private void pair(){
         EditText field=new EditText(this);field.setSingleLine(true);

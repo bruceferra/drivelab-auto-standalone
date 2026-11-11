@@ -1,6 +1,7 @@
 package ar.com.rango5gps.drivelabauto.sender;
 
 import android.content.Context;
+import android.net.Uri;
 import android.content.SharedPreferences;
 import ar.com.rango5gps.drivelabauto.common.BridgeCrypto;
 import java.io.*;
@@ -46,16 +47,37 @@ public final class SenderClient {
         s.setSoTimeout(4500);return s;
     }
     public static Session beginPairing(String ip) throws Exception{
+        return beginPairing(ip,null);
+    }
+    public static Session beginPairingQr(String raw)throws Exception{
+        if(raw==null||raw.length()>250)
+            throw new IOException("QR de vinculación inválido");
+        Uri link=Uri.parse(raw);
+        if(!"drivelabauto".equals(link.getScheme())||
+            !"pair".equals(link.getHost()))
+            throw new IOException("QR no pertenece a DriveLab Auto");
+        String ip=link.getQueryParameter("ip");
+        String token=link.getQueryParameter("ticket");
+        if(token==null||!token.matches("[0-9a-f]{48}"))
+            throw new IOException("QR vencido o mal formado");
+        return beginPairing(ip,token);
+    }
+    private static Session beginPairing(String ip,String ticket) throws Exception{
         if(!localIpv4(ip))throw new IOException("Dirección IP privada inválida");
         KeyPair mine=BridgeCrypto.newKeyPair();
         try(Socket socket=connect(ip,BridgeCrypto.PAIR_PORT)){
             DataOutputStream out=new DataOutputStream(socket.getOutputStream());
             DataInputStream in=new DataInputStream(socket.getInputStream());
             byte[] pub=BridgeCrypto.publicBytes(mine);
-            out.writeInt(BridgeCrypto.PAIR_MAGIC);out.writeByte(1);
-            out.writeShort(pub.length);out.write(pub);out.flush();
+            out.writeInt(BridgeCrypto.PAIR_MAGIC);
+            out.writeByte(ticket==null?1:3);
+            out.writeShort(pub.length);out.write(pub);
+            if(ticket!=null)out.write(BridgeCrypto.qrPairProof(ticket,pub));
+            out.flush();
             if(in.readInt()!=BridgeCrypto.PAIR_MAGIC||in.readUnsignedByte()!=11)
-                throw new IOException("Primero activá VINCULAR en el Receiver");
+                throw new IOException(ticket!=null?
+                    "QR no aceptado: generá uno nuevo en la T1, misma red Wi-Fi":
+                    "Primero activá VINCULAR en el Receiver");
             long id=in.readLong();int size=in.readUnsignedShort();
             if(size<70||size>200)throw new IOException("Clave pública T1 inválida");
             byte[] received=new byte[size];in.readFully(received);

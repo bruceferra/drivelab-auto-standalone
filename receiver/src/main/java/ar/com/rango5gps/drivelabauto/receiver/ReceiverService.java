@@ -18,6 +18,7 @@ public final class ReceiverService extends Service {
     public static final String ACTION_START="drivelab.receiver.START";
     public static final String ACTION_STOP="drivelab.receiver.STOP";
     public static final String ACTION_PAIR="drivelab.receiver.ARM_PAIR";
+    public static final String ACTION_PAIR_QR="drivelab.receiver.ARM_PAIR_QR";
     public static final String FROM_BOOT="from_boot";
     private static final String CHANNEL="drivelab_receiver_background",ROUTES="drivelab_receiver_routes";
     private volatile boolean running=false;
@@ -69,7 +70,8 @@ public final class ReceiverService extends Service {
             shutdown();stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();
             return START_NOT_STICKY;
         }
-        boolean arm=ACTION_PAIR.equals(action);
+        boolean qr=ACTION_PAIR_QR.equals(action);
+        boolean arm=qr||ACTION_PAIR.equals(action);
         boolean start=arm||ACTION_START.equals(action)||
             (intent==null&&prefs().getBoolean("keep_alive",false));
         if(!start)return START_NOT_STICKY;
@@ -87,9 +89,25 @@ public final class ReceiverService extends Service {
         }
         if(arm){
             pending=null;
-            prefs().edit().putLong("pair_until",System.currentTimeMillis()+120000)
+            SharedPreferences.Editor e=prefs().edit()
+                .putLong("pair_until",System.currentTimeMillis()+120000)
                 .remove("pair_code").remove("pair_id").remove("approved_id")
-                .putString("pair_status","ESPERANDO XIAOMI · 2 MINUTOS").apply();
+                .remove("pair_qr_ticket");
+            if(qr){
+                if(localIp().isEmpty()){
+                    e.putString("pair_status",
+                        "SIN IP Wi-Fi · conectá T1 y Xiaomi a la misma red");
+                }else{
+                    byte[] random=new byte[24];new SecureRandom().nextBytes(random);
+                    StringBuilder t=new StringBuilder(48);
+                    for(byte b:random)
+                        t.append(String.format(Locale.US,"%02x",b&255));
+                    e.putString("pair_qr_ticket",t.toString())
+                        .putString("pair_status",
+                            "QR ACTIVO · escaneá desde Sender · 2 MINUTOS");
+                }
+            }else e.putString("pair_status","ESPERANDO XIAOMI · 2 MINUTOS");
+            e.apply();
         }
         return START_STICKY;
     }
@@ -196,8 +214,9 @@ public final class ReceiverService extends Service {
                     DataOutputStream out=new DataOutputStream(client.getOutputStream());
                     if(in.readInt()!=BridgeCrypto.PAIR_MAGIC)continue;
                     int action=in.readUnsignedByte();
-                    if(action==1)beginPair(in,out);
+                    if(action==1)beginPair(in,out,false);
                     else if(action==2)finishPair(in,out);
+                    else if(action==3)beginPair(in,out,true);
                 }catch(SocketTimeoutException ignored){}catch(Exception error){
                     // Only failure category, never the code, key, IP or payload.
                     prefs().edit().putString("pair_status",
@@ -223,20 +242,33 @@ public final class ReceiverService extends Service {
     private void reject(DataOutputStream out) throws Exception{
         out.writeInt(BridgeCrypto.PAIR_MAGIC);out.writeByte(13);out.flush();
     }
-    private void beginPair(DataInputStream in,DataOutputStream out) throws Exception{
+    private void beginPair(DataInputStream in,DataOutputStream out,boolean qr)
+        throws Exception{
         long now=System.currentTimeMillis();
         if(now>prefs().getLong("pair_until",0)||pending!=null){reject(out);return;}
         int len=in.readUnsignedShort();
         if(len<70||len>200){reject(out);return;}
         byte[] phone=new byte[len];in.readFully(phone);
+        if(qr){
+            String ticket=prefs().getString("pair_qr_ticket","");
+            if(ticket.length()!=48){reject(out);return;}
+            byte[] proof=new byte[32];in.readFully(proof);
+            byte[] expected=BridgeCrypto.qrPairProof(ticket,phone);
+            if(!MessageDigest.isEqual(expected,proof)){reject(out);return;}
+        }
         KeyPair local=BridgeCrypto.newKeyPair();
         byte[] secret=BridgeCrypto.derive(local.getPrivate(),phone);
         long id=new SecureRandom().nextLong();
         String code=BridgeCrypto.sas(secret);
         pending=new Pending(secret,code,id,Math.min(now+120000,prefs().getLong("pair_until",0)));
-        prefs().edit().putLong("pair_id",id).putString("pair_code",code)
-            .putString("pair_status","COMPARÁ LOS 6 DÍGITOS CON XIAOMI")
-            .remove("approved_id").apply();
+        SharedPreferences.Editor edit=prefs().edit()
+            .putLong("pair_id",id).putString("pair_code",code);
+        if(qr)edit.putLong("approved_id",id)
+            .putString("pair_status",
+                "QR VERIFICADO · completando vinculación cifrada Xiaomi");
+        else edit.putString("pair_status","COMPARÁ LOS 6 DÍGITOS CON XIAOMI")
+            .remove("approved_id");
+        edit.apply();
         byte[] pub=BridgeCrypto.publicBytes(local);
         out.writeInt(BridgeCrypto.PAIR_MAGIC);out.writeByte(11);out.writeLong(id);
         out.writeShort(pub.length);out.write(pub);out.flush();
@@ -261,6 +293,7 @@ public final class ReceiverService extends Service {
         if(!prefs().edit().putString("secret",BridgeCrypto.packKey(session.secret))
             .putString("pair_status","XIAOMI VINCULADO · CIFRADO ACTIVO")
             .remove("pair_code").remove("pair_id").remove("approved_id")
+            .remove("pair_qr_ticket")
             .remove("pair_until").commit()){reject(out);return;}
         pending=null;
         out.writeInt(BridgeCrypto.PAIR_MAGIC);out.writeByte(12);

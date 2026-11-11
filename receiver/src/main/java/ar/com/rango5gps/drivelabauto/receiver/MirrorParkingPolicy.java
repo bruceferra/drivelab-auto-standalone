@@ -102,6 +102,17 @@ public final class MirrorParkingPolicy {
             Phase.NORMAL:Phase.UNKNOWN_POSITION;
         if(phase==Phase.NORMAL)leftIssued=rightIssued=0;
     }
+    /**
+     * After an explicit stationary manual RECUPERAR, resume AUTO only when
+     * ALL planned release-confirmed commands for both mirrors completed.
+     * This does not certify physical angle; the driver still owns the D pose.
+     */
+    public static boolean completedManualRecovery(int issuedLeft,int issuedRight,
+                                                   int requestedLeft,int requestedRight){
+        return requestedLeft>0 && requestedRight>0 &&
+            issuedLeft==requestedLeft && issuedRight==requestedRight;
+    }
+
     /** Any interrupted or uncontrolled movement invalidates reference. */
     public void invalidate(){
         phase=Phase.UNKNOWN_POSITION;

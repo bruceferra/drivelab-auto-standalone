@@ -14,6 +14,7 @@ import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
+import android.widget.ImageView;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
@@ -58,7 +59,9 @@ public final class ReceiverVehicleActivity extends Activity {
     private String batchValues="";
     private String exportStatus="";
     private int batchStart=2001;
-    private TextView diagnosticsView;
+    private TextView diagnosticsView,cloudView;
+    private ImageView cloudQrView;
+    private long lastCloudPoll=0L;
     private final android.os.Handler diagnosticHandler=
         new android.os.Handler(android.os.Looper.getMainLooper());
     private boolean diagnosticScreenVisible=false;
@@ -66,6 +69,13 @@ public final class ReceiverVehicleActivity extends Activity {
         @Override public void run(){
             if(!diagnosticScreenVisible||isFinishing()||isDestroyed())return;
             updateDiagnosticsText();
+            if(activeTab==3&&!T1CloudDiagnostics.active(ReceiverVehicleActivity.this)&&
+                    !T1CloudDiagnostics.qrUrl(ReceiverVehicleActivity.this).isEmpty()&&
+                    android.os.SystemClock.elapsedRealtime()-lastCloudPoll>6000L){
+                lastCloudPoll=android.os.SystemClock.elapsedRealtime();
+                T1CloudDiagnostics.check(ReceiverVehicleActivity.this,
+                    (message,url)->updateCloudUi(message,url));
+            }
             diagnosticHandler.postDelayed(this,1800);
         }
     };
@@ -83,6 +93,8 @@ public final class ReceiverVehicleActivity extends Activity {
         if(saved!=null){
             activeTab=Math.min(3,Math.max(0,saved.getInt("tab",0)));
             batchStart=saved.getInt("batch",2001);
+        }else if(getIntent()!=null){
+            activeTab=Math.min(3,Math.max(0,getIntent().getIntExtra("open_tab",0)));
         }
         render();
     }
@@ -146,7 +158,7 @@ public final class ReceiverVehicleActivity extends Activity {
         LinearLayout root=column();root.setPadding(16,10,16,26);
         scroll.addView(root);
         label(root,"DRIVELAB AUTO · T1",23);
-        label(root,"v0.2.30 · PHEV/consumo/radar/barrido · solo lectura",12);
+        label(root,"v0.2.31 · diagnósticos y subida QR · solo lectura",12);
         button(root,"← VOLVER A MAPAS Y PUENTE",this::finish);
         LinearLayout menu=new LinearLayout(this);
         menu.setOrientation(LinearLayout.HORIZONTAL);
@@ -620,12 +632,50 @@ public final class ReceiverVehicleActivity extends Activity {
             else wiperParkingStatus="Consultando radar delantero/trasero y limpias…";
             updateDiagnosticsText();
         });
+        section(body,"SUBIDA PRIVADA A SERVIDOR · SIN PIN");
+        label(body,"Una única activación: mostrás el QR en la T1 y lo escaneás "+
+            "con la cámara del Xiaomi. Después cada botón EXPORTAR guarda "+
+            "el CSV local y lo sube por HTTPS. Nadie recibe la clave del dispositivo "+
+            "en el QR. Si falla internet, siempre queda la copia local.",13);
+        button(body,"ACTIVAR SERVIDOR · MOSTRAR QR",()->{
+            updateCloudUi("Solicitando QR de un solo uso…",null);
+            T1CloudDiagnostics.beginQr(this,(message,url)->
+                updateCloudUi(message,url));
+        });
+        button(body,"COMPROBAR VINCULACIÓN DE NUBE",()->
+            T1CloudDiagnostics.check(this,(message,url)->
+                updateCloudUi(message,url)));
+        cloudView=status(body,T1CloudDiagnostics.status(this));
+        cloudQrView=new ImageView(this);
+        cloudQrView.setAdjustViewBounds(true);
+        cloudQrView.setMaxHeight(500);
+        cloudQrView.setVisibility(android.view.View.GONE);
+        body.addView(cloudQrView);
+        updateCloudUi(T1CloudDiagnostics.status(this),T1CloudDiagnostics.qrUrl(this));
         diagnosticsView=status(body,"Preparando diagnóstico…");
         updateDiagnosticsText();
         label(body,"Sensores PDC: valores sin calibrar; nunca equivalen "+
             "automáticamente a centímetros. Limpiaparabrisas AUTO 2126 y bandas "+
             "de radar 2107 no están validados como controles de ajuste. "+
             "AVAS 2074 se muestra solo como estado; sin apagado automático.",12);
+    }
+    private void updateCloudUi(String message,String url){
+        if(cloudView!=null&&!isFinishing()&&!isDestroyed())
+            cloudView.setText(message);
+        if(cloudQrView==null||isFinishing()||isDestroyed())return;
+        if(url==null||url.isEmpty()||T1CloudDiagnostics.active(this)){
+            cloudQrView.setVisibility(android.view.View.GONE);
+            cloudQrView.setImageDrawable(null);
+            return;
+        }
+        try{
+            cloudQrView.setImageBitmap(T1QrRenderer.bitmap(url));
+            cloudQrView.setVisibility(android.view.View.VISIBLE);
+        }catch(Exception e){
+            cloudQrView.setVisibility(android.view.View.GONE);
+            if(cloudView!=null)cloudView.setText(
+                "Error mostrando QR: "+e.getClass().getSimpleName());
+        }
     }
     private void updateDiagnosticsText(){
         if(activeTab!=3||diagnosticsView==null||
@@ -684,7 +734,15 @@ public final class ReceiverVehicleActivity extends Activity {
                 if(!copied)try{getContentResolver().delete(uri,null,null);}
                     catch(Exception ignored){}
             }
-            exportStatus="CSV GUARDADO en Descargas/DriveLabAuto/"+source.getName();
+            exportStatus="CSV GUARDADO en Descargas/DriveLabAuto/"+source.getName()+
+                " · enviando al servidor si la nube está activada…";
+            // Independent, asynchronous HTTPS upload. Never remove local files.
+            T1CloudDiagnostics.upload(this,source,(message,url)->{
+                exportStatus="Descargas/DriveLabAuto/"+source.getName()+
+                    " · "+message;
+                updateCloudUi(message,url);
+                updateDiagnosticsText();
+            });
         }catch(Exception e){
             exportStatus="No se pudo exportar: "+e.getClass().getSimpleName()+
                 (e.getMessage()==null?"":(" · "+e.getMessage()));
@@ -707,6 +765,29 @@ public final class ReceiverVehicleActivity extends Activity {
             b.append("code;eventos;").append(csv(scanEvents)).append("\n");
             b.append("code;tanda;").append(csv(batchStatus)).append("\n");
             b.append("code;resultados;").append(csv(batchValues)).append("\n");
+            android.content.SharedPreferences mirrorPrefs=getSharedPreferences(
+                MirrorAutomationService.PREFS,MODE_PRIVATE);
+            b.append("espejos_auto;seleccionado;")
+                .append(mirrorPrefs.getBoolean(MirrorAutomationService.AUTO,false))
+                .append("\n");
+            b.append("espejos_auto;servicio_activo;")
+                .append(mirrorPrefs.getBoolean(
+                    MirrorAutomationService.SERVICE_ACTIVE,false)).append("\n");
+            b.append("espejos_auto;marcha_1033;")
+                .append(mirrorPrefs.getInt(MirrorAutomationService.LAST_GEAR,-1))
+                .append("\n");
+            b.append("espejos_auto;velocidades_y_fuente;")
+                .append(csv(mirrorPrefs.getString(
+                    MirrorAutomationService.LAST_SPEED,"Sin medición"))).append("\n");
+            b.append("espejos_auto;ultimo_estado;")
+                .append(csv(mirrorPrefs.getString(
+                    MirrorAutomationService.STATUS,"Sin acción"))).append("\n");
+            b.append("espejos_auto;ultima_transicion;")
+                .append(csv(mirrorPrefs.getString(
+                    MirrorAutomationService.LAST_TRANSITION,"Sin transición"))).append("\n");
+            b.append("espejos_auto;ultimo_error;")
+                .append(csv(mirrorPrefs.getString(
+                    MirrorAutomationService.LAST_ERROR,"Sin error"))).append("\n");
             ContentValues meta=new ContentValues();
             String name="DriveLabAuto-CODE-"+System.currentTimeMillis()+".csv";
             meta.put(MediaStore.MediaColumns.DISPLAY_NAME,name);
@@ -718,7 +799,21 @@ public final class ReceiverVehicleActivity extends Activity {
                 if(stream==null)throw new IllegalStateException("No se pudo abrir el archivo");
                 stream.write(b.toString().getBytes(StandardCharsets.UTF_8));
             }
-            exportStatus="CSV guardado en Descargas/DriveLabAuto: "+name;
+            exportStatus="CSV guardado en Descargas/DriveLabAuto: "+name+
+                " · enviando a nube si está activada…";
+            // Preserve local backup and make a separate bounded server copy.
+            String cloudName="code_diag_"+new SimpleDateFormat(
+                "yyyyMMdd_HHmmss",Locale.ROOT).format(new Date())+".csv";
+            java.io.File cloud=new java.io.File(
+                T1TripRecorderService.tripDir(this),cloudName);
+            try(java.io.FileOutputStream local=new java.io.FileOutputStream(cloud)){
+                local.write(b.toString().getBytes(StandardCharsets.UTF_8));
+            }
+            T1CloudDiagnostics.upload(this,cloud,(msg,url)->{
+                exportStatus="Descargas/DriveLabAuto/"+name+" · "+msg;
+                updateCloudUi(msg,url);
+                if(activeTab==2)render();
+            });
         }catch(Exception error){
             exportStatus="No se pudo exportar CSV: "+error.getClass().getSimpleName();
         }
