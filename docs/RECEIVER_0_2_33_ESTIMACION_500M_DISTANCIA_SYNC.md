@@ -29,6 +29,6 @@ Análisis de los CSV privados del TRIP **11/11/2026 16:40:21**:
 
 ## Estado de pruebas de hardware
 
-Sin validación física de esta versión en Jetour. La firma, compilación y automatizaciones deben pasar CI y publicación antes de ofrecerla como actualización disponible.
+**Publicada y lista para actualizar:** [Receiver 0.2.33 / release oficial](https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.2.33). [QA del PR #40](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/43100909785), [QA de main](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/43101118194) y [compilación/firmado/publicación OTA](https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/43101118253) finalizaron correctamente. **Sin validación física todavía en Jetour.** Actualizar únicamente Receiver desde la propia aplicación y probar con un nuevo viaje; Sender 0.2.16 sigue instalado sin cambios.
 
 Ver [análisis de los dos registros del 11/11](ANALISIS_TRIP_20261111_164021_CSV_OEM_500M.md).
