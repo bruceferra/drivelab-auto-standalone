@@ -34,6 +34,7 @@ public final class T1PhevModeCaptureService extends Service {
     static final String ACTION_START="t1.phev.probe.START";
     static final String ACTION_STOP="t1.phev.probe.STOP";
     static final String RUNNING="running",STATUS="status",LAST="last",SAMPLES="samples",FILE="file";
+    static final String EVENTS="events",EVENT_FILE="events_file";
     private static final String CHANNEL="t1_phev_mode_probe_channel";
     private static final int NOTIFY_ID=7291;
     private static final long DURATION_MS=180000L,POLL_MS=3000L;
@@ -42,6 +43,7 @@ public final class T1PhevModeCaptureService extends Service {
     private static final String TOKEN="com.autolink.app.vehicleservice.IVehicleControl";
     private volatile boolean stop,active;
     private Thread worker;
+    private T1OemConsumptionCallbacks events;
 
     @Override public IBinder onBind(Intent intent){return null;}
     private SharedPreferences prefs(){return getSharedPreferences(PREFS,MODE_PRIVATE);}
@@ -49,6 +51,7 @@ public final class T1PhevModeCaptureService extends Service {
         String action=intent==null?"":intent.getAction();
         if(ACTION_STOP.equals(action)){
             stop=true;
+            if(events!=null)events.stop();
             if(worker!=null)worker.interrupt();
             if(!active){
                 prefs().edit().putBoolean(RUNNING,false).putString(STATUS,"Detenido").apply();
@@ -60,9 +63,13 @@ public final class T1PhevModeCaptureService extends Service {
         if(active)return START_NOT_STICKY;
         active=true;stop=false;
         notifyForeground();
+        events=new T1OemConsumptionCallbacks(this);
+        final boolean eventListening=events.start();
         prefs().edit().putBoolean(RUNNING,true).putInt(SAMPLES,0)
-            .putString(STATUS,"Leyendo modos PHEV en segundo plano durante 3 minutos…")
-            .putString(LAST,"Aún sin muestra").apply();
+            .putString(STATUS,"Leyendo modos PHEV en segundo plano durante 3 minutos…"+
+                (eventListening?" Eventos OEM también activos.":" Eventos OEM no iniciados."))
+            .putString(LAST,"Aún sin muestra")
+            .putString(EVENTS,"Esperando eventos OEM").apply();
         worker=new Thread(this::capture,"T1-PHEV-Mode-ReadOnly");
         worker.start();
         return START_NOT_STICKY;
@@ -189,7 +196,10 @@ public final class T1PhevModeCaptureService extends Service {
                         " · wiper 2126="+wiper+" · radar 2049="+radar+
                         " / banda 2107="+band+" · AVAS 2074="+avas+
                         " · velocidad="+speed;
+                    String eventStatus=events==null?
+                        "Sin escucha de eventos":events.snapshot();
                     prefs().edit().putInt(SAMPLES,samples).putString(LAST,last)
+                        .putString(EVENTS,eventStatus)
                         .putString(STATUS,"Grabando lecturas · segundo plano activo").apply();
                     try{Thread.sleep(POLL_MS);}catch(InterruptedException e){if(stop)break;}
                 }
@@ -200,9 +210,14 @@ public final class T1PhevModeCaptureService extends Service {
             result="No se pudo completar: "+e.getClass().getSimpleName()+
                 (e.getMessage()==null?"":(" · "+e.getMessage()));
         }finally{
+            if(events!=null)events.stop();
             if(bound&&connection!=null)try{unbindService(connection);}catch(Exception ignored){}
+            File callbackFile=events==null?null:events.lastLog();
             prefs().edit().putBoolean(RUNNING,false).putInt(SAMPLES,samples)
-                .putString(STATUS,result).apply();
+                .putString(STATUS,result)
+                .putString(EVENTS,events==null?"Sin evento":events.snapshot())
+                .putString(EVENT_FILE,callbackFile==null?"":callbackFile.getAbsolutePath())
+                .apply();
             active=false;
             stopForeground(STOP_FOREGROUND_REMOVE);
             stopSelf();
@@ -210,6 +225,7 @@ public final class T1PhevModeCaptureService extends Service {
     }
     @Override public void onDestroy(){
         stop=true;
+        if(events!=null)events.stop();
         if(worker!=null)worker.interrupt();
         super.onDestroy();
     }
