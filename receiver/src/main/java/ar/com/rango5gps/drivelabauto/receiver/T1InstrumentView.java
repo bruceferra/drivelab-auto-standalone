@@ -35,7 +35,8 @@ public final class T1InstrumentView extends View {
     }
     @Override protected void onMeasure(int w,int h){
         int width=MeasureSpec.getSize(w);
-        int height=(int)(width/2.45f);
+        // Compact horizontal strip: ~43% less vertical space than v0.2.31.
+        int height=(int)(width*280f/1200f);
         setMeasuredDimension(width,resolveSize(height,h));
     }
     private void fill(int color){p.setColor(color);p.setStyle(Paint.Style.FILL);}
@@ -52,41 +53,41 @@ public final class T1InstrumentView extends View {
     private void dial(Canvas c,float cx,float cy,float radius,String label,
                       Float actual,float drawn,float min,float max,int color,
                       String suffix,String detail,boolean twoDecimalLiters){
-        stroke(0xFF29465A,19);
+        stroke(0xFF29465A,12);
         RectF r=new RectF(cx-radius,cy-radius,cx+radius,cy+radius);
         c.drawArc(r,145,250,false,p);
         if(actual!=null){
             float f=Math.max(0,Math.min(1,(drawn-min)/(max-min)));
-            stroke(color,19);c.drawArc(r,145,250*f,false,p);
+            stroke(color,12);c.drawArc(r,145,250*f,false,p);
             double a=Math.toRadians(145+250*f);
-            stroke(WHITE,5);
-            float length=radius*0.73f;
+            stroke(WHITE,4);
+            float length=radius*0.67f;
             c.drawLine(cx,cy,(float)(cx+length*Math.cos(a)),
                 (float)(cy+length*Math.sin(a)),p);
-            fill(color);c.drawCircle(cx,cy,8,p);
+            fill(color);c.drawCircle(cx,cy,5,p);
         }
-        text(c,label,cx,cy-radius-21,23,0xFFD3E7F1);
+        text(c,label,cx,cy-radius-16,20,0xFFD3E7F1);
         text(c,actual==null?"--":(twoDecimalLiters?
                 T1FuelDisplay.liters(actual.doubleValue()):
                 String.format(Locale.US,"%.0f",actual)),
-            cx,cy+31,twoDecimalLiters?54:58,actual==null?MUTED:WHITE);
-        text(c,suffix,cx,cy+64,20,color);
-        text(c,detail,cx,cy+radius+27,18,MUTED);
+            cx,cy+14,twoDecimalLiters?43:47,actual==null?MUTED:WHITE);
+        text(c,suffix,cx,cy+46,17,color);
+        text(c,detail,cx,cy+radius+20,15,MUTED);
     }
     @Override protected void onDraw(Canvas canvas){
         super.onDraw(canvas);
         float scale=getWidth()/1200f;
         canvas.save();canvas.scale(scale,scale);
-        fill(NAVY);canvas.drawRoundRect(0,0,1200,490,32,32,p);
-        text(canvas,"DRIVELAB  ·  JETOUR T1",600,40,29,WHITE);
-        dial(canvas,220,255,145,"VELOCIDAD OEM",speed,shownSpeed,0,200,BLUE,
+        fill(NAVY);canvas.drawRoundRect(0,0,1200,280,24,24,p);
+        text(canvas,"DRIVELAB  ·  JETOUR T1",600,28,24,WHITE);
+        dial(canvas,215,146,75,"VELOCIDAD OEM",speed,shownSpeed,0,200,BLUE,
             "km/h · señal OEM","SIN SENSOR = --",false);
-        dial(canvas,600,255,145,"NAFTA · CI186",fuel,shownFuel,0,67,GOLD,
+        dial(canvas,600,146,75,"NAFTA · CI186",fuel,shownFuel,0,67,GOLD,
             "L indicados · 0,01 L","No son litros físicos",true);
-        dial(canvas,980,255,145,"BATERÍA PHEV",soc,shownSoc,0,100,TEAL,
+        dial(canvas,985,146,75,"BATERÍA PHEV",soc,shownSoc,0,100,TEAL,
             "% SOC OEM","No implica kWh de red",false);
         text(canvas,"Los tres indicadores requieren datos reales; sin lectura muestran --",
-            600,475,16,MUTED);
+            600,268,14,MUTED);
         canvas.restore();
     }
 }
