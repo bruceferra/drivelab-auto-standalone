@@ -171,3 +171,25 @@ Total **617 callbacks de 50 km**. Esto confirma que el servicio y los objetos Bi
 **Interpretación provisional:** el recorrido anterior de 1,65 km devolvió `1086/1087=-1` en lectura float; la prueba posterior de doble getter corroboró `-1` también en int. Ahora además no hay callbacks de 500 m durante esta escucha. Esto NO demuestra que el automóvil no genere datos por otros métodos ni que los callbacks se emitan necesariamente en marcha. Lo siguiente a verificar en un día posterior: número de inscripciones aceptadas y si se registran eventos 500 m al recorrer más de 500 m de forma habitual; comparar cantidad de valores únicos y frecuencia en los 50 km usando `oem_callbacks_*.csv`. No sumar notificaciones como combustible consumido.
 
 **Estado:** se conserva versión 0.2.28 y registro local. No modificar PDC/radar ni recomputar litros/kWh sin unidad y validación.
+
+## APK adicionales prioritarios para explorar (11/11/2026)
+
+Se inspeccionaron referencias de los **tres APK OEM ya extraídos** (ALVehicleService, ALCarService, ClusterInteraction); **no se afirmó presencia instalada ni acceso sin privilegios** de los nuevos paquetes.
+
+| Paquete referenciado en el DEX de ALVehicleService | Indicio | Prioridad |
+|---|---|---|
+| `com.autolink.hybridpower` | Lanzamiento explícito de `com.autolink.hybridpower.ui.HomeActivity`; candidato de UI/flujo híbrido y consumo | Alta |
+| `com.autolink.instrument` | Intención `com.autolink.instrument.action`, candidato de software de instrumentos | Alta |
+| `com.autolink.hmi.carsettings` | Componente `com.autolink.hmi.carsettings.activity.SettingActivity`, flags OPEN_GENERAL/OPEN_VOLUME/OPEN_SCREEN; relevante para radar y configuración | Alta para radar y limpiaparabrisas |
+
+**Comprobar instalación por WebADB (lectura solamente):** `pm path com.autolink.hybridpower`; `pm path com.autolink.instrument`; `pm path com.autolink.hmi.carsettings`. Si responde `package:/...` usar WebADB para extraer el archivo APK de esa ruta. Si no responde, buscar paquete equivalente en `pm list packages`. No root, no reemplazar o alterar APK OEM.
+
+**Hallazgos adicionales en el APK original ClusterInteraction, ya disponible:**
+- `IClusterInteraction.getIFEValue(): int`, transacción Binder **155**, callback de registro `registerIFECallback` tx **153**, cancelación tx **154**. `IFE` es candidato a economía instantánea, **sin unidad ni escala probada**.
+- `getAFCValue(): int` tx **143** (callback registro tx **141**) y `getAFCPHKMValue(): int` tx **146** (registro tx **144**). `AFC` es candidato a consumo medio, no necesariamente por viaje.
+- `getFuelVolumeSample(): float` tx **189**, callback de cambios tx **187**, y `getFuelVolumeDisplay(): float` tx **186** (ya usado para CI186 de nivel mostrado). Se deben distinguir volumen de muestra, visualización y litros reales.
+- `IChargePowerInfoCallback.onChargePowerInfoChanged(float,float,float)` y `IChargeVoltageCallback.onChargeVoltageChanged(float)` existen; hablan de **carga**, no se deben equiparar con voltaje HV de batería en conducción sin ensayo.
+
+**HAL ALCarService.apk:** `VC_VENDOR_PHEV_HV_READ` = **557843644** (HAL área config 0), y `PHEV_POWER_DISTANCE_READ` = **559940102**, códigos declarados en `CarVehicleControlPropConfig`. Ambos son **candidatos sin semántica verificada ni comprobación de disponibilidad**: no asignar voltios/km ni construir consumo desde ellos hasta medir.
+
+**Conclusión:** Antes de buscar un cuarto APK ya hay rutas de lectura adicionales verificadas por contrato en ClusterInteraction, además de paquetes instalables potenciales. Priorizar lectura segura de IFE/AFC y, si no basta, extraer el APK de hybridpower e instrument. No asumir que todos existen en firmware argentino ni que una app ordinaria puede invocar sus APIs.
