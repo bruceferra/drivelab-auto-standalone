@@ -1,0 +1,78 @@
+name: Repair signed Sender 0.2.14 APK in existing historical tag
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-sender-0214-repair.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: signed-drivelabauto-publication
+  cancel-in-progress: false
+jobs:
+  sender-repair:
+    runs-on: ubuntu-24.04
+    env:
+      SENDER_STORE_PASSWORD: ${{ secrets.SENDER_STORE_PASSWORD }}
+      SENDER_KEY_ALIAS: ${{ secrets.SENDER_KEY_ALIAS }}
+      SENDER_KEY_PASSWORD: ${{ secrets.SENDER_KEY_PASSWORD }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Install Android SDK 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool=$(command -v sdkmanager || find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)
+          "$tool" 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Sign Sender with unchanged certificate
+        shell: bash
+        env:
+          SENDER_KEYSTORE_B64: ${{ secrets.SENDER_KEYSTORE_B64 }}
+        run: |
+          set -euo pipefail
+          test -n "$SENDER_KEYSTORE_B64" && test -n "$SENDER_STORE_PASSWORD"
+          test -n "$SENDER_KEY_ALIAS" && test -n "$SENDER_KEY_PASSWORD"
+          printf %s "$SENDER_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/sender.p12"
+          chmod 600 "$RUNNER_TEMP/sender.p12"
+          echo "SENDER_KEYSTORE=$RUNNER_TEMP/sender.p12" >> "$GITHUB_ENV"
+      - name: Build, validate signers, and add Sender APK to existing v0.2.14 tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'bruceferra/drivelab-auto-standalone'
+          mkdir -p /tmp/previous-sender
+          gh release download v0.2.13 --pattern 'DriveLab-Auto-Sender-v0.2.13.apk' --dir /tmp/previous-sender
+          gradle --no-daemon :sender:assembleRelease
+          apk='sender/build/outputs/apk/release/sender-release.apk'
+          test -s "$apk"
+          sig="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          "$sig" verify --print-certs "$apk"
+          before=$("$sig" verify --print-certs /tmp/previous-sender/DriveLab-Auto-Sender-v0.2.13.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          after=$("$sig" verify --print-certs "$apk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          test -n "$before" && test "$before" = "$after"
+          badge=$("$aapt" dump badging "$apk" | head -1)
+          echo "$badge" | grep -F "package: name='ar.com.rango5gps.drivelabauto.sender'"
+          echo "$badge" | grep -F "versionName='0.2.14'"
+          echo "$badge" | grep -F "versionCode='15'"
+          name='DriveLab-Auto-Sender-v0.2.14.apk'
+          cp "$apk" "$name"
+          if gh release view v0.2.14 --json assets --jq '.assets[].name' | grep -Fxq "$name"; then
+            echo 'Sender 0.2.14 asset already present; refusing replacement.'
+          else
+            # The old tag v0.2.14 belongs to historical Receiver. Add one
+            # separate Sender asset without altering any older files.
+            gh release upload v0.2.14 "$name"
+          fi
+          gh release view v0.2.14 --json assets --jq '.assets[].name' | grep -Fx "$name"
+          gh release edit v0.2.31 --latest
+          gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name | grep -Fx 'v0.2.31'
+          echo 'Sender installed signing continuity verified; historical receiver assets unchanged.'
