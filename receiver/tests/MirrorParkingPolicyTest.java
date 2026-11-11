@@ -92,11 +92,29 @@ public final class MirrorParkingPolicyTest {
         eq(cap.requestedLeft(),20);
         eq(cap.requestedRight(),15);
     }
+    static void testManualRecoveryRearmsCleanFSM(){
+        // Recovery must re-arm only after both sides fully completed.
+        yes(MirrorParkingPolicy.completedManualRecovery(10,10,10,10));
+        yes(!MirrorParkingPolicy.completedManualRecovery(9,10,10,10));
+        yes(!MirrorParkingPolicy.completedManualRecovery(10,9,10,10));
+        yes(!MirrorParkingPolicy.completedManualRecovery(0,0,10,10));
+        yes(!MirrorParkingPolicy.completedManualRecovery(0,0,0,0));
+        // After successful recovery, service creates a *fresh* policy.
+        // It must not tilt on an initial R sample without a known exit from R.
+        MirrorParkingPolicy reset=new MirrorParkingPolicy(2);
+        eq(reset.observe(Gear.R,0,100,true),Action.NONE);
+        eq(reset.observe(Gear.P,0,300,true),Action.NONE);
+        eq(reset.observe(Gear.R,0,500,true),Action.TILT_ON_R);
+        reset.completeTilt(2,2);
+        eq(reset.observe(Gear.D,15,2000,true),Action.NONE);
+        eq(reset.observe(Gear.D,15,2900,true),Action.RESTORE_AFTER_NON_R_SPEED);
+    }
     public static void main(String[] args){
         testParkingShuffle();
         testNoFalseTriggers();
         testNeutralCoastAndUnknown();
         testInterruptedOperations();
+        testManualRecoveryRearmsCleanFSM();
         System.out.println("PASS "+checks+" assertions: R single tilt, non-R >10 km/h debounce (D or N), no parking shuttle loop");
     }
 }
