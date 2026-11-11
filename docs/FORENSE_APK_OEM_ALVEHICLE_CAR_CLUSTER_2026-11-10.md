@@ -155,3 +155,17 @@ Los cuatro métodos de registro del proxy son register...Callback(I...Callback) 
 **Límites:** Que un registro sea aceptado no demuestra que lleguen eventos. Que no haya eventos con vehículo inmóvil no demuestra que no funcionen al circular 500 m. Los promedios de 50 km se escuchan como grupo de control, pero tampoco está garantizado que emitan cada 3 minutos. No sumar callbacks como litros; determinar si el evento representa tramo finalizado, ventana móvil o alguna otra unidad antes de utilizarlo. El voltaje HV sigue sin dato validado; la lectura de corriente 1064 no autoriza calcular kWh.
 
 **Seguridad y UX:** no tocar botones durante marcha. Iniciar la escucha estacionado y leer resultados nuevamente estacionado; no hace falta provocar maniobras ni conducir específicamente para obtener un evento.
+
+## Primera prueba real de eventos OEM — Receiver 0.2.28
+
+**Usuario reporta:** al ejecutar la prueba de escucha OEM de hasta 3 minutos:
+- Nafta 500 m / `IAvgFuCallback`: **0 eventos**.
+- Electricidad 500 m / `IAvgElecCallback`: **0 eventos**.
+- Nafta 50 km / `IAvgFuCnsCallback`: **296 eventos**.
+- Electricidad 50 km / `IAvgElecCnsCallback`: **321 eventos**.
+
+Total **617 callbacks de 50 km**. Esto confirma que el servicio y los objetos Binder de callbacks de 50 km funcionan en la Jetour real; NO prueba que haya 617 valores distintos, porque pueden ser repeticiones. La prueba fue preparada para hacerse estacionado, pero en el mensaje de resultados no quedó confirmado expresamente si se mantuvo inmóvil ni si las 4 inscripciones fueron aceptadas (`X/4`), por lo que no atribuir los cero eventos 500 m a falta de desplazamiento como hecho comprobado.
+
+**Interpretación provisional:** el recorrido anterior de 1,65 km devolvió `1086/1087=-1` en lectura float; la prueba posterior de doble getter corroboró `-1` también en int. Ahora además no hay callbacks de 500 m durante esta escucha. Esto NO demuestra que el automóvil no genere datos por otros métodos ni que los callbacks se emitan necesariamente en marcha. Lo siguiente a verificar en un día posterior: número de inscripciones aceptadas y si se registran eventos 500 m al recorrer más de 500 m de forma habitual; comparar cantidad de valores únicos y frecuencia en los 50 km usando `oem_callbacks_*.csv`. No sumar notificaciones como combustible consumido.
+
+**Estado:** se conserva versión 0.2.28 y registro local. No modificar PDC/radar ni recomputar litros/kWh sin unidad y validación.
