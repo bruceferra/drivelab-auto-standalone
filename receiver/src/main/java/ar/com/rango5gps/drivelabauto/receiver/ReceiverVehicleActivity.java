@@ -763,6 +763,29 @@ public final class ReceiverVehicleActivity extends Activity {
             b.append("code;eventos;").append(csv(scanEvents)).append("\n");
             b.append("code;tanda;").append(csv(batchStatus)).append("\n");
             b.append("code;resultados;").append(csv(batchValues)).append("\n");
+            android.content.SharedPreferences mirrorPrefs=getSharedPreferences(
+                MirrorAutomationService.PREFS,MODE_PRIVATE);
+            b.append("espejos_auto;seleccionado;")
+                .append(mirrorPrefs.getBoolean(MirrorAutomationService.AUTO,false))
+                .append("\n");
+            b.append("espejos_auto;servicio_activo;")
+                .append(mirrorPrefs.getBoolean(
+                    MirrorAutomationService.SERVICE_ACTIVE,false)).append("\n");
+            b.append("espejos_auto;marcha_1033;")
+                .append(mirrorPrefs.getInt(MirrorAutomationService.LAST_GEAR,-1))
+                .append("\n");
+            b.append("espejos_auto;velocidades_y_fuente;")
+                .append(csv(mirrorPrefs.getString(
+                    MirrorAutomationService.LAST_SPEED,"Sin medición"))).append("\n");
+            b.append("espejos_auto;ultimo_estado;")
+                .append(csv(mirrorPrefs.getString(
+                    MirrorAutomationService.STATUS,"Sin acción"))).append("\n");
+            b.append("espejos_auto;ultima_transicion;")
+                .append(csv(mirrorPrefs.getString(
+                    MirrorAutomationService.LAST_TRANSITION,"Sin transición"))).append("\n");
+            b.append("espejos_auto;ultimo_error;")
+                .append(csv(mirrorPrefs.getString(
+                    MirrorAutomationService.LAST_ERROR,"Sin error"))).append("\n");
             ContentValues meta=new ContentValues();
             String name="DriveLabAuto-CODE-"+System.currentTimeMillis()+".csv";
             meta.put(MediaStore.MediaColumns.DISPLAY_NAME,name);
