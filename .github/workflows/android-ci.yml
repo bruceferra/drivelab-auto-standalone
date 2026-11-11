@@ -117,6 +117,12 @@ jobs:
           "$aapt" dump xmltree "$receiver" AndroidManifest.xml | grep 'ReceiverInstallResultReceiver'
           # Play Protect review: no broad notification listener or Bluetooth access in this corrective build.
           ! "$aapt" dump permissions "$sender" | grep BLUETOOTH_CONNECT
+          # Android 14+ requires the matching dataSync foreground-service permission.
+          "$aapt" dump permissions "$sender" | grep 'android.permission.FOREGROUND_SERVICE'
+          "$aapt" dump permissions "$sender" | grep 'android.permission.FOREGROUND_SERVICE_DATA_SYNC'
+          "$aapt" dump xmltree "$sender" AndroidManifest.xml | grep 'RouteDispatchService'
+          grep -q 'startForeground(FOREGROUND_ID' sender/src/main/java/ar/com/rango5gps/drivelabauto/sender/RouteDispatchService.java
+          grep -q 'catch(RuntimeException error)' sender/src/main/java/ar/com/rango5gps/drivelabauto/sender/RouteDispatchService.java
           ! "$aapt" dump xmltree "$sender" AndroidManifest.xml | grep SpotifySessionListener
           ! "$aapt" dump xmltree "$sender" AndroidManifest.xml | grep SpotifyBluetoothReceiver
           # Google Maps can share a place name or a short URL from T1.
