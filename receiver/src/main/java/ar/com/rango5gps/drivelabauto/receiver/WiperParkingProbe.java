@@ -25,7 +25,8 @@ import java.util.concurrent.atomic.AtomicReference;
  * bands (not a rear-only distance in metres); 2049 = parking radar switch.
  *
  * HAL integer IDs recovered from original ALCarService:
- * 557862927 = REAR PDC OBJECT DISTANCE; 557843296..299 = rear zones.
+ * 557862926/927 = FRONT/REAR PDC OBJECT DISTANCE;
+ * 557843300..303 = front zones; 557843296..299 = rear zones.
  * Scale/units unverified; NEVER render these raw integers as metres.
  */
 final class WiperParkingProbe {
@@ -38,7 +39,16 @@ final class WiperParkingProbe {
     private static final String CAR_PKG="com.autolink.carservice";
     private static final String CAR_CLS="com.autolink.carservice.ALCarService";
     private static final String CAR_TOKEN="com.autolink.adapterinterface.car.IALCar";
+    private static final int FRONT_DISTANCE=557862926;
     private static final int REAR_DISTANCE=557862927;
+    // Zone numbers are HAL candidates: verify actual wiring/scale in T1.
+    private static final int[] FRONT_ZONES={
+        557843300,557843301,557843302,557843303
+    };
+    private static final String[] FRONT_NAMES={
+        "DELANTERO ZONA 1","DELANTERO ZONA 2",
+        "DELANTERO ZONA 3","DELANTERO ZONA 4"
+    };
     private static final int[] REAR_ZONES={
         557843296,557843297,557843298,557843299
     };
@@ -97,8 +107,9 @@ final class WiperParkingProbe {
     // Original IALCar$Stub$Proxy.getIntProperty(id, area=0) uses transact(2).
     // Never sends setIntProperty (a different Binder method).
     private static int carInt(IBinder b,int id)throws Exception{
-        boolean allowed=id==REAR_DISTANCE;
+        boolean allowed=id==REAR_DISTANCE||id==FRONT_DISTANCE;
         for(int zone:REAR_ZONES)allowed|=id==zone;
+        for(int zone:FRONT_ZONES)allowed|=id==zone;
         if(!allowed)throw new SecurityException("HAL ID no autorizado");
         Parcel data=Parcel.obtain(),reply=Parcel.obtain();
         try{
@@ -138,6 +149,20 @@ final class WiperParkingProbe {
                 try{
                     query(app,CAR_PKG,CAR_CLS,CAR_TOKEN,b->{
                         try{
+                            data.put("PDC DELANTERO 557862926 · valor crudo",
+                                value(carInt(b,FRONT_DISTANCE)));
+                        }catch(Exception e){
+                            data.put("PDC DELANTERO 557862926",error(e));
+                        }
+                        for(int i=0;i<FRONT_ZONES.length;i++){
+                            try{
+                                data.put(FRONT_NAMES[i]+" · "+FRONT_ZONES[i],
+                                    value(carInt(b,FRONT_ZONES[i])));
+                            }catch(Exception e){
+                                data.put(FRONT_NAMES[i]+" · "+FRONT_ZONES[i],error(e));
+                            }
+                        }
+                        try{
                             data.put("PDC TRASERO 557862927 · valor crudo",
                                 value(carInt(b,REAR_DISTANCE)));
                         }catch(Exception e){
@@ -161,7 +186,7 @@ final class WiperParkingProbe {
                 running.set(false);
                 handler.post(()->cb.result(data));
             }
-        },"T1-Wiper-Rear-PDC-ReadOnly").start();
+        },"T1-Wiper-Front-Rear-PDC-ReadOnly").start();
         return true;
     }
 }
