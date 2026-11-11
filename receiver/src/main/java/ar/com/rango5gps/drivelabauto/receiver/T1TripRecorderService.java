@@ -279,9 +279,9 @@ public final class T1TripRecorderService extends Service {
             finalStatus="TRIP interrumpido · "+ex.getClass().getSimpleName();
         }finally{
             segments.stop();
-            segments.awaitStopped(3500);
+            segments.awaitStopped(7000);
             File events=segments.lastLog();
-            if(events!=null&&events.isFile()&&
+            if(!segments.busy()&&events!=null&&events.isFile()&&
                 events.getName().equals("trip_oem_"+tripId+".csv")&&
                 T1CloudDiagnostics.active(this)){
                 // Upload the tiny, GPS-free OEM segment log separately from
