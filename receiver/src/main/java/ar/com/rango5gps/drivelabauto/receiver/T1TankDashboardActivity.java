@@ -199,11 +199,15 @@ public final class T1TankDashboardActivity extends Activity {
         tripActionStatus=text("Para cambiar de viaje: DETENER, luego INICIAR. "+
             "No requiere PIN ni sincronización.",14,NAVY,true);
         root.addView(tripActionStatus);
-        root.addView(text("GPS con permiso o distancia aproximada por velocidad OEM. "+
-            "CSV privado con marcha, velocidad, CI186, SOC, HV, contadores "+
-            "1048/1049, recirculación, plegado y ruta GPS disponible.",
+        root.addView(text("INICIAR TRIP también graba automáticamente todos los "+
+            "eventos OEM de 500 metros hasta DETENER TRIP, incluso al abrir Waze "+
+            "o la pantalla original. Los negativos eléctricos son valores crudos, "+
+            "no kWh ni recuperación confirmada. El CSV de viaje y el de tramos "+
+            "se conservan separados; el viaje incluye los contadores por tramo.",
             12,GRAY,false));
         action(root,"EXPORTAR ÚLTIMO TRIP CSV",BLUE,this::exportLastTrip);
+        action(root,"EXPORTAR TRAMOS OEM 500 m DEL ÚLTIMO TRIP",BLUE,
+            this::exportTripSegments);
         exportStatus=text("Exportación directa a Descargas/DriveLabAuto (sin selector). "+
             "El CSV original siempre se conserva.",13,NAVY,false);
         root.addView(exportStatus);
@@ -276,6 +280,43 @@ public final class T1TankDashboardActivity extends Activity {
         setContentView(scroll);
     }
 
+    private File lastTripSegmentFile(){
+        File[] all=T1TripRecorderService.tripDir(this).listFiles(
+            file->file.isFile()&&file.getName().matches(
+                "trip_oem_[0-9]{8}_[0-9]{6}\\.csv"));
+        if(all==null||all.length==0)return null;
+        Arrays.sort(all,Comparator.comparing(File::getName).reversed());
+        return all[0];
+    }
+    private void exportTripSegments(){
+        if(getSharedPreferences(T1TripRecorderService.PREFS,MODE_PRIVATE)
+                .getBoolean(T1TripRecorderService.RUNNING,false)){
+            exportMessage("Detené TRIP antes de exportar los tramos OEM.");return;
+        }
+        File file=lastTripSegmentFile();
+        if(file==null||file.length()==0){
+            exportMessage("No hay tramos OEM guardados: primero INICIAR TRIP.");return;
+        }
+        exportMessage("Guardando tramos OEM de "+file.getName()+"…");
+        new Thread(()->{
+            String result;
+            try{
+                result="TRAMOS 500 m GUARDADOS: "+writeTripToDownloads(file)+
+                    " · original local conservado";
+                if(T1CloudDiagnostics.active(this)){
+                    T1CloudDiagnostics.upload(this,file,(message,url)->
+                        runOnUiThread(()->exportMessage(message)));
+                    result+=" · envío HTTPS solicitado";
+                }else result+=" · activá nube QR para enviarlos al servidor";
+            }catch(Exception ex){
+                result="No se pudo copiar a Descargas: "+
+                    ex.getClass().getSimpleName()+"; CSV original conservado";
+            }
+            String done=result;
+            runOnUiThread(()->{if(!isFinishing()&&!isDestroyed())
+                exportMessage(done);});
+        },"T1-Trip-OEM-Export").start();
+    }
     private void exportOemEvents(){
         if(oemCallbacks.busy()){
             oemEventsStatus.setText("Primero detené la escucha o completá los 3 minutos.");
@@ -397,6 +438,13 @@ public final class T1TankDashboardActivity extends Activity {
             " · muestras: "+p.getInt(T1TripRecorderService.SAMPLES,0)+"\n"+
             "Nafta PROXY: "+fmt(l,3)+" L × $"+fmt(fuelPrice,2)+
             " = ~$"+fmt(l*fuelPrice,0)+"\n"+
+            "OEM 500 m · tramos: nafta "+
+            p.getInt(T1TripRecorderService.SEG_FUEL_COUNT,0)+
+            " (último "+p.getString(T1TripRecorderService.SEG_FUEL_LAST,"—")+")"+
+            " · electricidad "+
+            p.getInt(T1TripRecorderService.SEG_ELEC_COUNT,0)+
+            " (último "+p.getString(T1TripRecorderService.SEG_ELEC_LAST,"—")+")"+
+            " · valores crudos, NO litros/kWh\n"+
             "HV descarga estimada: "+fmt(hv,3)+" kWh · carga HV: "+
             fmt(charge,3)+" kWh\n"+
             (price>0?"HV proxy × $"+fmt(price,2)+
@@ -563,7 +611,13 @@ public final class T1TankDashboardActivity extends Activity {
                     if(!T1TripSync.prefs(this).getBoolean(T1TripSync.ENABLED,false))
                         T1TripSync.configure(this);
                     T1TripSync.trigger(this,true);
-                    status+=" · TRIP a sincronización QR sin GPS";
+                    File segmentFile=lastTripSegmentFile();
+                    if(segmentFile!=null && !getSharedPreferences(
+                        T1TripRecorderService.PREFS,MODE_PRIVATE)
+                            .getBoolean(T1TripRecorderService.RUNNING,false))
+                        T1CloudDiagnostics.upload(this,segmentFile,(msg,url)->
+                            runOnUiThread(()->exportMessage(msg)));
+                    status+=" · TRIP a sincronización QR sin GPS; tramos OEM si disponibles";
                 }else status+=" · nube sin activar (usá QR en DIAGNÓSTICO)";
             }catch(Exception primary){
                 // Some OEM builds also lack the standard Downloads provider.
