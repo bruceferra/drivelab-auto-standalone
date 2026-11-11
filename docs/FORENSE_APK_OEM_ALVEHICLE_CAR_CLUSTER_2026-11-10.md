@@ -158,13 +158,15 @@ Los cuatro métodos de registro del proxy son register...Callback(I...Callback) 
 
 ## Primera prueba real de eventos OEM — Receiver 0.2.28
 
+**Usuario confirma en pantalla: `Inscripciones aceptadas: 4/4`.** Por lo tanto, los cuatro registros Binder de callbacks fueron aceptados por el servicio OEM; los dos canales de 500 m estaban efectivamente suscritos aunque no emitieron notificaciones durante este ensayo.
+
 **Usuario reporta:** al ejecutar la prueba de escucha OEM de hasta 3 minutos:
 - Nafta 500 m / `IAvgFuCallback`: **0 eventos**.
 - Electricidad 500 m / `IAvgElecCallback`: **0 eventos**.
 - Nafta 50 km / `IAvgFuCnsCallback`: **296 eventos**.
 - Electricidad 50 km / `IAvgElecCnsCallback`: **321 eventos**.
 
-Total **617 callbacks de 50 km**. Esto confirma que el servicio y los objetos Binder de callbacks de 50 km funcionan en la Jetour real; NO prueba que haya 617 valores distintos, porque pueden ser repeticiones. La prueba fue preparada para hacerse estacionado, pero en el mensaje de resultados no quedó confirmado expresamente si se mantuvo inmóvil ni si las 4 inscripciones fueron aceptadas (`X/4`), por lo que no atribuir los cero eventos 500 m a falta de desplazamiento como hecho comprobado.
+Total **617 callbacks de 50 km**. Esto confirma que el servicio y los objetos Binder de callbacks de 50 km funcionan en la Jetour real; NO prueba que haya 617 valores distintos, porque pueden ser repeticiones. La prueba fue preparada para hacerse estacionado, pero en el mensaje de resultados no quedó confirmado expresamente si se mantuvo inmóvil; los cuatro registros sí fueron aceptados, de modo que los cero eventos de 500 m no se deben a un rechazo de suscripción. No atribuirlos a falta de desplazamiento como hecho comprobado.
 
 **Interpretación provisional:** el recorrido anterior de 1,65 km devolvió `1086/1087=-1` en lectura float; la prueba posterior de doble getter corroboró `-1` también en int. Ahora además no hay callbacks de 500 m durante esta escucha. Esto NO demuestra que el automóvil no genere datos por otros métodos ni que los callbacks se emitan necesariamente en marcha. Lo siguiente a verificar en un día posterior: número de inscripciones aceptadas y si se registran eventos 500 m al recorrer más de 500 m de forma habitual; comparar cantidad de valores únicos y frecuencia en los 50 km usando `oem_callbacks_*.csv`. No sumar notificaciones como combustible consumido.
 
