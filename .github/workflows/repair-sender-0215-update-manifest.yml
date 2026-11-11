@@ -1,0 +1,64 @@
+name: Repair Sender 0.2.15 native updater manifest
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/repair-sender-0215-update-manifest.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: signed-drivelabauto-publication
+  cancel-in-progress: false
+jobs:
+  repair:
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Make Sender 0.2.15 pass legacy updater manifest validation
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'bruceferra/drivelab-auto-standalone'
+          test "$GITHUB_REF_NAME" = 'main'
+          gh release view v0.2.32 >/dev/null
+          gh release view v0.2.15 >/dev/null
+          mkdir -p before edit verify
+          gh release download v0.2.32 --pattern 'DriveLab-Auto-Sender-v0.2.15.apk' --dir before
+          gh release download v0.2.32 --pattern 'sender.json' --dir before
+          python3 - <<'PY'
+          import json,hashlib,pathlib
+          m=json.loads(pathlib.Path('before/sender.json').read_text())
+          assert m['packageName']=='ar.com.rango5gps.drivelabauto.sender'
+          assert m['versionName']=='0.2.15' and int(m['versionCode'])==16
+          apk=pathlib.Path('before/DriveLab-Auto-Sender-v0.2.15.apk')
+          assert apk.is_file() and apk.stat().st_size>100000
+          digest=hashlib.sha256(apk.read_bytes()).hexdigest()
+          assert digest==m['sha256'].lower(), 'Sender APK differs from published hash'
+          m['apkUrl']='https://github.com/bruceferra/drivelab-auto-standalone/releases/download/v0.2.15/DriveLab-Auto-Sender-v0.2.15.apk'
+          pathlib.Path('edit/sender.json').write_text(json.dumps(m,ensure_ascii=False,indent=2))
+          PY
+          name='DriveLab-Auto-Sender-v0.2.15.apk'
+          if gh release view v0.2.15 --json assets --jq '.assets[].name' | grep -Fxq "$name"; then
+            mkdir -p old
+            gh release download v0.2.15 --pattern "$name" --dir old
+            test "$(sha256sum "old/$name" | cut -d' ' -f1)" = "$(sha256sum "before/$name" | cut -d' ' -f1)"
+          else
+            # v0.2.15 already has older Receiver files: preserve them.
+            gh release upload v0.2.15 "before/$name"
+          fi
+          gh release view v0.2.15 --json assets --jq '.assets[].name' | grep -Fx "$name"
+          # Only overwrite the updater JSON; do not alter signed APKs.
+          gh release upload v0.2.32 edit/sender.json --clobber
+          gh release edit v0.2.32 --latest
+          gh release download v0.2.32 --pattern 'sender.json' --dir verify
+          cmp edit/sender.json verify/sender.json
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = 'v0.2.32'
+          python3 - <<'PY'
+          import json,hashlib,pathlib
+          m=json.loads(pathlib.Path('verify/sender.json').read_text())
+          assert m['apkUrl'].endswith('/releases/download/v0.2.15/DriveLab-Auto-Sender-v0.2.15.apk')
+          assert m['sha256']==hashlib.sha256(pathlib.Path('before/DriveLab-Auto-Sender-v0.2.15.apk').read_bytes()).hexdigest()
+          print('PASS: current Sender OTA resolves to identical signed APK at correct version tag.')
+          PY
