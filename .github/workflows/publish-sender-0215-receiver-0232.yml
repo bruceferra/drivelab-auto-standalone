@@ -1,0 +1,118 @@
+name: Publish Sender 0.2.15 + Receiver 0.2.32 signed
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-sender-0215-receiver-0232.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: signed-drivelabauto-publication
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    env:
+      SENDER_STORE_PASSWORD: ${{ secrets.SENDER_STORE_PASSWORD }}
+      SENDER_KEY_ALIAS: ${{ secrets.SENDER_KEY_ALIAS }}
+      SENDER_KEY_PASSWORD: ${{ secrets.SENDER_KEY_PASSWORD }}
+      RECEIVER_STORE_PASSWORD: ${{ secrets.RECEIVER_STORE_PASSWORD }}
+      RECEIVER_KEY_ALIAS: ${{ secrets.RECEIVER_KEY_ALIAS }}
+      RECEIVER_KEY_PASSWORD: ${{ secrets.RECEIVER_KEY_PASSWORD }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Android SDK 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool=$(command -v sdkmanager || find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)
+          "$tool" 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Restore unchanged signing credentials
+        shell: bash
+        env:
+          SENDER_KEYSTORE_B64: ${{ secrets.SENDER_KEYSTORE_B64 }}
+          RECEIVER_KEYSTORE_B64: ${{ secrets.RECEIVER_KEYSTORE_B64 }}
+        run: |
+          set -euo pipefail
+          test -n "$SENDER_KEYSTORE_B64" && test -n "$RECEIVER_KEYSTORE_B64"
+          test -n "$SENDER_STORE_PASSWORD" && test -n "$SENDER_KEY_ALIAS" && test -n "$SENDER_KEY_PASSWORD"
+          test -n "$RECEIVER_STORE_PASSWORD" && test -n "$RECEIVER_KEY_ALIAS" && test -n "$RECEIVER_KEY_PASSWORD"
+          printf %s "$SENDER_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/sender.p12"
+          printf %s "$RECEIVER_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/receiver.p12"
+          chmod 600 "$RUNNER_TEMP/sender.p12" "$RUNNER_TEMP/receiver.p12"
+          echo "SENDER_KEYSTORE=$RUNNER_TEMP/sender.p12" >> "$GITHUB_ENV"
+          echo "RECEIVER_KEYSTORE=$RUNNER_TEMP/receiver.p12" >> "$GITHUB_ENV"
+      - name: Build, verify signer continuity and publishable manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'bruceferra/drivelab-auto-standalone'
+          if gh release view v0.2.32 >/dev/null 2>&1; then
+            echo 'Refusing to overwrite an existing v0.2.32 release'; exit 1
+          fi
+          mkdir -p /tmp/prior/sender /tmp/prior/receiver output
+          gh release download v0.2.31 --pattern 'DriveLab-Auto-Receiver-v0.2.31.apk' --dir /tmp/prior/receiver
+          gh release download v0.2.14 --pattern 'DriveLab-Auto-Sender-v0.2.14.apk' --dir /tmp/prior/sender
+          gradle --no-daemon :sender:assembleRelease :receiver:assembleRelease
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          apksigner="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          for app in sender receiver; do
+            apk="$app/build/outputs/apk/release/$app-release.apk"
+            test -s "$apk"
+            "$apksigner" verify --print-certs "$apk"
+            if test "$app" = sender; then
+              old='/tmp/prior/sender/DriveLab-Auto-Sender-v0.2.14.apk'
+              version='0.2.15'; code='16'; proper='Sender'
+            else
+              old='/tmp/prior/receiver/DriveLab-Auto-Receiver-v0.2.31.apk'
+              version='0.2.32'; code='33'; proper='Receiver'
+            fi
+            "$apksigner" verify --print-certs "$old"
+            oldCert=$("$apksigner" verify --print-certs "$old" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+            newCert=$("$apksigner" verify --print-certs "$apk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+            test -n "$oldCert" && test "$oldCert" = "$newCert"
+            badge=$("$aapt" dump badging "$apk" | head -1)
+            echo "$badge"
+            echo "$badge" | grep -F "package: name='ar.com.rango5gps.drivelabauto.$app'"
+            echo "$badge" | grep -F "versionCode='$code'"
+            echo "$badge" | grep -F "versionName='$version'"
+            name="DriveLab-Auto-$proper-v$version.apk"
+            cp "$apk" "output/$name"
+            export APP_NAME="$app" APP_VERSION="$version" APP_CODE="$code" APP_APK="$name"
+            export APP_SHA=$(sha256sum "output/$name" | awk '{print $1}')
+            python3 - <<'PY'
+          import json,os
+          app=os.environ['APP_NAME'];repo=os.environ['GITHUB_REPOSITORY']
+          obj={'packageName':'ar.com.rango5gps.drivelabauto.'+app,
+               'versionName':os.environ['APP_VERSION'],
+               'versionCode':int(os.environ['APP_CODE']),
+               'sha256':os.environ['APP_SHA'],
+               'apkUrl':f'https://github.com/{repo}/releases/download/v0.2.32/{os.environ["APP_APK"]}'}
+          with open('output/'+app+'.json','w',encoding='utf-8') as f:
+              json.dump(obj,f,indent=2)
+          PY
+          done
+          sha256sum output/*.apk > output/release.sha256
+          test -s output/sender.json && test -s output/receiver.json
+      - name: Release both APKs and updater manifests together
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create v0.2.32 \
+            output/DriveLab-Auto-Sender-v0.2.15.apk \
+            output/DriveLab-Auto-Receiver-v0.2.32.apk \
+            output/sender.json output/receiver.json output/release.sha256 \
+            --target "$GITHUB_SHA" --latest \
+            --title 'DriveLab Auto Receiver 0.2.32 + Sender 0.2.15' \
+            --notes 'Sender 0.2.15: comparte rutas desde Uber sin abrir la pantalla DriveLab; una actividad transparente entrega al servicio corto de fondo, con notificación solo si hay un fallo. Receiver 0.2.32: INICIAR TRIP escucha callbacks de consumo OEM de 500 metros durante todo el viaje, conserva eventos crudos con hora y contador asociado a cada muestra de TRIP, sincroniza datos saneados al servidor QR sin GPS y permite exportar CSV de tramos; el panel DIAGNÓSTICO de 3 minutos permanece para pruebas. Reproducción de promedio 50km aún experimental; valores negativos NO equivalen por sí solos a recuperación. Incluye relojes compactos del tablero T1 y correcciones anteriores. Ambos certificados de firma verificados con las APK previas.'
+          gh release view v0.2.32 --json assets --jq '.assets[].name'
+          gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name | grep -Fx v0.2.32
