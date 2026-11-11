@@ -161,12 +161,12 @@ public final class ReceiverVehicleActivity extends Activity {
             changeScanner.isRunning()||batchReader.busy()||wiperParking.busy();
     }
     private void renderVehicle(LinearLayout body){
-        section(body,"LIMPIAPARABRISAS Y RADAR TRASERO · DIAGNÓSTICO");
+        section(body,"LIMPIAPARABRISAS Y RADAR DELANTERO / TRASERO · DIAGNÓSTICO");
         label(body,"Lecturas OEM originales: 2126 sensibilidad de barrido AUTO, "+
             "2107 distancia de aviso por tramos, 2049 radar, 2125 limpia trasero. "+
-            "HAL PDC trasero y cuatro zonas. Sin escritura; no mide metros "+
+            "HAL PDC delantero y trasero, cuatro zonas por lado. Sin escritura; no mide metros "+
             "hasta comparar valores crudos con una distancia real.",13);
-        button(body,"LEER LIMPIAPARABRISAS Y RADAR · SIN CAMBIAR",()->{
+        button(body,"LEER LIMPIAPARABRISAS Y RADARES · SIN CAMBIAR",()->{
             if(vehicleBusy()){
                 wiperParkingStatus="Otra operación OEM está en curso";
                 if(wiperParkingView!=null)wiperParkingView.setText(wiperParkingStatus);
@@ -182,7 +182,7 @@ public final class ReceiverVehicleActivity extends Activity {
             })){
                 wiperParkingStatus="No se inició lectura OEM";
             }else{
-                wiperParkingStatus="Leyendo propiedades OEM de limpiaparabrisas y PDC…";
+                wiperParkingStatus="Leyendo propiedades OEM de limpiaparabrisas y PDC delantero/trasero…";
             }
             if(wiperParkingView!=null)wiperParkingView.setText(wiperParkingStatus);
         });
