@@ -102,3 +102,15 @@ Usuario reportó el 11/11/2026 que DriveLab Auto quedó sin conexión entre Xiao
 **Pendiente (NO implementado):** flujo QR de vinculación para sugerir IP del Receiver al Sender. Mantener comprobación SAS de 6 dígitos y consentimiento en ambos equipos para evitar vinculación a un tercero de la misma red; un QR puede simplificar introducir IP pero no debería suprimir la confirmación de clave. La desactivación persistente/automática de AVAS 2074 no se implementó, ni se relajaron restricciones de seguridad en marcha. Los modos PHEV no se alteran por GPS/SOC hasta comprobar permisos y condiciones de seguridad.
 
 **Cómo probar:** con el auto detenido, abrir DIAGNÓSTICO e iniciar la prueba, pasar a pantalla nativa y cambiar manualmente Smart / Forzado o EV/HEV desde controles Jetour, sin manejar por esta razón. Al final, regresar, revisar estado y exportar ambos CSV. Si se desea comprobar eventos de 500 m, activar un nuevo registro antes de un trayecto normal y no manipular la pantalla durante la marcha; volver a consultar cuando se estacione.
+
+## Corrección preparada para próximo Receiver: RECUPERAR ESPEJOS vuelve a AUTO
+
+**Pedido usuario 11/11/2026, seguimiento issue #35:** al usar `RECUPERAR ESPEJOS · 10 PASOS ARRIBA` no quiere tocar manualmente `ESPEJOS AUTO` después; **recuperación exitosa debe dejar AUTO activo**. Se ajustó `MirrorAutomationService` en rama `fix/mirror-recovery-auto-rearm-next`:
+
+- `ACTION_RECOVER` pausa AUTO durante los 10 pulsos con vehículo **detenido y marcha OEM conocida**, y completa los movimientos por lado con neutralización del comando `0` al finalizar cada uno.
+- Solo si ambos espejos reciben los 10 comandos completos, reactiva `AUTO=true`, deja mensaje `AUTO REACTIVADO` y **crea una FSM nueva**; evita arrastrar estado `TILTED` antiguo, por lo que no vuelve a bajar hasta una **nueva** transición no-R → R comprobada.
+- Si el OEM devuelve error, la secuencia se interrumpe o el vehículo se mueve, AUTO permanece desactivado; **no** se presume conocer el ángulo físico de los espejos.
+- Los botones manuales de bajar/subir sí mantienen el comportamiento de desarmar AUTO.
+- Tests unitarios agregados para completar ambos espejos, rechazar parcial y exigir transición fresca a R tras recuperar.
+- **La corrección no resuelve todavía el bug principal de issue #35** (R baja correctamente, D >10 km/h no restaura): revisar selección de velocidad 2148/1089 y estados del servicio con evidencias de campo.
+- Mantener 0.2.30 publicada durante pruebas del usuario: esta rama debe incorporarse con la siguiente versión, no publicar sin verificar y combinar con la causa del no-retorno.
