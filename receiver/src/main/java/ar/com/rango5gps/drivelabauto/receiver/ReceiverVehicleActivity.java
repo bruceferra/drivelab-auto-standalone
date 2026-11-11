@@ -93,6 +93,8 @@ public final class ReceiverVehicleActivity extends Activity {
         if(saved!=null){
             activeTab=Math.min(3,Math.max(0,saved.getInt("tab",0)));
             batchStart=saved.getInt("batch",2001);
+        }else if(getIntent()!=null){
+            activeTab=Math.min(3,Math.max(0,getIntent().getIntExtra("open_tab",0)));
         }
         render();
     }
