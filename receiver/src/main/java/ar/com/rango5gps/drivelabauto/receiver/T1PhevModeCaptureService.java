@@ -41,6 +41,11 @@ public final class T1PhevModeCaptureService extends Service {
     private static final String PKG="com.autolink.app.vehicleservice";
     private static final String CLS="com.autolink.app.vehicleservice.VehicleService";
     private static final String TOKEN="com.autolink.app.vehicleservice.IVehicleControl";
+    private static final String HAL_PKG="com.autolink.carservice";
+    private static final String HAL_CLS="com.autolink.carservice.ALCarService";
+    private static final String HAL_TOKEN="com.autolink.adapterinterface.car.IALCar";
+    private static final int[] FRONT_ZONES={557843300,557843301,557843302,557843303};
+    private static final int[] REAR_ZONES={557843296,557843297,557843298,557843299};
     private volatile boolean stop,active;
     private Thread worker;
     private T1OemConsumptionCallbacks events;
@@ -106,6 +111,18 @@ public final class T1PhevModeCaptureService extends Service {
             out.readException();return out.readFloat();
         }finally{in.recycle();out.recycle();}
     }
+    private static String halInt(IBinder b,int id){
+        if(b==null)return "";
+        Parcel in=Parcel.obtain(),out=Parcel.obtain();
+        try{
+            in.writeInterfaceToken(HAL_TOKEN);
+            in.writeInt(id);in.writeInt(0);
+            if(!b.transact(2,in,out,0))return "";
+            out.readException();
+            return Integer.toString(out.readInt());
+        }catch(Exception e){return "";}
+        finally{in.recycle();out.recycle();}
+    }
     private static String i(IBinder b,int id){
         try{return Integer.toString(readInt(b,id));}
         catch(Exception ignored){return "";}
@@ -138,9 +155,13 @@ public final class T1PhevModeCaptureService extends Service {
         "soc_mode_1040_int,soc_target_1041_int,soc_target_1041_float,"+
         "power_mode_1043_int,charge_switch_1045_int,regen_1046_int,"+
         "soc_internal_1042_float,wiper_auto_2126_int,rear_wiper_2125_int,"+
-        "radar_2049_int,radar_band_2107_int,pedestrian_2074_int\n";
+        "radar_2049_int,radar_band_2107_int,pedestrian_2074_int,"+
+        "pdc_front_557862926,pdc_rear_557862927,"+
+        "front_zone_1,front_zone_2,front_zone_3,front_zone_4,"+
+        "rear_zone_1,rear_zone_2,rear_zone_3,rear_zone_4\n";
     private void capture(){
-        ServiceConnection connection=null;boolean bound=false;
+        ServiceConnection connection=null,halConnection=null;
+        boolean bound=false,halBound=false;IBinder halBinder=null;
         String result="Finalizado";int samples=0;File file=null;
         try{
             file=new File(T1TripRecorderService.tripDir(this),
@@ -169,6 +190,30 @@ public final class T1PhevModeCaptureService extends Service {
             if(binder==null||!binder.isBinderAlive()||
                 !TOKEN.equals(binder.getInterfaceDescriptor()))
                 throw new IllegalStateException("Interfaz OEM no disponible");
+            // Radar sector HAL is optional: absence must not stop reading PHEV modes.
+            try{
+                final CountDownLatch halReady=new CountDownLatch(1);
+                final AtomicReference<IBinder> halRemote=new AtomicReference<>();
+                halConnection=new ServiceConnection(){
+                    @Override public void onServiceConnected(ComponentName n,IBinder b){
+                        halRemote.set(b);halReady.countDown();
+                    }
+                    @Override public void onServiceDisconnected(ComponentName n){
+                        halRemote.set(null);halReady.countDown();
+                    }
+                    @Override public void onNullBinding(ComponentName n){halReady.countDown();}
+                    @Override public void onBindingDied(ComponentName n){halReady.countDown();}
+                };
+                halBound=bindService(new Intent().setComponent(
+                    new ComponentName(HAL_PKG,HAL_CLS)),halConnection,0);
+                if(halBound&&halReady.await(2000,TimeUnit.MILLISECONDS)){
+                    IBinder candidate=halRemote.get();
+                    if(candidate!=null&&candidate.isBinderAlive()&&
+                        HAL_TOKEN.equals(candidate.getInterfaceDescriptor()))
+                        halBinder=candidate;
+                }
+            }catch(Exception ignored){}
+            final IBinder parking=halBinder;
             try(FileOutputStream out=new FileOutputStream(file,false)){
                 out.write(HEADER.getBytes(StandardCharsets.UTF_8));
                 long until=SystemClock.elapsedRealtime()+DURATION_MS;
@@ -182,10 +227,18 @@ public final class T1PhevModeCaptureService extends Service {
                         regen=i(binder,1046),soc=f(binder,1042),
                         wiper=i(binder,2126),rear=i(binder,2125),
                         radar=i(binder,2049),band=i(binder,2107),avas=i(binder,2074);
+                    String[] fronts=new String[4],rears=new String[4];
+                    for(int k=0;k<4;k++){
+                        fronts[k]=halInt(parking,FRONT_ZONES[k]);
+                        rears[k]=halInt(parking,REAR_ZONES[k]);
+                    }
+                    String frontPdc=halInt(parking,557862926),
+                        rearPdc=halInt(parking,557862927);
                     String row=System.currentTimeMillis()+","+gear+","+speed+","+
                         socMode+","+socTarget+","+socTargetFloat+","+power+","+
                         charge+","+regen+","+soc+","+wiper+","+rear+","+
-                        radar+","+band+","+avas+"\n";
+                        radar+","+band+","+avas+","+frontPdc+","+rearPdc+","+
+                        String.join(",",fronts)+","+String.join(",",rears)+"\n";
                     out.write(row.getBytes(StandardCharsets.UTF_8));out.flush();
                     samples++;
                     String last="Muestras: "+samples+" · 1043="+power+" ("+
@@ -195,7 +248,10 @@ public final class T1PhevModeCaptureService extends Service {
                         nameRegen(regen)+") · SOC="+soc+
                         " · wiper 2126="+wiper+" · radar 2049="+radar+
                         " / banda 2107="+band+" · AVAS 2074="+avas+
-                        " · velocidad="+speed;
+                        " · velocidad="+speed+
+                        " · PDC adelante="+String.join("/",fronts)+
+                        " atrás="+String.join("/",rears)+
+                        " (lecturas crudas, NO metros)";
                     String eventStatus=events==null?
                         "Sin escucha de eventos":events.snapshot();
                     prefs().edit().putInt(SAMPLES,samples).putString(LAST,last)
@@ -212,6 +268,8 @@ public final class T1PhevModeCaptureService extends Service {
         }finally{
             if(events!=null)events.stop();
             if(bound&&connection!=null)try{unbindService(connection);}catch(Exception ignored){}
+            if(halBound&&halConnection!=null)
+                try{unbindService(halConnection);}catch(Exception ignored){}
             File callbackFile=events==null?null:events.lastLog();
             prefs().edit().putBoolean(RUNNING,false).putInt(SAMPLES,samples)
                 .putString(STATUS,result)
