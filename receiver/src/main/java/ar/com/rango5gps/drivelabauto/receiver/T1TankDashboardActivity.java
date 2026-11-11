@@ -116,6 +116,9 @@ public final class T1TankDashboardActivity extends Activity {
         return Double.isFinite(x)?String.format(Locale.forLanguageTag("es-AR"),
             "%."+dp+"f",x):"--";
     }
+    private static String rawInt(int x){
+        return x==Integer.MIN_VALUE?"SIN LECTURA":Integer.toString(x);
+    }
     private void render(){
         ScrollView scroll=new ScrollView(this);
         LinearLayout root=col();root.setPadding(18,14,18,30);
@@ -271,7 +274,17 @@ public final class T1TankDashboardActivity extends Activity {
                     "\nOEM 500 METROS (crudo, para validar): 1087 nafta="+
                     fmt(s.oemFuelAverage500m,2)+" · 1086 eléctrica="+
                     fmt(s.oemElectricAverage500m,2)+
-                    " · RPM válidas 1034="+s.rpmValid1034);
+                    " · RPM válidas 1034="+s.rpmValid1034+
+                    "\nPRUEBA DE TIPOS 500 m: 1087 int="+rawInt(s.oemFuel500mInt)+
+                    " / 1086 int="+rawInt(s.oemElectric500mInt)+
+                    " (comparar con float; -1 = posiblemente sin dato)"+
+                    "\nPRUEBA HV: 1063 float="+fmt(s.voltage,2)+
+                    " / int="+rawInt(s.voltage1063Int)+
+                    " · 1064 float="+fmt(s.current,2)+
+                    " / int="+rawInt(s.current1064Int)+
+                    " · 1090 float="+fmt(s.voltageFloat1090,2)+
+                    " / int="+rawInt(s.raw1090Int)+
+                    " (crudos, no convertir en kWh)");
                 updateRange();
             });
         },"T1-Instrument-ReadOnly").start();

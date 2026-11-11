@@ -169,6 +169,9 @@ public final class T1TripRecorderService extends Service {
     private static String n(double x){
         return Double.isFinite(x)?String.format(Locale.US,"%.5f",x):"";
     }
+    private static String ni(int x){
+        return x==Integer.MIN_VALUE?"":Integer.toString(x);
+    }
     private void record(){
         int sampleCount=0;double hvOut=0,hvIn=0;
         String finalStatus="TRIP terminado";
@@ -189,7 +192,10 @@ public final class T1TripRecorderService extends Service {
                 "oem_1085_gas_l_per_100km_last50,"+
                 "oem_1086_electric_average_last500m_raw,"+
                 "oem_1087_fuel_average_last500m_raw,"+
-                "rpm_valid_1034_raw\n")
+                "rpm_valid_1034_raw,"+
+                "oem_1086_electric_int_raw,oem_1087_fuel_int_raw,"+
+                "hv_voltage_1063_int_raw,hv_current_1064_int_raw,"+
+                "oem_1090_float_raw,oem_1090_int_raw\n")
                 .getBytes(StandardCharsets.UTF_8));
             T1TripTelemetry oem=new T1TripTelemetry(this);
             while(!stop){
@@ -223,7 +229,10 @@ public final class T1TripRecorderService extends Service {
                     n(s.rpm)+","+s.motorOn+","+
                     n(s.oemElectricRolling50)+","+n(s.oemFuelRolling50)+","+
                     n(s.oemElectricAverage500m)+","+n(s.oemFuelAverage500m)+","+
-                    s.rpmValid1034+"\n";
+                    s.rpmValid1034+","+
+                    ni(s.oemElectric500mInt)+","+ni(s.oemFuel500mInt)+","+
+                    ni(s.voltage1063Int)+","+ni(s.current1064Int)+","+
+                    n(s.voltageFloat1090)+","+ni(s.raw1090Int)+"\n";
                 out.write(line.getBytes(StandardCharsets.UTF_8));
                 sampleCount++;
                 if(sampleCount%5==0)out.flush();

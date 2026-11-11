@@ -99,3 +99,13 @@ Esto **podría explicar** el pitido en tráfico cuando otro vehículo se acerca 
 - No forzar escritura `2107`: valor 0 persistente sin tabla de niveles validados.
 - Próxima evidencia: observar el símbolo/botón OEM y si su piloto queda encendido en D tras salir de R, junto al pitido; comparar una vez con vehículo detenido y con control OEM original. Sin maniobras peligrosas ni usar a personas como obstáculos.
 
+
+## Nueva pista del usuario: valor delantero 175 → 50 al detectar y pitar
+
+En una prueba de proximidad delantera el usuario observó que **un sensor delantero pasaba del valor crudo 175 a 50** al acercarse a un objeto y activarse la alerta sonora. El objeto estaba casi pegado; no se midió una distancia con cinta ni se identificó el ID de la zona exacta. Esta observación sugiere que **la señal del sensor sí varía con proximidad**.
+
+**Hipótesis a validar:** `175` podría ser 175 cm o un máximo/código sin obstáculo y `50` podría ser 50 cm. Todavía **no** mostrar `1,75 m` y `0,50 m` como dato medido. Repetir solamente en P/freno con vehículo inmóvil y un objeto fijo colocado por una segunda persona a 1,5 m, 1,0 m y 0,6 m, sin mover el vehículo ni colocar personas como blancos, y anotar el **ID exacto** de la zona que cambia y la señal OEM de pitido.
+
+El APK `ALVehicleService` contiene **2107 `驻车雷达报警距离分段`** (segmentación de distancia de aviso), pero su lectura resultó cero incluso con radar ON y OFF. No se ha demostrado un mecanismo de modificación ni un umbral delantero/trasero independiente. Además existen `PARAM_GET_RADAR_VOLUME_LEVEL` y `PARAM_SET_RADAR_VOLUME_LEVEL` (ajuste de volumen del pitido) en `ALVehicleService`: **volumen es distinto de distancia de activación**. No invocar setters hasta conocer contrato, rango, permisos y efectos OEM. El manual de T1 describe distancia al objeto y alertas graduadas, sin garantizar que se pueda calibrar un umbral desde esta app; fuente: https://t1d.cherymanuals.com/views/om004007.html
+
+**Objetivo real:** adelantar un posible aviso delantero que el usuario considera tardío y suprimir pitidos molestos traseros fuera de maniobras, sin inutilizar asistencia de estacionamiento, ni falsificar distancias. Tratar por separado detección física, umbral acústico, volumen y activación del conjunto de radar.
