@@ -63,15 +63,35 @@ public final class T1TripRecorderService extends Service {
         String action=intent==null?null:intent.getAction();
         if(ACTION_STOP.equals(action)){
             stop=true;
-            if(worker!=null)worker.interrupt();
-            if(!running)stopSelf();
+            if(running&&worker!=null&&worker.isAlive()){
+                p().edit().putString(STATUS,
+                    "Deteniendo TRIP · guardando CSV local…").apply();
+                worker.interrupt();
+            }else{
+                // Android can kill the previous service while SharedPreferences
+                // still says RUNNING. A STOP on a newly created service must
+                // release that stale latch, without touching any CSV file.
+                running=false;
+                p().edit().putBoolean(RUNNING,false)
+                    .putLong(END_TIME,System.currentTimeMillis())
+                    .putString(STATUS,
+                        "TRIP detenido · sesión anterior conservada")
+                    .commit();
+                stopSelf();
+            }
             return START_NOT_STICKY;
         }
         if(!ACTION_START.equals(action))return START_NOT_STICKY;
         if(running)return START_NOT_STICKY;
         stop=false;running=true;distanceKm=0;gpsKm=0;lastGood=null;
-        String name=new SimpleDateFormat("yyyyMMdd_HHmmss",
-            Locale.ROOT).format(new Date());
+        // Never overwrite a previous TRIP started during the same second.
+        long started=System.currentTimeMillis();
+        String name;
+        do{
+            name=new SimpleDateFormat("yyyyMMdd_HHmmss",
+                Locale.ROOT).format(new Date(started));
+            started+=1000;
+        }while(new File(tripDir(this),"trip_"+name+".csv").exists());
         p().edit().putString(ID,name).putBoolean(RUNNING,true)
             .putLong(START_TIME,System.currentTimeMillis()).remove(END_TIME)
             .putFloat(DISTANCE,0).putFloat(GAS_L,0).putFloat(EV_KWH,0)
@@ -81,10 +101,23 @@ public final class T1TripRecorderService extends Service {
         return startRecording();
     }
     private int startRecording(){
-        foreground();
-        attachGps();
-        worker=new Thread(this::record,"T1-Trip-Samples");
-        worker.start();
+        try{
+            foreground();
+            attachGps();
+            worker=new Thread(this::record,"T1-Trip-Samples");
+            worker.start();
+        }catch(Exception error){
+            // An Android foreground-service/permission failure must not leave
+            // RUNNING=true forever; otherwise INICIAR refuses every next trip.
+            running=false;
+            p().edit().putBoolean(RUNNING,false)
+                .putLong(END_TIME,System.currentTimeMillis())
+                .putString(STATUS,"No se pudo iniciar TRIP: "+
+                    error.getClass().getSimpleName()).commit();
+            try{stopForeground(STOP_FOREGROUND_REMOVE);}
+            catch(Exception ignored){}
+            stopSelf();
+        }
         return START_NOT_STICKY;
     }
     private void foreground(){
