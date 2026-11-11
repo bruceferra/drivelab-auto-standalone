@@ -170,7 +170,8 @@ final class T1CloudDiagnostics {
                 if(active(app)){
                     done(app,"NUBE ACTIVA · exportación sin PIN",null,callback);return;
                 }
-                String[] device=device(app),claim=randomHex(24);
+                String[] device=device(app);
+                String claim=randomHex(24);
                 JSONObject body=new JSONObject();
                 body.put("authHash",sha(device[1])).put("claim",claim);
                 JSONObject response=request("start",device[0],null,body);
