@@ -53,12 +53,12 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'bruceferra/drivelab-auto-standalone'
           test "$GITHUB_REF_NAME" = 'main'
-          if gh release view 'v0.2.25' >/dev/null 2>&1; then
-            echo 'Release v0.2.25 already exists: no APK overwrite'
+          if gh release view 'v0.2.26' >/dev/null 2>&1; then
+            echo 'Release v0.2.26 already exists: no APK overwrite'
             exit 1
           fi
           mkdir -p /tmp/previous output
-          gh release download v0.2.24 --pattern 'DriveLab-Auto-Receiver-v0.2.24.apk' --dir /tmp/previous
+          gh release download v0.2.25 --pattern 'DriveLab-Auto-Receiver-v0.2.25.apk' --dir /tmp/previous
           gh release download v0.2.13 --pattern 'sender.json' --dir output
           gradle --no-daemon :receiver:assembleRelease
           apk='receiver/build/outputs/apk/release/receiver-release.apk'
@@ -66,16 +66,16 @@ jobs:
           aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
           sig="$ANDROID_HOME/build-tools/35.0.0/apksigner"
           "$sig" verify --print-certs "$apk"
-          "$sig" verify --print-certs /tmp/previous/DriveLab-Auto-Receiver-v0.2.24.apk
-          oldcert=$("$sig" verify --print-certs /tmp/previous/DriveLab-Auto-Receiver-v0.2.24.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          "$sig" verify --print-certs /tmp/previous/DriveLab-Auto-Receiver-v0.2.25.apk
+          oldcert=$("$sig" verify --print-certs /tmp/previous/DriveLab-Auto-Receiver-v0.2.25.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
           newcert=$("$sig" verify --print-certs "$apk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
           test -n "$oldcert" && test "$oldcert" = "$newcert"
           badge=$("$aapt" dump badging "$apk" | head -1)
           echo "$badge"
           echo "$badge" | grep -F "package: name='ar.com.rango5gps.drivelabauto.receiver'"
-          echo "$badge" | grep -F "versionCode='26'"
-          echo "$badge" | grep -F "versionName='0.2.25'"
-          name='DriveLab-Auto-Receiver-v0.2.25.apk'
+          echo "$badge" | grep -F "versionCode='27'"
+          echo "$badge" | grep -F "versionName='0.2.26'"
+          name='DriveLab-Auto-Receiver-v0.2.26.apk'
           cp "$apk" "output/$name"
           sha=$(sha256sum "output/$name" | awk '{print $1}')
           export RECEIVER_SHA="$sha"
@@ -84,10 +84,10 @@ jobs:
           repo=os.environ['GITHUB_REPOSITORY']
           manifest={
             'packageName':'ar.com.rango5gps.drivelabauto.receiver',
-            'versionName':'0.2.25',
-            'versionCode':26,
+            'versionName':'0.2.26',
+            'versionCode':27,
             'sha256':os.environ['RECEIVER_SHA'],
-            'apkUrl':f'https://github.com/{repo}/releases/download/v0.2.25/DriveLab-Auto-Receiver-v0.2.25.apk',
+            'apkUrl':f'https://github.com/{repo}/releases/download/v0.2.26/DriveLab-Auto-Receiver-v0.2.26.apk',
           }
           with open('output/receiver.json','w',encoding='utf-8') as f:
             json.dump(manifest,f,indent=2)
@@ -103,13 +103,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh release create v0.2.25 \
-            output/DriveLab-Auto-Receiver-v0.2.25.apk \
+          gh release create v0.2.26 \
+            output/DriveLab-Auto-Receiver-v0.2.26.apk \
             output/receiver.json output/sender.json output/receiver.sha256 \
             --target "$GITHUB_SHA" --latest \
-            --title 'DriveLab Auto Receiver 0.2.25 - recuperación de TRIP y errores de sincronización' \
-            --notes 'Receiver SOLO 0.2.25 (versionCode 26): corrige TRIP bloqueado cuando Android cierra el servicio y queda RUNNING activo; el botón DETENER ahora libera el estado sin borrar archivos CSV de sesiones previas, y se puede INICIAR un TRIP nuevo. Inicio con nombre CSV único y recuperación de errores de servicio. Mensajes junto a botones INICIAR/DETENER. Sincronización privada opt-in con PIN original de 8 dígitos: se indica error PIN incorrecto (401) o límite de intentos (429); el PIN no se distribuye en la APK y no es necesario para grabar local. Mantiene consumo OEM 1084-1087 y diagnóstico de radar delantero/trasero. Certificado de firma verificado contra v0.2.24. Sender 0.2.13 sin cambios; funciones de espejos AUTO requieren prueba física.'
+            --title 'DriveLab Auto Receiver 0.2.26 - exportar TRIP a Descargas sin selector' \
+            --notes 'Receiver SOLO v0.2.26 (versionCode 27). Corrige exportacion de ultimo TRIP CSV en Jetour Android 11 que carece del selector DocumentsUI. Ahora EXPORTAR ULTIMO TRIP guarda directamente en Descargas/DriveLabAuto via MediaStore sin permiso extra ni ventana; si Downloads no funciona usa carpeta externa privada accesible por ADB y muestra ruta y resultado al lado del boton. No borra CSV privado original. Continuan correccion de TRIP trabado de v0.2.25, telemetria consumo OEM 1084-1087 y radar delantero/trasero. Firma comprobada contra v0.2.25; Sender 0.2.13 sin cambios.'
           tag=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
-          test "$tag" = 'v0.2.25'
-          gh release view v0.2.25 --json assets --jq '.assets[].name'
-          echo 'OTA v0.2.25 published as latest with receiver.json and preserved sender.json'
+          test "$tag" = 'v0.2.26'
+          gh release view v0.2.26 --json assets --jq '.assets[].name'
+          echo 'OTA v0.2.26 published as latest with receiver.json and preserved sender.json'
