@@ -17,6 +17,8 @@ public final class ReceiverActivity extends Activity {
     private ReceiverQuickControls quickControls;
     private final Handler pairUiHandler=new Handler(Looper.getMainLooper());
     private TextView pairStatusView,pairCodeView,pairWindowView,pairPortView;
+    private ImageView pairQrView;
+    private String lastPairQrValue="";
     private ScrollView currentScroll;
     private boolean connectionExpanded=false;
     private long lastAutoCheckElapsed=0;
@@ -96,17 +98,27 @@ public final class ReceiverActivity extends Activity {
             .setMessage("Se detendrá el receptor y su inicio automático. ¿Confirmás?")
             .setNegativeButton("CANCELAR",null)
             .setPositiveButton("DETENER",(d,w)->start(ReceiverService.ACTION_STOP)).show());
-        button(settings,"VINCULAR XIAOMI · 6 DÍGITOS",()->start(ReceiverService.ACTION_PAIR));
-        label(settings,"VINCULACIÓN · ESTA PANTALLA NO ABRE UN POPUP. "+
-            "El botón habilita 2 minutos el puerto 48392. "+
-            "Después seguí desde DriveLab Auto Sender en Xiaomi, usando la IP actual de T1.",14);
+        button(settings,"VINCULAR XIAOMI POR QR · SIN CÓDIGOS",()->
+            start(ReceiverService.ACTION_PAIR_QR));
+        pairQrView=new ImageView(this);
+        pairQrView.setAdjustViewBounds(true);
+        pairQrView.setMaxHeight(490);
+        pairQrView.setVisibility(android.view.View.GONE);
+        settings.addView(pairQrView);
+        lastPairQrValue="";
+        button(settings,"MÉTODO ANTERIOR · 6 DÍGITOS",
+            ()->start(ReceiverService.ACTION_PAIR));
+        label(settings,"VINCULACIÓN POR QR: con ambos equipos en la misma red, "+
+            "tocá el botón QR y escaneá desde DriveLab Auto Sender en Xiaomi. "+
+            "El enlace cifrado se confirma automáticamente. "+
+            "No requiere escribir IP ni comparar seis dígitos.",14);
         pairStatusView=pairLabel(settings,"Vinculación: comprobando…",16);
         pairPortView=pairLabel(settings,"Puerto 48392: comprobando…",14);
         pairWindowView=pairLabel(settings,"Ventana de vinculación: no iniciada",14);
         pairCodeView=pairLabel(settings,"CÓDIGO: esperando solicitud de Xiaomi",20);
-        label(settings,"PASO 1: T1 → VINCULAR (2 minutos). "+
-            "PASO 2: Xiaomi → Vincular Receiver → IP actual de T1 → MOSTRAR CÓDIGO. "+
-            "PASO 3: comparar ambos números → autorizar primero en T1 y confirmar en Xiaomi.",13);
+        label(settings,"Alternativa manual: si el lector QR de Xiaomi no está "+
+            "disponible, usá el botón MÉTODO ANTERIOR, compará los seis dígitos "+
+            "y autorizá primero en T1, después en Sender.",13);
         button(settings,"AUTORIZAR CÓDIGO COINCIDENTE · PASO 1",this::approve);
         button(settings,"ACTUALIZAR ESTADO",this::render);
         boolean auto=p.getBoolean("auto_boot",false);
@@ -193,17 +205,43 @@ public final class ReceiverActivity extends Activity {
             "VENTANA ABIERTA · quedan "+((ms+999)/1000)+" segundos para vincular.":
             "Ventana cerrada. Tocá VINCULAR XIAOMI y empezá desde el teléfono.");
         String code=p.getString("pair_code","");
-        pairCodeView.setText(code.matches("[0-9]{6}")?
-            "CÓDIGO T1: "+code+" · compará con Xiaomi":
-            "CÓDIGO: esperando que Xiaomi toque MOSTRAR CÓDIGO");
+        boolean qrMode=p.getString("pair_qr_ticket","").length()==48;
+        pairCodeView.setText(qrMode?
+            "MODO QR · escaneá con Sender en Xiaomi (no pide código)":
+            (code.matches("[0-9]{6}")?
+                "CÓDIGO T1: "+code+" · compará con Xiaomi":
+                "CÓDIGO: esperando solicitud manual desde Xiaomi"));
+        if(pairQrView!=null){
+            String token=p.getString("pair_qr_ticket","");
+            String ip=ReceiverService.localIp();
+            boolean ready=p.getLong("pair_until",0)>System.currentTimeMillis()&&
+                token.matches("[0-9a-f]{48}")&&!ip.isEmpty();
+            String value=ready?"drivelabauto://pair?ip="+ip+"&ticket="+token:"";
+            if(!value.equals(lastPairQrValue)){
+                lastPairQrValue=value;
+                if(ready){
+                    try{
+                        pairQrView.setImageBitmap(T1QrRenderer.pairing(value));
+                        pairQrView.setVisibility(android.view.View.VISIBLE);
+                    }catch(Exception ex){
+                        pairQrView.setVisibility(android.view.View.GONE);
+                    }
+                }else{
+                    pairQrView.setImageDrawable(null);
+                    pairQrView.setVisibility(android.view.View.GONE);
+                }
+            }
+        }
     }
     private void start(String action){
         Intent service=new Intent(this,ReceiverService.class).setAction(action);
         try{
             if(ReceiverService.ACTION_STOP.equals(action))startService(service);
             else startForegroundService(service);
-            report(ReceiverService.ACTION_PAIR.equals(action)?
-                "Vinculación abierta 2 minutos. Iniciá el Xiaomi y tocá ACTUALIZAR ESTADO.":
+            report(ReceiverService.ACTION_PAIR_QR.equals(action)?
+                "QR de vinculación activo 2 minutos. Escaneá con DriveLab Sender en Xiaomi.":
+                ReceiverService.ACTION_PAIR.equals(action)?
+                "Vinculación manual abierta 2 minutos. Compará los seis dígitos.":
                 "Solicitud enviada al servicio. Actualizá estado.");
         }catch(Exception ex){report("Android bloqueó el inicio del servicio: "+
             ex.getClass().getSimpleName());}
