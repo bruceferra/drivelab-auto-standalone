@@ -193,3 +193,63 @@ Se inspeccionaron referencias de los **tres APK OEM ya extraídos** (ALVehicleSe
 **HAL ALCarService.apk:** `VC_VENDOR_PHEV_HV_READ` = **557843644** (HAL área config 0), y `PHEV_POWER_DISTANCE_READ` = **559940102**, códigos declarados en `CarVehicleControlPropConfig`. Ambos son **candidatos sin semántica verificada ni comprobación de disponibilidad**: no asignar voltios/km ni construir consumo desde ellos hasta medir.
 
 **Conclusión:** Antes de buscar un cuarto APK ya hay rutas de lectura adicionales verificadas por contrato en ClusterInteraction, además de paquetes instalables potenciales. Priorizar lectura segura de IFE/AFC y, si no basta, extraer el APK de hybridpower e instrument. No asumir que todos existen en firmware argentino ni que una app ordinaria puede invocar sus APIs.
+
+## ALVehicleSettings (DEX 1 y 2): catálogo de modos PHEV confirmado
+
+**Origen:** archivos `classes.dex` y `classes2.dex` extraídos por el propietario desde el APK grande ALVehicleSettings. Sin necesidad de cargar el APK entero de ~1 GB. Ambos DEX son válidos `dex\n039`; tamaño `8.336.168` y `8.130.820` bytes, respectivamente. SHA-256 (hex):
+- `classes.dex`: `14a957dc93afec3edb4056ad5be6ab7d57c44a0b38060fe883de16fb688021da`.
+- `classes2.dex`: `2d1adca3fafd8335509c1441ee0eba08d72dacfb7444dcc4a1d7eb90b96f7dc6`.
+
+Se parsearon tablas DEX (strings, type, field, method, class_defs y código de inicializadores estáticos) para evitar inferir valores únicamente a partir de nombres de texto.
+
+### IDs de VehiclePropertyKey extraídos de inicialización OEM
+
+| ID | Campo exacto | Semántica |
+|---|---|---|
+| **1040** | `KeyVehiclePhevSocMode` | modo de gestión SOC |
+| **1041** | `KeyHvacPhevSetSoc` | ajuste de SOC objetivo/protegido |
+| **1043** | `KeyPHEVPowerMode` | modo de propulsión EV/HEV |
+| **1045** | `KeyPHEVChargeSwitch` | conmutador de gestión/carga o recuerdo; alcance sin verificar |
+| **1046** | `KeyPHEVEnergyLevel` | nivel de regeneración |
+| **2074** | `KeyVehiclePropertyVendorAvas` | alarma acústica externa de peatones |
+| **1084/1085** | `KeyPHEVAvgElecCns` / `KeyPHEVAvgFuCns` | promedios OEM 50 km |
+| **1086/1087** | `KeyPHEVAvgElec` / `KeyPHEVAvgFu` | promedios OEM 500 m |
+
+### Enum OEM `PHEVPowerMode` (inicializador `<clinit>`)
+
+| valor enum | significado |
+|---:|---|
+| 0 | Not_Active (sin modo) |
+| **1** | **EV** |
+| **2** | **HEV** (observado por usuario en esta T1) |
+| **3** | **EV Max**, NO Smart |
+
+### Enum OEM `CarPhevSocMode` (inicializador `<clinit>`)
+
+| valor enum | significado |
+|---:|---|
+| 0 | NotActive |
+| 1 | Default |
+| 2 | SAVE |
+| 3 | Auto |
+| 4 | Charge |
+
+**Importante:** el literal `Auto` corresponde al enum de gestión SOC, pero no está comprobado que sea exactamente la opción que la pantalla local muestra como `Smart`. El cambio de EV/HEV y la estrategia de SOC **son dos ejes diferentes**. Nunca mapear 1043=3 a Smart.
+
+### Enum OEM `PHEVEnergyLevelMode`
+
+0 = Not_Active, **1 = Low**, **2 = Middle**, **3 = High**. Coincide con tres niveles de regeneración descritos por el propietario, pero falta prueba de lectura propia en su T1.
+
+### Valores SOC en enum `CarSocElectricityMode`
+
+El código define explícitamente los valores **20, 30, 40, 48, 50, 56, 60, 64, 70 y 72** con etiqueta de porcentaje de batería, además de `None` y `Reserved`. Estos valores son **opciones/etiquetas presentes en la librería OEM**, no prueba de que el firmware argentino habilite todos ni que se escriban directamente en 1041. El enum diferencia ordinal y valor porcentual interno.
+
+### Componentes y vías encontradas en los DEX
+
+`classes2.dex` contiene `com.autolink.hmi.carsettings.view.dialog.DriveModePHEVSettingDialog` y `com.autolink.hmi.carsettings.vehiclesettings.DriveFragment` con métodos `setDriveModeCarProperty`, `setDriveMode` y `onClick`. `VehicleSettingCarPropertyManager` expone `getCarPropertyValue`, `setCarPropertyValue` y `setCarPropertyValueImmediately` sobre `VehiclePropertyKey`. Esto evidencia que la interfaz de configuración OEM contiene lógica real de **lectura y escritura**, además del catálogo de códigos. No demuestra que una app de terceros disponga de permisos o pueda saltar condiciones del vehículo. Algunos «DriveMode» de UI describen Comfort/Sport/Eco del chasis y **no se deben confundir** con propulsión EV/HEV.
+
+También existen en código original propiedades HAL `VC_VENDOR_PHEV_POWER_MODE_WRITE`, `VC_VENDOR_PHEV_REGEBERATE_LEVEL_WRITE` y `EXT_VENDOR_AVAS_WRITE`, pero son definiciones de API, **no un contrato probado de comandos seguros** para DriveLab.
+
+### Próximo paso seguro
+
+Agregar lectura de solo diagnóstico de 1040/1041/1043/1045/1046 en pantalla con intervalos limitados y capturar transiciones **cuando el usuario cambie los modos desde el menú original**, inmóvil. Correlacionar nombre visible, valor de la lectura y SOC 1042. No configurar la modificación automática de EV/HEV/Smart por GPS hasta verificar estados OEM, condiciones y reversión controlada. No agregar apagado permanente / al arranque de AVAS.
