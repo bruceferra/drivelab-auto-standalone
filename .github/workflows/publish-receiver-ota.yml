@@ -53,12 +53,12 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'bruceferra/drivelab-auto-standalone'
           test "$GITHUB_REF_NAME" = 'main'
-          if gh release view 'v0.2.23' >/dev/null 2>&1; then
-            echo 'Release v0.2.23 already exists: no APK overwrite'
+          if gh release view 'v0.2.24' >/dev/null 2>&1; then
+            echo 'Release v0.2.24 already exists: no APK overwrite'
             exit 1
           fi
           mkdir -p /tmp/previous output
-          gh release download v0.2.22 --pattern 'DriveLab-Auto-Receiver-v0.2.22.apk' --dir /tmp/previous
+          gh release download v0.2.23 --pattern 'DriveLab-Auto-Receiver-v0.2.23.apk' --dir /tmp/previous
           gh release download v0.2.13 --pattern 'sender.json' --dir output
           gradle --no-daemon :receiver:assembleRelease
           apk='receiver/build/outputs/apk/release/receiver-release.apk'
@@ -66,16 +66,16 @@ jobs:
           aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
           sig="$ANDROID_HOME/build-tools/35.0.0/apksigner"
           "$sig" verify --print-certs "$apk"
-          "$sig" verify --print-certs /tmp/previous/DriveLab-Auto-Receiver-v0.2.22.apk
-          oldcert=$("$sig" verify --print-certs /tmp/previous/DriveLab-Auto-Receiver-v0.2.22.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          "$sig" verify --print-certs /tmp/previous/DriveLab-Auto-Receiver-v0.2.23.apk
+          oldcert=$("$sig" verify --print-certs /tmp/previous/DriveLab-Auto-Receiver-v0.2.23.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
           newcert=$("$sig" verify --print-certs "$apk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
           test -n "$oldcert" && test "$oldcert" = "$newcert"
           badge=$("$aapt" dump badging "$apk" | head -1)
           echo "$badge"
           echo "$badge" | grep -F "package: name='ar.com.rango5gps.drivelabauto.receiver'"
-          echo "$badge" | grep -F "versionCode='24'"
-          echo "$badge" | grep -F "versionName='0.2.23'"
-          name='DriveLab-Auto-Receiver-v0.2.23.apk'
+          echo "$badge" | grep -F "versionCode='25'"
+          echo "$badge" | grep -F "versionName='0.2.24'"
+          name='DriveLab-Auto-Receiver-v0.2.24.apk'
           cp "$apk" "output/$name"
           sha=$(sha256sum "output/$name" | awk '{print $1}')
           export RECEIVER_SHA="$sha"
@@ -84,10 +84,10 @@ jobs:
           repo=os.environ['GITHUB_REPOSITORY']
           manifest={
             'packageName':'ar.com.rango5gps.drivelabauto.receiver',
-            'versionName':'0.2.23',
-            'versionCode':24,
+            'versionName':'0.2.24',
+            'versionCode':25,
             'sha256':os.environ['RECEIVER_SHA'],
-            'apkUrl':f'https://github.com/{repo}/releases/download/v0.2.23/DriveLab-Auto-Receiver-v0.2.23.apk',
+            'apkUrl':f'https://github.com/{repo}/releases/download/v0.2.24/DriveLab-Auto-Receiver-v0.2.24.apk',
           }
           with open('output/receiver.json','w',encoding='utf-8') as f:
             json.dump(manifest,f,indent=2)
@@ -103,13 +103,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          gh release create v0.2.23 \
-            output/DriveLab-Auto-Receiver-v0.2.23.apk \
+          gh release create v0.2.24 \
+            output/DriveLab-Auto-Receiver-v0.2.24.apk \
             output/receiver.json output/sender.json output/receiver.sha256 \
             --target "$GITHUB_SHA" --latest \
-            --title 'DriveLab Auto Receiver 0.2.23 - diagnóstico de radar trasero y limpiaparabrisas' \
-            --notes 'Receiver SOLO 0.2.23 (versionCode 24). Añade panel VEHÍCULO solo lectura para investigar 2126 sensibilidad AUTO de limpiaparabrisas, 2125 limpia trasero, 2107 banda de aviso de radar, 2049 radar activo, y propiedad HAL distancia trasera 557862927 con cuatro zonas traseras; lecturas crudas sin conversion arbitraria a metros. No se cambian las distancias de alerta ni la velocidad de las escobillas: falta verificar modos y escala reales contra OEM. Conserva TRIP OEM 1084-1087, CI186 con 0.01 L, menús 3D y navegación. Firma continua desde v0.2.22; Sender 0.2.13 intacto. Espejos AUTO todavía requieren validación fisica.'
+            --title 'DriveLab Auto Receiver 0.2.24 - diagnostico PDC delantero y trasero' \
+            --notes 'Receiver SOLO 0.2.24 (versionCode 25): incorpora lecturas HAL PDC DELANTERO 557862926 y cuatro zonas delanteras 557843300 a 303, junto a las lecturas traseras de 0.2.23 y limpieza OEM. Solo lectura, sin escribir ajustes, sin convertir valores crudos a metros hasta verificar unidad. TRIP OEM 1084-1087, CSV, 3D, espejos y navegacion sin cambios. Certificado de firma verificado contra 0.2.23. Sender 0.2.13 intacto; automodo de espejos aun requiere pruebas fisicas.'
           tag=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
-          test "$tag" = 'v0.2.23'
-          gh release view v0.2.23 --json assets --jq '.assets[].name'
-          echo 'OTA v0.2.23 published as latest with receiver.json and preserved sender.json'
+          test "$tag" = 'v0.2.24'
+          gh release view v0.2.24 --json assets --jq '.assets[].name'
+          echo 'OTA v0.2.24 published as latest with receiver.json and preserved sender.json'
