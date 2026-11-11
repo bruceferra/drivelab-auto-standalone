@@ -41,8 +41,12 @@ public final class RouteActivity extends Activity {
             worker.setAction(RouteDispatchService.ACTION_SEND_ROUTE);
             if(raw!=null&&raw.length()<=8192)worker.putExtra(RouteDispatchService.EXTRA_RAW,raw);
             startForegroundService(worker);
-        }catch(Exception e){
-            Toast.makeText(this,"DriveLab: no se pudo iniciar envío oculto",
+        }catch(RuntimeException e){
+            getSharedPreferences(RouteDispatchService.STATE_PREFS,MODE_PRIVATE)
+                .edit().putString(RouteDispatchService.LAST_STATE,
+                    "ANDROID BLOQUEÓ RUTA: "+e.getClass().getSimpleName())
+                .putLong("timestamp",System.currentTimeMillis()).apply();
+            Toast.makeText(this,"DriveLab: Android bloqueó enviar destino",
                 Toast.LENGTH_SHORT).show();
         }finally{
             finish();
