@@ -48,7 +48,6 @@ public final class T1TankDashboardActivity extends Activity {
     private T1InstrumentView instruments;
     private TextView liveStatus,rangeStatus,tripStatus,tripActionStatus,exportStatus,formStatus,syncStatus,oemEventsStatus;
     private T1OemConsumptionCallbacks oemCallbacks;
-    private EditText syncPin;
     private EditText gasolinePrice,energyPrice,refillLiters,refillKm,anchorKm;
     private File pendingCsv;
     private double lastFuel=Double.NaN;
@@ -207,18 +206,15 @@ public final class T1TankDashboardActivity extends Activity {
 
         section(root,"SINCRONIZACIÓN PRIVADA · TRIP");
         LinearLayout sync=card(root,PALE);
-        sync.addView(text("Sube automáticamente cada ~60 segundos cuando hay "+
-            "Internet. Si falla, conserva el CSV y reintenta. Sin GPS, VIN "+
-            "ni ubicaciones. Desactivada hasta que la configures.",
+        sync.addView(text("Sin PIN: activá la nube una sola vez con un QR. "+
+            "Los lotes TRIP se sincronizan automáticamente cuando hay Internet. "+
+            "No se envían coordenadas GPS, VIN ni ubicación: solo telemetría "+
+            "permitida. El CSV local se conserva.",
             13,NAVY,false));
-        syncPin=new EditText(this);
-        syncPin.setHint("PIN de 8 dígitos de DriveLab T1");
-        syncPin.setSingleLine(true);
-        syncPin.setInputType(InputType.TYPE_CLASS_NUMBER|
-            InputType.TYPE_NUMBER_VARIATION_PASSWORD);
-        syncPin.setFilters(new android.text.InputFilter[]{
-            new android.text.InputFilter.LengthFilter(8)});
-        sync.addView(syncPin);
+        action(sync,"ACTIVAR NUBE CON QR · UNA VEZ",BLUE,()->{
+            startActivity(new android.content.Intent(this,
+                ReceiverVehicleActivity.class).putExtra("open_tab",3));
+        });
         syncStatus=text("Sincronización desactivada",13,NAVY,true);
         sync.addView(syncStatus);
         action(root,"ACTIVAR SINCRONIZACIÓN PRIVADA",TEAL,this::enableSync);
@@ -292,6 +288,13 @@ public final class T1TankDashboardActivity extends Activity {
             try{
                 result="EVENTOS EXPORTADOS: "+writeTripToDownloads(file)+
                     " · original local conservado";
+                if(T1CloudDiagnostics.active(this)){
+                    T1CloudDiagnostics.upload(this,file,(message,url)->{
+                        if(oemEventsStatus!=null&&!isFinishing()&&!isDestroyed())
+                            oemEventsStatus.setText(message+"\n"+oemCallbacks.snapshot());
+                    });
+                    result+=" · envío HTTPS iniciado";
+                }else result+=" · nube sin activar (usá QR en DIAGNÓSTICO)";
             }catch(Exception e){
                 result="No se pudo exportar eventos a Descargas ("+
                     e.getClass().getSimpleName()+"). Registro original conservado en "+
@@ -407,8 +410,7 @@ public final class T1TankDashboardActivity extends Activity {
     }
     private void enableSync(){
         try{
-            T1TripSync.configure(this,syncPin.getText().toString().trim());
-            syncPin.setText("");
+            T1TripSync.configure(this);
             T1TripSync.trigger(this,true);
             formStatus.setText("Sincronización activada; enviando pendientes si hay Internet");
             updateSyncStatus();
@@ -416,7 +418,10 @@ public final class T1TankDashboardActivity extends Activity {
     }
     private void syncNow(){
         if(!T1TripSync.prefs(this).getBoolean(T1TripSync.ENABLED,false)){
-            formStatus.setText("Primero activá con el PIN privado de 8 dígitos");
+            if(T1CloudDiagnostics.active(this)){
+                enableSync();return;
+            }
+            formStatus.setText("Primero activá la nube con el QR de DIAGNÓSTICO");
             return;
         }
         T1TripSync.trigger(this,true);
@@ -549,7 +554,13 @@ public final class T1TankDashboardActivity extends Activity {
             try{
                 String exported=writeTripToDownloads(local);
                 status="CSV GUARDADO: "+exported+
-                    " · original privado conservado. Descargalo con WebADB.";
+                    " · original privado conservado.";
+                if(T1CloudDiagnostics.active(this)){
+                    if(!T1TripSync.prefs(this).getBoolean(T1TripSync.ENABLED,false))
+                        T1TripSync.configure(this);
+                    T1TripSync.trigger(this,true);
+                    status+=" · TRIP a sincronización QR sin GPS";
+                }else status+=" · nube sin activar (usá QR en DIAGNÓSTICO)";
             }catch(Exception primary){
                 // Some OEM builds also lack the standard Downloads provider.
                 // Fallback is app-owned external storage, accessible by adb pull.
