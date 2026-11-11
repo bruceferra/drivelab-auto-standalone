@@ -43,7 +43,7 @@ public final class T1TankDashboardActivity extends Activity {
     private final AtomicBoolean sampling=new AtomicBoolean(false);
     private volatile boolean visible;
     private T1InstrumentView instruments;
-    private TextView liveStatus,rangeStatus,tripStatus,formStatus,syncStatus;
+    private TextView liveStatus,rangeStatus,tripStatus,tripActionStatus,formStatus,syncStatus;
     private EditText syncPin;
     private EditText gasolinePrice,energyPrice,refillLiters,refillKm,anchorKm;
     private File pendingCsv;
@@ -158,6 +158,9 @@ public final class T1TankDashboardActivity extends Activity {
         stop.setOnClickListener(v->stopTrip());
         controls.addView(stop,new LinearLayout.LayoutParams(0,60,1));
         root.addView(controls);
+        tripActionStatus=text("Para cambiar de viaje: DETENER, luego INICIAR. "+
+            "No requiere PIN ni sincronización.",14,NAVY,true);
+        root.addView(tripActionStatus);
         root.addView(text("GPS con permiso o distancia aproximada por velocidad OEM. "+
             "CSV privado con marcha, velocidad, CI186, SOC, HV, contadores "+
             "1048/1049, recirculación, plegado y ruta GPS disponible.",
@@ -348,16 +351,22 @@ public final class T1TankDashboardActivity extends Activity {
         formStatus.setText("Subida pausada. Los TRIP y CSV locales no se borraron.");
         updateSyncStatus();
     }
+    private void showTripMessage(String message){
+        if(tripActionStatus!=null)tripActionStatus.setText(message);
+        if(formStatus!=null)formStatus.setText(message);
+    }
     private void startTrip(){
         if(getSharedPreferences(T1TripRecorderService.PREFS,MODE_PRIVATE)
             .getBoolean(T1TripRecorderService.RUNNING,false)){
-            formStatus.setText("Ya hay un TRIP activo");return;
+            showTripMessage("Hay un TRIP marcado activo. Tocá DETENER TRIP "+
+                "para cerrarlo (conserva el CSV); luego INICIAR TRIP.");
+            return;
         }
         if(checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=
                 PackageManager.PERMISSION_GRANTED){
             requestPermissions(new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
                 ASK_GPS);
-            formStatus.setText("Autorizá GPS para kilometraje independiente; "+
+            showTripMessage("Autorizá GPS para kilometraje independiente; "+
                 "si lo rechazás se usará velocidad OEM estimada.");
             return;
         }
@@ -372,15 +381,17 @@ public final class T1TankDashboardActivity extends Activity {
         try{
             startForegroundService(new Intent(this,T1TripRecorderService.class)
                 .setAction(T1TripRecorderService.ACTION_START));
-            formStatus.setText("TRIP iniciado; muestras privadas cada 3 segundos");
-        }catch(Exception ex){formStatus.setText("No se inició TRIP: "+ex.getMessage());}
+            showTripMessage("Solicitando TRIP; verificá arriba que aumenten "+
+                "las muestras. PIN no necesario.");
+        }catch(Exception ex){showTripMessage("No se inició TRIP: "+ex.getMessage());}
     }
     private void stopTrip(){
         try{
             startService(new Intent(this,T1TripRecorderService.class)
                 .setAction(T1TripRecorderService.ACTION_STOP));
-            formStatus.setText("Deteniendo TRIP y conservando CSV…");
-        }catch(Exception ex){formStatus.setText("Error al detener: "+ex.getMessage());}
+            showTripMessage("Deteniendo TRIP y conservando CSV… "+
+                "Al mostrar TRIP detenido, podés iniciar otro.");
+        }catch(Exception ex){showTripMessage("Error al detener: "+ex.getMessage());}
     }
     private void savePrices(){
         try{
