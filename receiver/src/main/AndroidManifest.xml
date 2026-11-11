@@ -39,6 +39,10 @@
             android:foregroundServiceType="dataSync" />
         <service android:name=".T1TripRecorderService" android:exported="false"
             android:foregroundServiceType="location|dataSync" />
+        <!-- User-started only; bounded PHEV/SOC/wiper/radar and 500m callback probe.
+             Foreground service survives navigating to stock T1 screen or Maps. -->
+        <service android:name=".T1PhevModeCaptureService" android:exported="false"
+            android:foregroundServiceType="dataSync" />
         <receiver android:name=".BootReceiver" android:exported="false">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />

@@ -253,3 +253,26 @@ También existen en código original propiedades HAL `VC_VENDOR_PHEV_POWER_MODE_
 ### Próximo paso seguro
 
 Agregar lectura de solo diagnóstico de 1040/1041/1043/1045/1046 en pantalla con intervalos limitados y capturar transiciones **cuando el usuario cambie los modos desde el menú original**, inmóvil. Correlacionar nombre visible, valor de la lectura y SOC 1042. No configurar la modificación automática de EV/HEV/Smart por GPS hasta verificar estados OEM, condiciones y reversión controlada. No agregar apagado permanente / al arranque de AVAS.
+
+## Origen concreto del consumo 50 km y 500 m en ClusterInteraction.apk
+
+**Nueva inspección de bytecode DEX original (11/11/2026):** se recorrieron las tablas de métodos/código de `ClusterInteraction.apk`, clase `com.autolink.clusterinteraction.manager.ResponseManager` y las invocaciones de `handleRespFromInc(int,byte[])`. **Este servicio NO calcula las medias desde el recorrido GPS**: recibe un paquete de datos del instrumental (INC) y decodifica campos ya empaquetados. Se identificó una rama de paquete `int == 21`, sujeta a un filtro temporal de recepción. Estos offsets son **índices del array de bytes recibido por ResponseManager**, no IDs de propiedades de Android ni direcciones CAN.
+
+| Salida OEM | Bytes en mensaje de INC | Conversión detectada / disparador |
+|---|---|---|
+| `onAvgFuCnsChanged` 50 km nafta | offsets **138,139** | Little-endian unsigned de dos bytes / **10**, comparación con valor anterior |
+| `onAvgElecCnsChanged` 50 km electricidad | offsets **140,141** | Little-endian unsigned de dos bytes / **10**, con **offset -100** en float; comparación con valor anterior |
+| `onAvgFuChanged` 500 m nafta | offset **164 = contador de tramo**, offset **165 = valor** | La rutina empieza comparando `mAvgFuCount` con el byte contador; **si no cambia, retorna sin evento**. Cuando cambia, procesa el valor como unsigned byte / 10 con división entera y envía un evento float |
+| `onAvgElecChanged` 500 m eléctrico | offset **157 = contador de tramo**, offsets **160,161 = valor** | La rutina empieza comparando `mAvgElecCount` con el byte contador; **si no cambia, retorna sin evento**. Cuando cambia, combina unsigned LE, aplica **-250**, divide por 10 en entero y emite float |
+
+Los offsets y la lógica de igualdad/salto provienen de instrucciones de máquina Dalvik de `ResponseManager.handleRespFromInc`, `onAvgFuChanged(B,B)`, `onAvgElecChanged(B,B,B)`, `onAvgFuCnsChanged(B,B)` y `onAvgElecCnsChanged(B,B)`; no son una inferencia del CSV. Esta es la prueba más fuerte hasta ahora de que **los callbacks de 500 m son señales de evento de cierre/cambio de contador, no lecturas actualizadas cada 3 segundos**. Hay que verificar físicamente que el contador realmente cambia cada 500 m en firmware argentino: la etiqueta «500 m» no basta para probar la frecuencia real. El cálculo OEM del dato **antes de generar el paquete INC** todavía no fue identificado, y tampoco se identificó el origen físico de litros inyectados. No confundir «valor que entrega la ECU» con «volumen absoluto real medido» sin validación.
+
+**Correlación con pruebas de usuario:** en el TRIP de 1,65 km los getters `1086/1087` devolvieron `-1`; luego también `readInt` devolvió -1. En prueba de eventos estacionaria, las cuatro suscripciones quedaron aceptadas y los canales de 500 m tuvieron 0 eventos, mientras 50 km emitieron 296/321. **Esto es compatible con el diseño del servicio:** la señal de 500 m solo notifica cuando cambia el contador, a diferencia de 50 km. No declarar definitivamente roto el cálculo del vehículo hasta escuchar en movimiento con la suscripción activa.
+
+**Prueba instrumentada en Receiver 0.2.30:** iniciación voluntaria de servicio foreground de **180 segundos**, que mantiene la escucha de callbacks 500m y 50km **aunque el usuario pase a Waze, pantalla OEM o cierre la actividad de DriveLab**. El panel DIAGNÓSTICO registra además PHEV 1040/1041/1043/1045/1046, SOC, limpiaparabrisas 2125/2126, radar 2049/2107 y zonas HAL PDC frontales/traseras crudas. Dos CSV guardados internamente y exportables a Descargas/DriveLabAuto. **NO** se efectúan escrituras de PHEV, AVAS, radar, parabrisas ni valores 500m. No se auto-recomputa trip fuel usando 50 km porque promedios móviles de una ventana de 50 km no determinan litros de un tramo arbitrario.
+
+### Mapeo PHEV realmente observado en Argentina
+
+- `1043=1` EV; `1043=2` HEV; `1043=3` EV MAX (azul), coherente con enum del APK.
+- `1040=2` **Smart / ahorro de energía inteligente** en la interfaz local de la T1; `1040=4` **Forzado / Charge**, confirmados mediante alternar el control OEM y leer el código. **1040=3** sin validación real en esta unidad. No reemplazar el mapeo observado por nombres genéricos del enum compartido.
+- `1041` SOC objetivo y `1046` recuperación bajo/medio/alto: **solo lectura** hasta confirmar tipo, escala y condiciones de cambio.

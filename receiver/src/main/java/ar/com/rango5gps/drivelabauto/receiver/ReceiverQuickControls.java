@@ -135,7 +135,24 @@ final class ReceiverQuickControls {
         mirrorAuto=button(a,"ESPEJOS AUTO",GREEN,()->setMirrorMode(true));
         mirrorManual=button(a,"ESPEJOS MANUAL",ORANGE,()->setMirrorMode(false));
 
-        LinearLayout b=row(root);
+        // Put less frequent/manual OEM actions behind one expandable section.
+        // They remain accessible; opening Maps does not stop the opt-in
+        // recirculation guard, mirror-auto service or the Receiver server.
+        LinearLayout extra=new LinearLayout(activity);
+        extra.setOrientation(LinearLayout.VERTICAL);
+        extra.setVisibility(android.view.View.GONE);
+        Button extraToggle=new Button(activity);
+        extraToggle.setAllCaps(false);
+        extraToggle.setText("MOSTRAR CONTROLES AVANZADOS");
+        extraToggle.setOnClickListener(v->{
+            boolean reveal=extra.getVisibility()!=android.view.View.VISIBLE;
+            extra.setVisibility(reveal?android.view.View.VISIBLE:android.view.View.GONE);
+            extraToggle.setText(reveal?"OCULTAR CONTROLES AVANZADOS":
+                "MOSTRAR CONTROLES AVANZADOS");
+        });
+        root.addView(extraToggle);
+        root.addView(extra);
+        LinearLayout b=row(extra);
         button(b,"BAJAR ESPEJOS",BLUE,()->move(false));
         button(b,"SUBIR ESPEJOS",BLUE,()->move(true));
         button(b,"VENTILACIÓN TOTAL",TEAL,()->windows(WindowGroupPolicy.VENT_QUARTER));
@@ -148,13 +165,13 @@ final class ReceiverQuickControls {
         button(c,"TABLERO / TRIP",BLUE,()->activity.startActivity(
             new Intent(activity,T1TankDashboardActivity.class)));
 
-        LinearLayout d=row(root);
+        LinearLayout d=row(extra);
         leftMinus=button(d,"IZQ −",GREY,()->adjust(MirrorAutomationService.LEFT,-1));
         leftPlus=button(d,"IZQ +",TEAL,()->adjust(MirrorAutomationService.LEFT,1));
         rightMinus=button(d,"DER −",GREY,()->adjust(MirrorAutomationService.RIGHT,-1));
         rightPlus=button(d,"DER +",TEAL,()->adjust(MirrorAutomationService.RIGHT,1));
 
-        LinearLayout e=row(root);
+        LinearLayout e=row(extra);
         button(e,"RECUPERAR ESPEJOS · 10 PASOS ARRIBA",ORANGE,this::restoreMirrors);
 
         config=new TextView(activity);config.setTextSize(14);

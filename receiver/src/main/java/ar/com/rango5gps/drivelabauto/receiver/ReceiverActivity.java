@@ -18,6 +18,7 @@ public final class ReceiverActivity extends Activity {
     private final Handler pairUiHandler=new Handler(Looper.getMainLooper());
     private TextView pairStatusView,pairCodeView,pairWindowView,pairPortView;
     private ScrollView currentScroll;
+    private boolean connectionExpanded=false;
     private long lastAutoCheckElapsed=0;
     private final Runnable pairUiRefresh=new Runnable(){
         @Override public void run(){
@@ -66,53 +67,67 @@ public final class ReceiverActivity extends Activity {
         SharedPreferences p=prefs();
         quickControls.attach(body); // FIRST and always visible above menus
         label(body,"DRIVELAB AUTO · RECEIVER",23);
-        label(body,"v0.2.29 · vinculación Xiaomi estable + OEM · Jetour T1",13);
+        label(body,"v0.2.30 · diagnóstico PHEV y sensores en segundo plano · Jetour T1",13);
         button(body,"VEHÍCULO · VENTANILLAS / ENERGÍA / CODE",()->
             startActivity(new Intent(this,ReceiverVehicleActivity.class)));
         button(body,"TABLERO T1 · TANQUES / CONSUMO / TELEMETRÍA",()->
             startActivity(new Intent(this,T1TankDashboardActivity.class)));
-        label(body,"Jetour T1 · Receptor cifrado independiente",14);
-        label(body,"IP de T1: "+ReceiverService.localIp()+" · Puertos 48391 / 48392",15);
-        label(body,"ESTADO: "+p.getString("status","Sin iniciar")+
+        label(body,"Conexión Receiver: "+p.getString("status","Sin iniciar")+
+            " · IP "+ReceiverService.localIp()+
+            " · "+p.getString("pair_port_status","sin datos del puerto 48392"),14);
+        button(body,connectionExpanded?
+            "OCULTAR CONEXIÓN Y CONFIGURACIÓN":
+            "CONEXIÓN XIAOMI / AJUSTES / ACTUALIZAR",()->{
+            connectionExpanded=!connectionExpanded;
+            render();
+        });
+        LinearLayout settings=new LinearLayout(this);
+        settings.setOrientation(LinearLayout.VERTICAL);
+        settings.setVisibility(connectionExpanded?android.view.View.VISIBLE:
+            android.view.View.GONE);
+        body.addView(settings);
+        label(settings,"Jetour T1 · Receptor cifrado independiente",14);
+        label(settings,"IP de T1: "+ReceiverService.localIp()+" · Puertos 48391 / 48392",15);
+        label(settings,"ESTADO: "+p.getString("status","Sin iniciar")+
             "\nDestinos recibidos: "+p.getInt("received",0)+
             "\nÚltima navegación: "+p.getString("last_open","Sin pruebas"),14);
-        button(body,"INICIAR RECEPTOR · en segundo plano",()->start(ReceiverService.ACTION_START));
-        button(body,"DETENER RECEPTOR",()->new AlertDialog.Builder(this)
+        button(settings,"INICIAR RECEPTOR · en segundo plano",()->start(ReceiverService.ACTION_START));
+        button(settings,"DETENER RECEPTOR",()->new AlertDialog.Builder(this)
             .setMessage("Se detendrá el receptor y su inicio automático. ¿Confirmás?")
             .setNegativeButton("CANCELAR",null)
             .setPositiveButton("DETENER",(d,w)->start(ReceiverService.ACTION_STOP)).show());
-        button(body,"VINCULAR XIAOMI · 6 DÍGITOS",()->start(ReceiverService.ACTION_PAIR));
-        label(body,"VINCULACIÓN · ESTA PANTALLA NO ABRE UN POPUP. "+
+        button(settings,"VINCULAR XIAOMI · 6 DÍGITOS",()->start(ReceiverService.ACTION_PAIR));
+        label(settings,"VINCULACIÓN · ESTA PANTALLA NO ABRE UN POPUP. "+
             "El botón habilita 2 minutos el puerto 48392. "+
             "Después seguí desde DriveLab Auto Sender en Xiaomi, usando la IP actual de T1.",14);
-        pairStatusView=pairLabel(body,"Vinculación: comprobando…",16);
-        pairPortView=pairLabel(body,"Puerto 48392: comprobando…",14);
-        pairWindowView=pairLabel(body,"Ventana de vinculación: no iniciada",14);
-        pairCodeView=pairLabel(body,"CÓDIGO: esperando solicitud de Xiaomi",20);
-        label(body,"PASO 1: T1 → VINCULAR (2 minutos). "+
+        pairStatusView=pairLabel(settings,"Vinculación: comprobando…",16);
+        pairPortView=pairLabel(settings,"Puerto 48392: comprobando…",14);
+        pairWindowView=pairLabel(settings,"Ventana de vinculación: no iniciada",14);
+        pairCodeView=pairLabel(settings,"CÓDIGO: esperando solicitud de Xiaomi",20);
+        label(settings,"PASO 1: T1 → VINCULAR (2 minutos). "+
             "PASO 2: Xiaomi → Vincular Receiver → IP actual de T1 → MOSTRAR CÓDIGO. "+
             "PASO 3: comparar ambos números → autorizar primero en T1 y confirmar en Xiaomi.",13);
-        button(body,"AUTORIZAR CÓDIGO COINCIDENTE · PASO 1",this::approve);
-        button(body,"ACTUALIZAR ESTADO",this::render);
+        button(settings,"AUTORIZAR CÓDIGO COINCIDENTE · PASO 1",this::approve);
+        button(settings,"ACTUALIZAR ESTADO",this::render);
         boolean auto=p.getBoolean("auto_boot",false);
-        label(body,"Inicio automático del receptor: "+(auto?"ACTIVO":"DESACTIVADO"),16);
-        button(body,auto?"Desactivar inicio automático":"ACTIVAR INICIO AL ENCENDER T1",()->{
+        label(settings,"Inicio automático del receptor: "+(auto?"ACTIVO":"DESACTIVADO"),16);
+        button(settings,auto?"Desactivar inicio automático":"ACTIVAR INICIO AL ENCENDER T1",()->{
             p.edit().putBoolean("auto_boot",!auto).apply();
             if(!auto)start(ReceiverService.ACTION_START);else render();
         });
-        label(body,"Permiso para iniciar Waze desde segundo plano: "+
+        label(settings,"Permiso para iniciar Waze desde segundo plano: "+
             (Settings.canDrawOverlays(this)?"CONCEDIDO":"SIN AUTORIZAR"),14);
-        button(body,"AUTORIZAR SEGUNDO PLANO EN ANDROID",this::requestBackground);
+        button(settings,"AUTORIZAR SEGUNDO PLANO EN ANDROID",this::requestBackground);
         boolean waze=p.getBoolean("open_waze",true);
-        button(body,waze?"Desactivar apertura automática de Waze":
+        button(settings,waze?"Desactivar apertura automática de Waze":
             "Activar apertura automática de Waze",()->{
             p.edit().putBoolean("open_waze",!waze).apply();render();
         });
-        label(body,"App opcional al encender: "+p.getString("launch_label","NINGUNA")+
+        label(settings,"App opcional al encender: "+p.getString("launch_label","NINGUNA")+
             "\nEstado último arranque: "+p.getString("boot_status","Sin pruebas"),13);
-        button(body,"ELEGIR APP PARA ABRIR AL ENCENDER",this::pickBootApp);
+        button(settings,"ELEGIR APP PARA ABRIR AL ENCENDER",this::pickBootApp);
         boolean launch=p.getBoolean("launch_app_on_boot",false);
-        button(body,launch?"Desactivar apertura de app al encender":
+        button(settings,launch?"Desactivar apertura de app al encender":
             "Activar apertura de app al encender",()->{
             if(!launch&&(!p.getBoolean("auto_boot",false)||
                 !Settings.canDrawOverlays(this)||p.getString("launch_package","").isEmpty())){
@@ -121,28 +136,28 @@ public final class ReceiverActivity extends Activity {
             }
             p.edit().putBoolean("launch_app_on_boot",!launch).apply();render();
         });
-        button(body,"Quitar app de inicio",()->{
+        button(settings,"Quitar app de inicio",()->{
             p.edit().remove("launch_package").remove("launch_label")
                 .putBoolean("launch_app_on_boot",false).apply();render();
         });
-        button(body,"PRUEBA DIRECTA A LA PLATA",()->direct("-34.9214,-57.9545"));
-        button(body,"PRUEBA DIRECTA A MAR DEL PLATA",()->direct("-38.0055,-57.5426"));
-        button(body,"ACTUALIZAR RECEIVER · INSTALACIÓN DIRECTA",
+        button(settings,"PRUEBA DIRECTA A LA PLATA",()->direct("-34.9214,-57.9545"));
+        button(settings,"PRUEBA DIRECTA A MAR DEL PLATA",()->direct("-38.0055,-57.5426"));
+        button(settings,"ACTUALIZAR RECEIVER · INSTALACIÓN DIRECTA",
             ()->Updater.check(this,"receiver",this::report));
-        if(!message.isEmpty())label(body,"Actualizador / estado: "+message,14);
-        label(body,"Estado instalador T1: "+
+        if(!message.isEmpty())label(settings,"Actualizador / estado: "+message,14);
+        label(settings,"Estado instalador T1: "+
             getSharedPreferences("drivelab_native_update",MODE_PRIVATE)
                 .getString("last_install_status","Aún no hay instalación solicitada"),14);
-        button(body,"REINTENTAR INSTALACIÓN YA DESCARGADA",
+        button(settings,"REINTENTAR INSTALACIÓN YA DESCARGADA",
             ()->Updater.retryInstall(this,this::report));
-        button(body,"INSTALADOR NATIVO ALTERNATIVO",
+        button(settings,"INSTALADOR NATIVO ALTERNATIVO",
             ()->Updater.tryNativeIntent(this,this::report));
-        button(body,"ABRIR AJUSTES DE RECEIVER (PERMISO)",
+        button(settings,"ABRIR AJUSTES DE RECEIVER (PERMISO)",
             ()->Updater.openReceiverSettings(this,this::report));
-        label(body,"El sistema Android debe confirmar la instalación. "+
+        label(settings,"El sistema Android debe confirmar la instalación. "+
             "Si Jetour rechaza ambos métodos, el estado indicará el motivo. "+
             "No desactives Play Protect ni desinstales Receiver.",13);
-        label(body,"El servicio sigue activo aunque cierres esta pantalla. "+
+        label(settings,"El servicio sigue activo aunque cierres esta pantalla. "+
             "No fuerza Wi-Fi ni modifica Android Auto o T1Launcher. "+
             "La apertura en clúster depende de la ROM de la camioneta.",13);
         Receiver3DButtons.apply(body);
