@@ -135,7 +135,7 @@ public final class T1TankDashboardActivity extends Activity {
         scroll.addView(root);
         LinearLayout head=card(root,NAVY);
         head.addView(text("DRIVELAB · TABLERO T1",23,WHITE,true));
-        head.addView(text("Instrumentos en vivo · surtidor · autonomía · TRIP",
+        head.addView(text("Instrumentos compactos · consumo OEM 500 m por TRIP",
             13,0xFFB4DADD,false));
         action(root,"← VOLVER",BLUE,this::finish);
 
