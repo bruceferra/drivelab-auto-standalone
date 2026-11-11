@@ -24,7 +24,10 @@ android {
   }
   compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
 }
-dependencies { implementation project(':common') }
+dependencies {
+  implementation project(':common')
+  implementation 'com.google.zxing:core:3.5.4'
+}
 gradle.taskGraph.whenReady { graph ->
   if (graph.hasTask(':receiver:assembleRelease') && !System.getenv('RECEIVER_KEYSTORE')) {
     throw new GradleException('Missing RECEIVER_KEYSTORE for signed receiver release')
