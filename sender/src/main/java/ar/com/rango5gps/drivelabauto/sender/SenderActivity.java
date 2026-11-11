@@ -71,8 +71,10 @@ public final class SenderActivity extends Activity {
             .setMessage("¿Desvincular? La próxima vez tendrás que comparar los 6 dígitos.")
             .setNegativeButton("CANCELAR",null)
             .setPositiveButton("DESVINCULAR",(d,w)->{SenderClient.unpair(this);render();}).show());
-        title(body,"En Uber: si Android muestra un selector, elegí DriveLab Auto Sender. "+
-            "El modo Solo clúster no abre Waze en el teléfono si la T1 confirma recepción.",13);
+        title(body,"En Uber: elegí DriveLab Auto Sender para enviar destinos. "+
+            "Ahora la pantalla de Uber queda visible: el envío al clúster se realiza "+
+            "sin mostrar DriveLab. Los fallos aparecen en una notificación. "+
+            "Modo Solo clúster no abre Waze en Xiaomi.",13);
         setContentView(scroll);
         currentScroll=scroll;
         if(restoreY>0)scroll.post(()->{
