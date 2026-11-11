@@ -72,6 +72,8 @@ public final class ReceiverActivity extends Activity {
         label(body,"v0.2.31 · QR + nube privada + espejos AUTO de fondo · Jetour T1",13);
         button(body,"VEHÍCULO · VENTANILLAS / ENERGÍA / CODE",()->
             startActivity(new Intent(this,ReceiverVehicleActivity.class)));
+        button(body,"COCKPIT T1 · JORNADA / CLIENTES / COSTOS",()->
+            startActivity(new Intent(this,T1PremiumCockpitActivity.class)));
         button(body,"TABLERO T1 · TANQUES / CONSUMO / TELEMETRÍA",()->
             startActivity(new Intent(this,T1TankDashboardActivity.class)));
         label(body,"Conexión Receiver: "+p.getString("status","Sin iniciar")+
