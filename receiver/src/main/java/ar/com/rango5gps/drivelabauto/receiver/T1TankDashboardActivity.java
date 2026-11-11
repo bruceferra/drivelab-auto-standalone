@@ -46,7 +46,8 @@ public final class T1TankDashboardActivity extends Activity {
     private final AtomicBoolean sampling=new AtomicBoolean(false);
     private volatile boolean visible;
     private T1InstrumentView instruments;
-    private TextView liveStatus,rangeStatus,tripStatus,tripActionStatus,exportStatus,formStatus,syncStatus;
+    private TextView liveStatus,rangeStatus,tripStatus,tripActionStatus,exportStatus,formStatus,syncStatus,oemEventsStatus;
+    private T1OemConsumptionCallbacks oemCallbacks;
     private EditText syncPin;
     private EditText gasolinePrice,energyPrice,refillLiters,refillKm,anchorKm;
     private File pendingCsv;
@@ -57,18 +58,28 @@ public final class T1TankDashboardActivity extends Activity {
             if(!visible)return;
             updateTripStatus();
             updateSyncStatus();
+            if(oemEventsStatus!=null&&oemCallbacks!=null)
+                oemEventsStatus.setText(oemCallbacks.snapshot());
             if(!sampling.get()&&System.currentTimeMillis()-lastUiSample>=3500)
                 readTelem();
             ui.postDelayed(this,1300);
         }
     };
-    @Override public void onCreate(Bundle state){super.onCreate(state);render();}
+    @Override public void onCreate(Bundle state){
+        super.onCreate(state);
+        oemCallbacks=new T1OemConsumptionCallbacks(this);
+        render();
+    }
     @Override protected void onResume(){
         super.onResume();visible=true;ui.removeCallbacks(update);ui.post(update);
         T1TripSync.trigger(this,false);
     }
     @Override protected void onPause(){
         visible=false;ui.removeCallbacks(update);super.onPause();
+    }
+    @Override protected void onDestroy(){
+        if(oemCallbacks!=null)oemCallbacks.stop();
+        super.onDestroy();
     }
     private GradientDrawable panelBg(int color){
         GradientDrawable bg=new GradientDrawable();
@@ -133,6 +144,24 @@ public final class T1TankDashboardActivity extends Activity {
         root.addView(instruments,new LinearLayout.LayoutParams(-1,-2));
         liveStatus=text("Esperando lecturas OEM…",13,GRAY,false);root.addView(liveStatus);
         action(root,"LEER SEÑALES AHORA",TEAL,this::readTelem);
+
+        section(root,"PRUEBA OEM · EVENTOS 500 METROS Y 50 KM");
+        LinearLayout callbackPanel=card(root,PALE);
+        callbackPanel.addView(text("Escucha solo notificaciones de consumo OEM "+
+            "durante 3 minutos. Comparación 500 m vs 50 km. Sin modificar "+
+            "el vehículo ni calcular litros o kWh.",13,NAVY,false));
+        action(callbackPanel,"ESCUCHAR EVENTOS OEM · 3 MIN",TEAL,()->{
+            if(!oemCallbacks.start())
+                oemEventsStatus.setText("Ya está escuchando. "+oemCallbacks.snapshot());
+            else oemEventsStatus.setText(oemCallbacks.snapshot());
+        });
+        action(callbackPanel,"DETENER ESCUCHA OEM",RED,()->{
+            oemCallbacks.stop();
+            oemEventsStatus.setText("Cerrando inscripciones… "+oemCallbacks.snapshot());
+        });
+        action(callbackPanel,"EXPORTAR CSV EVENTOS OEM",BLUE,this::exportOemEvents);
+        oemEventsStatus=text(oemCallbacks.snapshot(),14,NAVY,false);
+        callbackPanel.addView(oemEventsStatus);
 
         section(root,"AUTONOMÍA PROPIA · NO OEM 1022 KM");
         LinearLayout range=card(root,PALE);
@@ -245,6 +274,35 @@ public final class T1TankDashboardActivity extends Activity {
         formStatus=text("",13,GRAY,false);root.addView(formStatus);
         Receiver3DButtons.apply(root);
         setContentView(scroll);
+    }
+
+    private void exportOemEvents(){
+        if(oemCallbacks.busy()){
+            oemEventsStatus.setText("Primero detené la escucha o completá los 3 minutos.");
+            return;
+        }
+        File file=oemCallbacks.lastLog();
+        if(file==null||!file.isFile()||file.length()==0){
+            oemEventsStatus.setText("Todavía no existe un registro OEM para exportar.");
+            return;
+        }
+        oemEventsStatus.setText("Exportando eventos OEM a Descargas/DriveLabAuto…");
+        new Thread(()->{
+            String result;
+            try{
+                result="EVENTOS EXPORTADOS: "+writeTripToDownloads(file)+
+                    " · original local conservado";
+            }catch(Exception e){
+                result="No se pudo exportar eventos a Descargas ("+
+                    e.getClass().getSimpleName()+"). Registro original conservado en "+
+                    file.getAbsolutePath();
+            }
+            final String message=result;
+            runOnUiThread(()->{
+                if(!isFinishing()&&!isDestroyed())
+                    oemEventsStatus.setText(message+"\n"+oemCallbacks.snapshot());
+            });
+        },"T1-OEM-Events-Export").start();
     }
 
     private void readTelem(){
