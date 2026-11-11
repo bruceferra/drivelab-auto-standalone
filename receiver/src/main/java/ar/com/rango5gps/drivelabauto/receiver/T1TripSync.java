@@ -156,6 +156,12 @@ final class T1TripSync {
         putNumber(s,"oemElectricAverage500m",f,27);
         putNumber(s,"oemFuelAverage500m",f,28);
         putNumber(s,"rpmValid1034",f,29);
+        putNumber(s,"oemElectric500mInt",f,30);
+        putNumber(s,"oemFuel500mInt",f,31);
+        putNumber(s,"voltage1063Int",f,32);
+        putNumber(s,"current1064Int",f,33);
+        putNumber(s,"raw1090Float",f,34);
+        putNumber(s,"raw1090Int",f,35);
         return s;
     }
     private static JSONArray readBatch(File file,int offset)throws Exception{
