@@ -105,9 +105,19 @@ final class T1TripSync {
         new Thread(()->{
             try{sendPending(app);}
             catch(Exception ex){
-                prefs(app).edit().putString(STATUS,
-                    "Sin conexión o envío fallido: "+ex.getClass().getSimpleName()+
-                    " (se conserva todo para reintentar)").apply();
+                String reason=ex.getMessage()==null?"":ex.getMessage();
+                String status;
+                if(reason.contains("HTTP 401"))
+                    status="PIN incorrecto (HTTP 401). Verificá el PIN privado "+
+                        "de DriveLab T1; CSV locales conservados.";
+                else if(reason.contains("HTTP 429"))
+                    status="Demasiados intentos (HTTP 429). "+
+                        "Sincronización en pausa temporal; CSV conservados.";
+                else
+                    status="Sin conexión o envío fallido: "+
+                        ex.getClass().getSimpleName()+
+                        " (se conserva todo para reintentar)";
+                prefs(app).edit().putString(STATUS,status).apply();
             }finally{ACTIVE.set(false);}
         },"T1-Private-Trip-Sync").start();
     }
