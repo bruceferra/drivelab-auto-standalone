@@ -18,7 +18,7 @@ import java.util.concurrent.atomic.AtomicReference;
 final class T1TripTelemetry {
     static final class Sample {
         long timestamp;
-        int gear=-1,recirc=-1,recircChange=-1,fold=-1,motorOn=-1;
+        int gear=-1,recirc=-1,recircChange=-1,fold=-1,motorOn=-1,powerMode=-1;
         double speed=Double.NaN,fuel=Double.NaN,rpm=Double.NaN,
             socInternal=Double.NaN,socDisplay=Double.NaN,
             voltage=Double.NaN,current=Double.NaN,
@@ -112,6 +112,7 @@ final class T1TripTelemetry {
         try{
             withService(VEHICLE_PKG,VEHICLE_CLS,VEHICLE_TOKEN,b->{
                 s.gear=safeInt(()->intValue(b,1033));
+                s.powerMode=safeInt(()->intValue(b,1043)); // read only EV/HEV/EV MAX
                 // RPM 1035 is an OEM candidate, not a proven motor state.
                 s.rpmValid1034=safeInt(()->intValue(b,1034));
                 s.rpm=safeFloat(()->floatValue(b,1035));
