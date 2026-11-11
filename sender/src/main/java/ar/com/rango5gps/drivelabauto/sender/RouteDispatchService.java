@@ -5,6 +5,8 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.util.Log;
+import android.content.SharedPreferences;
 import android.content.Intent;
 import android.os.IBinder;
 import android.net.Uri;
@@ -23,6 +25,8 @@ public final class RouteDispatchService extends Service {
     static final String EXTRA_RAW="navigation_share_text";
     private static final String CHANNEL="sender_route_dispatch";
     private static final int FOREGROUND_ID=9432, FAILURE_ID=9433;
+    static final String STATE_PREFS="sender_route_dispatch_state";
+    static final String LAST_STATE="last_state";
     private ExecutorService queue;
     @Override public void onCreate(){
         super.onCreate();
@@ -32,22 +36,45 @@ public final class RouteDispatchService extends Service {
             CHANNEL,"DriveLab destinos",NotificationManager.IMPORTANCE_LOW));
     }
     @Override public IBinder onBind(Intent intent){return null;}
+    private void mark(String state){
+        getSharedPreferences(STATE_PREFS,MODE_PRIVATE).edit()
+            .putString(LAST_STATE,state).putLong("timestamp",System.currentTimeMillis())
+            .apply();
+    }
     @Override public int onStartCommand(Intent intent,int flags,int startId){
-        Intent open=new Intent(this,SenderActivity.class);
-        PendingIntent tap=PendingIntent.getActivity(this,FOREGROUND_ID,open,
-            PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
-        startForeground(FOREGROUND_ID,new Notification.Builder(this,CHANNEL)
-            .setSmallIcon(android.R.drawable.ic_menu_directions)
-            .setContentTitle("DriveLab · enviando destino")
-            .setContentText("Envío cifrado a T1 en segundo plano")
-            .setContentIntent(tap)
-            .setOngoing(true).build());
+        // Android 14+ requires the exact FOREGROUND_SERVICE_DATA_SYNC permission
+        // for a dataSync service. Never let a SecurityException kill Sender.
+        try{
+            Intent open=new Intent(this,SenderActivity.class);
+            PendingIntent tap=PendingIntent.getActivity(this,FOREGROUND_ID,open,
+                PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+            startForeground(FOREGROUND_ID,new Notification.Builder(this,CHANNEL)
+                .setSmallIcon(android.R.drawable.ic_menu_directions)
+                .setContentTitle("DriveLab · enviando destino")
+                .setContentText("Envío cifrado a T1 en segundo plano")
+                .setContentIntent(tap)
+                .setOngoing(true).build());
+        }catch(RuntimeException error){
+            Log.e("DriveLabRoute","No se pudo iniciar servicio de ruta",error);
+            mark("SERVICIO BLOQUEADO · "+error.getClass().getSimpleName()+
+                " · Android impidió el envío en segundo plano");
+            stopSelf(startId);
+            return START_NOT_STICKY;
+        }
+        mark("Procesando destino en segundo plano…");
         final String raw=intent==null?null:intent.getStringExtra(EXTRA_RAW);
-        queue.execute(()->{
-            try{process(raw);}
-            catch(Exception e){failure("No se pudo procesar enlace de navegación",null);}
-            finally{stopSelf(startId);}
-        });
+        try{
+            queue.execute(()->{
+                try{process(raw);}
+                catch(Exception error){
+                    Log.e("DriveLabRoute","Error procesando navegación",error);
+                    failure("No se pudo procesar enlace de navegación",null);
+                }finally{stopSelf(startId);}
+            });
+        }catch(RuntimeException error){
+            mark("SERVICIO BLOQUEADO · "+error.getClass().getSimpleName());
+            stopSelf(startId);
+        }
         return START_NOT_STICKY;
     }
     private void process(String raw){
@@ -68,6 +95,7 @@ public final class RouteDispatchService extends Service {
         // Do not open Waze or DriveLab on the phone in SOLO CLÚSTER mode.
         SenderClient.Delivery sent=SenderClient.send(this,d.kind,d.value);
         if(!sent.accepted)failure(sent.status,d);
+        else mark("T1 CONFIRMÓ · destino enviado en segundo plano");
         if(!only){
             // The user deliberately requested navigation on both devices.
             Intent waze=new Intent(Intent.ACTION_VIEW,d.wazeUri());
@@ -80,8 +108,10 @@ public final class RouteDispatchService extends Service {
         // Successful SOLO CLÚSTER dispatch is intentionally silent.
     }
     private void failure(String reason,MapLinks.Destination destination){
+        mark("FALLÓ EL ENVÍO · "+reason);
         NotificationManager nm=getSystemService(NotificationManager.class);
         if(nm==null)return;
+        try{
         PendingIntent tap;
         if(destination!=null){
             Intent waze=new Intent(Intent.ACTION_VIEW,destination.wazeUri())
@@ -101,6 +131,11 @@ public final class RouteDispatchService extends Service {
             .setStyle(new Notification.BigTextStyle().bigText(reason+
                 "\nTocá para revisar o abrir Waze manualmente."))
             .setAutoCancel(true).setContentIntent(tap).build());
+        }catch(RuntimeException ex){
+            // Notifications may be restricted by Xiaomi; never crash Sender
+            // a second time while trying to report the first error.
+            Log.w("DriveLabRoute","No se pudo mostrar aviso de error",ex);
+        }
     }
     @Override public void onDestroy(){
         if(queue!=null)queue.shutdownNow();
