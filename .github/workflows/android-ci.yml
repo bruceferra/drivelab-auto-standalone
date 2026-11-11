@@ -56,6 +56,17 @@ jobs:
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1FuelDisplay.java \
             receiver/tests/T1FuelDisplayTest.java
           java -cp /tmp/fuel-display-test T1FuelDisplayTest
+      - name: OEM 500m paired fuel, energy and distance audit (pure JVM)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/oem-segment-test
+          javac -encoding UTF-8 -d /tmp/oem-segment-test \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SegmentConsumption.java \
+            receiver/tests/T1SegmentConsumptionTest.java
+          java -cp /tmp/oem-segment-test ar.com.rango5gps.drivelabauto.receiver.T1SegmentConsumptionTest
+          grep -q 'MAX_BATCHES_PER_FILE=4' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripSync.java
+          grep -q 'b.getName().compareTo(a.getName())' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripSync.java
       - name: Mirror parking R/D policy regression (pure JVM)
         shell: bash
         run: |
