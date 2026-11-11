@@ -61,6 +61,11 @@ public final class SenderActivity extends Activity {
         if(paired)title(body,"IP receptor: "+SenderClient.prefs(this).getString("receiver_ip",""),14);
         title(body,"Envíos confirmados: "+SenderClient.prefs(this).getInt("sent",0)+
             "\nÚltimo resultado: "+SenderClient.prefs(this).getString("last_status","Sin pruebas"),14);
+        String routeState=getSharedPreferences(
+            RouteDispatchService.STATE_PREFS,MODE_PRIVATE).getString(
+                RouteDispatchService.LAST_STATE,"");
+        if(!routeState.isEmpty())title(body,"Última navegación desde Uber: "+
+            routeState,13);
         button(body,"VINCULAR T1 POR QR · SIN CÓDIGOS",this::scanPairQr);
         button(body,"Vincular manualmente · 6 dígitos (respaldo)",this::pair);
         button(body,"Probar envío real a La Plata",this::test);
