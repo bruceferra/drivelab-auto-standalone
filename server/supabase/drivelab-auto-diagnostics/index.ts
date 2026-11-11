@@ -9,7 +9,7 @@ const HTML_HEADERS={"content-type":"text/html; charset=utf-8","cache-control":"n
 const UUID=/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const HEX64=/^[0-9a-f]{64}$/;
 const HEX48=/^[0-9a-f]{48}$/;
-const FILE=/^(?:phev_modes|oem_callbacks)_[0-9]{8}_[0-9]{6}\.csv$/;
+const FILE=/^(?:phev_modes|oem_callbacks|code_diag)_[0-9]{8}_[0-9]{6}\.csv$/;
 const MAX_BODY=24500;
 const result=(code:number,body:object)=>new Response(JSON.stringify(body),{status:code,headers:JSON_HEADERS});
 const sha=async(x:string)=>Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256",new TextEncoder().encode(x))))
