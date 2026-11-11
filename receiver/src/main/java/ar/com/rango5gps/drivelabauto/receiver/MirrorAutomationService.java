@@ -17,8 +17,9 @@ import android.os.SystemClock;
  *
  * Auto: one transition to R at <=0.5 km/h => tilt; R/non-R parking shuffle
  * does not repeat. Non-R and >10 km/h stable 800ms => restore once.
- * Manual down/up can run in P/R/N/D only while vehicle stopped, and they
- * DISARM auto to avoid stale relative-position bookkeeping.
+ * Manual down/up can run in P/R/N/D only while vehicle stopped and
+ * DISARM auto. A successful explicit 10-UP recovery resets the policy and
+ * REARMS AUTO for the next fresh R transition, without assuming measured angle.
  *
  * Commands: 2068/2069=2 down, =1 up, always release each with =0.
  * Default 2 pulses per side, editable 1..20. No absolute angle claim.
@@ -68,13 +69,17 @@ public final class MirrorAutomationService extends Service {
             prefs().edit().putBoolean(AUTO,true)
                 .putString(POSITION,"D · referencia ajustada por conductor")
                 .putString(STATUS,"AUTO armado · esperando transición nueva a R").apply();
-        }else if(ACTION_DOWN.equals(action)||ACTION_UP.equals(action)||
-                ACTION_RECOVER.equals(action)){
-            // Explicit manual control always overrides auto.
+        }else if(ACTION_RECOVER.equals(action)){
+            // Pause AUTO for a stationary 10-UP recovery. It must be rearmed
+            // only after ALL commands finish; failed/partial recovery stays MANUAL.
+            prefs().edit().putBoolean(AUTO,false)
+                .putString(STATUS,"RECUPERAR ESPEJOS · AUTO pausado hasta terminar").apply();
+            pendingManual=3;
+        }else if(ACTION_DOWN.equals(action)||ACTION_UP.equals(action)){
+            // Ordinary manual adjustments intentionally disarm AUTO.
             prefs().edit().putBoolean(AUTO,false)
                 .putString(STATUS,"AUTO detenido por operación manual").apply();
-            pendingManual=ACTION_RECOVER.equals(action)?3:
-                (ACTION_DOWN.equals(action)?1:2);
+            pendingManual=ACTION_DOWN.equals(action)?1:2;
         }
         boolean armed=prefs().getBoolean(AUTO,false);
         if(!armed && pendingManual==0){stopSelf();return START_NOT_STICKY;}
@@ -140,12 +145,28 @@ public final class MirrorAutomationService extends Service {
                         int[] counts=runPulses(oem,manual==1,l,r,false);
                         if(counts[0]!=l||counts[1]!=r)
                             throw new IllegalStateException("Movimiento manual incompleto");
-                        prefs().edit().putString(STATUS,
-                            (manual==3?"RECUPERAR 10 ARRIBA":
-                                "MANUAL "+(manual==1?"BAJAR":"SUBIR"))+
-                            " · izq="+l+" der="+r+" órdenes enviadas; "+
-                            "posición física no confirmada")
-                            .putString(POSITION,"Manual: posición sin medir").apply();
+                        if(manual==3){
+                            if(!MirrorParkingPolicy.completedManualRecovery(
+                                    counts[0],counts[1],l,r))
+                                throw new IllegalStateException(
+                                    "Recuperación incompleta: AUTO no reactivado");
+                            // Discard the previous TILTED/RESTORING bookkeeping.
+                            // A fresh policy needs a known non-R sample before
+                            // another R can command a tilt.
+                            policy=new MirrorParkingPolicy(steps(LEFT),steps(RIGHT));
+                            prefs().edit().putString(POSITION,
+                                    "Referencia D tras recuperar; ángulo sin sensor")
+                                .putString(STATUS,"RECUPERAR 10 ARRIBA completado "+
+                                    "· AUTO REACTIVADO · próximo R nuevo; "+
+                                    "posición física no medida")
+                                .putBoolean(AUTO,true).apply();
+                        }else{
+                            prefs().edit().putString(STATUS,
+                                    "MANUAL "+(manual==1?"BAJAR":"SUBIR")+
+                                    " · izq="+l+" der="+r+" órdenes enviadas; "+
+                                    "posición física no confirmada")
+                                .putString(POSITION,"Manual: posición sin medir").apply();
+                        }
                     }else if(auto){
                         MirrorParkingPolicy.Action action=policy.observe(gear,speed,
                             SystemClock.elapsedRealtime(),true);
