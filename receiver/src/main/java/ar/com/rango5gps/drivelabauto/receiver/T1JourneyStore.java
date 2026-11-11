@@ -27,11 +27,9 @@ final class T1JourneyStore {
     private static final String CSV_HEADER=
         "id;inicio;fin;etiqueta;trip_id;km_est_oem_velocidad;eventos_nafta;"+
         "nafta_raw;litros_experimentales;eventos_electricidad;electricidad_raw;"+
-        "kwh_neto_experimental;costo_nafta_experimental;precio_nafta
-";
+        "kwh_neto_experimental;costo_nafta_experimental;precio_nafta\n";
     private static final String CHARGES_HEADER=
-        "fecha_epoch_ms;kwh_red_medidos;precio_kwh;importe_ars;nota
-";
+        "fecha_epoch_ms;kwh_red_medidos;precio_kwh;importe_ars;nota\n";
 
     static final class Entry {
         final String id,label,tripId;
