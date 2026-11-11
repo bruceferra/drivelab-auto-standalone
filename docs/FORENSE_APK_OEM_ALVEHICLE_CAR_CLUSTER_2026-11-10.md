@@ -293,3 +293,18 @@ En el Receiver v0.2.31 se registraron **exactamente dos callbacks nuevos de la f
 **Unidades pendientes de validación:** `20` y `-12` son floats **ya convertidos** por el OEM antes de que el callback llegue a DriveLab. No son necesariamente valores directos del paquete INC, ni litros o kWh absolutos, ni deben multiplicarse por 500 m para computar un TRIP sin validar signo, escala y semántica. Futuros ensayos: capturar varios tramos de >2 km con velocidad OEM y registro TRIP a la vez, correlacionar marcas de tiempo e inicio/cierre de cada tramo y comprobar con consumo medido (no solo promedio 50 km).
 
 **Experimento control:** el CSV anterior `oem_callbacks_20261111_140815.csv` había tenido 1125 eventos de nafta 50 km (4.4) y 1125 eléctricos 50 km (3.9000015), y cero de ambos 500 m; la captura asociada recorrió ~0,24 km. La segunda tuvo nafta 50 km 4.6 y eléctrico 50 km 3.5, además del par de 500 m.
+
+### Tercera prueba 500m: dos cambios consecutivos y diferencia de 76 s (11/11/2026)
+
+**Fuente:** `oem_callbacks_20261111_154632.csv` registrado en la T1 desde 15:46:32 a 15:49:32 (ART), recibido en nube privada a 15:52:16, **18/18 fragmentos**, hash SHA-256 verificado. El archivo paralelo `phev_modes_20261111_154632.csv` **no había llegado** al consultar, por lo que no contamos aún con distancia ni velocidad sincronizadas para esta prueba.
+
+| Hora ART | NAFTA_500_m | ELÉCTRICO_500_m |
+|---|---:|---:|
+| **15:47:27.966** | **9** | **−12** |
+| **15:48:43.965** | **8** | **−5** |
+
+Intervalo: **76,0 segundos** entre eventos del mismo canal. Estos son **floats crudos que devuelve el OEM**, no litros ni kWh absolutos. La coincidencia temporal entre eventos de ambos canales apoya que la fuente usa cierres de tramo compartidos, pero confirmar **500 metros exactos por evento** exige distancia/speed/odómetro en la misma captura. No calcular volumen de un viaje ni costo a partir de estas cifras sin validar escalas.
+
+En la misma captura, `NAFTA_50_km = 5.2` repetido 1124 veces sin variación; `ELÉCTRICO_50_km` cambió de **1.699997** (261 eventos iniciales) a **1.300003** (863 eventos siguientes), con transición a las 15:47:14.618 ART. No confundir 2248 notificaciones de 50km con 2248 nuevas mediciones; el servicio notifica reiteradamente un promedio idéntico.
+
+**Siguiente paso implementable:** asociar los eventos a cada TRIP mientras el servicio de registro está activo, guardar `ts/channel/raw` junto a velocidad, 1040/1041/1043/SOC y kilometraje en CSV y nube privada; eliminar la necesidad de iniciar pruebas de solo 180 s para estudiar un recorrido normal. Filtrar duplicados de promedio 50km, pero **no** descartar eventos 500m aunque el valor numérico coincida con el tramo anterior. Exportación con un botón, preservando datos localmente y sin GPS/VIN hacia la nube. Corregir estados de UI de modo que la grabación de eventos sea coherente con el TRIP en background, sin tocar controles OEM.
