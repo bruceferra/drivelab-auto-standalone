@@ -1,4 +1,4 @@
-name: DriveLab Auto Receiver OTA signed update
+name: DriveLab Auto QR Sender + Receiver OTA signed update
 on:
   push:
     branches: [main]
@@ -15,6 +15,9 @@ jobs:
     runs-on: ubuntu-24.04
     if: github.ref == 'refs/heads/main'
     env:
+      SENDER_STORE_PASSWORD: ${{ secrets.SENDER_STORE_PASSWORD }}
+      SENDER_KEY_ALIAS: ${{ secrets.SENDER_KEY_ALIAS }}
+      SENDER_KEY_PASSWORD: ${{ secrets.SENDER_KEY_PASSWORD }}
       RECEIVER_STORE_PASSWORD: ${{ secrets.RECEIVER_STORE_PASSWORD }}
       RECEIVER_KEY_ALIAS: ${{ secrets.RECEIVER_KEY_ALIAS }}
       RECEIVER_KEY_PASSWORD: ${{ secrets.RECEIVER_KEY_PASSWORD }}
@@ -34,48 +37,54 @@ jobs:
           set -euo pipefail
           tool=$(command -v sdkmanager || find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)
           "$tool" 'platforms;android-35' 'build-tools;35.0.0'
-      - name: Restore existing RECEIVER signing certificate
+      - name: Restore both existing Sender and Receiver signing certificates
         shell: bash
         env:
+          SENDER_KEYSTORE_B64: ${{ secrets.SENDER_KEYSTORE_B64 }}
           RECEIVER_KEYSTORE_B64: ${{ secrets.RECEIVER_KEYSTORE_B64 }}
         run: |
           set -euo pipefail
+          test -n "$SENDER_KEYSTORE_B64"
+          test -n "$SENDER_STORE_PASSWORD" && test -n "$SENDER_KEY_ALIAS" && test -n "$SENDER_KEY_PASSWORD"
           test -n "$RECEIVER_KEYSTORE_B64"
           test -n "$RECEIVER_STORE_PASSWORD"
           test -n "$RECEIVER_KEY_ALIAS"
           test -n "$RECEIVER_KEY_PASSWORD"
+          printf %s "$SENDER_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/sender.p12"
+          chmod 600 "$RUNNER_TEMP/sender.p12"
+          echo "SENDER_KEYSTORE=$RUNNER_TEMP/sender.p12" >> "$GITHUB_ENV"
           printf %s "$RECEIVER_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/receiver.p12"
           chmod 600 "$RUNNER_TEMP/receiver.p12"
           echo "RECEIVER_KEYSTORE=$RUNNER_TEMP/receiver.p12" >> "$GITHUB_ENV"
-      - name: Build receiver update and verify installed signing continuity
+      - name: Build both apps and verify installed signing continuity
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'bruceferra/drivelab-auto-standalone'
           test "$GITHUB_REF_NAME" = 'main'
-          if gh release view 'v0.2.30' >/dev/null 2>&1; then
-            echo 'Release v0.2.30 already exists: no APK overwrite'
+          if gh release view 'v0.2.31' >/dev/null 2>&1; then
+            echo 'Release v0.2.31 already exists: no APK overwrite'
             exit 1
           fi
-          mkdir -p /tmp/previous output
-          gh release download v0.2.29 --pattern 'DriveLab-Auto-Receiver-v0.2.29.apk' --dir /tmp/previous
-          gh release download v0.2.13 --pattern 'sender.json' --dir output
-          gradle --no-daemon :receiver:assembleRelease
+          mkdir -p /tmp/previous /tmp/previous-sender output
+          gh release download v0.2.30 --pattern 'DriveLab-Auto-Receiver-v0.2.30.apk' --dir /tmp/previous
+          gh release download v0.2.13 --pattern 'DriveLab-Auto-Sender-v0.2.13.apk' --dir /tmp/previous-sender
+          gradle --no-daemon :receiver:assembleRelease :sender:assembleRelease
           apk='receiver/build/outputs/apk/release/receiver-release.apk'
           test -s "$apk"
           aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
           sig="$ANDROID_HOME/build-tools/35.0.0/apksigner"
           "$sig" verify --print-certs "$apk"
-          "$sig" verify --print-certs /tmp/previous/DriveLab-Auto-Receiver-v0.2.29.apk
+          "$sig" verify --print-certs /tmp/previous/DriveLab-Auto-Receiver-v0.2.30.apk
           oldcert=$("$sig" verify --print-certs /tmp/previous/DriveLab-Auto-Receiver-v0.2.29.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
           newcert=$("$sig" verify --print-certs "$apk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
           test -n "$oldcert" && test "$oldcert" = "$newcert"
           badge=$("$aapt" dump badging "$apk" | head -1)
           echo "$badge"
           echo "$badge" | grep -F "package: name='ar.com.rango5gps.drivelabauto.receiver'"
-          echo "$badge" | grep -F "versionCode='31'"
-          echo "$badge" | grep -F "versionName='0.2.30'"
-          name='DriveLab-Auto-Receiver-v0.2.30.apk'
+          echo "$badge" | grep -F "versionCode='32'"
+          echo "$badge" | grep -F "versionName='0.2.31'"
+          name='DriveLab-Auto-Receiver-v0.2.31.apk'
           cp "$apk" "output/$name"
           sha=$(sha256sum "output/$name" | awk '{print $1}')
           export RECEIVER_SHA="$sha"
@@ -84,32 +93,66 @@ jobs:
           repo=os.environ['GITHUB_REPOSITORY']
           manifest={
             'packageName':'ar.com.rango5gps.drivelabauto.receiver',
-            'versionName':'0.2.30',
-            'versionCode':31,
+            'versionName':'0.2.31',
+            'versionCode':32,
             'sha256':os.environ['RECEIVER_SHA'],
-            'apkUrl':f'https://github.com/{repo}/releases/download/v0.2.30/DriveLab-Auto-Receiver-v0.2.30.apk',
+            'apkUrl':f'https://github.com/{repo}/releases/download/v0.2.31/DriveLab-Auto-Receiver-v0.2.31.apk',
           }
           with open('output/receiver.json','w',encoding='utf-8') as f:
             json.dump(manifest,f,indent=2)
-          with open('output/sender.json',encoding='utf-8') as f:
-            sender=json.load(f)
-          assert sender['packageName']=='ar.com.rango5gps.drivelabauto.sender'
-          assert sender['versionName']=='0.2.13' and sender['versionCode']==14
-          assert sender['apkUrl']==f'https://github.com/{repo}/releases/download/v0.2.13/DriveLab-Auto-Sender-v0.2.13.apk'
+          # Sender will be built and verified below: never reuse an old manifest.
+          
           PY
           cat output/receiver.json
+          # Validate the Sender signer against the previously installed 0.2.13.
+          sender='sender/build/outputs/apk/release/sender-release.apk'
+          test -s "$sender"
+          "$sig" verify --print-certs "$sender"
+          previousSender='/tmp/previous-sender/DriveLab-Auto-Sender-v0.2.13.apk'
+          oldSenderCert=$("$sig" verify --print-certs "$previousSender" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          newSenderCert=$("$sig" verify --print-certs "$sender" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          test -n "$oldSenderCert" && test "$oldSenderCert" = "$newSenderCert"
+          senderBadge=$("$aapt" dump badging "$sender" | head -1)
+          echo "$senderBadge"
+          echo "$senderBadge" | grep -F "package: name='ar.com.rango5gps.drivelabauto.sender'"
+          echo "$senderBadge" | grep -F "versionCode='15'"
+          echo "$senderBadge" | grep -F "versionName='0.2.14'"
+          cp "$sender" output/DriveLab-Auto-Sender-v0.2.14.apk
+          export SENDER_SHA=$(sha256sum output/DriveLab-Auto-Sender-v0.2.14.apk | awk '{print $1}')
+          python3 - <<'PY'
+          import json,os
+          repo=os.environ['GITHUB_REPOSITORY']
+          manifest={'packageName':'ar.com.rango5gps.drivelabauto.sender',
+                    'versionName':'0.2.14','versionCode':15,
+                    'sha256':os.environ['SENDER_SHA'],
+                    'apkUrl':f'https://github.com/{repo}/releases/download/v0.2.14/DriveLab-Auto-Sender-v0.2.14.apk'}
+          with open('output/sender.json','w',encoding='utf-8') as f:json.dump(manifest,f,indent=2)
+          PY
           sha256sum output/*.apk > output/receiver.sha256
-      - name: Publish update channel used by installed Receiver
+      - name: Publish Sender first, then Receiver as latest (both update manifests)
         shell: bash
         run: |
           set -euo pipefail
-          gh release create v0.2.30 \
-            output/DriveLab-Auto-Receiver-v0.2.30.apk \
-            output/receiver.json output/sender.json output/receiver.sha256 \
-            --target "$GITHUB_SHA" --latest \
-            --title 'DriveLab Auto Receiver 0.2.30 - modos PHEV y consumo 500m en segundo plano' \
-            --notes 'Receiver SOLO v0.2.30 (versionCode 31). Nueva pestaña DIAGNOSTICO: registro SOLO LECTURA de 3 minutos en servicio foreground de los codigos PHEV 1040/1041/1043/1045/1046, SOC, marcha, limpiaparabrisas 2125/2126, radar 2049/2107, aviso peatones 2074 y diez zonas de sensores HAL PDC delante/detras. En paralelo suscribe eventos OEM del consumo de 500 metros y 50 kilometros, persiste dos CSV crudos y permite exportarlos a Descargas/DriveLabAuto. Funciona incluso cuando la pantalla DriveLab esta cerrada y se usa el sistema original Jetour/Maps, dentro de los 3 min de prueba. Mapeos confirmados: 1043=1 EV, 2 HEV, 3 EV MAX azul; 1040=2 Smart, 4 Forzado. 1040=3 pendiente. La pagina inicial oculta botones menos frecuentes bajo Controles Avanzados y los ajustes de vinculacion/actualizacion bajo Conexion/Ajustes. Conserva servicios independientes Receiver, espejo AUTO y recirculacion al cambiar de pantalla. No automatiza apagado de AVAS ni modifica control PHEV, radar o limpiaparabrisas. No transforma promedios 50km en litros reales. Firma verificada contra v0.2.29; Sender 0.2.13 sin cambios.'
+          if ! gh release view v0.2.14 >/dev/null 2>&1; then
+            mkdir -p /tmp/previous-receiver-json
+            gh release download v0.2.30 --pattern 'receiver.json' --dir /tmp/previous-receiver-json
+            gh release create v0.2.14 \
+              output/DriveLab-Auto-Sender-v0.2.14.apk output/sender.json \
+              /tmp/previous-receiver-json/receiver.json \
+              --target "$GITHUB_SHA" --latest \
+              --title 'DriveLab Auto Sender 0.2.14 - QR Xiaomi-T1 sin códigos' \
+              --notes 'Sender 0.2.14: lector QR en Xiaomi y vínculo ECDH con prueba criptográfica de presencia física. No se escriben IP ni seis dígitos. Conserva método anterior como respaldo; compatible con Receiver 0.2.31.'
+          fi
+          if ! gh release view v0.2.31 >/dev/null 2>&1; then
+            gh release create v0.2.31 \
+              output/DriveLab-Auto-Receiver-v0.2.31.apk \
+              output/receiver.json output/sender.json output/receiver.sha256 \
+              --target "$GITHUB_SHA" --latest \
+              --title 'DriveLab Auto Receiver 0.2.31 - QR, nube privada y espejos AUTO' \
+              --notes 'Receiver firmado v0.2.31. QR local temporal para vincular Xiaomi Sender 0.2.14 sin códigos; QR separado para activar nube privada de CSV sin PIN (clave única aleatoria protegida por Android Keystore). Exportar conserva CSV local y sube modos PHEV, consumo OEM y CODE via HTTPS, sin datos sensibles de ubicación. Monitoreo de espejos AUTO con Binder persistente y reconexión ante fallos de lectura; RECUPERAR ESPEJOS rearma AUTO tras terminar ambos lados. Sin escrituras nuevas AVAS ni PHEV.'
+          fi
+          gh release edit v0.2.31 --latest
           tag=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
-          test "$tag" = 'v0.2.30'
-          gh release view v0.2.30 --json assets --jq '.assets[].name'
-          echo 'OTA v0.2.30 published as latest with receiver.json and preserved sender.json'
+          test "$tag" = 'v0.2.31'
+          gh release view v0.2.31 --json assets --jq '.assets[].name'
+          echo 'Sender 0.2.14 / Receiver 0.2.31 published, both updater manifests on latest.'
