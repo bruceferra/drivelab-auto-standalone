@@ -35,11 +35,14 @@ public final class ReceiverVehicleActivity extends Activity {
     private MirrorPositionProbe mirrorProbe;
     private PedestrianAlertControl pedestrian;
     private VehicleReadOnly reader;
+    private WiperParkingProbe wiperParking;
     private VehicleChangeScanner changeScanner;
     private VehicleBatchReader batchReader;
     private TextView operationView,alertView,scannerView,scannerValuesView,scannerEventsView,mirrorView;
     private TextView mirrorGearView,mirrorRawView,mirrorHalView,gearCaptureView,fold2003View;
     private String windowStatus="Sin órdenes enviadas";
+    private String wiperParkingStatus="Sensibilidad y distancia de aviso: sin consultar";
+    private TextView wiperParkingView;
     private String mirrorStatus="Validado en la T1: 2068 izquierdo y 2069 derecho funcionan en ambos sentidos.";
     private String mirrorGearStatus="Marcha y velocidad: sin consultar";
     private String mirrorRawStatus="Estados RAW 2068/2069: sin consultar";
@@ -63,6 +66,7 @@ public final class ReceiverVehicleActivity extends Activity {
         mirrorProbe=new MirrorPositionProbe(this);
         pedestrian=new PedestrianAlertControl(this);
         reader=new VehicleReadOnly(this);
+        wiperParking=new WiperParkingProbe(this);
         changeScanner=new VehicleChangeScanner(this);
         batchReader=new VehicleBatchReader(this);
         if(saved!=null){
@@ -126,7 +130,7 @@ public final class ReceiverVehicleActivity extends Activity {
         LinearLayout root=column();root.setPadding(16,10,16,26);
         scroll.addView(root);
         label(root,"DRIVELAB AUTO · T1",23);
-        label(root,"v0.2.19 · Controles rápidos en pantalla principal",12);
+        label(root,"v0.2.23 · Diagnóstico radar y barrido · solo lectura",12);
         button(root,"← VOLVER A MAPAS Y PUENTE",this::finish);
         LinearLayout menu=new LinearLayout(this);
         menu.setOrientation(LinearLayout.HORIZONTAL);
@@ -154,9 +158,40 @@ public final class ReceiverVehicleActivity extends Activity {
     }
     private boolean vehicleBusy(){
         return windows.busy()||mirror.busy()||mirrorProbe.busy()||pedestrian.busy()||
-            changeScanner.isRunning()||batchReader.busy();
+            changeScanner.isRunning()||batchReader.busy()||wiperParking.busy();
     }
     private void renderVehicle(LinearLayout body){
+        section(body,"LIMPIAPARABRISAS Y RADAR TRASERO · DIAGNÓSTICO");
+        label(body,"Lecturas OEM originales: 2126 sensibilidad de barrido AUTO, "+
+            "2107 distancia de aviso por tramos, 2049 radar, 2125 limpia trasero. "+
+            "HAL PDC trasero y cuatro zonas. Sin escritura; no mide metros "+
+            "hasta comparar valores crudos con una distancia real.",13);
+        button(body,"LEER LIMPIAPARABRISAS Y RADAR · SIN CAMBIAR",()->{
+            if(vehicleBusy()){
+                wiperParkingStatus="Otra operación OEM está en curso";
+                if(wiperParkingView!=null)wiperParkingView.setText(wiperParkingStatus);
+                return;
+            }
+            if(!wiperParking.readOnce(values->{
+                StringBuilder out=new StringBuilder();
+                for(Map.Entry<String,String> e:values.entrySet())
+                    out.append(e.getKey()).append(" = ").append(e.getValue()).append("\n");
+                wiperParkingStatus=out.toString();
+                if(activeTab==0&&wiperParkingView!=null&&!isFinishing())
+                    wiperParkingView.setText(wiperParkingStatus);
+            })){
+                wiperParkingStatus="No se inició lectura OEM";
+            }else{
+                wiperParkingStatus="Leyendo propiedades OEM de limpiaparabrisas y PDC…";
+            }
+            if(wiperParkingView!=null)wiperParkingView.setText(wiperParkingStatus);
+        });
+        wiperParkingView=status(body,wiperParkingStatus);
+        label(body,"La velocidad de barrido MANUAL no está identificada: "+
+            "2126 es sensibilidad automática. 2107 no garantiza ajuste "+
+            "solo del radar trasero. No modificar avisos de seguridad "+
+            "sin escala y valores permitidos verificados.",12);
+
         section(body,"ESPEJOS · CONTROL MANUAL EN P");
         mirrorView=status(body,mirrorStatus);
         label(body,"Derecho 2069 e izquierdo 2068, ambos validados. "+
