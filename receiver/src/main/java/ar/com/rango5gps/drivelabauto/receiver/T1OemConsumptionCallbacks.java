@@ -1,0 +1,228 @@
+package ar.com.rango5gps.drivelabauto.receiver;
+
+import android.content.ComponentName;
+import android.content.Context;
+import android.content.Intent;
+import android.content.ServiceConnection;
+import android.os.Binder;
+import android.os.IBinder;
+import android.os.Parcel;
+import android.os.RemoteException;
+import android.os.SystemClock;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.Locale;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
+
+/**
+ * Read-only OEM callback experiment based on original ClusterInteraction.apk.
+ *
+ * IClusterInteraction register codes: Elec500=133, Fu500=135,
+ * FuCns50=137, ElecCns50=139. Unregister are +1.
+ * Each callback: onAvg*Changed(float), Binder transaction 1.
+ *
+ * Listener registration is NOT an ECU setter or a car control. No vehicle
+ * property writes. Callback values are raw/uncalibrated and NEVER trip litres.
+ */
+final class T1OemConsumptionCallbacks {
+    private static final String PKG="com.autolink.clusterinteraction";
+    private static final String CLASS="com.autolink.clusterinteraction.CiService";
+    private static final String TOKEN=
+        "com.autolink.adapterinterface.clusterinteraction.IClusterInteraction";
+    private static final long DURATION_MS=180000L;
+    private static final String[] LABELS={
+        "NAFTA 500 m","ELÉCTRICO 500 m","NAFTA 50 km","ELÉCTRICO 50 km"
+    };
+    private static final String[] CALLBACK_TOKENS={
+        "com.autolink.adapterinterface.clusterinteraction.IAvgFuCallback",
+        "com.autolink.adapterinterface.clusterinteraction.IAvgElecCallback",
+        "com.autolink.adapterinterface.clusterinteraction.IAvgFuCnsCallback",
+        "com.autolink.adapterinterface.clusterinteraction.IAvgElecCnsCallback"
+    };
+    private static final int[] REGISTER={135,133,137,139};
+    private static final int[] UNREGISTER={136,134,138,140};
+
+    private final Context app;
+    private final AtomicBoolean running=new AtomicBoolean(false);
+    private final Object dataLock=new Object();
+    private final int[] count=new int[4];
+    private final String[] last={"—","—","—","—"};
+    private volatile String state="Sin prueba. Registro de eventos apagado.";
+    private volatile String registration="Sin registros.";
+    private volatile File logFile;
+    private volatile CountDownLatch stopSignal;
+    private volatile long deadlineMs;
+
+    T1OemConsumptionCallbacks(Context context){
+        app=context.getApplicationContext();
+    }
+    boolean busy(){return running.get();}
+    File lastLog(){return logFile;}
+    String snapshot(){
+        StringBuilder sb=new StringBuilder();
+        sb.append(running.get()?
+            "● ESCUCHANDO eventos OEM · "+
+                (Math.max(0,deadlineMs-SystemClock.elapsedRealtime())/1000)+" s restantes":
+            "○ "+state);
+        sb.append("\n").append(registration);
+        synchronized(dataLock){
+            for(int i=0;i<4;i++){
+                sb.append("\n").append(LABELS[i]).append(": ")
+                  .append(count[i]).append(" evento(s) · último ")
+                  .append(last[i]);
+            }
+        }
+        sb.append("\nSin calibración: los eventos NO son litros ni kWh acumulados.");
+        if(logFile!=null)sb.append("\nRegistro local: ").append(logFile.getName());
+        return sb.toString();
+    }
+    boolean start(){
+        if(!running.compareAndSet(false,true))return false;
+        synchronized(dataLock){
+            for(int i=0;i<4;i++){count[i]=0;last[i]="—";}
+        }
+        stopSignal=new CountDownLatch(1);
+        state="Iniciando prueba.";
+        registration="Conectando ClusterInteraction OEM…";
+        logFile=null;
+        deadlineMs=SystemClock.elapsedRealtime()+DURATION_MS;
+        new Thread(this::listen,"T1-Avg-CI-Callbacks").start();
+        return true;
+    }
+    void stop(){
+        CountDownLatch latch=stopSignal;
+        if(latch!=null)latch.countDown();
+    }
+    private static void register(IBinder ci,int transaction,IBinder callback)
+        throws Exception{
+        Parcel in=Parcel.obtain(),out=Parcel.obtain();
+        try{
+            in.writeInterfaceToken(TOKEN);
+            in.writeStrongBinder(callback);
+            if(!ci.transact(transaction,in,out,0))
+                throw new IllegalStateException("Binder tx "+transaction+" rechazado");
+            out.readException();
+        }finally{
+            in.recycle();out.recycle();
+        }
+    }
+    private void record(int channel,float raw){
+        String value=Float.toString(raw);
+        synchronized(dataLock){
+            count[channel]++;
+            last[channel]=value;
+            File file=logFile;
+            if(file!=null){
+                String row=System.currentTimeMillis()+","+
+                    LABELS[channel].replace(" ","_")+","+
+                    value+"\n";
+                try(FileOutputStream o=new FileOutputStream(file,true)){
+                    o.write(row.getBytes(StandardCharsets.UTF_8));
+                }catch(Exception ignored){}
+            }
+        }
+    }
+    private final class FloatCallback extends Binder {
+        private final String descriptor;
+        private final int channel;
+        FloatCallback(int channel){
+            this.channel=channel;
+            descriptor=CALLBACK_TOKENS[channel];
+            attachInterface(null,descriptor);
+        }
+        @Override protected boolean onTransact(int code,Parcel in,Parcel out,int flags)
+            throws RemoteException{
+            if(code==IBinder.INTERFACE_TRANSACTION){
+                if(out!=null)out.writeString(descriptor);
+                return true;
+            }
+            if(code==1){
+                in.enforceInterface(descriptor);
+                float raw=in.readFloat();
+                record(channel,raw);
+                if(out!=null)out.writeNoException();
+                return true;
+            }
+            return super.onTransact(code,in,out,flags);
+        }
+    }
+    private void listen(){
+        ServiceConnection connection=null;
+        boolean bound=false;
+        IBinder ci=null;
+        FloatCallback[] callbacks=new FloatCallback[4];
+        boolean[] registered=new boolean[4];
+        StringBuilder errors=new StringBuilder();
+        try{
+            File dir=T1TripRecorderService.tripDir(app);
+            String time=new SimpleDateFormat("yyyyMMdd_HHmmss",Locale.ROOT)
+                .format(new Date());
+            File file=new File(dir,"oem_callbacks_"+time+".csv");
+            try(FileOutputStream out=new FileOutputStream(file,false)){
+                out.write("timestamp_epoch_ms,channel,value_float_raw\n"
+                    .getBytes(StandardCharsets.UTF_8));
+            }
+            logFile=file;
+            CountDownLatch ready=new CountDownLatch(1);
+            AtomicReference<IBinder> remote=new AtomicReference<>();
+            connection=new ServiceConnection(){
+                @Override public void onServiceConnected(ComponentName n,IBinder binder){
+                    remote.set(binder);ready.countDown();
+                }
+                @Override public void onServiceDisconnected(ComponentName n){
+                    ready.countDown();
+                }
+                @Override public void onNullBinding(ComponentName n){ready.countDown();}
+                @Override public void onBindingDied(ComponentName n){ready.countDown();}
+            };
+            bound=app.bindService(new Intent().setComponent(
+                new ComponentName(PKG,CLASS)),connection,0);
+            if(!bound)throw new IllegalStateException("CiService no enlazó");
+            if(!ready.await(4000,TimeUnit.MILLISECONDS))
+                throw new IllegalStateException("Tiempo de espera CiService");
+            ci=remote.get();
+            if(ci==null||!ci.isBinderAlive()||
+                !TOKEN.equals(ci.getInterfaceDescriptor()))
+                throw new IllegalStateException("Descriptor IClusterInteraction distinto");
+            int ok=0;
+            for(int i=0;i<4;i++){
+                callbacks[i]=new FloatCallback(i);
+                try{
+                    register(ci,REGISTER[i],callbacks[i]);
+                    registered[i]=true;
+                    ok++;
+                }catch(Exception e){
+                    if(errors.length()>0)errors.append("; ");
+                    errors.append(LABELS[i]).append(": ")
+                        .append(e.getClass().getSimpleName());
+                }
+            }
+            registration="Inscripciones aceptadas: "+ok+"/4"+
+                (errors.length()>0?" · "+errors:"");
+            if(ok==0)throw new IllegalStateException("Todas las inscripciones rechazadas");
+            long remaining=deadlineMs-SystemClock.elapsedRealtime();
+            if(remaining>0)stopSignal.await(remaining,TimeUnit.MILLISECONDS);
+            state="Prueba terminada; resultados conservados.";
+        }catch(Exception e){
+            state="PRUEBA FALLIDA: "+e.getClass().getSimpleName()+
+                (e.getMessage()==null?"":" · "+e.getMessage());
+        }finally{
+            if(ci!=null&&ci.isBinderAlive()){
+                for(int i=0;i<4;i++)if(registered[i]&&callbacks[i]!=null){
+                    try{register(ci,UNREGISTER[i],callbacks[i]);}
+                    catch(Exception ignored){}
+                }
+            }
+            if(bound&&connection!=null)
+                try{app.unbindService(connection);}catch(Exception ignored){}
+            running.set(false);
+        }
+    }
+}
