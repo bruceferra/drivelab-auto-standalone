@@ -47,3 +47,23 @@ El DEX del proxy `IALCar$Stub$Proxy.getIntProperty(id,area)` confirma `Binder.tr
 5. Cuando las escalas y modos permitidos estén demostrados, evaluar controles OEM con verificación posterior de lectura, bloqueo por marcha/velocidad y retorno inmediato a configuración original ante fallas.
 
 **Sin root, sin modificaciones de APK OEM, sin escribir valores de limpiaparabrisas, radar ni sensores.**
+
+## Primera prueba real con Receiver 0.2.23: vehículo apagado
+
+**Fuente:** foto de la pantalla VEHÍCULO del Receiver enviada por el usuario, con confirmación explícita posterior de que la Jetour T1 estaba **sin encender**. Todos los números son valores crudos, no unidades físicas validadas.
+
+| ID | Valor observado | Comentario |
+|---|---:|---|
+| 2126, sensibilidad de barrido AUTO | -1 | Posible no inicializado / no disponible; no asumir escala |
+| 2125, limpia trasero | 0 | Estado inactivo posible; falta confirmar encendida |
+| 2107, banda aviso radar | 0 | Sin interpretación del umbral |
+| 2049, radar estacionamiento | 0 | Puede ser inactivo con vehículo apagado |
+| 557862927, PDC trasero | 0 | No expresa 0 metros necesariamente |
+| 557843296, zona trasera izquierda | 62 | Mismo valor en cuatro zonas: posible centinela/reposo |
+| 557843297, zona trasera intermedia derecha | 62 | Idem |
+| 557843298, zona trasera intermedia izquierda | 62 | Idem |
+| 557843299, zona trasera derecha | 62 | Idem |
+
+**Hipótesis:** `62` podría ser un valor por defecto cuando el radar no está activo, o un código/estado empaquetado y no una distancia. No representar como 62 cm ni 62 m sin ensayo.
+
+**Comparación siguiente:** camioneta encendida, estacionada en zona despejada, con freno aplicado y un ayudante observando el indicador OEM original. Tomar lectura inicialmente en P; cuando corresponda y resulte seguro, con pie en el freno pasar a R sin desplazarse y repetir. Comparar si el 2049 y las cuatro zonas abandonan sus valores iniciales. No mover el vehículo hacia personas u obstáculos ni usar una lectura experimental para maniobrar. Anotar también si la opción OEM del radar está activada. El 2126 se ensaya solo con el mando original en modo AUTO y vehículo inmóvil.
