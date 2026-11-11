@@ -67,3 +67,35 @@ El DEX del proxy `IALCar$Stub$Proxy.getIntProperty(id,area)` confirma `Binder.tr
 **Hipótesis:** `62` podría ser un valor por defecto cuando el radar no está activo, o un código/estado empaquetado y no una distancia. No representar como 62 cm ni 62 m sin ensayo.
 
 **Comparación siguiente:** camioneta encendida, estacionada en zona despejada, con freno aplicado y un ayudante observando el indicador OEM original. Tomar lectura inicialmente en P; cuando corresponda y resulte seguro, con pie en el freno pasar a R sin desplazarse y repetir. Comparar si el 2049 y las cuatro zonas abandonan sus valores iniciales. No mover el vehículo hacia personas u obstáculos ni usar una lectura experimental para maniobrar. Anotar también si la opción OEM del radar está activada. El 2126 se ensaya solo con el mando original en modo AUTO y vehículo inmóvil.
+
+## Segunda prueba real con Receiver 0.2.23: vehículo encendido / radar OFF-ON
+
+**Fuente:** tres capturas del usuario 10/11/2026 con la Jetour T1 **encendida y sin desplazarse**, y una primera captura previa con vehículo apagado. El usuario activó el botón OEM de radar trasero, observando que también activa el delantero. Necesidad concreta: reducir la alerta acústica trasera en circulación cuando otro vehículo se aproxima a ~1 m, **sin perder el sensor delantero para estacionar**.
+
+| Escenario | 2126 AUTO | 2125 limpia trasero | 2107 tramo aviso | 2049 radar | PDC trasero 557862927 | Cuatro sectores traseros 557843296-299 |
+|---|---:|---:|---:|---:|---:|---|
+| T1 apagada | −1 | 0 | 0 | 0 | 0 | 62,62,62,62 |
+| T1 encendida, radar OFF | −1 | 0 | 0 | 0 | 0 | 335,335,335,335 |
+| T1 encendida, radar ON | −1 | 0 | 0 | **1** | 0 | 335,335,335,335 |
+
+Hallazgos:
+- **2049 confirmado como indicador de activación general del radar** con el botón OEM en ese ensayo; el cambio 0 → 1 no implica habilitar solo el radar trasero.
+- `2107` permaneció en 0 incluso al conmutar el botón; su rol de ajuste de distancia **no está demostrado** en este vehículo. No editarlo para intentar cambiar el aviso.
+- Todos los sectores traseros cambian simultáneamente 62 → 335 **con el encendido**, sin cambios cuando el radar se activa por el botón. Es probable que sean centinelas/valores por defecto o una codificación; no afirmar que 335 = 3,35 m o que 62 = 0,62 m.
+- La señal HAL de distancia trasera 557862927 sigue 0 en todos los escenarios. El getter consultado puede estar retornando un dato no poblado, o el área/servicio no ser adecuado. **No convertir a metros**.
+- `2126=-1` de sensibilidad del barrido se mantiene; no se ha probado variación desde el control OEM.
+
+### Comportamiento del radar documentado en el manual de la T1
+
+El manual público T1 (edición china, susceptible de variantes de equipamiento y país) detalla que para versiones de **8 y 12 sensores** se activa con el botón o al seleccionar R, y que **al salir de R puede permanecer encendido** en otra marcha. Indica que en algunos modos se desactiva cuando la velocidad supera 15 km/h, y que con P/freno de estacionamiento las advertencias acústicas pueden silenciarse aunque siga la indicación visual. Manual: https://t1d.cherymanuals.com/views/om004007.html (sección «泊车雷达系统»).
+
+Esto **podría explicar** el pitido en tráfico cuando otro vehículo se acerca por detrás: el sistema general sigue activo tras salir de reversa. NO demuestra que el radar se esté activando en el mismo modo en la versión argentina, ni que el umbral acústico sea modificable por separados.
+
+### Objetivo de ingeniería (sin pérdida de asistencia)
+
+- Mantener **alertas delanteras de estacionamiento** y **alertas traseras cuando efectivamente se da marcha atrás**.
+- Verificar con OEM si el sonido trasero en D se puede silenciar temporalmente sin cortar detección y/o avisos delanteros; identificar un ajuste *autorizado* específico si existe, antes de tocar la ECU.
+- No forzar escritura `2049=0` desde DriveLab: activa/desactiva el radar general y afectaría el delantero.
+- No forzar escritura `2107`: valor 0 persistente sin tabla de niveles validados.
+- Próxima evidencia: observar el símbolo/botón OEM y si su piloto queda encendido en D tras salir de R, junto al pitido; comparar una vez con vehículo detenido y con control OEM original. Sin maniobras peligrosas ni usar a personas como obstáculos.
+
