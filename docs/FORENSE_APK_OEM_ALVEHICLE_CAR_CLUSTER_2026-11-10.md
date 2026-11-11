@@ -276,3 +276,20 @@ Los offsets y la lógica de igualdad/salto provienen de instrucciones de máquin
 - `1043=1` EV; `1043=2` HEV; `1043=3` EV MAX (azul), coherente con enum del APK.
 - `1040=2` **Smart / ahorro de energía inteligente** en la interfaz local de la T1; `1040=4` **Forzado / Charge**, confirmados mediante alternar el control OEM y leer el código. **1040=3** sin validación real en esta unidad. No reemplazar el mapeo observado por nombres genéricos del enum compartido.
 - `1041` SOC objetivo y `1046` recuperación bajo/medio/alto: **solo lectura** hasta confirmar tipo, escala y condiciones de cambio.
+
+### Confirmación en campo: eventos OEM de 500 metros RECIBIDOS (11/11/2026)
+
+En el Receiver v0.2.31 se registraron **exactamente dos callbacks nuevos de la familia 500 m** durante una captura de ~177,5 segundos (CSV `oem_callbacks_20261111_153116.csv`, subido al servidor privado Supabase a las 15:42:10 Argentina, 17/17 fragmentos, SHA-256 íntegro). El CSV paralelo `phev_modes_20261111_153116.csv` contiene 59 lecturas, marcha D, velocidad 0–38,5 km/h, **distancia estimada por integración de velocidad de ~0,85 km**. No extrapolar este dato a distancia GPS precisa.
+
+| Canal | Eventos | Valor float crudo | Timestamp (ART) |
+|---|---:|---:|---|
+| `NAFTA_500_m` | **1** | **20** | 15:32:47.950 |
+| `ELÉCTRICO_500_m` | **1** | **-12** | 15:32:47.950 |
+| `NAFTA_50_km` | 1124 | 4.6 (sin variación) | reiterado durante captura |
+| `ELÉCTRICO_50_km` | 1124 | 3.5 (sin variación) | reiterado durante captura |
+
+**Hallazgo:** en la versión argentina los callbacks de 500 m sí se emiten en marcha y llegan a DriveLab Auto. Que la primera captura de ~0,24 km tuviera cero eventos fue compatible con el filtro `mAvgFuCount`/`mAvgElecCount` identificado en el DEX. La aparición de un evento conjunto con ~0,85 km recorridos es compatible con contador por tramo de 500 m, **pero no verifica con precisión la distancia exacta entre emisiones** porque no conocemos la alineación de comienzo del segmento.
+
+**Unidades pendientes de validación:** `20` y `-12` son floats **ya convertidos** por el OEM antes de que el callback llegue a DriveLab. No son necesariamente valores directos del paquete INC, ni litros o kWh absolutos, ni deben multiplicarse por 500 m para computar un TRIP sin validar signo, escala y semántica. Futuros ensayos: capturar varios tramos de >2 km con velocidad OEM y registro TRIP a la vez, correlacionar marcas de tiempo e inicio/cierre de cada tramo y comprobar con consumo medido (no solo promedio 50 km).
+
+**Experimento control:** el CSV anterior `oem_callbacks_20261111_140815.csv` había tenido 1125 eventos de nafta 50 km (4.4) y 1125 eléctricos 50 km (3.9000015), y cero de ambos 500 m; la captura asociada recorrió ~0,24 km. La segunda tuvo nafta 50 km 4.6 y eléctrico 50 km 3.5, además del par de 500 m.
