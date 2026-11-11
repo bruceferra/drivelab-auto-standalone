@@ -13,6 +13,15 @@ final class T1QrRenderer {
         if(url==null||!url.startsWith(
                 "https://wgqbvbzhdnkkrpkrohej.supabase.co/functions/v1/drivelab-auto-diagnostics?claim="))
             throw new IllegalArgumentException("QR de nube inválido");
+        return render(url);
+    }
+    static Bitmap pairing(String payload)throws Exception{
+        if(payload==null||!payload.matches(
+                "drivelabauto://pair\\?ip=[0-9.]{7,15}&ticket=[0-9a-f]{48}"))
+            throw new IllegalArgumentException("QR local inválido");
+        return render(payload);
+    }
+    private static Bitmap render(String url)throws Exception{
         final int size=420;
         BitMatrix b=new QRCodeWriter().encode(url,BarcodeFormat.QR_CODE,size,size);
         int[] pixels=new int[size*size];
