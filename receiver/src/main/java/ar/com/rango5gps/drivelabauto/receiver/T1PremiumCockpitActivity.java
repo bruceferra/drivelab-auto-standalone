@@ -200,6 +200,10 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         lp.setMargins(3,2,3,2);parent.addView(b,lp);
         return b;
     }
+    private String getPackageVersion(){
+        try{return getPackageManager().getPackageInfo(getPackageName(),0).versionName;}
+        catch(Exception ignored){return "desconocida";}
+    }
     private void updateTopModes(){
         if(modeEvButton==null||modeHevButton==null||modeMaxButton==null)
             return;
@@ -215,8 +219,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         }
         modeAtTop.setText(fresh?
             "ACTUAL: "+T1ManualHevPolicy.currentMode(actual)+
-            " (1043="+actual+"). Cambios de DriveLab: "+
-            "solo en P y 0 km/h; los tres modos probados en P.":
+            " (1043="+actual+"). Cambio manual EV/HEV/EV MAX: "+
+            "P/0 o D; solo toque explícito, sin GPS automático.":
             "MODO OEM · sin lectura reciente. Sin escrituras.");
     }
     private void askTripleMode(int target){
@@ -225,17 +229,15 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             return;
         }
         long age=System.currentTimeMillis()-lastSample.timestamp;
-        if(age<0||age>10000||lastSample.gear!=1||
-            !Double.isFinite(lastSample.speed)||lastSample.speed<0||
-            lastSample.speed>0.001){
+        if(age<0||age>10000||
+            !T1DriveModeGate.allowed(lastSample.gear,lastSample.speed)){
             new AlertDialog.Builder(this)
                 .setTitle("CAMBIO MANUAL · SIN ESCRITURA")
-                .setMessage("La Jetour permite cambios de modo desde su "+
-                    "interfaz original en marcha. La transacción de DriveLab "+
-                    "solo está probada estacionado, por lo que "+
-                    "no se anulan sus comprobaciones. "+
-                    "Lecturas: P/1033="+lastSample.gear+
-                    ", velocidad="+f(lastSample.speed,2)+
+                .setMessage("Se requiere telemetría reciente y marcha "+
+                    "P detenida o D con velocidad OEM válida. "+
+                    "Lecturas: 1033="+lastSample.gear+
+                    " ("+T1DriveModeGate.name(lastSample.gear)+")"+
+                    ", 2148="+f(lastSample.speed,2)+
                     " km/h; edad="+age+" ms.")
                 .setPositiveButton("ENTENDIDO",null).show();
             return;
@@ -253,13 +255,17 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         String targetName=T1ManualHevPolicy.currentMode(target);
         new AlertDialog.Builder(this)
             .setTitle("CAMBIO MANUAL → "+targetName)
-            .setMessage("Intentar una vez 1043="+target+
-                " con verificación doble de P/velocidad cero y lectura "+
-                "posterior del modo. EV, HEV y EV MAX confirmados por "+
-                "lectura 1043 desde DriveLab en P. El control Jetour "+
-                "original puede operar en marcha, pero esta interfaz "+
-                "Android NO fue validada circulando. "+
-                "Sin cambios GPS automáticos.")
+            .setMessage("Se enviará UNA SOLA orden OEM 1043="+target+
+                " en "+T1DriveModeGate.name(lastSample.gear)+
+                " con doble lectura OEM de marcha, velocidad y modo; "+
+                "lectura posterior 1043 para confirmar. "+
+                "En P los tres modos ya se comprobaron. "+
+                "En D la escritura desde DriveLab es EXPERIMENTAL, "+
+                "puede ser rechazada por Jetour y aún no fue comprobada "+
+                "físicamente en movimiento. No exige freno de pie: "+
+                "3011 se registra solo como diagnóstico. "+
+                "Sin cambios automáticos por GPS. "+
+                "No operes la pantalla mientras conducís.")
             .setNegativeButton("CANCELAR",null)
             .setPositiveButton("PROBAR UNA VEZ",(dialog,which)->{
                 modeAtTop.setText("Consultando OEM; verificando modo…");
@@ -386,7 +392,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         LinearLayout top=row();top.setGravity(Gravity.CENTER_VERTICAL);root.addView(top);
         LinearLayout title=col();
         title.addView(text("DRIVELAB / T1",19,WHITE,true));
-        title.addView(text("COCKPIT · v0.2.43",12,MUTED,false));
+        title.addView(text("COCKPIT · build OEM "+getPackageVersion(),12,MUTED,false));
         top.addView(title,new LinearLayout.LayoutParams(0,-2,1));
         Button displaySettings=new Button(this);
         displaySettings.setAllCaps(false);
@@ -403,7 +409,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         modeEvButton=topModeButton(modes,"EV",1);
         modeHevButton=topModeButton(modes,"HEV",2);
         modeMaxButton=topModeButton(modes,"EV MAX",3);
-        modeAtTop=text("MODO OEM: esperando 1043 · control manual solo detenido en P",
+        modeAtTop=text("MODO OEM: esperando 1043 · controles manuales P o D",
             14,MUTED,false);
         root.addView(modeAtTop);
         LinearLayout recordingLamps=row();
