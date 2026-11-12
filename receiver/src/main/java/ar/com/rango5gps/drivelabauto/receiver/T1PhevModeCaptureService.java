@@ -163,7 +163,7 @@ public final class T1PhevModeCaptureService extends Service {
         "pdc_front_557862926,pdc_rear_557862927,"+
         "front_zone_1,front_zone_2,front_zone_3,front_zone_4,"+
         "rear_zone_1,rear_zone_2,rear_zone_3,rear_zone_4,"+
-        "brake_pedal_557867210_raw,brake_validity_557867238_raw\n";
+        "brake_pedal_557867210_raw,brake_validity_557867238_raw,foot_brake_3011_int\n";
     private void capture(){
         ServiceConnection connection=null,halConnection=null;
         boolean bound=false,halBound=false;IBinder halBinder=null;
@@ -238,7 +238,8 @@ public final class T1PhevModeCaptureService extends Service {
                         rears[k]=halInt(parking,REAR_ZONES[k]);
                     }
                     String brakePedal=halInt(parking,HAL_BRAKE_PEDAL_STATUS),
-                        brakeValidity=halInt(parking,HAL_BRAKE_PEDAL_VALIDITY);
+                        brakeValidity=halInt(parking,HAL_BRAKE_PEDAL_VALIDITY),
+                        footBrake=i(binder,3011);
                     String frontPdc=halInt(parking,557862926),
                         rearPdc=halInt(parking,557862927);
                     String row=System.currentTimeMillis()+","+gear+","+speed+","+
@@ -246,7 +247,7 @@ public final class T1PhevModeCaptureService extends Service {
                         charge+","+regen+","+soc+","+wiper+","+rear+","+
                         radar+","+band+","+avas+","+frontPdc+","+rearPdc+","+
                         String.join(",",fronts)+","+String.join(",",rears)+","+
-                    brakePedal+","+brakeValidity+"\n";
+                    brakePedal+","+brakeValidity+","+footBrake+"\n";
                     out.write(row.getBytes(StandardCharsets.UTF_8));out.flush();
                     samples++;
                     String last="Muestras: "+samples+" · 1043="+power+" ("+
@@ -260,7 +261,9 @@ public final class T1PhevModeCaptureService extends Service {
                         (brakePedal.isEmpty()?"SIN LECTURA":brakePedal)+
                         " / validez candidata 557867238="+
                         (brakeValidity.isEmpty()?"SIN LECTURA":brakeValidity)+
-                        " (crudos; no equivalen a freno pisado)" +
+                        " (crudos NO calibrados)" +
+                        " · freno pie 3011="+(footBrake.isEmpty()?"SIN LECTURA":footBrake)+
+                        " (0 suelto / 1 pisado observado por usuario)" +
                         " · velocidad="+speed+
                         " · PDC adelante="+String.join("/",fronts)+
                         " atrás="+String.join("/",rears)+
