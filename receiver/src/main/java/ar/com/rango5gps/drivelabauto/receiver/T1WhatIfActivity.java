@@ -173,8 +173,8 @@ public final class T1WhatIfActivity extends T1ImmersiveActivity {
             double v=Double.parseDouble(x);
             if(Double.isFinite(v)&&v>=min&&v<=max)return v;
         }catch(Exception ignored){}
-        throw new IllegalArgumentException("Revisá el campo ""+
-            e.getHint()+"" (rango "+min+"–"+max+").");
+        throw new IllegalArgumentException("Revisá el campo ("+
+            e.getHint()+") rango "+min+"–"+max+".");
     }
     private void useHistoricalStart(){
         if(trips.length==0)return;
