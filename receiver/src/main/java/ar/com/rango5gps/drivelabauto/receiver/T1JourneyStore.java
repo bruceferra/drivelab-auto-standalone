@@ -30,6 +30,8 @@ final class T1JourneyStore {
         CARRY_ELEC="carry_electric",CARRY_NF="carry_nf",
         CARRY_NE="carry_ne",CHAIN="trip_chain",
         ORIGINAL_TIME="original_client_start",
+        START_PARKED="parked_at_client_start",
+        START_OFFLINE="offline_at_client_start",
         CARRY_UNCERTAIN="carry_has_missing_samples";
     private static final String CSV_HEADER=
         "id;inicio;fin;etiqueta;trip_id;km_est_oem_velocidad;eventos_nafta;"+
@@ -148,6 +150,8 @@ final class T1JourneyStore {
                 .putLong(TIME,m.getLong(T1TripRecorderService.START_TIME,
                     System.currentTimeMillis()))
                 .putFloat(KM,0f).putFloat(FUEL,0f).putFloat(ELEC,0f)
+                .putLong(START_PARKED,0L)
+                .putLong(START_OFFLINE,0L)
                 .putInt(N_FUEL,0).putInt(N_ELEC,0)
                 .putFloat(CARRY_KM,z.getFloat(CARRY_KM,0f)+
                     (float)recovered.km)
@@ -203,6 +207,8 @@ final class T1JourneyStore {
             .putLong(TIME,m.getLong(T1TripRecorderService.START_TIME,
                 System.currentTimeMillis()))
             .putFloat(KM,0).putFloat(FUEL,0).putFloat(ELEC,0)
+            .putLong(START_PARKED,0L)
+            .putLong(START_OFFLINE,0L)
             .putInt(N_FUEL,0).putInt(N_ELEC,0)
             .putBoolean(CARRY_UNCERTAIN,true)
             .putString(RECOVERY_NOTE,
@@ -217,6 +223,24 @@ final class T1JourneyStore {
     }
     static boolean partialRecovery(Context c){
         return p(c).getBoolean(CARRY_UNCERTAIN,false);
+    }
+    static long elapsedMillis(Context c){
+        if(!active(c))return 0;
+        long began=p(c).getLong(ORIGINAL_TIME,
+            p(c).getLong(TIME,System.currentTimeMillis()));
+        return Math.max(0,System.currentTimeMillis()-began);
+    }
+    static long parkedMillis(Context c){
+        if(!active(c))return 0;
+        return Math.max(0,master(c).getLong(
+            T1TripRecorderService.PARKED_MS,0L)-
+            p(c).getLong(START_PARKED,0L));
+    }
+    static long offlineMillis(Context c){
+        if(!active(c))return 0;
+        return Math.max(0,master(c).getLong(
+            T1TripRecorderService.OFFLINE_MS,0L)-
+            p(c).getLong(START_OFFLINE,0L));
     }
     private static T1JourneyMetrics.Result withCarry(Context c,
         T1JourneyMetrics.Result part,double price){
@@ -282,6 +306,10 @@ final class T1JourneyStore {
             .putString(CHAIN,mark.tripId)
             .putFloat(CARRY_KM,0f).putFloat(CARRY_FUEL,0f)
             .putFloat(CARRY_ELEC,0f)
+            .putLong(START_PARKED,master(c).getLong(
+                T1TripRecorderService.PARKED_MS,0))
+            .putLong(START_OFFLINE,master(c).getLong(
+                T1TripRecorderService.OFFLINE_MS,0))
             .putInt(CARRY_NF,0).putInt(CARRY_NE,0)
             .putBoolean(CARRY_UNCERTAIN,false)
             .remove(RECOVERY_NOTE)
