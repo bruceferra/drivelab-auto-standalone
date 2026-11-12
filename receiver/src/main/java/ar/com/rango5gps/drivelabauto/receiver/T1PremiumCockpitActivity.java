@@ -69,6 +69,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private Button modeEvButton,modeHevButton,modeMaxButton;
     private TextView modeAtTop,osmStatus;
     private Button osmEnabledButton,osmSocButton;
+    private TextView offlineMapStatus;
+    private final AtomicBoolean mapDownloading=new AtomicBoolean(false);
     private T1OsmRoadAdvisor.Result osmLast;
     private final AtomicBoolean osmReading=new AtomicBoolean(false);
     private long lastOsmQuery=0;
@@ -153,6 +155,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         super.onResume();visible=true;lastTelem=0;lastTotals=0;
         ensureContinuousTrip();
         T1ClientTripSync.trigger(this,false);
+        if(T1OfflineRoadMap.checkDue(this))updateOfflineMap(false);
         ui.removeCallbacks(ticker);ui.post(ticker);
     }
     private void ensureContinuousTrip(){
@@ -273,7 +276,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private void updateOsmControls(){
         if(osmEnabledButton==null)return;
         osmEnabledButton.setText(osmEnabled()?
-            "OSM · DESACTIVAR ASESOR":"OSM · ACTIVAR ASESOR");
+            "OSM OFFLINE · DESACTIVAR":"OSM OFFLINE · ACTIVAR");
         osmSocButton.setText(motorwayForced()?
             "AUTOPISTA · HEV FORZADO":"AUTOPISTA · HEV SMART");
         if(osmBanner!=null){
@@ -293,13 +296,13 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             return;
         }
         new AlertDialog.Builder(this)
-            .setTitle("ASESOR OSM · SOLO RECOMENDACIONES")
-            .setMessage("Al activarlo, mientras el cockpit esté abierto "+
-                "se consultará cada ~95 segundos la clase de la vía "+
-                "en Overpass/OpenStreetMap, enviando tus coordenadas "+
-                "de ubicación al servicio público. NO cambiará EV/HEV "+
-                "ni SOC; solo mostrará sugerencias. "+
-                "Si falla GPS o el mapa es ambiguo, no recomienda nada.")
+            .setTitle("ASESOR OSM OFFLINE · SOLO SUGERENCIAS")
+            .setMessage("Usa exclusivamente el mapa de Provincia y CABA "+
+                "que descargás una vez desde el servidor de DriveLab Uber. "+
+                "NO consulta Overpass ni envía tu GPS a terceros. "+
+                "Si el mapa todavía no está instalado, presioná "+
+                "DESCARGAR MAPA PBA+CABA en Diagnósticos. "+
+                "Las sugerencias NO cambian EV/HEV ni SOC.")
             .setNegativeButton("CANCELAR",null)
             .setPositiveButton("ACTIVAR",(d,w)->{
                 getSharedPreferences(OSM_PREFS,MODE_PRIVATE).edit()
@@ -341,9 +344,9 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         if(!osmReading.compareAndSet(false,true))return;
         lastOsmQuery=System.currentTimeMillis();
         android.location.Location loc=T1ModeZoneStore.location(this);
-        osmStatus.setText("OSM · buscando GPS reciente; solo lectura.");
+        osmStatus.setText("OSM offline · buscando GPS reciente; sin red.");
         if(osmBanner!=null&&osmEnabled())
-            osmBanner.setText("OSM · localizando y clasificando vía…");
+            osmBanner.setText("OSM OFFLINE · localizando y clasificando vía…");
         // Older code used cached GPS up to 120 s, but Overpass refuses
         // GPS older than 25 s, thus it silently returned UNKNOWN.
         if(loc!=null&&loc.hasAccuracy()&&loc.getAccuracy()<=35f&&
@@ -399,14 +402,56 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         if(loc==null){osmReading.set(false);return;}
         final long attempt=lastOsmQuery;
         new Thread(()->{
-            T1OsmRoadAdvisor.Result result=T1OsmRoadAdvisor.lookup(loc);
+            // Offline SQLite indexed road geometry ONLY: no Overpass calls.
+            T1OsmRoadAdvisor.Result result=
+                T1OfflineRoadMap.roadAt(getApplicationContext(),loc);
             ui.post(()->{
                 if(attempt!=lastOsmQuery)return;
                 osmReading.set(false);
                 if(!visible||isFinishing()||isDestroyed())return;
                 osmLast=result;showOsmResult();
             });
-        },"T1-OSM-Road-ReadOnly").start();
+        },"T1-OSM-Offline-SQLite-ReadOnly").start();
+    }
+    private void updateOfflineMap(boolean manual){
+        if(!manual&&!T1OfflineRoadMap.checkDue(this))return;
+        if(!mapDownloading.compareAndSet(false,true))return;
+        if(!manual&&android.os.Build.VERSION.SDK_INT>=23){
+            android.net.ConnectivityManager cm=(android.net.ConnectivityManager)
+                getSystemService(CONNECTIVITY_SERVICE);
+            if(cm==null||cm.getActiveNetwork()==null||cm.isActiveNetworkMetered()){
+                mapDownloading.set(false);
+                return; // No large automatic download on cellular data.
+            }
+        }
+        if(offlineMapStatus!=null)offlineMapStatus.setText(
+            "MAPA · consultando manifiesto de DriveLab Uber…");
+        new Thread(()->{
+            String failure=null;
+            try{
+                T1OfflineRoadMap.install(getApplicationContext(),(msg,pct)->
+                    ui.post(()->{
+                        if(offlineMapStatus!=null)
+                            offlineMapStatus.setText(msg+" · "+pct+" %");
+                    }));
+            }catch(Exception ex){
+                failure=ex.getMessage();
+                if(failure==null||failure.trim().isEmpty())
+                    failure=ex.getClass().getSimpleName();
+            }
+            String outcome=failure;
+            ui.post(()->{
+                mapDownloading.set(false);
+                if(offlineMapStatus!=null)offlineMapStatus.setText(outcome==null?
+                    T1OfflineRoadMap.status(this):
+                    "MAPA SIN ACTUALIZAR · "+outcome+
+                    " · se conserva versión anterior si existía.");
+                if(outcome==null&&osmEnabled()&&visible){
+                    lastOsmQuery=0;
+                    lookupOsm(false);
+                }
+            });
+        },"T1-PBA-CABA-Map-Install").start();
     }
     private GradientDrawable bg(int color,int radius){
         GradientDrawable g=new GradientDrawable();g.setColor(color);
@@ -696,22 +741,38 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         advanced.setBackground(bg(CARD,20));
         advanced.setVisibility(android.view.View.GONE);
         root.addView(advanced);
-        heading(advanced,"REGLA CIUDAD / AUTOPISTA · OPENSTREETMAP");
+        heading(advanced,"ASESOR OSM OFFLINE · PBA + CABA");
         advanced.addView(text("CIUDAD → EV. AUTOPISTA → HEV SMART o HEV FORZADO. "+
-            "La lectura de carretera OSM es aproximada y NO cambia "+
-            "la propulsión: solo sugiere. Si activás el asesor, "+
-            "se consultan coordenadas GPS en un servicio público "+
-            "de OpenStreetMap mientras el cockpit está abierto.",
+            "Usa un índice SQLite del mapa descargado del mismo servidor "+
+            "que DriveLab Uber: SIN Overpass, SIN transmitir coordenadas "+
+            "de GPS a ningún servidor. No cambia la propulsión. "+
+            "Revisa la versión del mapa cada 24 h cuando la app está abierta "+
+            "y hay Wi-Fi; con datos móviles solo descarga por acción manual.",
             13,MUTED,false));
+        LinearLayout mapRow=row();advanced.addView(mapRow);
+        button(mapRow,"DESCARGAR / ACTUALIZAR MAPA PBA+CABA",TEAL,
+            ()->new AlertDialog.Builder(this)
+                .setTitle("MAPA OFFLINE PROVINCIA + CABA")
+                .setMessage("Se descarga de tu mismo servidor DriveLab Uber, "+
+                    "con SHA-256 verificado. Recomendamos Wi-Fi y 200 MB "+
+                    "libres. Los datos de Uber Driver quedan intactos. "+
+                    "La versión instalada de Receiver se conserva "+
+                    "si falla la actualización.")
+                .setNegativeButton("CANCELAR",null)
+                .setPositiveButton("DESCARGAR",(d,w)->updateOfflineMap(true))
+                .show());
+        offlineMapStatus=text(T1OfflineRoadMap.status(this),
+            13,WHITE,false);
+        advanced.addView(offlineMapStatus);
         LinearLayout osmButtons=row();advanced.addView(osmButtons);
         osmEnabledButton=button(osmButtons,
             "OSM · ACTIVAR ASESOR",BLUE,this::toggleOsm);
         osmSocButton=button(osmButtons,
             "AUTOPISTA · HEV SMART",TEAL,this::toggleOsmSoc);
         LinearLayout osmCheckRow=row();advanced.addView(osmCheckRow);
-        button(osmCheckRow,"CONSULTAR VÍA OSM · NO ESCRIBE",
+        button(osmCheckRow,"CONSULTAR VÍA OFFLINE · NO ESCRIBE",
             BLUE,()->lookupOsm(true));
-        osmStatus=text("OSM no iniciado: sin clasificación de vía.",
+        osmStatus=text("OSM offline no iniciado: sin clasificación de vía.",
             14,WHITE,false);
         advanced.addView(osmStatus);
         updateOsmControls();
