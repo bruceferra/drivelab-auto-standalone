@@ -69,7 +69,13 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
         SharedPreferences p=prefs();
         quickControls.attach(body); // FIRST and always visible above menus
         label(body,"DRIVELAB AUTO · RECEIVER",23);
-        label(body,"v0.2.31 · QR + nube privada + espejos AUTO de fondo · Jetour T1",13);
+        label(body,"v0.2.37 · QR + nube privada + espejos AUTO de fondo · Jetour T1",13);
+        button(body,T1ImmersiveMode.enabled(this)?
+            "PANTALLA COMPLETA · ACTIVADA · MOSTRAR BARRAS":
+            "PANTALLA COMPLETA · DESACTIVADA · OCULTAR BARRAS",()->{
+                T1ImmersiveMode.setEnabled(this,!T1ImmersiveMode.enabled(this));
+                render();
+            });
         button(body,"VEHÍCULO · VENTANILLAS / ENERGÍA / CODE",()->
             startActivity(new Intent(this,ReceiverVehicleActivity.class)));
         button(body,"COCKPIT T1 · JORNADA / CLIENTES / COSTOS",()->
