@@ -760,89 +760,113 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         double price=m.getFloat(T1TripRecorderService.FUEL_PRICE,2129f);
         boolean client=T1JourneyStore.active(this),
             pending=T1JourneyStore.pending(this);
+        boolean second=T1JourneyStore2.active(this),
+            secondPending=T1JourneyStore2.pending(this);
         boolean dayPaused=m.getBoolean(T1TripRecorderService.PAUSED,false);
         boolean clientPaused=T1JourneyStore.paused(this);
+        boolean secondPaused=T1JourneyStore2.paused(this);
         boolean dayDesired=m.getBoolean(T1TripRecorderService.DESIRED,false);
         T1JourneyMetrics.Result live=client?T1JourneyStore.running(this):null;
+        T1JourneyMetrics.Result secondLive=second?T1JourneyStore2.running(this):null;
         boolean blink=(android.os.SystemClock.elapsedRealtime()/700L)%2==0;
         boolean clientLive=client&&!clientPaused&&fresh&&live!=null;
+        boolean secondLiveNow=second&&!secondPaused&&fresh&&secondLive!=null;
         if(dayRecordingLamp!=null){
-            dayRecordingLamp.setText(dayPaused?"Ⅱ JORNADA EN PAUSA":
-                fresh?(blink?"● ":"◉ ")+"JORNADA GRABANDO":
-                running?"◉ ESPERANDO OEM":
-                dayDesired?"◉ RECUPERANDO JORNADA":"○ JORNADA DETENIDA");
+            dayRecordingLamp.setText(dayPaused?"Ⅱ VIAJE TOTAL PAUSADO":
+                fresh?(blink?"● ":"◉ ")+"VIAJE TOTAL GRABANDO":
+                running?"◉ TOTAL ESPERANDO OEM":
+                dayDesired?"◉ RECUPERANDO TOTAL":"○ VIAJE TOTAL DETENIDO");
             dayRecordingLamp.setTextColor(dayPaused?GOLD:
                 fresh?TEAL:running||dayDesired?GOLD:MUTED);
         }
         if(clientRecordingLamp!=null){
-            clientRecordingLamp.setText(clientPaused?"Ⅱ CLIENTE EN PAUSA":
-                clientLive?(blink?"● ":"◉ ")+"CLIENTE GRABANDO":
-                pending?"◉ INICIANDO CLIENTE":
-                T1JourneyStore.stuck(this)?"⚠ CLIENTE BLOQUEADO":
-                client?"◉ CLIENTE SIN DATOS":"○ CLIENTE DETENIDO");
+            clientRecordingLamp.setText(clientPaused?"Ⅱ VIAJE 1 PAUSADO":
+                clientLive?(blink?"● ":"◉ ")+"VIAJE 1 GRABANDO":
+                pending?"◉ INICIANDO VIAJE 1":
+                T1JourneyStore.stuck(this)?"⚠ VIAJE 1 BLOQUEADO":
+                client?"◉ VIAJE 1 ESPERANDO OEM":"○ VIAJE 1 DETENIDO");
             clientRecordingLamp.setTextColor(clientPaused?GOLD:
                 clientLive?TEAL:(client||pending)?GOLD:MUTED);
         }
+        if(secondRecordingLamp!=null){
+            secondRecordingLamp.setText(secondPaused?"Ⅱ VIAJE 2 PAUSADO":
+                secondLiveNow?(blink?"● ":"◉ ")+"VIAJE 2 GRABANDO":
+                secondPending?"◉ INICIANDO VIAJE 2":
+                T1JourneyStore2.stuck(this)?"⚠ VIAJE 2 BLOQUEADO":
+                second?"◉ VIAJE 2 ESPERANDO OEM":"○ VIAJE 2 DETENIDO");
+            secondRecordingLamp.setTextColor(secondPaused?GOLD:
+                secondLiveNow?TEAL:(second||secondPending)?GOLD:MUTED);
+        }
+        // Independent button availability. The old client-dependent conditions
+        // grayed out JORNADA PAUSAR/TERMINAR while Viaje 1 was active.
         if(dayStartButton!=null){
             dayStartButton.setText(dayPaused?"REANUDAR":"INICIAR");
-            dayStartButton.setEnabled(
-                dayPaused&&!running||(!dayDesired&&!running));
+            dayStartButton.setEnabled(!running&&(dayPaused||!dayDesired));
         }
         if(dayPauseButton!=null)dayPauseButton.setEnabled(
-            !dayPaused&&running&&fresh&&(!client||clientPaused)&&!pending);
-        if(dayEndButton!=null)dayEndButton.setEnabled(
-            (dayDesired||dayPaused)&&!client&&!pending);
+            !dayPaused&&running&&fresh);
+        if(dayEndButton!=null)dayEndButton.setEnabled(dayDesired||dayPaused);
         if(clientStartButton!=null){
             clientStartButton.setText(clientPaused?"REANUDAR":"INICIAR");
-            clientStartButton.setEnabled(clientPaused||!client&&!pending);
+            clientStartButton.setEnabled(
+                (clientPaused&&!dayPaused&&!running?false:
+                    clientPaused||(!client&&!pending)));
         }
         if(clientPauseButton!=null)
-            clientPauseButton.setEnabled(client&&!clientPaused&&fresh);
+            clientPauseButton.setEnabled(client&&!clientPaused&&fresh&&!dayPaused);
         if(clientEndButton!=null)
             clientEndButton.setEnabled(client||pending);
+        if(secondStartButton!=null){
+            secondStartButton.setText(secondPaused?"REANUDAR":"INICIAR");
+            secondStartButton.setEnabled(
+                (secondPaused&&!dayPaused&&!running?false:
+                    secondPaused||(!second&&!secondPending)));
+        }
+        if(secondPauseButton!=null)
+            secondPauseButton.setEnabled(second&&!secondPaused&&fresh&&!dayPaused);
+        if(secondEndButton!=null)
+            secondEndButton.setEnabled(second||secondPending);
         if(clientRecoverButton!=null)
             clientRecoverButton.setVisibility(
                 T1JourneyStore.stuck(this)?
                     android.view.View.VISIBLE:android.view.View.GONE);
-        T1CockpitScope.Value scoped=T1CockpitScope.choose(
-            fresh||dayPaused,client,pending,live,km,nf,ne,fRaw,eRaw,price);
-        switch(scoped.kind){
-            case CLIENT:
-                scopeTitle.setText((clientPaused?"Ⅱ CLIENTE PAUSADO · ":"● CLIENTE ACTIVO · ")+
-                    T1JourneyStore.activeLabel(this));
-                break;
-            case DAY:scopeTitle.setText(dayPaused?"Ⅱ JORNADA PAUSADA":
-                "● JORNADA ACTIVA · SIN CLIENTE");break;
-            case PREPARING:
-                scopeTitle.setText("◉ PREPARANDO CLIENTE · "+
-                    T1JourneyStore.pendingLabel(this));break;
-            case UNSYNCED:
-                scopeTitle.setText("⚠ DATOS OEM SIN ACTUALIZAR");break;
-            default:scopeTitle.setText("○ JORNADA ACTUAL · SIN GRABACIÓN");
-        }
-        kmNow.setText(f(scoped.km,2)+" km");
-        double electricRoadKm=client?T1JourneyStore.electricKm(this):
-            fresh||dayPaused?m.getFloat(T1TripRecorderService.EV_DISTANCE,0f):0;
+
+        T1CockpitScope.Value total=T1CockpitScope.choose(
+            fresh||dayPaused,false,false,null,km,nf,ne,fRaw,eRaw,price);
+        T1CockpitScope.Value trip1=T1CockpitScope.choose(
+            false,client,pending,live,0,0,0,0,0,price);
+        T1CockpitScope.Value trip2=T1CockpitScope.choose(
+            false,second,secondPending,secondLive,0,0,0,0,0,price);
+        totalScopeTitle.setText(dayPaused?"Ⅱ VIAJE TOTAL PAUSADO":
+            dayDesired?"● VIAJE TOTAL · JORNADA":"○ VIAJE TOTAL · SIN GRABAR");
+        totalScopeKm.setText(f(total.km,2)+" km");
+        scopeTitle.setText(clientPaused?"Ⅱ VIAJE 1 PAUSADO":
+            client?"● VIAJE 1 · ACTIVO":
+            pending?"◉ VIAJE 1 · PREPARANDO":"○ VIAJE 1 · SIN GRABAR");
+        kmNow.setText(f(trip1.km,2)+" km");
+        secondScopeTitle.setText(secondPaused?"Ⅱ VIAJE 2 PAUSADO":
+            second?"● VIAJE 2 · ACTIVO":
+            secondPending?"◉ VIAJE 2 · PREPARANDO":"○ VIAJE 2 · SIN GRABAR");
+        secondScopeKm.setText(f(trip2.km,2)+" km");
+        refreshScopeSelection();
+        scopeProgress.setText(selectedScope==1?"SELECCIONADO · tocá otro para comparar":
+            "TOCÁ VIAJE 1 PARA VER VALORES");
+
+        T1CockpitScope.Value scoped=selectedScope==0?total:
+            selectedScope==2?trip2:trip1;
+        double electricRoadKm=selectedScope==0?
+            (dayDesired||dayPaused?
+                m.getFloat(T1TripRecorderService.EV_DISTANCE,0f):0):
+            selectedScope==2?(second?T1JourneyStore2.electricKm(this):0):
+            client?T1JourneyStore.electricKm(this):0;
         evKmNow.setText(f(electricRoadKm,2)+" km");
-        clientSyncStatus.setText("CLIENTE QR · "+T1ClientTripSync.status(this));
+        clientSyncStatus.setText("VIAJES QR · "+T1ClientTripSync.status(this));
         fuelNow.setText(scoped.fuelKnown?
             f(scoped.fuelLiters,3)+" L":"ESPERANDO");
         electricNow.setText(scoped.electricKnown?
             f(scoped.electricNetKwh,3)+" kWh":"ESPERANDO");
         costNow.setText(scoped.fuelKnown?
             "$ "+f(scoped.fuelCost,0):"SIN DATO");
-        scopeProgress.setText(clientPaused?"Pausado · valores conservados":
-            dayPaused?"Jornada pausada · al reanudar continúa mismo CSV":
-            scoped.kind==T1CockpitScope.Kind.CLIENT||
-            scoped.kind==T1CockpitScope.Kind.DAY?
-            "AVANCE EN VIVO · nafta "+scoped.fuelEvents+
-            " tramos / electricidad "+scoped.electricEvents+
-            " tramos de 500 m · km por velocidad OEM ajustada provisionalmente":
-            scoped.kind==T1CockpitScope.Kind.PREPARING?
-            "0,00 km · esperando la primera muestra fresca de DriveLab (≈ 3 s)":
-            scoped.kind==T1CockpitScope.Kind.UNSYNCED?
-            "Sin muestras OEM recientes; comprobá que el grabador siga funcionando":
-            "Iniciá jornada o trayecto. El último viaje NO se cuenta como actual.");
         if(!running){
             tripStatus.setText((dayPaused?"Ⅱ JORNADA PAUSADA · TRIP ":"○ JORNADA DETENIDA · último TRIP ")+
                 (m.getInt(T1TripRecorderService.SAMPLES,0)>0?
