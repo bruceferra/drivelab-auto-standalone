@@ -44,6 +44,10 @@ public final class T1PhevModeCaptureService extends Service {
     private static final String HAL_PKG="com.autolink.carservice";
     private static final String HAL_CLS="com.autolink.carservice.ALCarService";
     private static final String HAL_TOKEN="com.autolink.adapterinterface.car.IALCar";
+    // Catalogo T1: candidatos de SOLO LECTURA. Su semantica (pisado/suelto)
+    // no esta confirmada: nunca usarlos para autorizar una escritura 1043.
+    private static final int HAL_BRAKE_PEDAL_STATUS=557867210;
+    private static final int HAL_BRAKE_PEDAL_VALIDITY=557867238;
     private static final int[] FRONT_ZONES={557843300,557843301,557843302,557843303};
     private static final int[] REAR_ZONES={557843296,557843297,557843298,557843299};
     private volatile boolean stop,active;
@@ -158,7 +162,8 @@ public final class T1PhevModeCaptureService extends Service {
         "radar_2049_int,radar_band_2107_int,pedestrian_2074_int,"+
         "pdc_front_557862926,pdc_rear_557862927,"+
         "front_zone_1,front_zone_2,front_zone_3,front_zone_4,"+
-        "rear_zone_1,rear_zone_2,rear_zone_3,rear_zone_4\n";
+        "rear_zone_1,rear_zone_2,rear_zone_3,rear_zone_4,"+
+        "brake_pedal_557867210_raw,brake_validity_557867238_raw\n";
     private void capture(){
         ServiceConnection connection=null,halConnection=null;
         boolean bound=false,halBound=false;IBinder halBinder=null;
@@ -232,13 +237,16 @@ public final class T1PhevModeCaptureService extends Service {
                         fronts[k]=halInt(parking,FRONT_ZONES[k]);
                         rears[k]=halInt(parking,REAR_ZONES[k]);
                     }
+                    String brakePedal=halInt(parking,HAL_BRAKE_PEDAL_STATUS),
+                        brakeValidity=halInt(parking,HAL_BRAKE_PEDAL_VALIDITY);
                     String frontPdc=halInt(parking,557862926),
                         rearPdc=halInt(parking,557862927);
                     String row=System.currentTimeMillis()+","+gear+","+speed+","+
                         socMode+","+socTarget+","+socTargetFloat+","+power+","+
                         charge+","+regen+","+soc+","+wiper+","+rear+","+
                         radar+","+band+","+avas+","+frontPdc+","+rearPdc+","+
-                        String.join(",",fronts)+","+String.join(",",rears)+"\n";
+                        String.join(",",fronts)+","+String.join(",",rears)+","+
+                    brakePedal+","+brakeValidity+"\n";
                     out.write(row.getBytes(StandardCharsets.UTF_8));out.flush();
                     samples++;
                     String last="Muestras: "+samples+" · 1043="+power+" ("+
@@ -248,6 +256,11 @@ public final class T1PhevModeCaptureService extends Service {
                         nameRegen(regen)+") · SOC="+soc+
                         " · wiper 2126="+wiper+" · radar 2049="+radar+
                         " / banda 2107="+band+" · AVAS 2074="+avas+
+                        " · freno candidato 557867210="+
+                        (brakePedal.isEmpty()?"SIN LECTURA":brakePedal)+
+                        " / validez candidata 557867238="+
+                        (brakeValidity.isEmpty()?"SIN LECTURA":brakeValidity)+
+                        " (crudos; no equivalen a freno pisado)" +
                         " · velocidad="+speed+
                         " · PDC adelante="+String.join("/",fronts)+
                         " atrás="+String.join("/",rears)+
