@@ -40,3 +40,15 @@ La app ya admite carga manual en grid_charges.csv pero no cuenta con detector au
 - Nueva suma de las sesiones maestras del día basada en archivos CSV existentes, en **solo lectura**. Nunca fusiona archivos, reinicia, detiene o modifica los checkpoints del cliente.
 - El control 1043 sigue bloqueado fuera de P y velocidad cero. No se habilitó D en la APK; esa decisión requiere validación de estado de freno real y equivalencia de ruta OEM, no solo el éxito del selector original.
 - Sender 0.2.16 sin cambios.
+
+
+## Validación real en la Jetour, 12/11/2026 (Receiver 0.2.45 / code 46)
+
+Se recibieron en Supabase `public.drivelab_auto_diagnostic_csv_chunks` dos exportaciones completas por archivo (chunk_total=1); no se trata de la captura de 3 minutos completa:
+- `phev_modes_20261112_105539.csv` — 23 muestras, aprox. 67 s; marcha `1033=1` (P) y velocidad `2148=0.0`; modo `1043=2` (HEV).
+- `phev_modes_20261112_105725.csv` — 15 muestras, aprox. 43 s; marcha P=1 → D=4 → P=1, siempre `2148=0.0`; `1043=2` (HEV) estable. Se confirman 7 muestras consecutivas en D (~18 s), NO escritura ni cambio de modo.
+- En **las 38 muestras**, ambos candidatos `557867210` y `557867238` entregan **0 fijo**, incluso durante el procedimiento de pisar y soltar el freno indicado al propietario. Esto **NO valida** la semántica del pedal de freno ni que 0 indique freno suelto, pisado o lectura no soportada. La lectura cruda viene del HAL `IALCar` `transact(2)` sin comprobación independiente de validez. Tampoco debe suponerse que un 0 en el candidato de validez es positivo.
+- El estado de marcha y velocidad sí ha quedado corroborado para **D detenido**, pero aún **no** el estado del freno. Una lectura constante no debe usarse para autorizar escritura `1043`.
+- Próximo paso técnico: identificar la señal OEM confiable de *freno de pie* (distinguir de freno de estacionamiento/Auto Hold/ABS), calibrar contra pedal suelto/pisado con fuente y validez verificadas, usarla solo para preflight read-only; el control manual de 1043 permanece bloqueado fuera de P. No habilitar cambios en movimiento basándose en una prueba de D detenido.
+
+Esta evidencia queda en documentación, no se altera la telemetría ni se implementan escrituras en D.
