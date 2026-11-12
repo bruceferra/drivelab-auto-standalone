@@ -25,9 +25,9 @@ import java.text.SimpleDateFormat;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** Practical T1 cockpit: one all-day recorder + local passenger checkpoints.
- * No write/control Binder operation is reachable from this screen.
- * Trips and costs are explicitly estimated until OEM units are validated. */
+/** T1 cockpit: trip recorder, compact manually confirmed OEM mode experiments
+ * and read-only road suggestions. Powertrain writes never come from GPS.
+ * Trips and costs remain estimated until OEM units are validated. */
 public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private static final int BG=0xFF091421,CARD=0xFF142639,WHITE=0xFFF3F8FD,
         MUTED=0xFF9BB0C1,TEAL=0xFF14AFA7,BLUE=0xFF2B789B,
@@ -977,8 +977,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             .setTitle("EV → HEV · COMANDO EXPERIMENTAL")
             .setMessage("Solo estando ESTACIONADO en P, freno de "+
                 "estacionamiento y velocidad cero. Se intentará UNA VEZ "+
-                "la orden OEM 1043=2. La escritura no fue validada aún "+
-                "con la ROM de esta Jetour. El sistema volverá a comprobar "+
+                "la orden OEM 1043=2, ya comprobada en P en tu Jetour. "+
+                "No está validada circulando. Se comprobará de nuevo "+
                 "P, velocidad, EV/EV MAX y la lectura final HEV. "+
                 "No realiza cambios por GPS ni en movimiento. "+
                 "Si hay un rechazo o un estado inesperado, verificá "+
