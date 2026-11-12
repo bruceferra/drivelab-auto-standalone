@@ -417,9 +417,12 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         T1OptimizedModePolicy.Decision decision=
             T1OptimizedModePolicy.evaluate(category,
                 T1OptimizedModeStore.get(this,category),soc);
-        String suggestion=decision.summary();
-        String road=T1OptimizedModePolicy.roadName(category);
         boolean auto=T1OptimizedAutoService.enabled(this);
+        String suggestion=auto?
+            decision.summary().replace("SOLO SUGERENCIA",
+                "PERFIL 1043 AUTOMÁTICO"):
+            decision.summary();
+        String road=T1OptimizedModePolicy.roadName(category);
         osmStatus.setText("VÍA: "+road+" · "+osmLast.explain()+
             "\nMODO OPTIMIZADO · "+suggestion+
             (auto?"\nAUTO ON: propulsión 1043 activa por mapa tras "+
