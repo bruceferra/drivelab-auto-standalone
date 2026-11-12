@@ -9,6 +9,13 @@ final class T1OptimizedModePolicy {
     enum Power { EV, HEV, EV_MAX }
     enum Strategy { SMART, FORCED }
     enum Regen { LOW, MEDIUM, HIGH }
+    enum Comparison {
+        GREATER_OR_EQUAL, LESS_OR_EQUAL;
+        String symbol(){return this==GREATER_OR_EQUAL?"≥":"≤";}
+        boolean matches(double current,int threshold){
+            return this==GREATER_OR_EQUAL?current>=threshold:current<=threshold;
+        }
+    }
 
     static final class Rule {
         final Power power;
@@ -16,13 +23,19 @@ final class T1OptimizedModePolicy {
         final int forcedSoc;
         final boolean thresholdEnabled;
         final int minBattery;
+        final Comparison comparison;
         final Regen regeneration;
         Rule(Power p, Strategy s, int target, boolean condition, int minimum, Regen r){
+            this(p,s,target,condition,minimum,Comparison.GREATER_OR_EQUAL,r);
+        }
+        Rule(Power p, Strategy s, int target, boolean condition, int minimum,
+             Comparison comparator, Regen r){
             power=p==null?Power.HEV:p;
             strategy=s==null?Strategy.SMART:s;
             forcedSoc=clamp(target,0,100);
             thresholdEnabled=condition;
             minBattery=clamp(minimum,0,100);
+            comparison=comparator==null?Comparison.GREATER_OR_EQUAL:comparator;
             regeneration=r==null?Regen.MEDIUM:r;
         }
     }
@@ -44,7 +57,8 @@ final class T1OptimizedModePolicy {
                     "SOC FORZADO "+requested.forcedSoc+" %")+
                 " · regeneración "+regenerationName(requested.regeneration)+
                 (requested.thresholdEnabled?
-                    " · batería > "+requested.minBattery+" %":"")+
+                    " · batería "+requested.comparison.symbol()+" "+
+                        requested.minBattery+" %":"")+
                 " · SOLO SUGERENCIA";
         }
     }
@@ -56,11 +70,10 @@ final class T1OptimizedModePolicy {
                 batteryPercent>100)
                 return new Decision(road,rule,false,false,
                     "SOC OEM desconocido; no se cumple condición");
-            // User wants greater than configured threshold, not >=.
-            if(batteryPercent<=rule.minBattery)
+            if(!rule.comparison.matches(batteryPercent,rule.minBattery))
                 return new Decision(road,rule,false,true,
-                    "SOC "+String.format(java.util.Locale.ROOT,"%.1f",batteryPercent)+
-                    " % no supera "+rule.minBattery+" %");
+                    "SOC batería "+String.format(java.util.Locale.ROOT,"%.1f",batteryPercent)+
+                    " % no cumple "+rule.comparison.symbol()+" "+rule.minBattery+" %");
         }
         return new Decision(road,rule,true,true,
             road==Road.UNKNOWN?"Vía desconocida: perfil de respaldo": "Vía identificada");
