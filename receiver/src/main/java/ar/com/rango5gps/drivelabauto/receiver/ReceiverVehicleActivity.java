@@ -361,9 +361,11 @@ public final class ReceiverVehicleActivity extends T1ImmersiveActivity {
             ()->{windows.cancel();windowStatus="Cancelación solicitada; no detiene un motor ya activo";
                  if(operationView!=null)operationView.setText(windowStatus);});
         section(body,"ALARMA DE PEATONES · ID 2074");
-        label(body,"Un toque: activar alerta en cualquier marcha conocida. "+
-            "Desactivar únicamente con el vehículo detenido, incluso en D/N. "+
-            "No se desactiva automáticamente al arrancar.",13);
+        label(body,"CONTROL MANUAL COMO EL ORIGINAL · 2074. "+
+            "Cada toque lee el estado real y solicita ON u OFF. "+
+            "Sin restricción extra de P/velocidad en DriveLab; "+
+            "el módulo OEM decide si acepta. "+
+            "Nunca se activa al encender ni en segundo plano.",13);
         button(body,"ALARMA PEATÓN · CAMBIAR ON/OFF",this::confirmPedestrian);
         alertView=status(body,pedestrianStatus);
     }
@@ -470,7 +472,7 @@ public final class ReceiverVehicleActivity extends T1ImmersiveActivity {
         if(vehicleBusy()){updateAlert("Otra operación OEM está en curso");return;}
         if(!pedestrian.toggle(r->updateAlert(r.summary())))
             updateAlert("Sin orden: app no visible o control en espera");
-        else updateAlert("Verificando P/velocidad 0 y cambiando 2074…");
+        else updateAlert("Consultando 2074 y enviando cambio manual ON/OFF…");
     }
     private void updateAlert(String s){
         pedestrianStatus=s;
