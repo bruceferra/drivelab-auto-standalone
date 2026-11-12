@@ -36,7 +36,7 @@ public final class BootReceiver extends BroadcastReceiver {
         if(!trip.contains(T1TripRecorderService.DESIRED))
             desired=trip.getBoolean(T1TripRecorderService.RUNNING,false)||
                 T1JourneyStore.active(context)||T1JourneyStore.pending(context);
-        if(desired){
+        if(desired && !trip.getBoolean(T1TripRecorderService.PAUSED,false)){
             try{
                 Intent restore=new Intent(context,T1TripRecorderService.class)
                     .setAction(T1TripRecorderService.ACTION_RESTORE);
@@ -55,8 +55,11 @@ public final class BootReceiver extends BroadcastReceiver {
                     .apply();
             }
         }
-        // Recirculation has independent opt-in. Mirror control is NOT
-        // resumed across boot; only data recording is restarted here.
+        // Recirculation has independent opt-in and a dedicated foreground
+        // service, even when DriveLab UI / Maps is closed. An OEM protective
+        // PAUSED state is NOT cleared on reboot or package replacement.
+        // Mirror control still requires safe known physical reference before
+        // its intentional automatic movements.
         android.content.SharedPreferences hvac=context.getSharedPreferences(
             RecirculationGuardService.PREFS,Context.MODE_PRIVATE);
         if(RecirculationGuardService.MODE_INTERIOR.equals(hvac.getString(
@@ -64,7 +67,7 @@ public final class BootReceiver extends BroadcastReceiver {
                 !hvac.getBoolean(RecirculationGuardService.PAUSED,false)){
             try{
                 Intent guard=new Intent(context,RecirculationGuardService.class)
-                    .setAction(RecirculationGuardService.ACTION_INTERIOR);
+                    .setAction(RecirculationGuardService.ACTION_RESTORE);
                 context.startForegroundService(guard);
             }catch(RuntimeException error){
                 hvac.edit().putString(RecirculationGuardService.STATUS,
