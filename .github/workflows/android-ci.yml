@@ -313,6 +313,48 @@ jobs:
           # No code path may invoke the triple mode pilot from a GPS callback:
           ! grep -E 'threeModePilot|T1ManualThreeModePilot' \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OsmRoadAdvisor.java
+      - name: Continuous OEM trip and passenger survival after boot, update or crash
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-trip-resume
+          javac -encoding UTF-8 -d /tmp/t1-trip-resume \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripRecoveryState.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1JourneyRecoveryFile.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1JourneyMetrics.java \
+            receiver/tests/T1TripResumeContinuityTest.java
+          java -cp /tmp/t1-trip-resume ar.com.rango5gps.drivelabauto.receiver.T1TripResumeContinuityTest
+          svc=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripRecorderService.java
+          client=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1JourneyStore.java
+          ui=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
+          callbacks=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OemConsumptionCallbacks.java
+          sync=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripSync.java
+          boot=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/BootReceiver.java
+          grep -q 'ACTION_RESTORE="t1.trip.RESTORE"' "$svc"
+          grep -q 'START_STICKY' "$svc"
+          grep -q 'new FileOutputStream(path,restoring)' "$svc"
+          grep -q 'T1TripRecoveryState.read(currentFile(this))' "$svc"
+          grep -q 'putBoolean(DESIRED,false)' "$svc"
+          grep -q 'parkedMs' "$svc"
+          grep -q 'offlineMs' "$svc"
+          grep -q 'T1TripRecorderService.ACTION_RESTORE' "$boot"
+          grep -q 'Intent.ACTION_MY_PACKAGE_REPLACED' "$boot"
+          grep -q 'reconcileInterrupted(Context c)' "$client"
+          grep -q 'putBoolean(CARRY_UNCERTAIN' "$client"
+          grep -q 'putLong(ORIGINAL_TIME' "$client"
+          grep -q 'withCarry(c,T1JourneyMetrics.between' "$client"
+          ! grep -q '90000){clearPending' "$client"
+          grep -q 'RED:BLUE' "$ui"
+          grep -q 'JORNADA GRABANDO' "$ui"
+          grep -q 'CLIENTE GRABANDO' "$ui"
+          grep -q 'ensureContinuousTrip()' "$ui"
+          grep -q 'repairWithoutOldCsv' "$ui"
+          grep -q 'boolean resume=tripMode&&file.isFile()' "$callbacks"
+          grep -q 'count\[channel\]++' "$callbacks"
+          grep -q 'int required=header.split' "$sync"
+          # All passenger finish operations require explicit user action.
+          grep -q 'this::finishClient' "$ui"
+          ! grep -q 'T1JourneyStore.finish(this)' "$svc" "$boot"
       - name: Separate apps and Android APK builds
         run: gradle --no-daemon :sender:assembleDebug :receiver:assembleDebug
       - name: Verify independent identities, permissions and no telemetry
