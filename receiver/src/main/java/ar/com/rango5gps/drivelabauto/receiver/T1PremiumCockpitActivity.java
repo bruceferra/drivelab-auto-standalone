@@ -67,7 +67,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private T1ManualHevExperiment hevPilot;
     private T1ManualThreeModePilot threeModePilot;
     private Button modeEvButton,modeHevButton,modeMaxButton;
-    private TextView modeAtTop,osmStatus;
+    private TextView modeAtTop,osmStatus,vehicleModeStatus,rawSignalsStatus;
     private Button osmEnabledButton,osmSocButton;
     private TextView offlineMapStatus;
     private final AtomicBoolean mapDownloading=new AtomicBoolean(false);
@@ -124,6 +124,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                         updateAutonomy();
                         updateZone();
                         updateTopModes();
+                        updateVehicleOemSignals();
                         if(osmEnabled()&&
                             System.currentTimeMillis()-lastOsmQuery>95000)
                             lookupOsm(false);
@@ -573,6 +574,12 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         modeAtTop=text("MODO OEM: esperando 1043 · controles manuales P o D",
             14,MUTED,false);
         root.addView(modeAtTop);
+        vehicleModeStatus=text("MODO CONDUCCIÓN · 2053: esperando OEM   |   "+
+            "COMBUSTIBLE · 1079: esperando OEM",12,WHITE,true);
+        vehicleModeStatus.setSingleLine(true);
+        vehicleModeStatus.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        vehicleModeStatus.setOnClickListener(v->showRawVehicleSignals());
+        root.addView(vehicleModeStatus);
         osmBanner=text("OSM · esperando vía…",12,0xFFB3E9F1,true);
         osmBanner.setSingleLine(true);
         osmBanner.setEllipsize(android.text.TextUtils.TruncateAt.END);
@@ -741,6 +748,18 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         advanced.setBackground(bg(CARD,20));
         advanced.setVisibility(android.view.View.GONE);
         root.addView(advanced);
+        heading(advanced,"SEÑALES OEM NUEVAS · SOLO LECTURA");
+        advanced.addView(text("1079 porcentaje combustible · 2053 modo "+
+            "Eco/Sport/Snow (tabla numérica pendiente) · 2204 freno de mano · "+
+            "1031 alta tensión activada · 2073 estado general del motor "+
+            "(NO RPM térmicas) · 1088 validez de velocidad · 2014 iluminación "+
+            "ambiente · 2170 puerta acompañante. Sin escritura.",12,MUTED,false));
+        rawSignalsStatus=text("Esperando lectura OEM para diagnosticar…",12,WHITE,false);
+        advanced.addView(rawSignalsStatus);
+        LinearLayout rawRow=row();advanced.addView(rawRow);
+        button(rawRow,"COMPARTIR SEÑALES OEM 12/11",BLUE,()->
+            shareDiagnostic("senales_oem_12nov",rawVehicleReport(),rawSignalsStatus));
+
         heading(advanced,"ASESOR OSM OFFLINE · PBA + CABA");
         advanced.addView(text("CIUDAD → EV. AUTOPISTA → HEV SMART o HEV FORZADO. "+
             "Usa un índice SQLite del mapa descargado del mismo servidor "+
@@ -1378,6 +1397,58 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                         f(m.gridCost,0)+"). Sin doble conteo de recuperación.");
                 }catch(Exception e){message("No se guardó la carga: revisá kWh y precio.");}
             }).show();
+    }
+    private static String rawCode(int raw){
+        return raw==Integer.MIN_VALUE?"SIN DATO":Integer.toString(raw);
+    }
+    private void updateVehicleOemSignals(){
+        if(lastSample==null)return;
+        T1TripTelemetry.Sample x=lastSample;
+        if(vehicleModeStatus!=null)
+            vehicleModeStatus.setText("CONDUCCIÓN · 2053="+rawCode(x.driveMode2053)+
+                " (Eco/Sport/Snow · valores sin calibrar)"+
+                "   |   COMBUSTIBLE · 1079="+rawCode(x.fuelPct1079)+
+                (x.fuelPct1079>=0&&x.fuelPct1079<=100?" %":""));
+        if(rawSignalsStatus!=null)
+            rawSignalsStatus.setText(rawVehicleReport());
+    }
+    private String rawVehicleReport(){
+        if(lastSample==null)return "SIN LECTURA OEM. No se pudo generar diagnóstico.";
+        T1TripTelemetry.Sample x=lastSample;
+        return "JETOUR T1 · SEÑALES OEM · SOLO LECTURA\n"+
+            "Marca temporal: "+x.timestamp+"\n"+
+            "1079 · COMBUSTIBLE % OEM: "+rawCode(x.fuelPct1079)+"\n"+
+            "2053 · MODO CONDUCCIÓN Eco/Sport/Snow: "+
+                rawCode(x.driveMode2053)+" (MAPA NO VALIDADO)\n"+
+            "2204 · FRENO DE MANO: "+rawCode(x.handbrake2204)+"\n"+
+            "1031 · ALTA TENSIÓN HABILITADA (estado, NO voltaje): "+
+                rawCode(x.highVoltageReady1031)+"\n"+
+            "1063 · VOLTAJE HV PACK (getter float): "+
+                (Double.isFinite(x.voltage)?f(x.voltage,2):"SIN DATO")+"\n"+
+            "1064 · CORRIENTE HV (A, NO voltios): "+
+                (Double.isFinite(x.current)?f(x.current,2):"SIN DATO")+"\n"+
+            "2073 · KEY ENGINE STS (NO INTERPRETAR COMO RPM): "+
+                rawCode(x.engineStatus2073)+"\n"+
+            "1035 · RPM MOTOR TÉRMICO: "+
+                (Double.isFinite(x.rpm)?f(x.rpm,0):"SIN DATO")+"\n"+
+            "1088 · SPEED VALID: "+rawCode(x.speedValid1088)+"\n"+
+            "2014 · ATMOSPHERE LIGHT SWITCH: "+
+                rawCode(x.atmosphereSwitch2014)+"\n"+
+            "2170 · PASSENGER DOOR CEM2: "+
+                rawCode(x.passengerDoorCem2_2170)+"\n"+
+            "559940910 · EXT BATTERY VOLT: candidato HV, "+
+                "getter separado en diagnósticos 12 V/IBS. "+
+                "No atribuir a batería 12 V sin corroborar.\n"+
+            "Sin escritura OEM; sin GPS, nombres, VIN o historial.";
+    }
+    private void showRawVehicleSignals(){
+        new AlertDialog.Builder(this).setTitle("SEÑALES OEM · SOLO LECTURA")
+            .setMessage(rawVehicleReport())
+            .setNegativeButton("CERRAR",null)
+            .setPositiveButton("COMPARTIR",(d,w)->
+                shareDiagnostic("senales_oem_12nov",rawVehicleReport(),
+                    vehicleModeStatus))
+            .show();
     }
     private void updateSoc(){
         if(socStrategy==null||lastSample==null)return;
