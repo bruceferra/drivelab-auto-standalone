@@ -49,9 +49,24 @@ public final class T1OptimizedModePolicyTest {
         ok(!T1OptimizedModePolicy.evaluate(
             T1OptimizedModePolicy.Road.CITY,city,Double.NaN)
                 .conditionSatisfied,"missing SOC must not allow");
-        ok(!T1OptimizedModePolicy.evaluate(
+        ok(T1OptimizedModePolicy.evaluate(
             T1OptimizedModePolicy.Road.CITY,city,30)
-                .conditionSatisfied,"threshold requires strictly greater");
+                .conditionSatisfied,"default comparator is greater or equal");
+        ok(!T1OptimizedModePolicy.evaluate(
+            T1OptimizedModePolicy.Road.CITY,city,29.9)
+                .conditionSatisfied,"below threshold rejected");
+        T1OptimizedModePolicy.Rule low=
+            new T1OptimizedModePolicy.Rule(
+                T1OptimizedModePolicy.Power.HEV,
+                T1OptimizedModePolicy.Strategy.SMART,50,true,30,
+                T1OptimizedModePolicy.Comparison.LESS_OR_EQUAL,
+                T1OptimizedModePolicy.Regen.LOW);
+        ok(T1OptimizedModePolicy.evaluate(
+            T1OptimizedModePolicy.Road.CITY,low,30)
+                .conditionSatisfied,"less or equal includes threshold");
+        ok(!T1OptimizedModePolicy.evaluate(
+            T1OptimizedModePolicy.Road.CITY,low,30.1)
+                .conditionSatisfied,"above less-than threshold rejected");
         ok(T1OptimizedModePolicy.evaluate(
             T1OptimizedModePolicy.Road.CITY,city,30.1)
                 .conditionSatisfied,"SOC above 30 allowed");
