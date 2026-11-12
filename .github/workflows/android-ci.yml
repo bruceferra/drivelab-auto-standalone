@@ -254,6 +254,37 @@ jobs:
           grep -q 'tempEngine.setText(result.engineTemperatureDisplay())' "$ui"
           grep -q 'TEMPERATURA MOTOR · 559940105 · EXP.' "$ui"
 
+      - name: Photo evidence EV HEV mode and 12V voltage domain regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-mode-volt
+          javac -encoding UTF-8 -d /tmp/t1-mode-volt \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ZonePolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ManualHevPolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ElectricalEvidence.java \
+            receiver/tests/T1ModeAndVoltageEvidenceTest.java
+          java -cp /tmp/t1-mode-volt ar.com.rango5gps.drivelabauto.receiver.T1ModeAndVoltageEvidenceTest
+          cockpit=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
+          probe=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1Aux12vReadOnlyProbe.java
+          grep -q 'YA ESTÁS EN HEV' "$cockpit"
+          grep -q 'preflightReason' "$cockpit"
+          grep -q 'T1ElectricalEvidence.report(readings\[1\])' "$probe"
+          # The new HAL side-channel is ONLY a getter. The candidate
+          # 557843642 MUST NOT be transmitted as a write.
+          hal=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PhevHalModeProbe.java
+          grep -q 'HAL_PHEV_POWER_MODE_READ=557867211' "$hal"
+          grep -q 'HAL_PHEV_POWER_MODE_WRITE_UNTESTED=557843642' "$hal"
+          grep -q 'b.transact(2,d,r,0)' "$hal"
+          ! grep -E 'transact\\(15|setInt\\(|setFloat\\(|setProperty\\(' "$hal"
+          grep -q 'T1PhevHalModeProbe.inspect(app,mode)' \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ManualHevExperiment.java
+          grep -q 'getPackageInfo(' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/ReceiverActivity.java
+          grep -q 'messageView.setTextColor(android.graphics.Color.BLACK)' \
+            common/src/main/java/ar/com/rango5gps/drivelabauto/common/Updater.java
+          # Physical EV/HEV test still manual & single shot, no new setters.
+          grep -q 'checkStopped(b,confirmedMode,"CONTROL_2")' \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ManualHevExperiment.java
       - name: Separate apps and Android APK builds
         run: gradle --no-daemon :sender:assembleDebug :receiver:assembleDebug
       - name: Verify independent identities, permissions and no telemetry

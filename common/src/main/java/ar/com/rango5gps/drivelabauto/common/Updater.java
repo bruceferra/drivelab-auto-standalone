@@ -87,14 +87,32 @@ public final class Updater {
                 notify(a,reporter,"Actualización "+offer.name+" disponible para "+proper+".");
                 a.runOnUiThread(()->{
                     if(a.isFinishing()||a.isDestroyed())return;
-                    new AlertDialog.Builder(a)
+                    // Jetour's themed dialog body previously rendered in
+                    // very low-contrast grey and printed literal \\n.
+                    // Explicit black-on-white message, real line break and
+                    // dark colored action buttons for legibility at night.
+                    android.widget.TextView messageView=
+                        new android.widget.TextView(a);
+                    messageView.setText("Versión nueva: "+offer.name+
+                        "\n¿Querés descargarla e instalarla desde DriveLab Auto?");
+                    messageView.setTextColor(android.graphics.Color.BLACK);
+                    messageView.setTextSize(18f);
+                    int pad=(int)(20f*a.getResources()
+                        .getDisplayMetrics().density+0.5f);
+                    messageView.setPadding(pad,pad,pad,pad);
+                    AlertDialog dlg=new AlertDialog.Builder(a,
+                        android.R.style.Theme_Material_Light_Dialog_Alert)
                         .setTitle("Actualización disponible · "+proper)
-                        .setMessage("Versión nueva: "+offer.name+
-                            "\\n¿Querés descargarla e instalarla desde DriveLab Auto?")
+                        .setView(messageView)
                         .setNegativeButton("AHORA NO",null)
                         .setPositiveButton("DESCARGAR E INSTALAR",
                             (dialog,which)->check(a,app,reporter))
-                        .show();
+                        .create();
+                    dlg.show();
+                    dlg.getButton(AlertDialog.BUTTON_NEGATIVE)
+                        .setTextColor(0xFF425466);
+                    dlg.getButton(AlertDialog.BUTTON_POSITIVE)
+                        .setTextColor(0xFF006A63);
                 });
             }catch(Exception ex){
                 String detail=ex.getMessage()==null?

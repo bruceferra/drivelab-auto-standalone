@@ -96,10 +96,18 @@ final class T1ManualHevExperiment {
                 T1OemDiagnosticLog.add(app,"SOLO_LECTURA",
                     "1033="+readback.gear+"; 2148/1089="+readback.speed+
                     " km/h; 1043="+mode+"; apto="+readback.canRequest);
+                // Compare the actual PHEV-mode HAL read from the T1N134
+                // catalog with the proven 4-digit VehicleService getter.
+                // This is a separate getter, NOT a propulsion-mode write.
+                String hal=T1PhevHalModeProbe.inspect(app,mode);
+                T1OemDiagnosticLog.add(app,"HAL_557867211",hal);
                 return "LECTURA OEM COMPLETADA: P/1033="+readback.gear+
                     ", velocidad="+readback.speed+" km/h, 1043="+mode+
-                    ". Comando NO enviado. "+(readback.canRequest?
-                    "Las precondiciones se cumplen.":"Bloqueado por P/velocidad/modo.");
+                    " ("+T1ManualHevPolicy.currentMode(mode)+"). "+
+                    "Comando NO enviado. "+
+                    T1ManualHevPolicy.preflightReason(
+                        readback.gear,readback.speed,mode,0)+
+                    "\n\nCOMPARACIÓN HAL: "+hal;
             }
             checkStopped(b,mode,"CONTROL_1");
             SystemClock.sleep(350);
@@ -150,9 +158,10 @@ final class T1ManualHevExperiment {
             "; apto="+check.canRequest);
         if(!check.canRequest)
             throw new IllegalStateException(
-                "NO SE ESCRIBIÓ. Se exige P=1, velocidad 0 y modo EV=1 o EV MAX=3. "+
-                "Leídos: 1033="+check.gear+", velocidad="+check.speed+
-                ", 1043="+mode);
+                T1ManualHevPolicy.preflightReason(
+                    check.gear,check.speed,mode,0)+
+                " · Binder: 1033="+check.gear+
+                ", velocidad="+check.speed+", 1043="+mode);
     }
     private static int readInt(IBinder b,int id)throws Exception{
         Parcel d=Parcel.obtain(),r=Parcel.obtain();
