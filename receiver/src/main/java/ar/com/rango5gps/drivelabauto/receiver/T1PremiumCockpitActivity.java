@@ -276,6 +276,13 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             "OSM · DESACTIVAR ASESOR":"OSM · ACTIVAR ASESOR");
         osmSocButton.setText(motorwayForced()?
             "AUTOPISTA · HEV FORZADO":"AUTOPISTA · HEV SMART");
+        if(osmBanner!=null){
+            osmBanner.setVisibility(osmEnabled()?
+                android.view.View.VISIBLE:android.view.View.GONE);
+            if(osmEnabled()&&osmLast==null)
+                osmBanner.setText("OSM ACTIVO · esperando GPS. "+
+                    "Tocá para ver el motivo o guardar zona EV/HEV.");
+        }
     }
     private void toggleOsm(){
         if(osmEnabled()){
@@ -312,14 +319,22 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private void showOsmResult(){
         if(osmStatus==null)return;
         if(osmLast==null){
-            osmStatus.setText("OSM sin clasificación: ciudad → EV / "+
-                "autopista → HEV "+(motorwayForced()?"FORZADO":"SMART")+
-                ". SIN ESCRITURA.");
+            osmStatus.setText("OSM sin clasificación. El asesor NO guarda zonas "+
+                "ni cambia el vehículo; usá GUARDAR ZONA EV/HEV debajo.");
+            if(osmBanner!=null&&osmEnabled())
+                osmBanner.setText("OSM ACTIVO · esperando clasificación de la vía");
             return;
         }
-        osmStatus.setText(osmLast.recommendation(motorwayForced())+
-            "\n"+osmLast.explain()+
-            "\nASESOR OSM: SOLO LECTURA, NO CAMBIA EL VEHÍCULO.");
+        String suggestion=osmLast.recommendation(motorwayForced());
+        osmStatus.setText(suggestion+"\n"+osmLast.explain()+
+            "\nSolo consejo, no cambia EV/HEV. Las zonas se guardan "+
+            "manualmente con GUARDAR ZONA EV/HEV debajo.");
+        if(osmBanner!=null&&osmEnabled())
+            osmBanner.setText("OSM · "+suggestion+" · "+
+                (osmLast.roadTag.isEmpty()?
+                    osmLast.detail:osmLast.roadTag+" · "+osmLast.name)+
+                " · TOCÁ PARA DETALLES");
+    }
     }
     private void lookupOsm(boolean userTriggered){
         if(osmStatus==null||!visible)return;
@@ -327,16 +342,72 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         if(!osmReading.compareAndSet(false,true))return;
         lastOsmQuery=System.currentTimeMillis();
         android.location.Location loc=T1ModeZoneStore.location(this);
-        osmStatus.setText("Verificando vía OSM… "+
-            "(consulta GPS; sin órdenes al vehículo)");
+        osmStatus.setText("OSM · buscando GPS reciente; solo lectura.");
+        if(osmBanner!=null&&osmEnabled())
+            osmBanner.setText("OSM · localizando y clasificando vía…");
+        // Older code used cached GPS up to 120 s, but Overpass refuses
+        // GPS older than 25 s, thus it silently returned UNKNOWN.
+        if(loc!=null&&loc.hasAccuracy()&&loc.getAccuracy()<=35f&&
+            android.os.SystemClock.elapsedRealtimeNanos()-
+                loc.getElapsedRealtimeNanos()<=35000000000L){
+            runOsmQuery(loc);return;
+        }
+        if(checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)!=
+                android.content.pm.PackageManager.PERMISSION_GRANTED){
+            osmReading.set(false);
+            osmLast=new T1OsmRoadAdvisor.Result(
+                T1OsmRoadAdvisor.Road.UNKNOWN,"","",Double.NaN,
+                "Falta permiso GPS de Receiver. Habilitá Ubicación "+
+                "para esta app Android y probá CONSULTAR VÍA OSM.");
+            showOsmResult();return;
+        }
+        try{
+            android.location.LocationManager mgr=(android.location.LocationManager)
+                getSystemService(LOCATION_SERVICE);
+            if(mgr==null)throw new IllegalStateException("Sin LocationManager");
+            String provider=mgr.isProviderEnabled(
+                android.location.LocationManager.GPS_PROVIDER)?
+                android.location.LocationManager.GPS_PROVIDER:
+                mgr.isProviderEnabled(android.location.LocationManager.NETWORK_PROVIDER)?
+                android.location.LocationManager.NETWORK_PROVIDER:null;
+            if(provider==null)throw new IllegalStateException("GPS desactivado");
+            final long attempt=lastOsmQuery;
+            mgr.requestSingleUpdate(provider,new android.location.LocationListener(){
+                @Override public void onLocationChanged(android.location.Location fresh){
+                    if(!osmReading.get()||!visible||lastOsmQuery!=attempt)return;
+                    runOsmQuery(fresh);
+                }
+            },getMainLooper());
+            ui.postDelayed(()->{
+                if(lastOsmQuery!=attempt||!osmReading.compareAndSet(true,false))
+                    return;
+                osmLast=new T1OsmRoadAdvisor.Result(
+                    T1OsmRoadAdvisor.Road.UNKNOWN,"","",Double.NaN,
+                    "Sin GPS reciente en 16 s. Revisá permisos Android y GPS "+
+                    "y reintentá CONSULTAR VÍA OSM.");
+                showOsmResult();
+            },16000L);
+        }catch(Exception ex){
+            osmReading.set(false);
+            osmLast=new T1OsmRoadAdvisor.Result(
+                T1OsmRoadAdvisor.Road.UNKNOWN,"","",Double.NaN,
+                "GPS no disponible: "+ex.getClass().getSimpleName()+
+                ". Revisá ubicación del vehículo.");
+            showOsmResult();
+        }
+    }
+    private void runOsmQuery(android.location.Location loc){
+        if(loc==null){osmReading.set(false);return;}
+        final long attempt=lastOsmQuery;
         new Thread(()->{
             T1OsmRoadAdvisor.Result result=T1OsmRoadAdvisor.lookup(loc);
             ui.post(()->{
+                if(attempt!=lastOsmQuery)return;
                 osmReading.set(false);
                 if(!visible||isFinishing()||isDestroyed())return;
                 osmLast=result;showOsmResult();
             });
-        },"T1-OpenStreetMap-Road-ReadOnly").start();
+        },"T1-OSM-Road-ReadOnly").start();
     }
     private GradientDrawable bg(int color,int radius){
         GradientDrawable g=new GradientDrawable();g.setColor(color);
@@ -455,6 +526,14 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         modeAtTop=text("MODO OEM: esperando 1043 · controles manuales P o D",
             14,MUTED,false);
         root.addView(modeAtTop);
+        osmBanner=text("OSM · esperando vía…",12,0xFFB3E9F1,true);
+        osmBanner.setOnClickListener(v->{
+            advanced.setVisibility(android.view.View.VISIBLE);
+            lookupOsm(true);
+        });
+        root.addView(osmBanner);
+        osmBanner.setVisibility(osmEnabled()?
+            android.view.View.VISIBLE:android.view.View.GONE);
         // Three independent button sets: JORNADA, VIAJE 1 and VIAJE 2.
         // Disabled is gray, only available actions retain colored tint.
         LinearLayout controls=row();root.addView(controls);
