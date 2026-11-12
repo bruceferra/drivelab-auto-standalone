@@ -255,7 +255,7 @@ final class T1OfflineRoadMap {
             Double.toString(lon-lonSpan),Double.toString(lat+latSpan),
             Double.toString(lat-latSpan)};
         double nearest=Double.POSITIVE_INFINITY,runner=Double.POSITIVE_INFINITY;
-        String highway="",ref="";
+        String highway="",ref="",maxspeed="";
         T1OsmRoadAdvisor.Road best=T1OsmRoadAdvisor.Road.UNKNOWN,
             next=T1OsmRoadAdvisor.Road.UNKNOWN;
         int checked=0,ignoredUnknown=0;
@@ -263,7 +263,7 @@ final class T1OfflineRoadMap {
                 dataset(context).getAbsolutePath(),null,
                 SQLiteDatabase.OPEN_READONLY|SQLiteDatabase.NO_LOCALIZED_COLLATORS);
             Cursor rows=db.rawQuery(
-                "SELECT r.highway,r.ref,r.vertices "+
+                "SELECT r.highway,r.ref,r.vertices,r.maxspeed,r.motorroad,r.expressway "+
                 "FROM roads_bounds i JOIN roads r ON i.osm_id=r.osm_id "+
                 "WHERE i.min_lon <= ? AND i.max_lon >= ? "+
                 "AND i.min_lat <= ? AND i.max_lat >= ? LIMIT 1200",args)){
@@ -273,7 +273,10 @@ final class T1OfflineRoadMap {
                 byte[] bytes=rows.getBlob(2);if(bytes==null)continue;
                 double meters=distanceToRoad(lat,lon,bytes);
                 if(!Double.isFinite(meters))continue;
-                T1OsmRoadAdvisor.Road kind=T1OsmRoadAdvisor.classify(type);
+                T1OsmRoadAdvisor.Road kind=T1OsmRoadAdvisor.Road.valueOf(
+                    T1RoadSpeedClassifier.category(type,rows.getString(1),
+                        rows.getString(3),rows.getString(4),
+                        rows.getString(5)).name());
                 // The original nearest-road selector also chose pedestrian
                 // paths, cycleways and non-driveable UNKNOWN classes. That
                 // could hide a perfectly valid city street 2 m further away.
@@ -287,6 +290,7 @@ final class T1OfflineRoadMap {
                     }
                     nearest=meters;best=kind;
                     highway=type;ref=rows.getString(1);
+                    maxspeed=rows.getString(3);
                 }else if(meters<runner&&kind!=best){
                     runner=meters;next=kind;
                 }
@@ -312,9 +316,11 @@ final class T1OfflineRoadMap {
             return unknown("Vías cercanas de distinta categoría: "+
                 "clasificación ambigua, sin sugerencia.");
         String name=ref==null||ref.trim().isEmpty()?"Vía sin referencia":"Ruta "+ref;
+        int limit=T1RoadSpeedClassifier.maxKmh(maxspeed);
         return new T1OsmRoadAdvisor.Result(best,highway,name,nearest,
-            "Mapa offline completo Provincia BA + CABA (índice SQLite v3). "+
-            "Consulta local sin red, sin escritura en el vehículo.");
+            "OSM highway="+highway+" · máxima publicada="+
+            (limit<0?"SIN DATO":limit+" km/h")+
+            " · SQLite PBA+CABA v3. Solo sugerencias, sin comandos.");
     }
     private static T1OsmRoadAdvisor.Result unknown(String note){
         return new T1OsmRoadAdvisor.Result(
