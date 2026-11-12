@@ -2,8 +2,6 @@ package ar.com.rango5gps.drivelabauto.receiver;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.content.ClipData;
-import android.content.ClipboardManager;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
@@ -72,6 +70,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private T1RearSeatLightsProbe seatProbe;
     private T1RearSeatLightsProbe.Snapshot seatBefore;
     private String seatReport="";
+    private String lightReport="";
     private T1ThermalMotorProbe thermalProbe;
     private T1ThermalMotorProbe.Snapshot lastThermal;
     private T1Aux12vReadOnlyProbe aux12vProbe;
@@ -591,7 +590,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         advanced.addView(hevStatus);
         LinearLayout debugRow=row();advanced.addView(debugRow);
         button(debugRow,"DIAGNOSTICAR · NO ESCRIBE",BLUE,this::diagnoseHev);
-        button(debugRow,"VER / COPIAR INFORME",BLUE,this::showHevReport);
+        button(debugRow,"COMPARTIR INFORME",BLUE,this::showHevReport);
         heading(advanced,"PARRILLA LED DELANTERA · EFECTO EN P");
         advanced.addView(text("NUEVO · Registro SOLO LECTURA de 30 segundos "+
             "de la tira LED «horizonte»: LIGHT SHOW, DRL, WELCOME "+
@@ -604,18 +603,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         LinearLayout ledButtons=row();advanced.addView(ledButtons);
         button(ledButtons,"REGISTRAR LED 30 S · NO ESCRIBE",
             TEAL,this::recordHorizonLed);
-        button(ledButtons,"COPIAR INFORME LED",BLUE,()->{
-            if(ledReport.isEmpty()){
-                ledStatus.setText("No existe informe. Empezá con REGISTRAR LED.");
-                return;
-            }
-            ClipboardManager clipboard=(ClipboardManager)
-                getSystemService(CLIPBOARD_SERVICE);
-            if(clipboard!=null)clipboard.setPrimaryClip(
-                ClipData.newPlainText("Jetour T1 tira LED P N",ledReport));
-            ledStatus.setText("Informe de LED copiado. "+
-                "Compartí el texto para comparar P y N.");
-        });
+        button(ledButtons,"COMPARTIR LED",BLUE,
+            ()->shareDiagnostic("led_frontal",ledReport,ledStatus));
         ledStatus=text("LED delantero: sin registro todavía. "+
             "Los códigos de show mode están identificados pero NO validados.",
             13,WHITE,false);
@@ -632,6 +621,9 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             "El resultado aparece acá; no hay comandos de iluminación habilitados.",
             13,WHITE,false);
         advanced.addView(lightStatus);
+        LinearLayout lightShare=row();advanced.addView(lightShare);
+        button(lightShare,"COMPARTIR LUCES / BAÚL",BLUE,
+            ()->shareDiagnostic("luces_baul",lightReport,lightStatus));
         heading(advanced,"LUCES DE LECTURA · SEGUNDA FILA POR ASIENTO");
         advanced.addView(text("NUEVA PRUEBA: área 16 izquierda / 32 centro / "+
             "64 derecha. Consultamos 356519683 (estado) y 356519684 "+
@@ -644,17 +636,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         button(seatButtons,"ASIENTOS B · ENCENDIDAS",TEAL,
             ()->captureRearSeats(true));
         LinearLayout seatCopy=row();advanced.addView(seatCopy);
-        button(seatCopy,"COPIAR INFORME ASIENTOS",BLUE,()->{
-            if(seatReport.isEmpty()){
-                rearSeatStatus.setText("Primero completá A y B.");return;
-            }
-            ClipboardManager clipboard=(ClipboardManager)
-                getSystemService(CLIPBOARD_SERVICE);
-            if(clipboard!=null)clipboard.setPrimaryClip(
-                ClipData.newPlainText("Jetour T1 luces lectura por asiento",seatReport));
-            rearSeatStatus.setText("Informe de luces por asiento copiado. "+
-                "Pegalo en el chat para mapear el control OEM.");
-        });
+        button(seatCopy,"COMPARTIR LUCES ASIENTOS",BLUE,
+            ()->shareDiagnostic("luces_asientos",seatReport,rearSeatStatus));
         rearSeatStatus=text("Sin comparación por asiento todavía.",
             14,WHITE,false);
         advanced.addView(rearSeatStatus);
@@ -673,17 +656,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         button(beltButtons,"CINTURONES B · ABROCHADO",TEAL,
             ()->captureRearBelts(true));
         LinearLayout beltCopy=row();advanced.addView(beltCopy);
-        button(beltCopy,"COPIAR INFORME CINTURONES",BLUE,()->{
-            if(rearBeltReport.isEmpty()){
-                rearBeltStatus.setText("Primero completá las capturas A y B.");
-                return;
-            }
-            ClipboardManager clipboard=(ClipboardManager)
-                getSystemService(CLIPBOARD_SERVICE);
-            if(clipboard!=null)clipboard.setPrimaryClip(
-                ClipData.newPlainText("T1 cinturones traseros",rearBeltReport));
-            rearBeltStatus.setText("Informe de cinturones copiado.");
-        });
+        button(beltCopy,"COMPARTIR CINTURONES",BLUE,
+            ()->shareDiagnostic("cinturones_traseros",rearBeltReport,rearBeltStatus));
         rearBeltStatus=text("Sin comparación de cinturones todavía.",
             14,WHITE,false);
         advanced.addView(rearBeltStatus);
@@ -1180,6 +1154,21 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 })))message("Prueba ocupada; no se envió otra orden.");
             }).show();
     }
+    /** Reports are always private uploads through the already paired cloud.
+     * Preserve the local CSV if the vehicle is offline. */
+    private void shareDiagnostic(String type,String report,TextView output){
+        if(report==null||report.trim().isEmpty()){
+            if(output!=null)output.setText("Primero completá la captura.");
+            return;
+        }
+        if(output!=null)output.setText("Compartiendo informe "+type+
+            " con el servidor…");
+        T1ReportShare.share(this,type,report,status->{
+            if(isFinishing()||isDestroyed())return;
+            if(output!=null)output.setText(status);
+            else if(feedback!=null)feedback.setText(status);
+        });
+    }
     private void readAux12v(){
         if(!parked()){
             aux12vStatus.setText("Estacioná en P, velocidad cero y "+
@@ -1198,13 +1187,9 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 new AlertDialog.Builder(this).setTitle("12 V · LECTURA OEM")
                     .setMessage(aux12vReport)
                     .setNegativeButton("CERRAR",null)
-                    .setPositiveButton("COPIAR INFORME",(d,w)->{
-                        ClipboardManager clipboard=(ClipboardManager)
-                            getSystemService(CLIPBOARD_SERVICE);
-                        if(clipboard!=null)clipboard.setPrimaryClip(
-                            ClipData.newPlainText(
-                                "Jetour T1 bateria 12V",aux12vReport));
-                    }).show();
+                    .setPositiveButton("COMPARTIR",
+                        (d,w)->shareDiagnostic("bateria_12v",
+                            aux12vReport,aux12vStatus)).show();
             });
         },"T1-12V-IBS-ReadOnly").start();
     }
@@ -1220,24 +1205,14 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             if(isFinishing()||isDestroyed())return;
             hevStatus.setText(report);
             new AlertDialog.Builder(this).setTitle("DIAGNÓSTICO EV/HEV")
-                .setMessage(report+"\n\nSi el botón había fallado, "+
-                    "VER / COPIAR INFORME muestra las etapas y errores OEM.")
+                .setMessage(report+"\n\nUsá COMPARTIR INFORME para subir "+
+                    "las etapas y errores OEM al servidor.")
                 .setPositiveButton("CERRAR",null).show();
         })))hevStatus.setText("No se pudo iniciar: diagnóstico ocupado.");
     }
     private void showHevReport(){
         String report=T1OemDiagnosticLog.report(this);
-        new AlertDialog.Builder(this).setTitle("INFORME EV/HEV")
-            .setMessage(report)
-            .setNegativeButton("CERRAR",null)
-            .setPositiveButton("COPIAR",(d,w)->{
-                ClipboardManager clipboard=(ClipboardManager)
-                    getSystemService(CLIPBOARD_SERVICE);
-                if(clipboard!=null)clipboard.setPrimaryClip(
-                    ClipData.newPlainText("DriveLab EV/HEV",report));
-                hevStatus.setText("Informe copiado. No contiene "+
-                    "coordenadas ni datos personales.");
-            }).show();
+        shareDiagnostic("ev_hev_oem",report,hevStatus);
     }
     private void readThermal(boolean showDetails){
         if(!visible||!thermalReading.compareAndSet(false,true))return;
@@ -1258,13 +1233,9 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                         .setTitle("Temperaturas y motor · lecturas OEM")
                         .setMessage(report)
                         .setNegativeButton("CERRAR",null)
-                        .setPositiveButton("COPIAR",(d,w)->{
-                            ClipboardManager clipboard=(ClipboardManager)
-                                getSystemService(CLIPBOARD_SERVICE);
-                            if(clipboard!=null)clipboard.setPrimaryClip(
-                                ClipData.newPlainText(
-                                    "Jetour T1 temperaturas y motor",report));
-                        }).show();
+                        .setPositiveButton("COMPARTIR",(d,w)->
+                            shareDiagnostic("motor_temperaturas",report,tempEngine))
+                        .show();
                 }
             });
         },"T1-Thermal-Motor-ReadOnly").start();
@@ -1322,7 +1293,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 if(!visible||isFinishing()||isDestroyed()||ledStatus==null)return;
                 ledStatus.setText("LED · Registro completo ("+
                     frames.size()+" muestras). Volvé a P y "+
-                    "tocá COPIAR INFORME LED para compartir.");
+                    "tocá COMPARTIR LED para subir.");
                 new AlertDialog.Builder(this)
                     .setTitle("LED DELANTERO · REGISTRO P/N")
                     .setMessage("Lectura completada. "+
@@ -1422,9 +1393,9 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                         "cambiá el interruptor de luz trasera/portón original "+
                         "y tocá CAPTURA B.\n"+snap.describe());
                 }else{
-                    lightStatus.setText(
-                        T1CabinLightReadOnlyProbe.Snapshot.compare(
-                            lightBefore,snap));
+                    lightReport=T1CabinLightReadOnlyProbe.Snapshot.compare(
+                        lightBefore,snap);
+                    lightStatus.setText(lightReport);
                     lightBefore=null;
                 }
             });
