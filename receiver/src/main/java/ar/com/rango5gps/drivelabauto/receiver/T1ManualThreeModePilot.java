@@ -14,15 +14,16 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 
 /**
- * Explicit one-shot manual mode selector. 1043=2 HEV was physically
- * confirmed ON THIS VEHICLE while parked by the owner. Reverse transitions
- * 1043=1 EV and 1043=3 EV MAX are still UNVALIDATED.
+ * Explicit one-shot manual mode selector. Owner photos show three successful
+ * parked readbacks from DriveLab: 1043=1 EV, 2 HEV and 3 EV MAX. All
+ * three targets are now confirmed in P for this firmware.
  *
  * NEVER callable from GPS, route detection, boot, or background services.
  * All writes require stable P, OEM speed exactly zero, 2 fresh reads, an
  * active Activity and an independent user confirmation in the caller.
  * Changing modes through Jetour's certified OEM UI in motion is NOT proof
  * this third-party Binder transaction is safe to send while moving.
+ * No moving-vehicle write path or OSM-initiated setter is enabled.
  */
 final class T1ManualThreeModePilot {
     interface Callback { void complete(String result); }
