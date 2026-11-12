@@ -37,8 +37,11 @@ public final class T1PremiumCockpitActivity extends Activity {
     private T1TripTelemetry.Sample lastSample;
     private T1PremiumInstrumentView gauge;
     private TextView tripStatus,kmNow,fuelNow,electricNow,costNow,clientNow,
-        dayNow,monthNow,historyNow,zoneStatus,feedback,energyNote;
+        dayNow,monthNow,historyNow,zoneStatus,feedback,energyNote,
+        scopeTitle,scopeProgress,socStrategy,autonomyNow,autonomyDetail;
     private LinearLayout advanced;
+    private T1ManualHevExperiment hevPilot;
+    private static final String RANGE_PREFS="t1_cockpit_range_settings";
     private final Runnable ticker=new Runnable(){
         @Override public void run(){
             if(!visible)return;
@@ -54,7 +57,11 @@ public final class T1PremiumCockpitActivity extends Activity {
                         if(!visible||isFinishing()||isDestroyed())return;
                         lastSample=s;
                         gauge.update(valid(s.speed,0,220),valid(s.fuel,0,70),
-                            valid(s.socDisplay,0,100),s.powerMode);
+                            valid(s.socDisplay,0,100),s.powerMode,
+                            valid(s.rpm,0,12000),
+                            valid(s.current,-1500,1500));
+                        updateSoc();
+                        updateAutonomy();
                         updateZone();
                     });
                 },"T1-Cockpit-ReadOnly").start();
@@ -66,7 +73,11 @@ public final class T1PremiumCockpitActivity extends Activity {
         return Double.isFinite(v)&&v>=min&&v<=max?v:null;
     }
     private static String f(double v,int digits){return T1JourneyMetrics.fmt(v,digits);}
-    @Override public void onCreate(Bundle b){super.onCreate(b);draw();}
+    @Override public void onCreate(Bundle b){
+        super.onCreate(b);
+        hevPilot=new T1ManualHevExperiment(this);
+        draw();
+    }
     @Override protected void onResume(){
         super.onResume();visible=true;lastTelem=0;lastTotals=0;
         ui.removeCallbacks(ticker);ui.post(ticker);
@@ -117,19 +128,47 @@ public final class T1PremiumCockpitActivity extends Activity {
         LinearLayout top=row();top.setGravity(Gravity.CENTER_VERTICAL);root.addView(top);
         LinearLayout title=col();
         title.addView(text("DRIVELAB  /  JETOUR T1",22,WHITE,true));
-        title.addView(text("COCKPIT · v0.2.34 · telemetría OEM",13,MUTED,false));
+        title.addView(text("COCKPIT · v0.2.35 · telemetría OEM",13,MUTED,false));
         top.addView(title,new LinearLayout.LayoutParams(0,-2,1));
         Button back=new Button(this);back.setText("VOLVER AL T1");
         back.setAllCaps(false);back.setOnClickListener(v->finish());top.addView(back);
         gauge=new T1PremiumInstrumentView(this);
         LinearLayout.LayoutParams meterParams=new LinearLayout.LayoutParams(-1,-2);
-        meterParams.setMargins(0,6,0,12);root.addView(gauge,meterParams);
-
+        meterParams.setMargins(0,6,0,8);root.addView(gauge,meterParams);
+        socStrategy=text("GESTIÓN SOC: SIN LECTURA · OBJETIVO: SIN DATO",
+            17,WHITE,true);root.addView(socStrategy);
+        LinearLayout scope=col();
+        scope.setBackground(bg(0xFF123950,22));
+        scope.setPadding(20,13,20,13);
+        LinearLayout.LayoutParams scopeParams=new LinearLayout.LayoutParams(-1,-2);
+        scopeParams.setMargins(0,8,0,8);
+        root.addView(scope,scopeParams);
+        scopeTitle=text("JORNADA ACTUAL · SIN GRABACIÓN",16,0xFFB5DAEC,true);
+        scope.addView(scopeTitle);
+        kmNow=text("0,00 km",45,0xFF5BE2D0,true);scope.addView(kmNow);
+        scopeProgress=text("Iniciá una jornada o un trayecto; acá verás el avance.",
+            15,WHITE,false);
+        scope.addView(scopeProgress);
         LinearLayout metrics=row();root.addView(metrics);
-        kmNow=metric(tile(metrics,CARD),"DISTANCIA · VELOCIDAD OEM","0,00 km");
         fuelNow=metric(tile(metrics,CARD),"NAFTA 500 m · EXPERIMENTAL","—");
         electricNow=metric(tile(metrics,CARD),"ELECTRICIDAD NETA · EXP.","—");
         costNow=metric(tile(metrics,CARD),"COSTO NAFTA · EXP.","—");
+
+        LinearLayout range=col();range.setBackground(bg(CARD,20));
+        range.setPadding(14,9,14,12);
+        LinearLayout.LayoutParams rangeParams=new LinearLayout.LayoutParams(-1,-2);
+        rangeParams.setMargins(0,8,0,5);root.addView(range,rangeParams);
+        LinearLayout rangeTop=row();rangeTop.setGravity(Gravity.CENTER_VERTICAL);
+        range.addView(rangeTop);
+        LinearLayout rangeInfo=col();
+        rangeInfo.addView(text("AUTONOMÍA TOTAL · EXPERIMENTAL",15,MUTED,true));
+        autonomyNow=text("SIN DATOS",30,WHITE,true);rangeInfo.addView(autonomyNow);
+        rangeTop.addView(rangeInfo,new LinearLayout.LayoutParams(0,-2,1f));
+        Button adjust=new Button(this);adjust.setText("AJUSTAR");
+        adjust.setAllCaps(false);adjust.setOnClickListener(v->adjustAutonomy());
+        rangeTop.addView(adjust);
+        autonomyDetail=text("Combustible (CI186) + SOC eléctrico; pendiente de calibración",
+            13,MUTED,false);range.addView(autonomyDetail);
         energyNote=text("Km calculados desde velocidad OEM (sin calibrar). "+
             "Nafta y energía: hipótesis de unidades OEM 500 m. "+
             "Costo eléctrico total aún sin medidor validado.",12,MUTED,false);
@@ -190,6 +229,12 @@ public final class T1PremiumCockpitActivity extends Activity {
             .setPositiveButton("BORRAR",(d,w)->{
                 T1ModeZoneStore.clear(this);updateZone();
             }).show());
+        LinearLayout oneShot=row();advanced.addView(oneShot);
+        button(oneShot,"PRUEBA MANUAL · EV → HEV · SOLO EN P",GOLD,
+            this::askHevExperiment);
+        advanced.addView(text("Comando único 1043=2, sin GPS ni automatismos. "+
+            "Requiere P, 0 km/h, doble lectura y confirmación manual. "+
+            "Puede ser rechazado por los permisos OEM.",13,MUTED,false));
         LinearLayout extra=row();root.addView(extra);
         button(extra,"TABLERO TÉCNICO / CSV",BLUE,()->startActivity(
             new Intent(this,T1TankDashboardActivity.class)));
@@ -205,29 +250,70 @@ public final class T1PremiumCockpitActivity extends Activity {
     private void updateStats(){
         SharedPreferences m=getSharedPreferences(T1TripRecorderService.PREFS,MODE_PRIVATE);
         boolean running=m.getBoolean(T1TripRecorderService.RUNNING,false);
+        long ms=System.currentTimeMillis()-m.getLong(T1TripRecorderService.LAST_SAMPLE_TIME,0L);
+        boolean fresh=running&&ms>=0&&ms<=15000&&
+            m.getInt(T1TripRecorderService.SAMPLES,0)>0;
         double km=m.getFloat(T1TripRecorderService.DISTANCE,0f);
         int nf=m.getInt(T1TripRecorderService.SEG_FUEL_COUNT,0),
             ne=m.getInt(T1TripRecorderService.SEG_ELEC_COUNT,0);
         double fRaw=m.getFloat(T1TripRecorderService.SEG_FUEL_RAW_SUM,0f),
             eRaw=m.getFloat(T1TripRecorderService.SEG_ELEC_RAW_SUM,0f);
         double price=m.getFloat(T1TripRecorderService.FUEL_PRICE,2129f);
-        double lit=nf>0?fRaw*0.005:Double.NaN;
-        double eNet=ne>0?eRaw*0.005:Double.NaN;
-        kmNow.setText(f(km,2)+" km");
-        fuelNow.setText(nf>0?f(lit,3)+" L":"SIN TRAMOS");
-        electricNow.setText(ne>0?f(eNet,3)+" kWh":"SIN TRAMOS");
-        costNow.setText(nf>0?"$ "+f(lit*price,0):"SIN TRAMOS");
-        tripStatus.setText((running?"● JORNADA ABIERTA":"○ JORNADA DETENIDA")+
-            " · "+m.getInt(T1TripRecorderService.SAMPLES,0)+" muestras"+
-            " · "+nf+" tramos OEM de nafta / "+ne+" eléctricos"+
-            "\nFuente de km: "+m.getString(T1TripRecorderService.DIST_SOURCE,"sin dato"));
-        if(T1JourneyStore.active(this)){
-            T1JourneyMetrics.Result live=T1JourneyStore.running(this);
+        boolean client=T1JourneyStore.active(this),
+            pending=T1JourneyStore.pending(this);
+        T1JourneyMetrics.Result live=client?T1JourneyStore.running(this):null;
+        T1CockpitScope.Value scoped=T1CockpitScope.choose(
+            fresh,client,pending,live,km,nf,ne,fRaw,eRaw,price);
+        switch(scoped.kind){
+            case CLIENT:
+                scopeTitle.setText("● CLIENTE EN CURSO · "+T1JourneyStore.activeLabel(this));
+                break;
+            case DAY:scopeTitle.setText("● JORNADA EN CURSO · SIN CLIENTE");break;
+            case PREPARING:
+                scopeTitle.setText("◉ PREPARANDO CLIENTE · "+
+                    T1JourneyStore.pendingLabel(this));break;
+            case UNSYNCED:
+                scopeTitle.setText("⚠ DATOS OEM SIN ACTUALIZAR");break;
+            default:scopeTitle.setText("○ JORNADA ACTUAL · SIN GRABACIÓN");
+        }
+        kmNow.setText(f(scoped.km,2)+" km");
+        fuelNow.setText(scoped.fuelKnown?
+            f(scoped.fuelLiters,3)+" L":"ESPERANDO");
+        electricNow.setText(scoped.electricKnown?
+            f(scoped.electricNetKwh,3)+" kWh":"ESPERANDO");
+        costNow.setText(scoped.fuelKnown?
+            "$ "+f(scoped.fuelCost,0):"SIN DATO");
+        scopeProgress.setText(scoped.kind==T1CockpitScope.Kind.CLIENT||
+            scoped.kind==T1CockpitScope.Kind.DAY?
+            "AVANCE EN VIVO · nafta "+scoped.fuelEvents+
+            " tramos / electricidad "+scoped.electricEvents+
+            " tramos de 500 m · km por velocidad OEM sin calibrar":
+            scoped.kind==T1CockpitScope.Kind.PREPARING?
+            "0,00 km · esperando la primera muestra fresca de DriveLab (≈ 3 s)":
+            scoped.kind==T1CockpitScope.Kind.UNSYNCED?
+            "Sin muestras OEM recientes; comprobá que el grabador siga funcionando":
+            "Iniciá jornada o trayecto. El último viaje NO se cuenta como actual.");
+        if(!running){
+            tripStatus.setText("○ JORNADA DETENIDA · último TRIP "+
+                (m.getInt(T1TripRecorderService.SAMPLES,0)>0?
+                    f(km,2)+" km guardados":"sin historial")+
+                " · el nuevo contador está en cero.");
+        }else{
+            tripStatus.setText((fresh?"● GRABACIÓN CONTINUA":
+                "⚠ ESPERANDO OEM · sin muestra fresca")+
+                " · "+m.getInt(T1TripRecorderService.SAMPLES,0)+" muestras"+
+                " · origen distancia "+m.getString(
+                    T1TripRecorderService.DIST_SOURCE,"por verificar"));
+        }
+        if(client){
             clientNow.setText("● "+T1JourneyStore.activeLabel(this)+
-                (live==null?" · comprobando señal…":
+                (live==null?" · esperando lectura reciente":
                     " · "+f(live.km,2)+" km · "+
                     (live.fuelAvailable?f(live.fuelLitersCandidate,3)+
-                        " L experimentales":"esperando tramo de 500 m")));
+                        " L nafta experimental":"esperando 500 m")));
+        }else if(pending){
+            clientNow.setText("◉ "+T1JourneyStore.pendingLabel(this)+
+                " · 0,00 km · preparando grabación");
         }else clientNow.setText("○ Sin cliente activo · listo para iniciar");
         if(System.currentTimeMillis()-lastTotals>5000){
             lastTotals=System.currentTimeMillis();
@@ -266,7 +352,9 @@ public final class T1PremiumCockpitActivity extends Activity {
     private void message(String m){feedback.setText(m);lastTotals=0;updateStats();}
     private void startDay(){
         SharedPreferences m=getSharedPreferences(T1TripRecorderService.PREFS,MODE_PRIVATE);
-        if(m.getBoolean(T1TripRecorderService.RUNNING,false)){
+        long age=System.currentTimeMillis()-
+            m.getLong(T1TripRecorderService.LAST_SAMPLE_TIME,0L);
+        if(m.getBoolean(T1TripRecorderService.RUNNING,false)&&age>=0&&age<=15000){
             message("La jornada ya está grabando; no se reinició.");return;
         }
         try{
@@ -276,8 +364,8 @@ public final class T1PremiumCockpitActivity extends Activity {
         }catch(Exception ex){message("No se inició: "+ex.getClass().getSimpleName());}
     }
     private void endDay(){
-        if(T1JourneyStore.active(this)){
-            message("Primero FINALIZÁ EL TRAYECTO del cliente para conservar su costo.");
+        if(T1JourneyStore.active(this)||T1JourneyStore.pending(this)){
+            message("Primero FINALIZÁ o cancelá el trayecto del cliente.");
             return;
         }
         new AlertDialog.Builder(this).setTitle("Cerrar la jornada")
@@ -295,14 +383,42 @@ public final class T1PremiumCockpitActivity extends Activity {
         EditText name=new EditText(this);name.setSingleLine(true);
         name.setHint("Ej.: Cliente, traslado, tramo de vuelta");
         new AlertDialog.Builder(this).setTitle("Iniciar trayecto")
-            .setMessage("La jornada sigue grabando. Este tramo tendrá su propio costo.")
+            .setMessage("Empieza en 0,00 km para este cliente; no se reinicia "+
+                "la grabación general. Si aún no hay jornada, se inicia también.")
             .setView(name).setNegativeButton("CANCELAR",null)
             .setPositiveButton("INICIAR",(d,w)->{
-                try{message(T1JourneyStore.start(this,name.getText().toString()));}
-                catch(Exception ex){message("No se inició: "+ex.getMessage());}
+                if(T1JourneyStore.active(this)||T1JourneyStore.pending(this)){
+                    message("Ya hay un trayecto activo o preparándose.");return;
+                }
+                try{
+                    SharedPreferences p=getSharedPreferences(
+                        T1TripRecorderService.PREFS,MODE_PRIVATE);
+                    long age=System.currentTimeMillis()-
+                        p.getLong(T1TripRecorderService.LAST_SAMPLE_TIME,0L);
+                    boolean live=p.getBoolean(T1TripRecorderService.RUNNING,false)
+                        &&age>=0&&age<=15000;
+                    if(live){
+                        // Immediate checkpoint; do not reset the all-day trip.
+                        message(T1JourneyStore.start(this,name.getText().toString()));
+                    }else{
+                        String status=T1JourneyStore.queue(this,
+                            name.getText().toString());
+                        startForegroundService(new Intent(this,
+                            T1TripRecorderService.class).setAction(
+                                T1TripRecorderService.ACTION_START));
+                        message(status);
+                    }
+                }catch(Exception ex){
+                    T1JourneyStore.cancelPending(this);
+                    message("No se inició: "+ex.getMessage());
+                }
             }).show();
     }
     private void finishClient(){
+        if(T1JourneyStore.pending(this)){
+            T1JourneyStore.cancelPending(this);
+            message("Se canceló el inicio: no había empezado el trayecto.");return;
+        }
         if(!T1JourneyStore.active(this)){message("No hay trayecto activo.");return;}
         new AlertDialog.Builder(this).setTitle("Finalizar trayecto")
             .setMessage("Se guardará como subviaje sin interrumpir la jornada.")
@@ -338,6 +454,103 @@ public final class T1PremiumCockpitActivity extends Activity {
                         " · este mes "+f(m.gridKwh,2)+" kWh comprados ($"+
                         f(m.gridCost,0)+"). Sin doble conteo de recuperación.");
                 }catch(Exception e){message("No se guardó la carga: revisá kWh y precio.");}
+            }).show();
+    }
+    private void updateSoc(){
+        if(socStrategy==null||lastSample==null)return;
+        double goal=T1SocModePolicy.socTarget(lastSample.socTargetInt,
+            lastSample.socTargetFloat);
+        socStrategy.setText("GESTIÓN SOC: "+
+            T1SocModePolicy.name(lastSample.socMode)+
+            "    |    OBJETIVO: "+
+            (Double.isFinite(goal)?f(goal,0)+" %":"SIN DATO")+
+            "    |    SOC ACTUAL: "+
+            (Double.isFinite(lastSample.socDisplay)?
+                f(lastSample.socDisplay,1)+" %":"SIN DATO"));
+    }
+    private void updateAutonomy(){
+        if(autonomyNow==null||lastSample==null)return;
+        SharedPreferences p=getSharedPreferences(RANGE_PREFS,MODE_PRIVATE);
+        double l100=p.getFloat("fuel_l100",(float)T1ExperimentalRange.DEFAULT_L100),
+            fullEv=p.getFloat("full_ev_km",100f);
+        T1ExperimentalRange.Estimate e=T1ExperimentalRange.estimate(
+            lastSample.fuel,lastSample.socDisplay,l100,fullEv);
+        autonomyNow.setText(Double.isFinite(e.totalKm)?
+            "~ "+f(e.totalKm,0)+" km":"SIN ESTIMACIÓN TOTAL");
+        autonomyDetail.setText("Nafta: "+(e.fuelOk?"~ "+f(e.fuelKm,0)+" km":
+            "NO FIABLE / SIN DATO")+"  +  eléctrico: "+
+            (e.electricOk?"~ "+f(e.electricKm,0)+" km":"SIN DATO")+
+            " · cálculo EXPERIMENTAL con "+f(l100,2)+" L/100 km, "+
+            f(fullEv,0)+" km EV a SOC 100 %, reserva 5,3 L. "+
+            "No sustituye la autonomía original Jetour.");
+    }
+    private void adjustAutonomy(){
+        LinearLayout form=col();form.setPadding(25,12,25,5);
+        form.addView(text("Fórmula experimental: "+
+            "km nafta=(litros CI186 − 5,3 L) × 100 / consumo L/100. "+
+            "Km EV=(SOC actual / 100) × alcance EV al 100 %. "+
+            "Total estimado=suma de ambos, supone utilización secuencial.",
+            14,Color.DKGRAY,false));
+        SharedPreferences p=getSharedPreferences(RANGE_PREFS,MODE_PRIVATE);
+        EditText fuel=new EditText(this);
+        fuel.setHint("L/100 km nafta (3 a 20)");
+        fuel.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        fuel.setText(String.format(Locale.ROOT,"%.2f",p.getFloat("fuel_l100",
+            (float)T1ExperimentalRange.DEFAULT_L100)));
+        form.addView(fuel);
+        EditText ev=new EditText(this);
+        ev.setHint("Autonomía EV con SOC 100 % (20 a 180 km)");
+        ev.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        ev.setText(String.format(Locale.ROOT,"%.0f",
+            p.getFloat("full_ev_km",100f)));
+        form.addView(ev);
+        new AlertDialog.Builder(this).setTitle("AUTONOMÍA EXPERIMENTAL")
+            .setView(form).setNegativeButton("CANCELAR",null)
+            .setPositiveButton("GUARDAR",(d,w)->{
+                try{
+                    double l=Double.parseDouble(fuel.getText().toString().replace(",","."));
+                    double e=Double.parseDouble(ev.getText().toString().replace(",","."));
+                    if(!Double.isFinite(l)||l<3||l>20||
+                        !Double.isFinite(e)||e<20||e>180)
+                        throw new IllegalArgumentException("Fuera de rango");
+                    p.edit().putFloat("fuel_l100",(float)l)
+                        .putFloat("full_ev_km",(float)e).apply();
+                    updateAutonomy();
+                    message("Autonomía experimental ajustada. "+
+                        "No modifica los datos del vehículo.");
+                }catch(Exception ex){
+                    message("No se aplicó: verificá consumo de 3–20 L/100 "+
+                        "y autonomía eléctrica de 20–180 km.");
+                }
+            }).show();
+    }
+    private void askHevExperiment(){
+        if(!parked()||lastSample==null||
+           !T1ManualHevPolicy.canRequest(lastSample.gear,
+               lastSample.speed,lastSample.powerMode)){
+            message("Prueba EV→HEV solo con lectura reciente: P, 0 km/h "+
+                "y modo EV o EV MAX. No se envió ningún comando.");
+            return;
+        }
+        if(hevPilot.busy()){message("Ya hay una prueba en curso.");return;}
+        new AlertDialog.Builder(this)
+            .setTitle("EV → HEV · COMANDO EXPERIMENTAL")
+            .setMessage("Solo estando ESTACIONADO en P, freno de "+
+                "estacionamiento y velocidad cero. Se intentará UNA VEZ "+
+                "la orden OEM 1043=2. La escritura no fue validada aún "+
+                "con la ROM de esta Jetour. El sistema volverá a comprobar "+
+                "P, velocidad, EV/EV MAX y la lectura final HEV. "+
+                "No realiza cambios por GPS ni en movimiento. "+
+                "Si hay un rechazo o un estado inesperado, verificá "+
+                "manualmente el modo original del auto.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("PROBAR UNA VEZ",(d,w)->{
+                message("Comprobando dos veces P, velocidad y modo OEM…");
+                if(!hevPilot.request(()->visible,report->ui.post(()->{
+                    if(!isFinishing()&&!isDestroyed()){
+                        message(report);lastTelem=0;updateZone();
+                    }
+                })))message("Prueba ocupada; no se envió otra orden.");
             }).show();
     }
     private boolean parked(){

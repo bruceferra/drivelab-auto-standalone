@@ -84,6 +84,30 @@ jobs:
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ModeZoneStore.java
           grep -q 'T1PremiumCockpitActivity' receiver/src/main/AndroidManifest.xml
+      - name: T1 cockpit client reset, live autonomy, engine and SOC policy (pure JVM)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-cockpit-test
+          javac -encoding UTF-8 -d /tmp/t1-cockpit-test \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripMath.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1JourneyMetrics.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ZonePolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CockpitScope.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PowerFlowPolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocModePolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ExperimentalRange.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ManualHevPolicy.java \
+            receiver/tests/T1CockpitLiveTest.java
+          java -cp /tmp/t1-cockpit-test ar.com.rango5gps.drivelabauto.receiver.T1CockpitLiveTest
+          # Exactly one manual EV→HEV mode target, no GPS or background write.
+          grep -q 'POWER_MODE_ID=1043,HEV=2' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ManualHevPolicy.java
+          grep -q 'checkStopped(b,confirmedMode)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ManualHevExperiment.java
+          grep -q 'd.writeInt(T1ManualHevPolicy.HEV)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ManualHevExperiment.java
+          ! grep -E 'transact\\(15|setInt\\(' \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ModeZoneStore.java
+          grep -q 'LAST_SAMPLE_TIME' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripRecorderService.java
+          grep -q 'T1JourneyStore.fulfillPending' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripRecorderService.java
       - name: Mirror parking R/D policy regression (pure JVM)
         shell: bash
         run: |

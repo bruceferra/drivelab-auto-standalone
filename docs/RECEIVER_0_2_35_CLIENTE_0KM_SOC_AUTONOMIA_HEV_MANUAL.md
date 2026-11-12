@@ -1,0 +1,30 @@
+# Receiver 0.2.35 — cockpit real-time, SOC, autonomía y ensayo manual EV→HEV
+
+Fecha: 11/11/2026. Compatibilidad: Receiver Jetour Android 11, Sender Xiaomi **permanece 0.2.16**. No modifica el firmware ni reemplaza el cluster OEM.
+
+## Incidencia observada por propietario en Receiver 0.2.34
+
+* El velocímetro circular funciona.
+* En el nuevo cockpit aparecían **52,70 km** de la jornada ya terminada `20261111_183400` en el panel principal, confundiéndose con el nuevo trayecto.
+* Al pulsar **INICIAR TRAYECTO** no se veía arrancar desde cero en los indicadores principales; era necesario iniciar antes la jornada, y la cuenta del cliente estaba relegada a texto inferior.
+* El panel mostraba 0,000 L de nafta aunque no se habían recibido aún callbacks 500 m.
+* El usuario confirmó que `1043=3` se muestra correctamente como **EV MAX** cuando activa EV azul desde los controles originales.
+* Requiere además motor ON/OFF y rpm, corriente HV de carga/descarga, modo SOC Smart/Forzado, SOC objetivo y autonomía experimental.
+
+## Cambios implementados
+
+1. **Contador central destacado:** un recuadro grande con distancia y progreso de la **selección actual**; empieza en `0,00 km` para cliente nuevo (diferencia respecto al checkpoint OEM), y crece con muestras nuevas (~cada 3 s). Prioridad de pantalla: CLIENTE > JORNADA > DETENIDO. El trip terminado anterior solo se menciona en el rótulo de histórico, **nunca se muestra como distancia actual**.
+2. **Pulsación cliente intuitiva:** si jornada ya está activa con muestra reciente, crea el checkpoint de ese momento y muestra 0 instantáneamente; si no hay jornada, inicia el mismo servicio foreground de grabación OEM y crea el checkpoint con la primera muestra NUEVA, sin reutilizar 52,70 km previos. Estado `PREPARANDO CLIENTE` muestra 0,00 mientras espera.
+3. **Acumuladores por cliente:** distancia de la muestra OEM integrada menos distancia inicial, conteos y diferencias de sumas crudas de los callbacks `NAFTA_500_m` y `ELÉCTRICO_500_m`. Nafta y energía no se muestran como cantidades físicas hasta recibir al menos un segmento; pone `ESPERANDO` en vez de inventar cero. El costo de nafta es experimental y el eléctrico **no se imputa** hasta medir cargas de red. No modifica CSV histórico ni el TRIP de jornada.
+4. **Diagnóstico de frescura:** cada muestra del grabador guarda `LAST_SAMPLE_TIME`; si no existe o pasaron >15 segundos, se muestra `DATOS OEM SIN ACTUALIZAR` y no se abre checkpoint desde muestra antigua. Protege contra un proceso detenido o grabaciones anteriores.
+5. **Cabecera de instrumentos ampliada:** motor térmico `1035 RPM`: `ENCENDIDO`, `APAGADO` o `SIN LECTURA`; `RPM: NNNN`. Indicador de batería HV con porcentaje SOC 1062 y corriente 1064: `CARGANDO` si corriente negativa, `DESCARGANDO` positiva, `EN REPOSO` cerca de cero, o `SIN LECTURA`. La polaridad de 1064 fue observada en la T1, pero sigue siendo **convención experimental** y no confirma energía de red ni regeneración. Se ocultan lecturas inválidas; nunca suponer 0 rpm o 0 amperios ante fallas del getter.
+6. **SOC Smart/Forzado:** `1040=2` SMART y `1040=4` FORZADO observados en la T1 argentina; objetivo de SOC `1041` si válido, y SOC actual del tablero 1062. Se mantienen separados de `1043` EV / HEV / EV MAX.
+7. **Autonomía total experimental:** visible en la pantalla, expresada como alcance **nafta + eléctrico**, con subtotales. Parámetros iniciales configurables por el usuario: `7,4679 L/100 km` (histórico de dos tanques, `T1TripMath.lPer100()`) y `100 km EV con SOC 100 %` como hipótesis de experiencia. Nafta `max(0, CI186−5,3 L)×100 / L/100 km` (corte térmico OEM observado); eléctrico `SOC_display/100 × autonomía_EV_100%`. Se suma solo para un escenario secuencial que empieza con la batería actual. **NO es autonomía certificada**, cambia con conducción, temperatura, motor, pendientes, climatización, regeneración y variación de precio de red. Los 50 km OEM son promedio híbrido y no se suman directamente como gasolina; si CI186 está en saturación alta (≥60,5 L), la parte de nafta se marca `NO FIABLE` en vez de asignarle precisión ficticia. Botón AJUSTAR para cambiar L/100 km entre 3–20 y 100 % EV entre 20–180 km; preferencias locales, sin escritura OEM.
+8. **Botón EV → HEV experimental/manual:** panel `ZONAS GPS · EV/HEV`, separado del botón de captura read-only. Un ensayo por pulsación, con mensaje y confirmación doble. Solo admite `1043=1 (EV)` o `1043=3 (EV MAX)` y solicita `1043=2 (HEV)`; jamás modifica `1040/1041`, regeneración o AVAS. Comprueba dos veces, leyendo desde Binder OEM, marcha `1033=1` (P), velocidad OEM `0 km/h`, y modo de origen; aborta si Activity no está visible, no hay OEM o no coincide. Transacción 15 `VehicleService`, **una sola**, con nombre del paquete, según contrato observado para ventanillas; se exige confirmación posterior con lectura OEM, no se repite a ciegas. Este setter **NO ha sido probado aún físicamente para 1043 en firmware argentino**. Si el OEM lo rechaza, no se falsea éxito. **Sin reglas GPS ni comandos en movimiento**, no habilita conmutación automática.
+9. **Ensayo físico seguro:** estacionar en P y verificar que el cuadro de la Jetour permita elegir EV/HEV; abrir panel avanzado, confirmar EV actual y lectura 1043, pulsar EV→HEV una vez. Observar el resultado y contrastarlo con el indicador OEM. Si no confirma HEV, no repetir hasta revisar captura. No tocar el control mientras se conduce. La automatización geográfica queda deliberadamente en fase de recomendaciones.
+
+## Pruebas y firma
+
+* Regression JVM: distancia 52,70 de jornada anterior no aparece activa, cliente arranca 0,00, a 320m solo muestra 0,32 y diferencias locales de callbacks, NO convierte ausencia de eventos en consumo cero; pruebas de estados Smart/Forzado, RPM, corriente, autonomía, corte de combustible, zonas y bloqueo EV→HEV en D/velocidad>0.
+* QA Android :sender:assembleDebug :receiver:assembleDebug, permisos y app ID; firma Release con certificado anterior y OTA Sender 0.2.16 intacto.
+* Solo tras QA y firmado puede instalarse sobre Receiver 0.2.34 sin desinstalar.

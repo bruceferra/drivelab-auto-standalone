@@ -23,7 +23,9 @@ import java.util.Map;
 final class T1JourneyStore {
     private static final String PREFS="t1_passenger_journeys";
     private static final String ACTIVE="active",LABEL="label",TIME="start_time",
-        TRIP="trip_id",KM="km",FUEL="fuel",ELEC="electric",N_FUEL="nf",N_ELEC="ne";
+        TRIP="trip_id",KM="km",FUEL="fuel",ELEC="electric",N_FUEL="nf",N_ELEC="ne",
+        PENDING_LABEL="pending_label",PENDING_TIME="pending_time",
+        PENDING_TRIP="pending_trip";
     private static final String CSV_HEADER=
         "id;inicio;fin;etiqueta;trip_id;km_est_oem_velocidad;eventos_nafta;"+
         "nafta_raw;litros_experimentales;eventos_electricidad;electricidad_raw;"+
@@ -74,9 +76,13 @@ final class T1JourneyStore {
     static T1JourneyMetrics.Checkpoint now(Context c) {
         SharedPreferences m=master(c);
         String trip=m.getString(T1TripRecorderService.ID,"");
-        if(!trip.matches("[0-9]{8}_[0-9]{6}")||
-                m.getInt(T1TripRecorderService.SAMPLES,0)<1)
-            throw new IllegalStateException("Primero iniciá JORNADA y esperá una muestra");
+        long lastSample=m.getLong(T1TripRecorderService.LAST_SAMPLE_TIME,0L);
+        long age=System.currentTimeMillis()-lastSample;
+        if(!m.getBoolean(T1TripRecorderService.RUNNING,false)||
+           !trip.matches("[0-9]{8}_[0-9]{6}")||
+           m.getInt(T1TripRecorderService.SAMPLES,0)<1||
+           lastSample<=0||age<0||age>15000)
+            throw new IllegalStateException("Esperando muestra OEM nueva de la jornada");
         return new T1JourneyMetrics.Checkpoint(trip,
             System.currentTimeMillis(),m.getFloat(T1TripRecorderService.DISTANCE,0f),
             m.getFloat(T1TripRecorderService.SEG_FUEL_RAW_SUM,0f),
@@ -86,6 +92,53 @@ final class T1JourneyStore {
     }
     static boolean active(Context c){return p(c).getBoolean(ACTIVE,false);}
     static String activeLabel(Context c){return p(c).getString(LABEL,"");}
+    static boolean pending(Context c){return p(c).contains(PENDING_TIME);}
+    static String pendingLabel(Context c){return p(c).getString(PENDING_LABEL,"");}
+
+    /** A one-tap client may start the master recorder first. The actual client
+     * checkpoint is created by the recorder after its FIRST fresh OEM sample,
+     * never from the previous finished 52.70 km snapshot. */
+    static synchronized String queue(Context c,String label){
+        if(active(c))return "Ya hay un trayecto activo; finalizalo primero.";
+        if(pending(c))return "Iniciando "+pendingLabel(c)+"; esperando telemetría nueva.";
+        SharedPreferences m=master(c);
+        long sampleAge=System.currentTimeMillis()-
+            m.getLong(T1TripRecorderService.LAST_SAMPLE_TIME,0L);
+        boolean fresh=m.getBoolean(T1TripRecorderService.RUNNING,false)&&
+            sampleAge>=0&&sampleAge<=15000;
+        String expected=fresh?m.getString(T1TripRecorderService.ID,""):"";
+        boolean saved=p(c).edit().putString(PENDING_LABEL,cleanLabel(label))
+            .putLong(PENDING_TIME,System.currentTimeMillis())
+            .putString(PENDING_TRIP,expected).commit();
+        return saved?"Preparando trayecto: "+cleanLabel(label)+
+            ". Quedará en 0,00 km cuando llegue la primera muestra nueva.":
+            "Error al preparar trayecto";
+    }
+    private static void clearPending(Context c) {
+        p(c).edit().remove(PENDING_LABEL).remove(PENDING_TIME)
+            .remove(PENDING_TRIP).commit();
+    }
+    static synchronized void cancelPending(Context c){clearPending(c);}
+
+    /** Called inside the foreground recorder after it persisted its sample.
+     * Works even if the user switched to Maps or the original T1 interface. */
+    static synchronized void fulfillPending(Context c){
+        if(!pending(c)||active(c))return;
+        SharedPreferences req=p(c),m=master(c);
+        long age=System.currentTimeMillis()-req.getLong(PENDING_TIME,0L);
+        if(age<0||age>90000){clearPending(c);return;}
+        if(!m.getBoolean(T1TripRecorderService.RUNNING,false)||
+            m.getInt(T1TripRecorderService.SAMPLES,0)<1)return;
+        String expected=req.getString(PENDING_TRIP,"");
+        String current=m.getString(T1TripRecorderService.ID,"");
+        if(!expected.isEmpty()&&!expected.equals(current)){
+            clearPending(c);return;
+        }
+        String label=req.getString(PENDING_LABEL,"Trayecto");
+        // start() is synchronized on the same monitor. Re-entrant is safe.
+        start(c,label);
+        if(active(c))clearPending(c);
+    }
     static synchronized String start(Context c,String label){
         if(active(c))return "Ya hay un trayecto activo; finalizalo primero.";
         if(!master(c).getBoolean(T1TripRecorderService.RUNNING,false))

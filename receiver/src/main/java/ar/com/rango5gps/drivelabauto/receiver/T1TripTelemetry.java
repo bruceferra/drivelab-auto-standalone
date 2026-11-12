@@ -18,14 +18,15 @@ import java.util.concurrent.atomic.AtomicReference;
 final class T1TripTelemetry {
     static final class Sample {
         long timestamp;
-        int gear=-1,recirc=-1,recircChange=-1,fold=-1,motorOn=-1,powerMode=-1;
+        int gear=-1,recirc=-1,recircChange=-1,fold=-1,motorOn=-1,powerMode=-1,
+            socMode=-1,socTargetInt=Integer.MIN_VALUE;
         double speed=Double.NaN,fuel=Double.NaN,rpm=Double.NaN,
             socInternal=Double.NaN,socDisplay=Double.NaN,
             voltage=Double.NaN,current=Double.NaN,
             counter1048=Double.NaN,counter1049=Double.NaN,
             oemElectricRolling50=Double.NaN,oemFuelRolling50=Double.NaN,
             oemElectricAverage500m=Double.NaN,oemFuelAverage500m=Double.NaN,
-            voltageFloat1090=Double.NaN;
+            voltageFloat1090=Double.NaN,socTargetFloat=Double.NaN;
         // Integer.MIN_VALUE means getter failed. -1 is preserved: it can be
         // a *real OEM sentinel* rather than an Android exception.
         int rpmValid1034=-1,oemElectric500mInt=Integer.MIN_VALUE,
@@ -113,6 +114,9 @@ final class T1TripTelemetry {
             withService(VEHICLE_PKG,VEHICLE_CLS,VEHICLE_TOKEN,b->{
                 s.gear=safeInt(()->intValue(b,1033));
                 s.powerMode=safeInt(()->intValue(b,1043)); // read only EV/HEV/EV MAX
+                s.socMode=safeInt(()->intValue(b,1040)); // Smart / Forzado
+                s.socTargetInt=diagnosticInt(()->intValue(b,1041));
+                s.socTargetFloat=safeFloat(()->floatValue(b,1041));
                 // RPM 1035 is an OEM candidate, not a proven motor state.
                 s.rpmValid1034=safeInt(()->intValue(b,1034));
                 s.rpm=safeFloat(()->floatValue(b,1035));
