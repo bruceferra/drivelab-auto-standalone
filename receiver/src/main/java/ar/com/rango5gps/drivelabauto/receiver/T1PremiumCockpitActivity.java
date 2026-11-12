@@ -378,8 +378,28 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             "\nSOLO SUGERENCIA. No hay control automático de EV/HEV, "+
             "SOC ni regeneración; las escrituras OEM aún requieren validación.");
         if(osmBanner!=null&&osmEnabled())
-            osmBanner.setText("OSM OFFLINE · "+road+" · "+suggestion+
-                " · TOCÁ PARA DETALLES");
+            osmBanner.setText(category==T1OptimizedModePolicy.Road.UNKNOWN?
+                "OSM · DESCONOCIDO · "+shortOsmProblem(osmLast.detail)+
+                    " · TOCÁ PARA DIAGNÓSTICO":
+                "OSM OFFLINE · "+road+" · "+suggestion+
+                    " · TOCÁ PARA DETALLES");
+    }
+    private String shortOsmProblem(String detail){
+        if(detail==null)return "SIN CAUSA";
+        String why=detail.toLowerCase(Locale.ROOT);
+        if(why.contains("no instalado"))return "FALTA DESCARGAR MAPA";
+        if(why.contains("instalando")||why.contains("descargando"))
+            return "MAPA DESCARGÁNDOSE";
+        if(why.contains("permiso"))return "FALTA PERMISO GPS";
+        if(why.contains("sin gps")||why.contains("gps reciente")||
+            why.contains("gps desactivado")||why.contains("precisión"))
+            return "REVISAR GPS / PRECISIÓN";
+        if(why.contains("sqlite"))return "ERROR EN MAPA LOCAL";
+        if(why.contains("sin calle")||why.contains("no se encontró"))
+            return "SIN CALLE CERCA";
+        if(why.contains("paralela")||why.contains("ambigua"))
+            return "VÍAS AMBIGUAS";
+        return "VER DETALLES";
     }
     /** Read-only road transition indicator. Stays at top even on scroll.
      * Never intercepts touch, never sends OEM commands, never needs an
@@ -393,6 +413,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         T1OptimizedModePolicy.Road entered=roadTransitionGate.observe(category);
         if(entered==null)return;
         String label=T1RoadTransitionGate.popupText(entered);
+        if(entered==T1OptimizedModePolicy.Road.UNKNOWN)
+            label+=" · "+shortOsmProblem(observed.detail);
         roadTransitionPopup.animate().cancel();
         ui.removeCallbacks(hideRoadTransitionPopup);
         roadTransitionPopup.setText(label);
@@ -427,11 +449,23 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         osmStatus.setText("OSM offline · buscando GPS reciente; sin red.");
         if(osmBanner!=null&&osmEnabled())
             osmBanner.setText("OSM OFFLINE · localizando y clasificando vía…");
-        // Older code used cached GPS up to 120 s, but Overpass refuses
-        // GPS older than 25 s, thus it silently returned UNKNOWN.
-        if(loc!=null&&loc.hasAccuracy()&&loc.getAccuracy()<=35f&&
+        if(!T1OfflineRoadMap.installed(this)){
+            osmReading.set(false);
+            osmLast=new T1OsmRoadAdvisor.Result(
+                T1OsmRoadAdvisor.Road.UNKNOWN,"","",Double.NaN,
+                mapDownloading.get()?"Mapa offline descargándose; "+
+                    "se clasificará al terminar.":
+                    "Mapa offline no instalado en Receiver. "+
+                    "Entrá a ZONAS / DIAGNÓSTICOS y descargá PBA+CABA. "+
+                    "La copia privada de Uber Driver no es accesible desde esta app.");
+            showOsmResult();
+            showRoadTransitionIfChanged(osmLast);
+            return;
+        }
+        // Match offline-map tolerance, not the old 35m Overpass restriction.
+        if(loc!=null&&loc.hasAccuracy()&&loc.getAccuracy()<=65f&&
             android.os.SystemClock.elapsedRealtimeNanos()-
-                loc.getElapsedRealtimeNanos()<=35000000000L){
+                loc.getElapsedRealtimeNanos()<=45000000000L){
             runOsmQuery(loc);return;
         }
         if(checkSelfPermission(android.Manifest.permission.ACCESS_FINE_LOCATION)!=
@@ -501,6 +535,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     }
     private void updateOfflineMap(boolean manual){
         if(!manual&&!T1OfflineRoadMap.checkDue(this))return;
+        if(!manual&&!T1OfflineRoadMap.automaticRetryAllowed(this))return;
         if(!mapDownloading.compareAndSet(false,true))return;
         if(!manual&&android.os.Build.VERSION.SDK_INT>=23){
             android.net.ConnectivityManager cm=(android.net.ConnectivityManager)
@@ -510,6 +545,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 return; // No large automatic download on cellular data.
             }
         }
+        if(!manual)T1OfflineRoadMap.markAutoAttempt(this);
         if(offlineMapStatus!=null)offlineMapStatus.setText(
             "MAPA · consultando manifiesto de DriveLab Uber…");
         new Thread(()->{
@@ -681,8 +717,19 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         osmBanner.setSingleLine(true);
         osmBanner.setEllipsize(android.text.TextUtils.TruncateAt.END);
         osmBanner.setOnClickListener(v->{
-            advanced.setVisibility(android.view.View.VISIBLE);
-            lookupOsm(true);
+            String detail=osmLast==null?"Todavía no hay lectura del GPS.":
+                osmLast.explain();
+            new AlertDialog.Builder(this)
+                .setTitle("DIAGNÓSTICO · OSM OFFLINE")
+                .setMessage(T1OfflineRoadMap.status(this)+"\n\n"+
+                    "Asesor: "+(osmEnabled()?"ACTIVADO":"DESACTIVADO")+
+                    "\n"+detail+"\n\n"+
+                    "Si falta el mapa, descargalo por Wi-Fi desde el "+
+                    "servidor DriveLab. No se envían coordenadas.")
+                .setNegativeButton("CERRAR",null)
+                .setNeutralButton("REVISAR GPS",(d,w)->lookupOsm(true))
+                .setPositiveButton("DESCARGAR MAPA",(d,w)->updateOfflineMap(true))
+                .show();
         });
         root.addView(osmBanner);
         osmBanner.setVisibility(osmEnabled()?
