@@ -80,7 +80,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private final Runnable hideRoadTransitionPopup=()->{
         if(roadTransitionPopup!=null){
             roadTransitionPopup.animate().cancel();
-            roadTransitionPopup.animate().alpha(0f).setDuration(360L)
+            roadTransitionPopup.animate().alpha(0f).setDuration(200L)
                 .withEndAction(()->{
                     if(roadTransitionPopup!=null)
                         roadTransitionPopup.setVisibility(android.view.View.GONE);
@@ -413,8 +413,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         T1OptimizedModePolicy.Road entered=roadTransitionGate.observe(category);
         if(entered==null)return;
         String label=T1RoadTransitionGate.popupText(entered);
-        if(entered==T1OptimizedModePolicy.Road.UNKNOWN)
-            label+=" · "+shortOsmProblem(observed.detail);
+        // Short labels only; detailed UNKNOWN reasons stay available on
+        // tapping the diagnostic OSM banner, not in the temporary popup.
         roadTransitionPopup.animate().cancel();
         ui.removeCallbacks(hideRoadTransitionPopup);
         roadTransitionPopup.setText(label);
@@ -427,7 +427,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         roadTransitionPopup.setVisibility(android.view.View.VISIBLE);
         roadTransitionPopup.bringToFront();
         roadTransitionPopup.announceForAccessibility(label);
-        ui.postDelayed(hideRoadTransitionPopup,4500L);
+        ui.postDelayed(hideRoadTransitionPopup,1700L);
     }
     private void openWhatIf(){
         startActivity(new Intent(this,T1WhatIfActivity.class));
@@ -1077,7 +1077,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         // voice-assistant clearance strip owned by T1ImmersiveActivity.
         FrameLayout cockpitFrame=new FrameLayout(this);
         cockpitFrame.addView(scroll,new FrameLayout.LayoutParams(-1,-1));
-        roadTransitionPopup=text("ENTRANDO A CIUDAD",26,WHITE,true);
+        roadTransitionPopup=text("CIUDAD",26,WHITE,true);
         roadTransitionPopup.setGravity(Gravity.CENTER);
         int pad=Math.round(13*getResources().getDisplayMetrics().density);
         roadTransitionPopup.setPadding(pad,pad,pad,pad);
