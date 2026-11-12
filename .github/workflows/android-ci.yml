@@ -129,6 +129,15 @@ jobs:
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
           grep -q 'CAPTURA B · DESPUÉS' \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
+          # The 12V probe only reads IALCar properties from our fixed catalog.
+          ! grep -E 'transact\\(15|setInt\\(|writeProperty|setProperty' \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1Aux12vReadOnlyProbe.java
+          grep -q 'b.transact(2,data,reply,0)' \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1Aux12vReadOnlyProbe.java
+          grep -q 'b.transact(9,data,reply,0)' \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1Aux12vReadOnlyProbe.java
+          grep -q 'LEER 12 V' \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
       - name: Mirror parking R/D policy regression (pure JVM)
         shell: bash
         run: |
