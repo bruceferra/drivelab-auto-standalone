@@ -391,18 +391,23 @@ public final class T1PremiumCockpitActivity extends Activity {
                     message("Ya hay un trayecto activo o preparándose.");return;
                 }
                 try{
-                    String status=T1JourneyStore.queue(this,name.getText().toString());
                     SharedPreferences p=getSharedPreferences(
                         T1TripRecorderService.PREFS,MODE_PRIVATE);
                     long age=System.currentTimeMillis()-
                         p.getLong(T1TripRecorderService.LAST_SAMPLE_TIME,0L);
-                    if(!p.getBoolean(T1TripRecorderService.RUNNING,false)||
-                        age<0||age>30000){
+                    boolean live=p.getBoolean(T1TripRecorderService.RUNNING,false)
+                        &&age>=0&&age<=15000;
+                    if(live){
+                        // Immediate checkpoint; do not reset the all-day trip.
+                        message(T1JourneyStore.start(this,name.getText().toString()));
+                    }else{
+                        String status=T1JourneyStore.queue(this,
+                            name.getText().toString());
                         startForegroundService(new Intent(this,
                             T1TripRecorderService.class).setAction(
                                 T1TripRecorderService.ACTION_START));
+                        message(status);
                     }
-                    message(status);
                 }catch(Exception ex){
                     T1JourneyStore.cancelPending(this);
                     message("No se inició: "+ex.getMessage());
