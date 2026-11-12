@@ -52,7 +52,10 @@ final class T1JourneyStore2 {
     static final class Entry {
         final String id,label,tripId;
         final long started,ended;
-        final double km,liters,electricNet,fuelCost;
+        double km;
+        final double originalKm,liters,electricNet,fuelCost;
+        boolean correctedKm=false;
+        String distanceAudit="";
         double evKm=Double.NaN,iceKm=Double.NaN,unknownKm=Double.NaN;
         final int fuelEvents,electricEvents;
         Entry(String id,long started,long ended,String label,String tripId,
@@ -60,6 +63,7 @@ final class T1JourneyStore2 {
               double electricNet,double fuelCost){
             this.id=id;this.started=started;this.ended=ended;
             this.label=label;this.tripId=tripId;this.km=km;
+            this.originalKm=km;
             this.fuelEvents=fuelEvents;this.electricEvents=electricEvents;
             this.liters=liters;this.electricNet=electricNet;this.fuelCost=fuelCost;
         }
@@ -526,6 +530,8 @@ final class T1JourneyStore2 {
     }
     static ArrayList<Entry> history(Context c) {
         ArrayList<Entry> out=new ArrayList<>();
+        Map<String,T1HistoricalDistanceRepair.Entry> repairs=
+            T1HistoricalDistanceRepair.load(T1TripRecorderService.tripDir(c));
         // Historical V1 clients predate RPM 1035 distance split; they stay
         // unknown rather than being labelled zero-electric.
         Map<String,double[]> drive=new LinkedHashMap<>();
@@ -555,6 +561,15 @@ final class T1JourneyStore2 {
                 double[] mode=drive.get(e.id);
                 if(mode!=null){
                     e.evKm=mode[0];e.iceKm=mode[1];e.unknownKm=mode[2];
+                }
+                T1HistoricalDistanceRepair.Entry fix=repairs.get("2:"+e.id);
+                if(T1HistoricalDistanceRepair.matches(fix,e.started,e.ended,
+                        e.originalKm)){
+                    e.km=fix.km;
+                    e.evKm=fix.evKm;e.iceKm=fix.iceKm;
+                    e.unknownKm=fix.unknownKm;
+                    e.correctedKm=true;
+                    e.distanceAudit="OEM "+T1HistoricalDistanceRepair.METHOD;
                 }
                 dedup.put(f[0],e);
             }
