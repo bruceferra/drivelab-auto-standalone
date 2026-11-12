@@ -42,6 +42,10 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         dayNow,monthNow,historyNow,zoneStatus,feedback,energyNote,
         scopeTitle,scopeProgress,socStrategy,autonomyNow,autonomyDetail;
     private LinearLayout advanced;
+    private TextView rearBeltStatus;
+    private T1RearSeatBeltProbe rearBeltProbe;
+    private T1RearSeatBeltProbe.Snapshot rearBeltBefore;
+    private String rearBeltReport="";
     private TextView hevStatus,lightStatus,aux12vStatus,rearSeatStatus,
         tempEngine,tempBattery,electricMotorStatus,electricMotorRpm;
     private T1ManualHevExperiment hevPilot;
@@ -57,6 +61,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private final AtomicBoolean lightReading=new AtomicBoolean(false),
         aux12vReading=new AtomicBoolean(false),
         seatReading=new AtomicBoolean(false),
+        beltReading=new AtomicBoolean(false),
         thermalReading=new AtomicBoolean(false);
     private long lastThermalAttempt=0;
     private static final String RANGE_PREFS="t1_cockpit_range_settings";
@@ -103,6 +108,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         hevPilot=new T1ManualHevExperiment(this);
         lightProbe=new T1CabinLightReadOnlyProbe(this);
         seatProbe=new T1RearSeatLightsProbe(this);
+        rearBeltProbe=new T1RearSeatBeltProbe(this);
         thermalProbe=new T1ThermalMotorProbe(this);
         aux12vProbe=new T1Aux12vReadOnlyProbe(this);
         draw();
@@ -364,6 +370,32 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         rearSeatStatus=text("Sin comparación por asiento todavía.",
             14,WHITE,false);
         advanced.addView(rearSeatStatus);
+        heading(advanced,"CINTURONES TRASEROS · ESTADO Y AVISO OEM");
+        advanced.addView(text("Nueva prueba SOLO LECTURA: cinturones "+
+            "segunda fila izquierdo, central y derecho; sensor de ocupación "+
+            "por asiento, y señal de aviso. Con el vehículo en P, sin "+
+            "pasajeros en movimiento: capturá A con cinturones sueltos, "+
+            "abrochá uno y capturá B. Repetí por asiento.",13,MUTED,false));
+        LinearLayout beltButtons=row();advanced.addView(beltButtons);
+        button(beltButtons,"CINTURONES A · SUELTOS",BLUE,
+            ()->captureRearBelts(false));
+        button(beltButtons,"CINTURONES B · ABROCHADO",TEAL,
+            ()->captureRearBelts(true));
+        LinearLayout beltCopy=row();advanced.addView(beltCopy);
+        button(beltCopy,"COPIAR INFORME CINTURONES",BLUE,()->{
+            if(rearBeltReport.isEmpty()){
+                rearBeltStatus.setText("Primero completá las capturas A y B.");
+                return;
+            }
+            ClipboardManager clipboard=(ClipboardManager)
+                getSystemService(CLIPBOARD_SERVICE);
+            if(clipboard!=null)clipboard.setPrimaryClip(
+                ClipData.newPlainText("T1 cinturones traseros",rearBeltReport));
+            rearBeltStatus.setText("Informe de cinturones copiado.");
+        });
+        rearBeltStatus=text("Sin comparación de cinturones todavía.",
+            14,WHITE,false);
+        advanced.addView(rearBeltStatus);
         LinearLayout extra=row();root.addView(extra);
         button(extra,"TABLERO TÉCNICO / CSV",BLUE,()->startActivity(
             new Intent(this,T1TankDashboardActivity.class)));
@@ -792,6 +824,39 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 }
             });
         },"T1-Thermal-Motor-ReadOnly").start();
+    }
+    private void captureRearBelts(boolean after){
+        if(!parked()){
+            rearBeltStatus.setText("Estacioná en P y velocidad cero. "+
+                "Esta prueba nunca desactiva alertas ni abrocha cinturones.");
+            return;
+        }
+        if(after&&rearBeltBefore==null){
+            rearBeltStatus.setText("Primero hacé CINTURONES A · SUELTOS.");
+            return;
+        }
+        if(!beltReading.compareAndSet(false,true))return;
+        rearBeltStatus.setText("Leyendo cinturones OEM y ocupación "+
+            "por asiento, sin escrituras…");
+        new Thread(()->{
+            T1RearSeatBeltProbe.Snapshot snap=rearBeltProbe.read();
+            ui.post(()->{
+                beltReading.set(false);
+                if(isFinishing()||isDestroyed())return;
+                if(!after){
+                    rearBeltBefore=snap;
+                    rearBeltReport="CAPTURA A:\n"+snap.format();
+                    rearBeltStatus.setText("CAPTURA A guardada. Con el auto "+
+                        "en P, abrochá el cinturón trasero a investigar "+
+                        "y tocá CINTURONES B · ABROCHADO.");
+                }else{
+                    rearBeltReport=T1RearSeatBeltProbe.Snapshot.compare(
+                        rearBeltBefore,snap);
+                    rearBeltBefore=null;
+                    rearBeltStatus.setText(rearBeltReport);
+                }
+            });
+        },"T1-Rear-Belts-ReadOnly").start();
     }
     private void captureRearSeats(boolean after){
         if(!parked()){
