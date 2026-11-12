@@ -15,11 +15,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Explicit manual ON/OFF requests for OEM pedestrian-warning setting 2074.
- * No boot receiver, no background automation and no writes on startup.
- * ON is idempotent and never blocked by a vehicle speed/gear precheck;
- * OEM still decides whether to accept the command.
- * OFF requires verified stationarity and gear; no automatic deactivation.
+ * One-tap MANUAL control for OEM 2074 pedestrian acoustic alert.
+ * This class never runs on startup/background or issues automatic writes.
+ * The user-requested toggle reads current OEM state, requests the opposite
+ * state once, then verifies the readback. Any OEM-side refusal is respected.
+ * No fabricated application-side P/0 km/h interlock or 12s cooldown.
  */
 public final class PedestrianAlertControl {
     public interface Callback{void done(Result result);}
@@ -35,7 +35,7 @@ public final class PedestrianAlertControl {
                 " después="+(after==null?"?":after);
         }
     }
-    private static final int ID=2074,ON=1,OFF=0,COOLDOWN_MS=1200;
+    private static final int ID=2074,ON=1,OFF=0,COOLDOWN_MS=350;
     private static final String PKG="com.autolink.app.vehicleservice";
     private static final String CLS="com.autolink.app.vehicleservice.VehicleService";
     private static final String TOKEN="com.autolink.app.vehicleservice.IVehicleControl";
@@ -51,12 +51,13 @@ public final class PedestrianAlertControl {
         long t=lastAttemptAt;
         return t!=0&&SystemClock.elapsedRealtime()-t<COOLDOWN_MS;
     }
-    /** A tap requests a SPECIFIC state, never an ambiguous toggle.
-     * Activation is safe to request regardless of speed; deactivation is
-     * never sent in motion or with unknown vehicle conditions. */
-    public boolean request(boolean enabled,Callback callback){
-        if(!foreground||coolingDown()||!busy.compareAndSet(false,true))return false;
-        final int command=enabled?ON:OFF;
+    /** Explicit on-screen manual tap; never automatic or a persistent guard.
+     * No gear/speed reads are required for the manual OEM setting.
+     * The vehicle's original control service remains final authority.
+     */
+    public boolean toggle(Callback callback){
+        if(!foreground||coolingDown()||!busy.compareAndSet(false,true))
+            return false;
         new Thread(()->{
             Integer before=null,after=null;
             boolean written=false,bound=false;
@@ -70,48 +71,48 @@ public final class PedestrianAlertControl {
                         ref.set(b);latch.countDown();
                     }
                     @Override public void onServiceDisconnected(ComponentName c){}
-                    @Override public void onNullBinding(ComponentName c){latch.countDown();}
+                    @Override public void onNullBinding(ComponentName c){
+                        latch.countDown();
+                    }
                     @Override public void onBindingDied(ComponentName c){}
                 };
                 bound=app.bindService(new Intent().setComponent(
                     new ComponentName(PKG,CLS)),connection,0);
                 if(!bound||!latch.await(4,TimeUnit.SECONDS))
-                    throw new IllegalStateException("Servicio OEM no disponible");
+                    throw new IllegalStateException(
+                        "Servicio OEM no disponible");
                 IBinder b=ref.get();
                 if(b==null||!TOKEN.equals(b.getInterfaceDescriptor()))
                     throw new SecurityException("Interfaz OEM inesperada");
                 before=read(b);
                 if(before==null)
-                    throw new IllegalStateException("Lectura 2074 no es 0 ni 1");
+                    throw new IllegalStateException(
+                        "No se pudo leer 2074 (estado ON/OFF)");
                 if(!foreground)
-                    throw new IllegalStateException("La pantalla de control ya no está activa");
-                // If state already matches, don't issue an unnecessary OEM write.
-                if(before==command){
-                    after=before;
-                    status=command==ON?"Alerta YA ACTIVADA · OEM confirmado":
-                        "Alerta YA DESACTIVADA · OEM confirmado";
-                }else{
-                    // The OEM setter may reject ON depending on vehicle state;
-                    // do not preemptively require P/0 km/h when enabling.
-                    if(command==OFF)verifySafeToDisable(b);
-                    lastAttemptAt=SystemClock.elapsedRealtime();
+                    throw new IllegalStateException(
+                        "Pantalla de control no activa");
+                int requested=before==ON?OFF:ON;
+                lastAttemptAt=SystemClock.elapsedRealtime();
                 Parcel data=Parcel.obtain(),reply=Parcel.obtain();
                 try{
                     data.writeInterfaceToken(TOKEN);
-                    data.writeInt(ID);data.writeInt(command);
+                    data.writeInt(ID);data.writeInt(requested);
                     data.writeString(app.getPackageName());
                     if(!b.transact(15,data,reply,0))
-                        throw new IllegalStateException("Comando rechazado por OEM");
+                        throw new IllegalStateException(
+                            "Servicio OEM rechazó la orden");
                     reply.readException();
                     written=true;
-                }finally{data.recycle();reply.recycle();}
-                    SystemClock.sleep(350);
-                    after=read(b);
-                    status=(after!=null&&after==command?
-                        "Alerta "+(after==ON?"ACTIVADA":"DESACTIVADA")+
-                        " · lectura OEM confirmada":
-                        "Orden enviada; estado final NO confirmado");
+                }finally{
+                    data.recycle();reply.recycle();
                 }
+                // Short readback, no 12-second artificial waiting.
+                SystemClock.sleep(180);
+                after=read(b);
+                status=after!=null&&after==requested?
+                    "Alerta peatonal "+(after==ON?"ACTIVADA":"DESACTIVADA")+
+                        " · OEM confirmado":
+                    "Orden enviada, cambio de estado 2074 no confirmado";
             }catch(Exception e){
                 status=(written?"Orden enviada; ":"SIN ORDEN · ")+
                     e.getClass().getSimpleName()+": "+e.getMessage();
@@ -122,46 +123,8 @@ public final class PedestrianAlertControl {
                 Result result=new Result(before,after,written,status);
                 main.post(()->callback.done(result));
             }
-        },"T1-Pedestrian-Manual-"+(enabled?"ON":"OFF")).start();
+        },"T1-Pedestrian-ManualToggle").start();
         return true;
-    }
-    private static void verifySafeToDisable(IBinder b)throws Exception{
-        int gear=readInt(b,1033);
-        if(gear<1||gear>4)
-            throw new IllegalStateException("Marcha desconocida: "+gear);
-        double speed;
-        try{
-            float f=readFloat(b,2148);
-            if(!Float.isFinite(f)||f<0||f>300)
-                throw new IllegalStateException("Velocidad float inválida");
-            speed=f;
-        }catch(Exception ex){speed=readInt(b,1089);}
-        if(!Double.isFinite(speed)||speed<0||speed>250)
-            throw new IllegalStateException("Velocidad inválida: "+speed);
-        if(speed>0.5)
-            throw new IllegalStateException("NO se desactiva el aviso "+
-                "de peatones en movimiento (velocidad OEM="+speed+
-                " km/h). Para apagarlo: detener el vehículo.");
-    }
-    private static int readInt(IBinder b,int id)throws Exception{
-        if(id!=1033&&id!=1089)throw new SecurityException("Lectura no autorizada");
-        Parcel data=Parcel.obtain(),reply=Parcel.obtain();
-        try{
-            data.writeInterfaceToken(TOKEN);
-            data.writeInt(id);
-            if(!b.transact(5,data,reply,0))throw new IllegalStateException("Getter int rechazado");
-            reply.readException();return reply.readInt();
-        }finally{data.recycle();reply.recycle();}
-    }
-    private static float readFloat(IBinder b,int id)throws Exception{
-        if(id!=2148)throw new SecurityException("Lectura no autorizada");
-        Parcel data=Parcel.obtain(),reply=Parcel.obtain();
-        try{
-            data.writeInterfaceToken(TOKEN);
-            data.writeInt(id);
-            if(!b.transact(6,data,reply,0))throw new IllegalStateException("Getter float rechazado");
-            reply.readException();return reply.readFloat();
-        }finally{data.recycle();reply.recycle();}
     }
     private static Integer read(IBinder b){
         Parcel data=Parcel.obtain(),reply=Parcel.obtain();
