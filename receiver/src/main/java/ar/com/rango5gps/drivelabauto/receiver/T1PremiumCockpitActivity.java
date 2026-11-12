@@ -42,14 +42,23 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         dayNow,monthNow,historyNow,zoneStatus,feedback,energyNote,
         scopeTitle,scopeProgress,socStrategy,autonomyNow,autonomyDetail;
     private LinearLayout advanced;
-    private TextView hevStatus,lightStatus,aux12vStatus;
+    private TextView hevStatus,lightStatus,aux12vStatus,rearSeatStatus,
+        tempEngine,tempBattery,electricMotorStatus,electricMotorRpm;
     private T1ManualHevExperiment hevPilot;
     private T1CabinLightReadOnlyProbe lightProbe;
     private T1CabinLightReadOnlyProbe.Snapshot lightBefore;
+    private T1RearSeatLightsProbe seatProbe;
+    private T1RearSeatLightsProbe.Snapshot seatBefore;
+    private String seatReport="";
+    private T1ThermalMotorProbe thermalProbe;
+    private T1ThermalMotorProbe.Snapshot lastThermal;
     private T1Aux12vReadOnlyProbe aux12vProbe;
     private String aux12vReport="";
     private final AtomicBoolean lightReading=new AtomicBoolean(false),
-        aux12vReading=new AtomicBoolean(false);
+        aux12vReading=new AtomicBoolean(false),
+        seatReading=new AtomicBoolean(false),
+        thermalReading=new AtomicBoolean(false);
+    private long lastThermalAttempt=0;
     private static final String RANGE_PREFS="t1_cockpit_range_settings";
     // Jetour voice assistant remains floating above the upper-left corner.
     // Keep the permanent empty strip the same dark color as the cockpit.
@@ -58,7 +67,11 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         @Override public void run(){
             if(!visible)return;
             updateStats();
-            if(System.currentTimeMillis()-lastTelem>3800&&
+            if(System.currentTimeMillis()-lastThermalAttempt>12000){
+            lastThermalAttempt=System.currentTimeMillis();
+            readThermal(false);
+        }
+        if(System.currentTimeMillis()-lastTelem>3800&&
                 reading.compareAndSet(false,true)){
                 lastTelem=System.currentTimeMillis();
                 new Thread(()->{
@@ -89,6 +102,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         super.onCreate(b);
         hevPilot=new T1ManualHevExperiment(this);
         lightProbe=new T1CabinLightReadOnlyProbe(this);
+        seatProbe=new T1RearSeatLightsProbe(this);
+        thermalProbe=new T1ThermalMotorProbe(this);
         aux12vProbe=new T1Aux12vReadOnlyProbe(this);
         draw();
     }
@@ -142,7 +157,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         LinearLayout top=row();top.setGravity(Gravity.CENTER_VERTICAL);root.addView(top);
         LinearLayout title=col();
         title.addView(text("DRIVELAB  /  JETOUR T1",22,WHITE,true));
-        title.addView(text("COCKPIT · v0.2.38 · telemetría OEM",13,MUTED,false));
+        title.addView(text("COCKPIT · v0.2.39 · telemetría OEM",13,MUTED,false));
         top.addView(title,new LinearLayout.LayoutParams(0,-2,1));
         Button systemBars=new Button(this);
         systemBars.setText(T1ImmersiveMode.enabled(this)?"MOSTRAR BARRAS":"PANTALLA COMPLETA");
@@ -166,6 +181,24 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         gauge=new T1PremiumInstrumentView(this);
         LinearLayout.LayoutParams meterParams=new LinearLayout.LayoutParams(-1,-2);
         meterParams.setMargins(0,6,0,8);root.addView(gauge,meterParams);
+        LinearLayout powertrain=row();root.addView(powertrain);
+        tempEngine=metric(tile(powertrain,CARD),
+            "REFRIGERANTE MOTOR · °C","SIN LECTURA");
+        tempBattery=metric(tile(powertrain,CARD),
+            "TEMP. BATERÍA HV · OEM","SIN LECTURA");
+        LinearLayout electricTile=tile(powertrain,CARD);
+        electricTile.addView(text("MOTOR ELÉCTRICO",13,MUTED,false));
+        electricMotorStatus=text("ESTADO SIN VALIDAR",20,GOLD,true);
+        electricTile.addView(electricMotorStatus);
+        electricMotorRpm=text("RPM: SIN LECTURA",14,WHITE,false);
+        electricTile.addView(electricMotorRpm);
+        LinearLayout thermalRow=row();root.addView(thermalRow);
+        button(thermalRow,"TEMPERATURAS / MOTOR · VER CÓDIGOS",BLUE,
+            ()->readThermal(true));
+        root.addView(text("Refrigerante OEM estándar en °C; batería "+
+            "muestra valor crudo hasta calibrar. No hay ID de RPM "+
+            "del motor eléctrico confirmado: no se infiere ON/OFF "+
+            "de EV o velocidad.",12,MUTED,false));
         socStrategy=text("GESTIÓN SOC: SIN LECTURA · OBJETIVO: SIN DATO",
             17,WHITE,true);root.addView(socStrategy);
         LinearLayout scope=col();
@@ -305,6 +338,32 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             "El resultado aparece acá; no hay comandos de iluminación habilitados.",
             13,WHITE,false);
         advanced.addView(lightStatus);
+        heading(advanced,"LUCES DE LECTURA · SEGUNDA FILA POR ASIENTO");
+        advanced.addView(text("NUEVA PRUEBA: área 16 izquierda / 32 centro / "+
+            "64 derecha. Consultamos 356519683 (estado) y 356519684 "+
+            "(interruptor) por asiento. SOLO LECTURA, sin encenderlas "+
+            "por software. Primero APAGADAS; después ENCENDIDAS "+
+            "con el botón original.",13,MUTED,false));
+        LinearLayout seatButtons=row();advanced.addView(seatButtons);
+        button(seatButtons,"ASIENTOS A · APAGADAS",BLUE,
+            ()->captureRearSeats(false));
+        button(seatButtons,"ASIENTOS B · ENCENDIDAS",TEAL,
+            ()->captureRearSeats(true));
+        LinearLayout seatCopy=row();advanced.addView(seatCopy);
+        button(seatCopy,"COPIAR INFORME ASIENTOS",BLUE,()->{
+            if(seatReport.isEmpty()){
+                rearSeatStatus.setText("Primero completá A y B.");return;
+            }
+            ClipboardManager clipboard=(ClipboardManager)
+                getSystemService(CLIPBOARD_SERVICE);
+            if(clipboard!=null)clipboard.setPrimaryClip(
+                ClipData.newPlainText("Jetour T1 luces lectura por asiento",seatReport));
+            rearSeatStatus.setText("Informe de luces por asiento copiado. "+
+                "Pegalo en el chat para mapear el control OEM.");
+        });
+        rearSeatStatus=text("Sin comparación por asiento todavía.",
+            14,WHITE,false);
+        advanced.addView(rearSeatStatus);
         LinearLayout extra=row();root.addView(extra);
         button(extra,"TABLERO TÉCNICO / CSV",BLUE,()->startActivity(
             new Intent(this,T1TankDashboardActivity.class)));
@@ -702,6 +761,69 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 hevStatus.setText("Informe copiado. No contiene "+
                     "coordenadas ni datos personales.");
             }).show();
+    }
+    private void readThermal(boolean showDetails){
+        if(!visible||!thermalReading.compareAndSet(false,true))return;
+        new Thread(()->{
+            T1ThermalMotorProbe.Snapshot result=thermalProbe.read();
+            ui.post(()->{
+                thermalReading.set(false);
+                if(!visible||isFinishing()||isDestroyed())return;
+                lastThermal=result;
+                tempEngine.setText(Double.isFinite(result.engineCoolantC)?
+                    f(result.engineCoolantC,1)+" °C":"SIN LECTURA");
+                tempBattery.setText(result.batteryTempRaw);
+                // No supported motor-electric RPM or confirmed ON/OFF signal.
+                electricMotorStatus.setText("ESTADO SIN VALIDAR");
+                electricMotorRpm.setText("RPM: SIN LECTURA");
+                if(showDetails){
+                    String report=result.report();
+                    new AlertDialog.Builder(this)
+                        .setTitle("Temperaturas y motor · lecturas OEM")
+                        .setMessage(report)
+                        .setNegativeButton("CERRAR",null)
+                        .setPositiveButton("COPIAR",(d,w)->{
+                            ClipboardManager clipboard=(ClipboardManager)
+                                getSystemService(CLIPBOARD_SERVICE);
+                            if(clipboard!=null)clipboard.setPrimaryClip(
+                                ClipData.newPlainText(
+                                    "Jetour T1 temperaturas y motor",report));
+                        }).show();
+                }
+            });
+        },"T1-Thermal-Motor-ReadOnly").start();
+    }
+    private void captureRearSeats(boolean after){
+        if(!parked()){
+            rearSeatStatus.setText("Esta prueba requiere P, velocidad cero "+
+                "y lectura OEM reciente. Sin escrituras.");
+            return;
+        }
+        if(after&&seatBefore==null){
+            rearSeatStatus.setText("Primero capturá A con luces traseras APAGADAS.");
+            return;
+        }
+        if(!seatReading.compareAndSet(false,true))return;
+        rearSeatStatus.setText("Consultando estado e interruptores OEM "+
+            "por área de asiento · SOLO LECTURA…");
+        new Thread(()->{
+            T1RearSeatLightsProbe.Snapshot snap=seatProbe.read();
+            ui.post(()->{
+                seatReading.set(false);
+                if(isFinishing()||isDestroyed())return;
+                if(!after){
+                    seatBefore=snap;
+                    seatReport="CAPTURA A:\n"+snap.summary();
+                    rearSeatStatus.setText("CAPTURA A guardada. Ahora "+
+                        "encendé las luces traseras con el interruptor original "+
+                        "y tocá ASIENTOS B · ENCENDIDAS.");
+                }else{
+                    seatReport=T1RearSeatLightsProbe.Snapshot.compare(seatBefore,snap);
+                    seatBefore=null;
+                    rearSeatStatus.setText(seatReport);
+                }
+            });
+        },"T1-Rear-Seats-ReadOnly").start();
     }
     private void captureLights(boolean after){
         if(!parked()){
