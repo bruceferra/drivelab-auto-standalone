@@ -989,34 +989,72 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         }catch(Exception ex){message("No se inició: "+ex.getClass().getSimpleName());}
     }
     private void pauseDay(){
+        // Never disable this button just because another slot is active.
+        // Both independent client checkpoints must be paused BEFORE the
+        // shared OEM recorder is stopped, otherwise the deltas could span
+        // an unmeasured interval.
         if(T1JourneyStore.active(this)&&!T1JourneyStore.paused(this)){
-            message("Pausá primero el cliente; la jornada sigue activa.");return;
+            String result=T1JourneyStore.pause(this);
+            if(!T1JourneyStore.paused(this)){message("Viaje 1: "+result);return;}
+        }
+        if(T1JourneyStore2.active(this)&&!T1JourneyStore2.paused(this)){
+            String result=T1JourneyStore2.pause(this);
+            if(!T1JourneyStore2.paused(this)){message("Viaje 2: "+result);return;}
         }
         try{
             startService(new Intent(this,T1TripRecorderService.class)
                 .setAction(T1TripRecorderService.ACTION_PAUSE));
-            message("PAUSANDO JORNADA · conserva el mismo CSV y los kilómetros.");
+            message("VIAJE TOTAL PAUSADO · Viaje 1/2 abiertos en pausa. "+
+                "Reanudá sus contadores por separado al reanudar Jornada.");
         }catch(Exception ex){message("No se pausó: "+ex.getClass().getSimpleName());}
     }
     private void pauseClient(){
         if(!T1JourneyStore.active(this)){
-            message("No hay cliente activo.");return;
+            message("No hay Viaje 1 activo.");return;
         }
         message(T1JourneyStore.pause(this));
     }
-    private void endDay(){
-        if(T1JourneyStore.active(this)||T1JourneyStore.pending(this)){
-            message("Primero FINALIZÁ o cancelá el trayecto del cliente.");
-            return;
+    private void pauseSecond(){
+        if(!T1JourneyStore2.active(this)){
+            message("No hay Viaje 2 activo.");return;
         }
-        new AlertDialog.Builder(this).setTitle("FINALIZAR JORNADA MANUALMENTE")
-            .setMessage("Se termina la grabación continua y se conservan CSV y trayectos.")
+        message(T1JourneyStore2.pause(this));
+    }
+    private void endDay(){
+        // This global action is always available independently. Closing a
+        // master containing open slots is explicitly confirmed and atomically
+        // saves both client checkpoints before stopping their data source.
+        boolean has1=T1JourneyStore.active(this);
+        boolean has2=T1JourneyStore2.active(this);
+        new AlertDialog.Builder(this).setTitle("TERMINAR VIAJE TOTAL")
+            .setMessage((has1||has2?
+                "Hay viajes individuales abiertos. Al cerrar el TOTAL "+
+                "también se guardarán Viaje 1 y/o Viaje 2. "+
+                "Podés cancelar y cerrarlos por separado.\n\n":"")+
+                "Se conservan los CSV y se pide sincronización final QR.")
             .setNegativeButton("CANCELAR",null)
-            .setPositiveButton("CERRAR",(d,w)->{
+            .setPositiveButton("TERMINAR",(d,w)->{
                 try{
+                    if(T1JourneyStore.active(this)){
+                        String result=T1JourneyStore.finish(this);
+                        if(T1JourneyStore.active(this)){
+                            message("No se cerró el total: Viaje 1 · "+result);
+                            return;
+                        }
+                    }
+                    if(T1JourneyStore2.active(this)){
+                        String result=T1JourneyStore2.finish(this);
+                        if(T1JourneyStore2.active(this)){
+                            message("No se cerró el total: Viaje 2 · "+result);
+                            return;
+                        }
+                    }
+                    T1JourneyStore.cancelPending(this);
+                    T1JourneyStore2.cancelPending(this);
                     startService(new Intent(this,T1TripRecorderService.class)
                         .setAction(T1TripRecorderService.ACTION_STOP));
-                    message("Finalizando jornada; esperando cierre del CSV.");
+                    message("Finalizando VIAJE TOTAL; Viajes 1/2 guardados "+
+                        "si estaban abiertos. Sincronización QR en curso.");
                 }catch(Exception ex){message("Error: "+ex.getClass().getSimpleName());}
             }).show();
     }
@@ -1062,6 +1100,48 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 }
             }).show();
     }
+    private void askSecond(){
+        if(T1JourneyStore2.paused(this)){
+            message(T1JourneyStore2.resume(this));return;
+        }
+        if(T1JourneyStore2.active(this)||T1JourneyStore2.pending(this)){
+            message("Ya hay un Viaje 2 activo o iniciándose.");return;
+        }
+        EditText name=new EditText(this);name.setSingleLine(true);
+        name.setHint("Ej.: Viaje 2, traslado, tramo de vuelta");
+        new AlertDialog.Builder(this).setTitle("Iniciar Viaje 2")
+            .setMessage("Empieza en 0,00 km para este Viaje 2; no se reinicia "+
+                "la grabación general. Si aún no hay jornada, se inicia también.")
+            .setView(name).setNegativeButton("CANCELAR",null)
+            .setPositiveButton("INICIAR",(d,w)->{
+                if(T1JourneyStore2.active(this)||T1JourneyStore2.pending(this)){
+                    message("Ya hay un Viaje 2 activo o preparándose.");return;
+                }
+                try{
+                    SharedPreferences p=getSharedPreferences(
+                        T1TripRecorderService.PREFS,MODE_PRIVATE);
+                    long age=System.currentTimeMillis()-
+                        p.getLong(T1TripRecorderService.LAST_SAMPLE_TIME,0L);
+                    boolean live=p.getBoolean(T1TripRecorderService.RUNNING,false)
+                        &&age>=0&&age<=15000;
+                    if(live){
+                        // Immediate checkpoint; do not reset the all-day trip.
+                        message(T1JourneyStore2.start(this,name.getText().toString()));
+                    }else{
+                        String status=T1JourneyStore2.queue(this,
+                            name.getText().toString());
+                        startForegroundService(new Intent(this,
+                            T1TripRecorderService.class).setAction(
+                                T1TripRecorderService.ACTION_START));
+                        message(status+" · Jornada iniciada automáticamente "+
+                            "para grabar el Viaje 2 en el mismo TRIP.");
+                    }
+                }catch(Exception ex){
+                    T1JourneyStore2.cancelPending(this);
+                    message("No se inició: "+ex.getMessage());
+                }
+            }).show();
+    }
     private void repairClient(){
         if(!T1JourneyStore.stuck(this)){
             message("El trayecto ya está asociado a la jornada actual.");return;
@@ -1093,6 +1173,20 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             .setNegativeButton("CANCELAR",null)
             .setPositiveButton("GUARDAR",(d,w)->{
                 try{message(T1JourneyStore.finish(this));}
+                catch(Exception ex){message("No se guardó: "+ex.getMessage());}
+            }).show();
+    }
+    private void finishSecond(){
+        if(T1JourneyStore2.pending(this)){
+            T1JourneyStore2.cancelPending(this);
+            message("Se canceló el inicio: no había empezado el Viaje 2.");return;
+        }
+        if(!T1JourneyStore2.active(this)){message("No hay Viaje 2 activo.");return;}
+        new AlertDialog.Builder(this).setTitle("Finalizar Viaje 2")
+            .setMessage("Se guardará como subviaje sin interrumpir la jornada.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("GUARDAR",(d,w)->{
+                try{message(T1JourneyStore2.finish(this));}
                 catch(Exception ex){message("No se guardó: "+ex.getMessage());}
             }).show();
     }
