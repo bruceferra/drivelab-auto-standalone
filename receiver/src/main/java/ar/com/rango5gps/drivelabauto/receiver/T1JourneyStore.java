@@ -25,9 +25,12 @@ final class T1JourneyStore {
     private static final String ACTIVE="active",LABEL="label",TIME="start_time",
         TRIP="trip_id",KM="km",FUEL="fuel",ELEC="electric",N_FUEL="nf",N_ELEC="ne",
         PENDING_LABEL="pending_label",PENDING_TIME="pending_time",
-        PENDING_TRIP="pending_trip",
-        RESUME_LABEL="last_interrupted_label",
-        RECOVERY_NOTE="last_interruption_note";
+        PENDING_TRIP="pending_trip",RECOVERY_NOTE="last_interruption_note",
+        CARRY_KM="carry_km",CARRY_FUEL="carry_fuel",
+        CARRY_ELEC="carry_electric",CARRY_NF="carry_nf",
+        CARRY_NE="carry_ne",CHAIN="trip_chain",
+        ORIGINAL_TIME="original_client_start",
+        CARRY_UNCERTAIN="carry_has_missing_samples";
     private static final String CSV_HEADER=
         "id;inicio;fin;etiqueta;trip_id;km_est_oem_velocidad;eventos_nafta;"+
         "nafta_raw;litros_experimentales;eventos_electricidad;electricidad_raw;"+
@@ -98,103 +101,85 @@ final class T1JourneyStore {
     static String pendingLabel(Context c){return p(c).getString(PENDING_LABEL,"");}
 
     /**
-     * A service killed by Android / APK upgrade can leave ACTIVE true and
-     * reference a TRIP which is no longer the running master's ID. That made
-     * all future "Iniciar trayecto" calls refuse indefinitely, while CSV
-     * samples of the new day continued to upload. Repair BEFORE selecting
-     * cockpit scope. Never merge kilometre or OEM callback counters across
-     * different trip IDs.
-     *
-     * The discontinued part is archived locally as a PARTIAL customer segment
-     * using its original append-only CSV; the label is offered for explicit
-     * continuation on the CURRENT fresh day.
+     * True continuous passenger journey: the customer stays ACTIVE until the
+     * user explicitly taps FINALIZAR. During old-version upgrades, a brand
+     * new master day could be created and the original customer checkpoint
+     * was left behind. Migrate that checkpoint into cumulative carry-over
+     * WITHOUT closing the client or combining two unlike TRIP IDs.
      */
     static synchronized String reconcileInterrupted(Context c){
         SharedPreferences z=p(c),m=master(c);
         if(pending(c)){
-            long when=z.getLong(PENDING_TIME,0L);
-            long age=System.currentTimeMillis()-when;
             String expected=z.getString(PENDING_TRIP,"");
             String current=m.getString(T1TripRecorderService.ID,"");
-            if(age>90000||age<0||
-                (!expected.isEmpty()&&!expected.equals(current))){
-                clearPending(c);
-                z.edit().putString(RECOVERY_NOTE,
-                    "Inicio pendiente vencido: se liberó para volver a intentar.")
-                    .commit();
-            }
+            if(!current.isEmpty()&&!expected.equals(current))
+                z.edit().putString(PENDING_TRIP,current).commit();
         }
         if(!active(c))return "";
-        String original=z.getString(TRIP,"");
+        String old=z.getString(TRIP,"");
         String current=m.getString(T1TripRecorderService.ID,"");
-        if(original.isEmpty()||original.equals(current))return "";
-        // No active session can legally span two different TRIP IDs.
+        if(old.isEmpty()||current.isEmpty()||old.equals(current))return "";
+        // This situation is specifically an old-version split, not an
+        // intentional client finish. Keep ACTIVE and the original label.
+        T1JourneyMetrics.Checkpoint first=startCheckpoint(c);
         String label=activeLabel(c);
-        T1JourneyMetrics.Checkpoint start=startCheckpoint(c);
-        if(!original.matches("[0-9]{8}_[0-9]{6}"))return "TRIP anterior inválido";
-        T1JourneyRecoveryFile.End end;
         try{
-            end=T1JourneyRecoveryFile.read(T1TripRecorderService.tripDir(c),
-                original);
-            boolean later=end.timestamp>=start.time;
-            double distance=later?Math.max(start.km,end.km):start.km;
-            int nf=later&&end.fuelComplete&&end.fuelCount>=start.fuelCount?
-                end.fuelCount:start.fuelCount;
-            int ne=later&&end.electricComplete&&
-                end.electricCount>=start.electricCount?
-                end.electricCount:start.electricCount;
-            double f=nf>start.fuelCount?end.rawFuel:start.rawFuel;
-            double e=ne>start.electricCount?end.rawElectric:start.rawElectric;
-            T1JourneyMetrics.Checkpoint finish=new T1JourneyMetrics.Checkpoint(
-                original,Math.max(start.time,end.timestamp),distance,
-                f,e,nf,ne);
-            T1JourneyMetrics.Result metrics=T1JourneyMetrics.between(
-                start,finish,
-                m.getFloat(T1TripRecorderService.FUEL_PRICE,2129f));
-            String key=Long.toString(start.time);
-            boolean alreadySaved=false;
-            for(Entry entry:history(c))if(key.equals(entry.id)){
-                alreadySaved=true;break;
-            }
-            if(!alreadySaved){
-                String row=key+";"+start.time+";"+finish.time+";"+
-                    cleanLabel(label+" (PARCIAL / INTERRUPCION)")+";"+
-                    original+";"+db(metrics.km)+";"+metrics.fuelEvents+
-                    ";"+db(metrics.rawFuel)+";"+
-                    db(metrics.fuelLitersCandidate)+";"+
-                    metrics.electricEvents+";"+db(metrics.rawElectric)+";"+
-                    db(metrics.electricNetKwhCandidate)+";"+
-                    db(metrics.fuelCostCandidate)+";"+
-                    db(m.getFloat(T1TripRecorderService.FUEL_PRICE,2129f))+
-                    "\n";
-                append(new File(T1TripRecorderService.tripDir(c),
-                    "client_trips.csv"),CSV_HEADER,row);
-            }
-            String note="Viaje "+cleanLabel(label)+" interrumpido: "+
-                T1JourneyMetrics.fmt(metrics.km,2)+
-                " km recuperados de "+original+
-                ". Segmento anterior guardado como PARCIAL; "+
-                "para continuar iniciá otro trayecto en la jornada nueva.";
-            // Only remove active checkpoint fields, never wipe recovery hint
-            // or the append-only customer/day CSV.
-            boolean saved=z.edit().remove(ACTIVE).remove(LABEL)
-                .remove(TIME).remove(TRIP).remove(KM).remove(FUEL)
-                .remove(ELEC).remove(N_FUEL).remove(N_ELEC)
-                .putString(RESUME_LABEL,cleanLabel(label))
-                .putString(RECOVERY_NOTE,note).commit();
-            return saved?note:"No se pudo liberar el estado anterior";
-        }catch(Exception ex){
-            String note="TRAYECTO BLOQUEADO EN JORNADA ANTERIOR: "+
-                ex.getClass().getSimpleName()+
-                (ex.getMessage()==null?"":" "+ex.getMessage())+
-                ". No se borraron CSV. Usá RECUPERAR / LIBERAR "+
-                "cuando estés estacionado.";
+            T1JourneyRecoveryFile.End oldLast=
+                T1JourneyRecoveryFile.read(T1TripRecorderService.tripDir(c),old);
+            if(oldLast.timestamp<first.time||oldLast.km<first.km)
+                throw new IllegalStateException("CSV anterior anterior al cliente");
+            int nf=oldLast.fuelComplete?oldLast.fuelCount:first.fuelCount;
+            int ne=oldLast.electricComplete?oldLast.electricCount:first.electricCount;
+            T1JourneyMetrics.Checkpoint last=
+                new T1JourneyMetrics.Checkpoint(old,oldLast.timestamp,
+                    oldLast.km,oldLast.fuelComplete?
+                        oldLast.rawFuel:first.rawFuel,
+                    oldLast.electricComplete?
+                        oldLast.rawElectric:first.rawElectric,nf,ne);
+            T1JourneyMetrics.Result recovered=T1JourneyMetrics.between(
+                first,last,m.getFloat(T1TripRecorderService.FUEL_PRICE,2129f));
+            boolean full=oldLast.fuelComplete&&oldLast.electricComplete;
+            String chain=z.getString(CHAIN,old);
+            long origin=z.getLong(ORIGINAL_TIME,first.time);
+            // Snapshot the old CSV counters before switching the active
+            // checkpoint to the new master. All source files are retained.
+            boolean written=z.edit()
+                .putString(TRIP,current)
+                .putLong(TIME,m.getLong(T1TripRecorderService.START_TIME,
+                    System.currentTimeMillis()))
+                .putFloat(KM,0f).putFloat(FUEL,0f).putFloat(ELEC,0f)
+                .putInt(N_FUEL,0).putInt(N_ELEC,0)
+                .putFloat(CARRY_KM,z.getFloat(CARRY_KM,0f)+
+                    (float)recovered.km)
+                .putFloat(CARRY_FUEL,z.getFloat(CARRY_FUEL,0f)+
+                    (float)recovered.rawFuel)
+                .putFloat(CARRY_ELEC,z.getFloat(CARRY_ELEC,0f)+
+                    (float)recovered.rawElectric)
+                .putInt(CARRY_NF,z.getInt(CARRY_NF,0)+recovered.fuelEvents)
+                .putInt(CARRY_NE,z.getInt(CARRY_NE,0)+recovered.electricEvents)
+                .putLong(ORIGINAL_TIME,origin)
+                .putString(CHAIN,chain+"+"+current)
+                .putBoolean(CARRY_UNCERTAIN,
+                    z.getBoolean(CARRY_UNCERTAIN,false)||!full)
+                .putString(RECOVERY_NOTE,
+                    "CLIENTE "+label+" SIGUE ABIERTO. Se recuperaron "+
+                    T1JourneyMetrics.fmt(recovered.km,2)+
+                    " km del CSV "+old+
+                    " y se continúa en "+current+
+                    " sin cerrar el trayecto ni inventar km del corte."+
+                    (full?"":" Energía parcial sin eventos completos."))
+                .commit();
+            return written?recoveryNote(c):
+                "No se pudo guardar la continuidad: cliente preservado.";
+        }catch(Exception e){
+            String note="CLIENTE "+label+
+                " sigue abierto, pero el CSV de la jornada anterior "+
+                "no se pudo reconstruir: "+e.getClass().getSimpleName()+
+                ". No se borró ningún dato. Usá REPARAR CONTINUIDAD "+
+                "para mantener el mismo cliente sin inventar mediciones.";
             z.edit().putString(RECOVERY_NOTE,note).apply();
             return note;
         }
-    }
-    static String interruptedLabel(Context c){
-        return p(c).getString(RESUME_LABEL,"");
     }
     static String recoveryNote(Context c){
         return p(c).getString(RECOVERY_NOTE,"");
@@ -203,35 +188,45 @@ final class T1JourneyStore {
         if(!active(c))return false;
         String old=p(c).getString(TRIP,"");
         String current=master(c).getString(T1TripRecorderService.ID,"");
-        return !old.isEmpty()&&!old.equals(current);
+        return !old.isEmpty()&&!current.isEmpty()&&!old.equals(current);
     }
-    /** Manual last-resort release, used only after a confirmation dialog.
-     * Original trip and customer CSVs remain on disk for subsequent recovery.
-     */
-    static synchronized String releaseStuck(Context c){
-        if(!stuck(c))return "No hay un trayecto de otra jornada bloqueando.";
-        String label=activeLabel(c);
-        boolean saved=p(c).edit()
-            .remove(ACTIVE).remove(LABEL).remove(TIME).remove(TRIP)
-            .remove(KM).remove(FUEL).remove(ELEC)
-            .remove(N_FUEL).remove(N_ELEC)
-            .putString(RESUME_LABEL,cleanLabel(label))
+    static synchronized String repairWithoutOldCsv(Context c){
+        if(!stuck(c))return "El cliente ya usa la jornada actual.";
+        SharedPreferences z=p(c),m=master(c);
+        String old=z.getString(TRIP,"");
+        String current=m.getString(T1TripRecorderService.ID,"");
+        long original=z.getLong(ORIGINAL_TIME,z.getLong(TIME,0L));
+        String chain=z.getString(CHAIN,old);
+        boolean result=z.edit().putString(TRIP,current)
+            .putLong(ORIGINAL_TIME,original)
+            .putString(CHAIN,chain+"+"+current)
+            .putLong(TIME,m.getLong(T1TripRecorderService.START_TIME,
+                System.currentTimeMillis()))
+            .putFloat(KM,0).putFloat(FUEL,0).putFloat(ELEC,0)
+            .putInt(N_FUEL,0).putInt(N_ELEC,0)
+            .putBoolean(CARRY_UNCERTAIN,true)
             .putString(RECOVERY_NOTE,
-                "Bloqueo anterior liberado MANUALMENTE. "+
-                "Los CSV originales permanecen intactos. "+
-                "No se pudieron incorporar al historial los datos del cliente.")
+                "CLIENTE CONTINÚA SIN CIERRE. No se reconstruyó el tramo "+
+                old+"; CSV intacto, kilometraje parcial (subestimado).")
             .commit();
-        return saved?"Bloqueo liberado; CSV intactos. "+
-            "Ahora podés iniciar un trayecto nuevo.":"No se pudo liberar bloqueo.";
+        return result?recoveryNote(c):
+            "No se pudo reanudar. Se conserva el estado original.";
     }
-    static synchronized String resumeInterrupted(Context c){
-        String label=interruptedLabel(c);
-        if(label.isEmpty())return "No hay trayecto previo para continuar.";
-        if(active(c)||pending(c))return "Ya existe otro trayecto en curso.";
-        String result=start(c,label);
-        if(result.startsWith("Trayecto iniciado:"))
-            p(c).edit().remove(RESUME_LABEL).commit();
-        return result;
+    static String tripChain(Context c){
+        return p(c).getString(CHAIN,p(c).getString(TRIP,""));
+    }
+    static boolean partialRecovery(Context c){
+        return p(c).getBoolean(CARRY_UNCERTAIN,false);
+    }
+    private static T1JourneyMetrics.Result withCarry(Context c,
+        T1JourneyMetrics.Result part,double price){
+        SharedPreferences z=p(c);
+        return new T1JourneyMetrics.Result(
+            part.km+z.getFloat(CARRY_KM,0),
+            part.rawFuel+z.getFloat(CARRY_FUEL,0),
+            part.rawElectric+z.getFloat(CARRY_ELEC,0),
+            part.fuelEvents+z.getInt(CARRY_NF,0),
+            part.electricEvents+z.getInt(CARRY_NE,0),price);
     }
 
     /** A one-tap client may start the master recorder first. The actual client
@@ -264,14 +259,13 @@ final class T1JourneyStore {
     static synchronized void fulfillPending(Context c){
         if(!pending(c)||active(c))return;
         SharedPreferences req=p(c),m=master(c);
-        long age=System.currentTimeMillis()-req.getLong(PENDING_TIME,0L);
-        if(age<0||age>90000){clearPending(c);return;}
+        // Do not time out pending passengers on reboot or package update.
         if(!m.getBoolean(T1TripRecorderService.RUNNING,false)||
             m.getInt(T1TripRecorderService.SAMPLES,0)<1)return;
         String expected=req.getString(PENDING_TRIP,"");
         String current=m.getString(T1TripRecorderService.ID,"");
         if(!expected.isEmpty()&&!expected.equals(current)){
-            clearPending(c);return;
+            req.edit().putString(PENDING_TRIP,current).commit();
         }
         String label=req.getString(PENDING_LABEL,"Trayecto");
         // start() is synchronized on the same monitor. Re-entrant is safe.
@@ -284,6 +278,13 @@ final class T1JourneyStore {
             return "Primero iniciá JORNADA para grabar el TRIP OEM.";
         T1JourneyMetrics.Checkpoint mark=now(c);
         boolean ok=p(c).edit().putBoolean(ACTIVE,true)
+            .putLong(ORIGINAL_TIME,mark.time)
+            .putString(CHAIN,mark.tripId)
+            .putFloat(CARRY_KM,0f).putFloat(CARRY_FUEL,0f)
+            .putFloat(CARRY_ELEC,0f)
+            .putInt(CARRY_NF,0).putInt(CARRY_NE,0)
+            .putBoolean(CARRY_UNCERTAIN,false)
+            .remove(RECOVERY_NOTE)
             .putString(LABEL,cleanLabel(label)).putString(TRIP,mark.tripId)
             .putLong(TIME,mark.time).putFloat(KM,(float)mark.km)
             .putFloat(FUEL,(float)mark.rawFuel)
@@ -301,8 +302,12 @@ final class T1JourneyStore {
     }
     static synchronized T1JourneyMetrics.Result running(Context c) {
         if(!active(c))return null;
-        try{return T1JourneyMetrics.between(startCheckpoint(c),now(c),
-            master(c).getFloat(T1TripRecorderService.FUEL_PRICE,2129f));}
+        try{
+            double price=master(c).getFloat(
+                T1TripRecorderService.FUEL_PRICE,2129f);
+            return withCarry(c,T1JourneyMetrics.between(
+                startCheckpoint(c),now(c),price),price);
+        }
         catch(IllegalArgumentException|IllegalStateException ex){return null;}
     }
     static synchronized String finish(Context c){
@@ -312,17 +317,22 @@ final class T1JourneyStore {
             return "Cambió la jornada: "+reconcileInterrupted(c)+
                 " · no se mezclaron kilómetros entre sesiones.";
         T1JourneyMetrics.Result result;
-        try{result=T1JourneyMetrics.between(start,end,
-            master(c).getFloat(T1TripRecorderService.FUEL_PRICE,2129f));}
+        try{
+            double price=master(c).getFloat(
+                T1TripRecorderService.FUEL_PRICE,2129f);
+            result=withCarry(c,T1JourneyMetrics.between(start,end,price),price);
+        }
         catch(IllegalArgumentException ex){return "Lecturas incoherentes: no se guardó";}
-        String id=Long.toString(start.time);
+        long originalStart=p(c).getLong(ORIGINAL_TIME,start.time);
+        String id=Long.toString(originalStart);
         String label=cleanLabel(activeLabel(c));
         // Idempotent even when Android crashes between CSV flush and clearing prefs.
         for(Entry e:history(c))if(id.equals(e.id)){
             p(c).edit().clear().commit();
             return "Trayecto anterior ya estaba guardado.";
         }
-        String row=id+";"+start.time+";"+end.time+";"+label+";"+start.tripId+
+        String row=id+";"+originalStart+";"+end.time+";"+label+";"+
+            tripChain(c)+
             ";"+db(result.km)+";"+result.fuelEvents+";"+db(result.rawFuel)+
             ";"+db(result.fuelLitersCandidate)+";"+result.electricEvents+
             ";"+db(result.rawElectric)+";"+db(result.electricNetKwhCandidate)+
@@ -332,7 +342,8 @@ final class T1JourneyStore {
             append(new File(T1TripRecorderService.tripDir(c),"client_trips.csv"),CSV_HEADER,row);
         }catch(IOException ex){return "No se guardó: "+ex.getClass().getSimpleName();}
         p(c).edit().clear().commit();
-        return "GUARDADO: "+label+" · "+T1JourneyMetrics.fmt(result.km,2)+
+        return "FINALIZADO SOLO POR USUARIO: "+label+" · "+
+            T1JourneyMetrics.fmt(result.km,2)+
             " km (OEM velocidad, sin calibrar) · "+
             (result.fuelAvailable?T1JourneyMetrics.fmt(result.fuelLitersCandidate,3)+
             " L experimentales":"sin tramo OEM completo")+
