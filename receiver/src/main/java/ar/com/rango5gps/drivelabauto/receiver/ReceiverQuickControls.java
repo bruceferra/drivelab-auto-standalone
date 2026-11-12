@@ -34,7 +34,28 @@ final class ReceiverQuickControls {
     void onResume(){
         fold.setForeground(true);windows.setForeground(true);
         avas.setForeground(true);
+        ensureRecirculationGuard();
         refresh();
+    }
+    private void ensureRecirculationGuard(){
+        android.content.SharedPreferences p=hvacPrefs();
+        boolean wanted=RecirculationGuardService.MODE_INTERIOR.equals(
+            p.getString(RecirculationGuardService.MODE,
+                RecirculationGuardService.MODE_AUTO));
+        if(!wanted||p.getBoolean(RecirculationGuardService.PAUSED,false))return;
+        long age=System.currentTimeMillis()-
+            p.getLong(RecirculationGuardService.LAST_POLL,0L);
+        if(age>=0&&age<=8000&&
+            p.getBoolean(RecirculationGuardService.MONITORING,false))return;
+        try{
+            activity.startForegroundService(new Intent(activity,
+                RecirculationGuardService.class).setAction(
+                    RecirculationGuardService.ACTION_RESTORE));
+        }catch(RuntimeException e){
+            p.edit().putString(RecirculationGuardService.STATUS,
+                "Modo interior persistido pero Android impidió reanudar: "+
+                    e.getClass().getSimpleName()).apply();
+        }
     }
     void onPause(){
         fold.cancel();fold.setForeground(false);windows.setForeground(false);
@@ -192,7 +213,8 @@ final class ReceiverQuickControls {
                 RecirculationGuardService.MODE_AUTO));
         styleSelected(mirrorAuto,on,GREEN);
         styleSelected(mirrorManual,!on,ORANGE);
-        styleSelected(interiorMode,interior,GREEN);
+        styleSelected(interiorMode,interior&&
+            !a.getBoolean(RecirculationGuardService.PAUSED,false),GREEN);
         styleSelected(airAuto,!interior,GREY);
         if(leftMinus!=null)leftMinus.setText("IZQ − ("+l+")");
         if(leftPlus!=null)leftPlus.setText("IZQ + ("+l+")");
@@ -205,7 +227,12 @@ final class ReceiverQuickControls {
             "  · pasos por lado: IZQ "+l+" / DER "+r+
             "  · aire: "+(interior?"SIEMPRE INTERIOR":"AUTO")+
             (a.getBoolean(RecirculationGuardService.PAUSED,false)?
-                " (HVAC PAUSADO)":""));
+                " (HVAC PAUSADO POR OEM)":
+                interior?(a.getBoolean(RecirculationGuardService.MONITORING,false)&&
+                    System.currentTimeMillis()-a.getLong(
+                        RecirculationGuardService.LAST_POLL,0L)<9000?
+                    " (SERVICIO ACTIVO EN SEGUNDO PLANO)":
+                    " (SIN MONITOREO RECIENTE; RECUPERANDO)"):""));
         // Display the most recent OEM action without altering scroll position.
         String current=m.getString(MirrorAutomationService.STATUS,"");
         String recirc=a.getString(RecirculationGuardService.STATUS,"");
