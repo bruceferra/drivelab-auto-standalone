@@ -223,63 +223,38 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             "P/0 o D; solo toque explícito, sin GPS automático.":
             "MODO OEM · sin lectura reciente. Sin escrituras.");
     }
+    /** One tap = one manual OEM request. No confirmation or result dialogs.
+     * All direct OEM gear/speed/mode checks remain inside the pilot.
+     */
     private void askTripleMode(int target){
+        String targetName=T1ManualHevPolicy.currentMode(target);
         if(lastSample==null){
-            modeAtTop.setText("SIN TELEMETRÍA OEM. No se envió comando.");
+            modeAtTop.setText("SIN TELEMETRÍA OEM · no se envió "+targetName);
             return;
         }
         long age=System.currentTimeMillis()-lastSample.timestamp;
         if(age<0||age>10000||
             !T1DriveModeGate.allowed(lastSample.gear,lastSample.speed)){
-            new AlertDialog.Builder(this)
-                .setTitle("CAMBIO MANUAL · SIN ESCRITURA")
-                .setMessage("Se requiere telemetría reciente y marcha "+
-                    "P detenida o D con velocidad OEM válida. "+
-                    "Lecturas: 1033="+lastSample.gear+
-                    " ("+T1DriveModeGate.name(lastSample.gear)+")"+
-                    ", 2148="+f(lastSample.speed,2)+
-                    " km/h; edad="+age+" ms.")
-                .setPositiveButton("ENTENDIDO",null).show();
+            modeAtTop.setText("NO ENVIADO "+targetName+
+                " · marcha/velocidad OEM no válidas ("+
+                lastSample.gear+"/"+f(lastSample.speed,1)+")");
             return;
         }
         if(lastSample.powerMode==target){
-            modeAtTop.setText("Ya está en "+
-                T1ManualHevPolicy.currentMode(target)+
-                " · no se envió nada.");
+            modeAtTop.setText("ACTUAL: "+targetName+" · sin cambios.");
             return;
         }
         if(threeModePilot.busy()||hevPilot.busy()){
-            modeAtTop.setText("Otro ensayo OEM está en curso.");
+            modeAtTop.setText("Otra orden OEM está en curso.");
             return;
         }
-        String targetName=T1ManualHevPolicy.currentMode(target);
-        new AlertDialog.Builder(this)
-            .setTitle("CAMBIO MANUAL → "+targetName)
-            .setMessage("Se enviará UNA SOLA orden OEM 1043="+target+
-                " en "+T1DriveModeGate.name(lastSample.gear)+
-                " con doble lectura OEM de marcha, velocidad y modo; "+
-                "lectura posterior 1043 para confirmar. "+
-                "En P los tres modos ya se comprobaron. "+
-                "En D la escritura desde DriveLab es EXPERIMENTAL, "+
-                "puede ser rechazada por Jetour y aún no fue comprobada "+
-                "físicamente en movimiento. No exige freno de pie: "+
-                "3011 se registra solo como diagnóstico. "+
-                "Sin cambios automáticos por GPS. "+
-                "No operes la pantalla mientras conducís.")
-            .setNegativeButton("CANCELAR",null)
-            .setPositiveButton("PROBAR UNA VEZ",(dialog,which)->{
-                modeAtTop.setText("Consultando OEM; verificando modo…");
-                if(!threeModePilot.request(target,()->visible,
-                        result->ui.post(()->{
-                    if(!visible||isFinishing()||isDestroyed())return;
-                    modeAtTop.setText(result);
-                    lastTelem=0;
-                    new AlertDialog.Builder(this)
-                        .setTitle("RESULTADO MANUAL · "+targetName)
-                        .setMessage(result)
-                        .setPositiveButton("CERRAR",null).show();
-                })))modeAtTop.setText("Ensayo ocupado. No se envió nada.");
-            }).show();
+        modeAtTop.setText("ENVIANDO "+targetName+" · verificando 1043…");
+        if(!threeModePilot.request(target,()->visible,
+                result->ui.post(()->{
+            if(!visible||isFinishing()||isDestroyed())return;
+            modeAtTop.setText(result);
+            lastTelem=0;
+        })))modeAtTop.setText("Orden ocupada: "+targetName+" no enviado.");
     }
     private void updateOsmControls(){
         if(osmEnabledButton==null)return;
