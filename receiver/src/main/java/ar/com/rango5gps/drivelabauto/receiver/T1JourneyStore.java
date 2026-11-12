@@ -55,6 +55,7 @@ final class T1JourneyStore {
         double km;
         final double originalKm,liters,electricNet,fuelCost;
         boolean correctedKm=false;
+        boolean estimatedDistance=false;
         String distanceAudit="";
         double evKm=Double.NaN,iceKm=Double.NaN,unknownKm=Double.NaN;
         final int fuelEvents,electricEvents;
@@ -569,7 +570,10 @@ final class T1JourneyStore {
                     e.evKm=fix.evKm;e.iceKm=fix.iceKm;
                     e.unknownKm=fix.unknownKm;
                     e.correctedKm=true;
-                    e.distanceAudit="OEM "+T1HistoricalDistanceRepair.METHOD;
+                    e.estimatedDistance=!fix.independentlyVerified();
+                    e.distanceAudit=(e.estimatedDistance?
+                        "ESTIMADO POR VELOCIDAD OEM":"VERIFICADO OEM 500m")+
+                        " · "+T1HistoricalDistanceRepair.METHOD;
                 }
                 dedup.put(f[0],e);
             }
