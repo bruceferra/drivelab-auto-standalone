@@ -14,16 +14,17 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 
 /**
- * Explicit one-shot manual mode selector. Owner photos show three successful
- * parked readbacks from DriveLab: 1043=1 EV, 2 HEV and 3 EV MAX. All
- * three targets are now confirmed in P for this firmware.
+ * User-confirmed, ONE-SHOT manual EV/HEV/EV MAX selector (1043=1/2/3).
+ * In P the original Owner tests confirmed all three commands and readbacks.
+ * The user independently confirmed 1033=4 means D and OEM selector changes
+ * modes while in D. D write from DriveLab remains an EXPERIMENT and the OEM
+ * VehicleService may reject it; never claim D acceptance until observed.
  *
- * NEVER callable from GPS, route detection, boot, or background services.
- * All writes require stable P, OEM speed exactly zero, 2 fresh reads, an
- * active Activity and an independent user confirmation in the caller.
- * Changing modes through Jetour's certified OEM UI in motion is NOT proof
- * this third-party Binder transaction is safe to send while moving.
- * No moving-vehicle write path or OSM-initiated setter is enabled.
+ * Two fresh direct OEM preflight readings are mandatory: stable 1033=1 and
+ * exactly 0 km/h, OR stable 1033=4 with finite plausible speed 0..160 km/h.
+ * No pedal requirement: 3011 brake status is diagnostic only (0/1).
+ * Never from GPS, route detection, boot, background or a hidden Activity.
+ * The OEM remains responsible for accepting/rejecting the mode transition.
  */
 final class T1ManualThreeModePilot {
     interface Callback { void complete(String result); }
@@ -39,7 +40,7 @@ final class T1ManualThreeModePilot {
         if(!busy.compareAndSet(false,true))return false;
         T1OemDiagnosticLog.begin(app,
             "Control manual triple · objetivo 1043="+target+
-            ". Sin GPS, únicamente vehículo detenido en P.");
+            ". Sin GPS; solo toque manual P o D, doble preflight OEM.");
         new Thread(()->{
             String result;
             try{result=attempt(target,screenVisible);}
@@ -81,7 +82,7 @@ final class T1ManualThreeModePilot {
                     !TOKEN.equals(b.getInterfaceDescriptor()))
                 throw new SecurityException("Interfaz OEM no reconocida");
             int start=readInt(b,1043);
-            checkParked(b,start,target,"PRIMERA_LECTURA");
+            int startGear=checkDrivePosition(b,start,target,"PRIMERA_LECTURA");
             SystemClock.sleep(420);
             if(!visible.getAsBoolean()||!b.isBinderAlive())
                 throw new IllegalStateException("Cockpit perdió el foco");
@@ -89,7 +90,10 @@ final class T1ManualThreeModePilot {
             if(still!=start)
                 throw new IllegalStateException(
                     "Modo cambió durante comprobación: "+start+" a "+still);
-            checkParked(b,still,target,"SEGUNDA_LECTURA");
+            int confirmGear=checkDrivePosition(b,still,target,"SEGUNDA_LECTURA");
+            if(startGear!=confirmGear)
+                throw new IllegalStateException(
+                    "Marcha cambió durante preflight: "+startGear+" -> "+confirmGear);
             if(!visible.getAsBoolean())throw new SecurityException("Sin foco");
             Parcel data=Parcel.obtain(),reply=Parcel.obtain();
             try{
@@ -119,25 +123,32 @@ final class T1ManualThreeModePilot {
                 ". No reenviar sin revisar el log.";
         }finally{try{app.unbindService(c);}catch(Exception ignored){}}
     }
-    private void checkParked(IBinder b,int mode,int target,String stage)
+    private int checkDrivePosition(IBinder b,int mode,int target,String stage)
             throws Exception{
         int gear=readInt(b,1033);
         double speed;
-        try{speed=readFloat(b,2148);}
-        catch(Exception e){speed=readInt(b,1089);}
+        // Do NOT fall back to 1089: it has not been validated as an equal
+        // vehicle-speed signal in D. A missing speed reading must fail closed.
+        speed=readFloat(b,2148);
+        String footBrake="sin lectura";
+        try{footBrake=Integer.toString(readInt(b,3011));}
+        catch(Exception ignored){}
         T1OemDiagnosticLog.add(app,stage,
-            "1033="+gear+"; velocidad="+speed+"; 1043="+mode+
+            "1033="+gear+" ("+T1DriveModeGate.name(gear)+
+            "); 2148="+speed+"; 3011_freno_lectura="+footBrake+
+            " (diagnóstico, NO requisito); 1043="+mode+
             "; objetivo="+target);
-        if(gear!=1||!Double.isFinite(speed)||speed<0||speed>0.001)
+        if(!T1DriveModeGate.allowed(gear,speed))
             throw new IllegalStateException(
-                "Bloqueado: solo P y 0,00 km/h. Lecturas "+
-                "1033="+gear+", velocidad="+speed);
+                "Bloqueado: solo P/0 km/h o D con velocidad OEM válida "+
+                "0-160 km/h. Lecturas 1033="+gear+", 2148="+speed);
         if(mode!=1&&mode!=2&&mode!=3)
             throw new IllegalStateException(
                 "Modo actual 1043="+mode+" no validado");
         if(mode==target)throw new IllegalStateException(
             "Ya está en "+T1ManualHevPolicy.currentMode(target)+
             "; ninguna escritura necesaria");
+        return gear;
     }
     private static int readInt(IBinder b,int id)throws Exception{
         Parcel data=Parcel.obtain(),reply=Parcel.obtain();
