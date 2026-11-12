@@ -12,11 +12,12 @@ import android.os.SystemClock;
 import java.util.ArrayDeque;
 
 /**
- * Explicitly opt-in auto-recirculation: read 1004 every 3 seconds, request
+ * Owner-requested default auto-recirculation on app open: read 1004 every 3 seconds, request
  * 1004=1 only when previously observed 1004=2. 2101 is read-only diagnostic.
  *
  * Never writes 1004=2 or 2101. No direct ties to navigation or mirror motors.
- * If ECU/HVAC overrides repeatedly, stop writing, warn and require user reset.
+ * If ECU/HVAC overrides repeatedly, stop writing, warn and require a manual
+ * driver reset; windshield defogging/visibility must take priority.
  */
 public final class RecirculationGuardService extends Service {
     public static final String PREFS="t1_recirc_control";
@@ -33,6 +34,32 @@ public final class RecirculationGuardService extends Service {
     private Thread worker;
     private final ArrayDeque<Long> recentWrites=new ArrayDeque<>();
     private SharedPreferences pref(){return getSharedPreferences(PREFS,MODE_PRIVATE);}
+    /**
+     * Automatic cabin-air preference requested by the vehicle owner:
+     * on a fresh DriveLab main-screen launch, select interior air and
+     * start the dedicated foreground guard. No user tap is required.
+     * A safety PAUSED state is NEVER cleared by re-opening the app.
+     * The driver can still choose AIRE AUTO for the current session.
+     */
+    static void activateOnAppOpen(android.content.Context context){
+        SharedPreferences p=context.getSharedPreferences(PREFS,MODE_PRIVATE);
+        boolean safetyPaused=p.getBoolean(PAUSED,false);
+        p.edit().putString(MODE,MODE_INTERIOR)
+            .putString(STATUS,safetyPaused?
+                "AIRE INTERIOR SOLICITADO · protección OEM pausó el monitor; "+
+                    "revisar desempañado y reactivar manualmente":
+                "AIRE INTERIOR AUTOMÁTICO · iniciando monitoreo OEM 1004")
+            .apply();
+        if(safetyPaused)return;
+        try{
+            context.startForegroundService(new Intent(context,
+                RecirculationGuardService.class).setAction(ACTION_RESTORE));
+        }catch(RuntimeException error){
+            p.edit().putString(STATUS,
+                "Android no permitió iniciar monitoreo de aire interior: "+
+                error.getClass().getSimpleName()).apply();
+        }
+    }
     @Override public IBinder onBind(Intent i){return null;}
 
     @Override public int onStartCommand(Intent i,int flags,int startId){
@@ -51,7 +78,7 @@ public final class RecirculationGuardService extends Service {
             pref().edit().putString(MODE,MODE_INTERIOR).putBoolean(PAUSED,false)
                 .putString(STATUS,"SIEMPRE SIN AIRE EXTERIOR · verificando 1004").apply();
         }else if(ACTION_RESTORE.equals(action)){
-            // Boot / package replace / app reopening: DO NOT clear PAUSED.
+            // Boot / package replace / app reopening: NEVER clear PAUSED.
             if(!MODE_INTERIOR.equals(pref().getString(MODE,MODE_AUTO))||
                 pref().getBoolean(PAUSED,false)){
                 stopSelf();return START_NOT_STICKY;
