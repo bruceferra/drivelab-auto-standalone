@@ -230,6 +230,22 @@ jobs:
           ! grep -E 'transact\\(15|setInt\\(|setFloat\\(|setProperty\\(' "$belt"
           grep -q 'CINTURONES A · SUELTOS' "$cockpit"
           grep -q 'CINTURONES B · ABROCHADO' "$cockpit"
+      - name: Front horizon LED show/welcome status read only regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          probe=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1HorizonLedReadOnlyProbe.java
+          ui=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
+          grep -q '557843630' "$probe"
+          grep -q '557843784' "$probe"
+          grep -q '557867035' "$probe"
+          grep -q '557867047' "$probe"
+          grep -q 'b.transact(2,d,r,0)' "$probe"
+          ! grep -E 'transact\\(15|setInt\\(|setFloat\\(|setProperty\\(' "$probe"
+          grep -q 'REGISTRAR LED 30 S · NO ESCRIBE' "$ui"
+          grep -q 'COPIAR INFORME LED' "$ui"
+          grep -q 'reading.speed>0.5' "$ui"
+          grep -q 'T1HorizonLedReadOnlyProbe.Snapshot.transitions' "$ui"
       - name: Separate apps and Android APK builds
         run: gradle --no-daemon :sender:assembleDebug :receiver:assembleDebug
       - name: Verify independent identities, permissions and no telemetry
