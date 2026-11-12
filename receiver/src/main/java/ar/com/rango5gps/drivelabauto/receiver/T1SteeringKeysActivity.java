@@ -53,7 +53,8 @@ public final class T1SteeringKeysActivity extends Activity {
         root.addView(share);
         output=new TextView(this);output.setTextColor(Color.WHITE);
         output.setTextSize(14);output.setPadding(8,10,8,10);
-        output.setText("Sin captura. Poner el auto en P, velocidad 0.");
+        output.setText("Poné el auto en P y 0 km/h. Iniciar lectura no exige que "+
+            "la señal OEM 1033/2148 esté disponible: es SOLO KEYEVENT.");
         ScrollView scroll=new ScrollView(this);scroll.addView(output);
         root.addView(scroll,new LinearLayout.LayoutParams(-1,0,1f));
         root.setFocusableInTouchMode(true);
@@ -61,19 +62,24 @@ public final class T1SteeringKeysActivity extends Activity {
     }
     private void startCapture(){
         T1TripTelemetry.Sample s=new T1TripTelemetry(this).snapshot();
-        if(s.gear!=1||!Double.isFinite(s.speed)||
-            s.speed<0||s.speed>0.001){
-            output.setText("NO INICIADO: únicamente P y 0 km/h. "+
-                "1033="+s.gear+", velocidad 2148="+s.speed);
-            return;
-        }
+        // Read-only KeyEvent monitoring is safe without an OEM Binder result.
+        // Earlier this refused to start when 1033/2148 were temporarily
+        // missing even though the T1 was actually parked in P.
+        // Show evidence, never issue gear or propulsion commands.
+        String verified=(s.gear==1&&Double.isFinite(s.speed)&&
+            s.speed>=0&&s.speed<1)?"P y 0 km/h por OEM":
+            "Estado OEM no confirmado (1033="+s.gear+
+            ", 2148="+s.speed+"). Usar solo estacionado en P.";
+
         report.setLength(0);
         report.append("DriveLab · volante T1 · Android KeyEvent\n");
         report.append("inicio_epoch_ms=").append(System.currentTimeMillis()).append('\n');
-        report.append("Marcha P=1; velocidad 0; sin comandos vehículo\n");
+        report.append("Verificación: ").append(verified)
+            .append("; sin comandos vehículo\n");
         enabled=true;count=0;
         endsAt=SystemClock.elapsedRealtime()+90000L;
-        output.setText("GRABANDO · 90 s. Probá OK, Atrás, ruedita + y −.\n");
+        output.setText("GRABANDO · 90 s. "+verified+
+            "\nProbá OK, Atrás, ruedita + y −.\n");
     }
     @Override public boolean dispatchKeyEvent(KeyEvent event){
         if(enabled){
