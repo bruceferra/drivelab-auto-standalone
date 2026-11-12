@@ -139,8 +139,17 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         LinearLayout top=row();top.setGravity(Gravity.CENTER_VERTICAL);root.addView(top);
         LinearLayout title=col();
         title.addView(text("DRIVELAB  /  JETOUR T1",22,WHITE,true));
-        title.addView(text("COCKPIT · v0.2.36 · telemetría OEM",13,MUTED,false));
+        title.addView(text("COCKPIT · v0.2.37 · telemetría OEM",13,MUTED,false));
         top.addView(title,new LinearLayout.LayoutParams(0,-2,1));
+        Button systemBars=new Button(this);
+        systemBars.setText(T1ImmersiveMode.enabled(this)?"MOSTRAR BARRAS":"PANTALLA COMPLETA");
+        systemBars.setAllCaps(false);
+        systemBars.setOnClickListener(v->{
+            T1ImmersiveMode.setEnabled(this,!T1ImmersiveMode.enabled(this));
+            systemBars.setText(T1ImmersiveMode.enabled(this)?
+                "MOSTRAR BARRAS":"PANTALLA COMPLETA");
+        });
+        top.addView(systemBars);
         Button back=new Button(this);back.setText("VOLVER AL T1");
         back.setAllCaps(false);back.setOnClickListener(v->finish());top.addView(back);
         gauge=new T1PremiumInstrumentView(this);
