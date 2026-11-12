@@ -20,15 +20,17 @@ import java.util.EnumMap;
 import java.util.Locale;
 
 /**
- * Offline per-road rule editor. All controls SAVE PREFERENCES ONLY.
- * No automatic powertrain, SOC or regenerative-braking commands are issued.
+ * Offline four-profile editor and EXPLICIT opt-in automatic EV/HEV/EV MAX
+ * controller. Only OEM 1043 is writable automatically. Forced SOC and
+ * regenerative braking remain preferences/suggestions.
  */
 public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
     private static final int BG=0xFF0A1623, CARD=0xFFF4F8FA,
         MUTED=0xFF9DB7CA, AQUA=0xFF22BDB7;
     private final EnumMap<T1OptimizedModePolicy.Road,Profile> profiles=
         new EnumMap<>(T1OptimizedModePolicy.Road.class);
-    private TextView preview;
+    private TextView preview,automaticState;
+    private Button automaticButton;
     private T1OptimizedModePolicy.Road road=T1OptimizedModePolicy.Road.UNKNOWN;
     @Override protected int overlayClearBackgroundColor(){return BG;}
     static final class Profile {
@@ -164,10 +166,24 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         column(title,text("MODO OPTIMIZADO · 4 PERFILES",20,Color.WHITE,true),1);
         Button close=new Button(this);close.setAllCaps(false);close.setText("VOLVER");
         close.setOnClickListener(v->finish());title.addView(close);
-        root.addView(text("CONFIGURACIÓN LOCAL · SOLO SUGERENCIAS. "+
-            "No cambia automáticamente EV/HEV/EV MAX, SOC ni regeneración. "+
-            "Falta validar las escrituras OEM y transiciones antes de "+
-            "habilitar automatización del vehículo.",13,MUTED,false));
+        root.addView(text("MODO OPTIMIZADO ON aplica EV / HEV / EV MAX "+
+            "(señal 1043) automáticamente según el mapa OFFLINE y la "+
+            "condición SOC de cada perfil. Solo se hacen cambios con GPS "+
+            "preciso, clasificación estable y doble comprobación OEM de "+
+            "marcha/velocidad y modo. SOC SMART/FORZADO (1040/1041) y "+
+            "REGENERACIÓN (1046) siguen SOLO COMO PREFERENCIAS: sus "+
+            "comandos todavía no están validados. Si OEM rechaza un "+
+            "cambio, AUTO se desactiva; no repite órdenes ciegamente.",
+            13,MUTED,false));
+        LinearLayout switchRow=horizontal();root.addView(switchRow);
+        automaticButton=new Button(this);
+        automaticButton.setAllCaps(false);
+        automaticButton.setTextSize(18);
+        automaticButton.setOnClickListener(v->toggleAutomatic());
+        column(switchRow,automaticButton,1);
+        automaticState=text("AUTO: verificando estado…",14,Color.WHITE,true);
+        root.addView(automaticState);
+        refreshAutoUi();
         for(T1OptimizedModePolicy.Road r:T1OptimizedModePolicy.Road.values())
             card(root,r);
         LinearLayout actions=horizontal();root.addView(actions);
@@ -213,7 +229,7 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
             T1OptimizedModePolicy.Comparison.values()[
                 p.comparison.getSelectedItemPosition()],regen);
     }
-    private void saveProfiles(){
+    private boolean saveProfiles(){
         try{
             EnumMap<T1OptimizedModePolicy.Road,T1OptimizedModePolicy.Rule> next=
                 new EnumMap<>(T1OptimizedModePolicy.Road.class);
@@ -221,11 +237,58 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
                 next.put(r,fromControls(profiles.get(r)));
             for(T1OptimizedModePolicy.Road r:next.keySet())
                 T1OptimizedModeStore.save(this,r,next.get(r));
-            preview.setText("GUARDADOS LOS CUATRO PERFILES · sin comandos al "+
-                "vehículo.\n"+currentRecommendation());
+            preview.setText("GUARDADOS LOS CUATRO PERFILES · "+
+                "el modo automático solo controla 1043 si está ON.\n"+
+                currentRecommendation());
+            return true;
         }catch(IllegalArgumentException ex){
             preview.setText("NO GUARDADO: "+ex.getMessage());
+            return false;
         }
+    }
+    private void refreshAutoUi(){
+        boolean enabled=T1OptimizedAutoService.enabled(this);
+        if(automaticButton!=null){
+            automaticButton.setText(enabled?
+                "MODO OPTIMIZADO · ON · TOCAR PARA APAGAR":
+                "MODO OPTIMIZADO · OFF · TOCAR PARA ACTIVAR");
+            automaticButton.setBackgroundTintList(
+                android.content.res.ColorStateList.valueOf(
+                    enabled?0xFF087B71:0xFF7B4541));
+        }
+        if(automaticState!=null)
+            automaticState.setText(T1OptimizedAutoService.status(this));
+    }
+    private void toggleAutomatic(){
+        if(T1OptimizedAutoService.enabled(this)){
+            T1OptimizedAutoService.disable(this);
+            refreshAutoUi();
+            showCurrent();
+            return;
+        }
+        if(!saveProfiles())return;
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("ACTIVAR MODO OPTIMIZADO")
+            .setMessage("Al activarlo, DriveLab cambiará automáticamente "+
+                "EV, HEV o EV MAX según la vía y el SOC, incluso con Maps "+
+                "en pantalla. La app necesita GPS preciso y el mapa "+
+                "offline PBA+CABA. Verifica marcha P/0 o D con velocidad "+
+                "OEM válida, tres lecturas de vía consecutivas y el "+
+                "resultado del comando 1043. No aplica todavía SOC "+
+                "Forzado/Smart ni regeneración, aunque los hayas "+
+                "configurado. Ante un rechazo OEM se desactiva "+
+                "automáticamente. Podés apagarlo con este mismo botón "+
+                "o con la notificación del sistema.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("ACTIVAR",(d,w)->{
+                String message=T1OptimizedAutoService.activate(this);
+                refreshAutoUi();
+                preview.setText(message+"\n"+currentRecommendation());
+            }).show();
+    }
+    @Override protected void onResume(){
+        super.onResume();
+        refreshAutoUi();
     }
     private String currentRecommendation(){
         road=T1OptimizedModeStore.lastRoad(this);
@@ -240,11 +303,14 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
             road,T1OptimizedModeStore.get(this,road),soc);
         return "VÍA: "+T1OptimizedModePolicy.roadName(road)+
             " · "+info+"\n"+result.summary()+
-            "\nUna condición SOC mínima necesita batería OEM válida. "+
+            "\nEl modo automático aplica solo 1043 si está encendido. "+
+            "Una condición SOC necesita batería OEM válida. "+
             "Si la lectura está ausente, se recomienda HEV SMART. "+
             "La condición usa el SOC actual, no el objetivo SOC forzado.";
     }
     private void showCurrent(){
-        preview.setText(currentRecommendation());
+        preview.setText(currentRecommendation()+"\n"+
+            T1OptimizedAutoService.status(this));
+        refreshAutoUi();
     }
 }
