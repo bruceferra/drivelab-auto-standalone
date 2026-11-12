@@ -178,6 +178,24 @@ jobs:
             receiver/tests/RecirculationPolicyTest.java
           java -cp /tmp/t1-trip-test T1TripMathTest
           java -cp /tmp/t1-trip-test RecirculationPolicyTest
+      - name: T1 voice-overlay safe area and immersive regression (static)
+        shell: bash
+        run: |
+          set -euo pipefail
+          base=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ImmersiveActivity.java
+          cockpit=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
+          hub=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/ReceiverActivity.java
+          grep -q 'DEFAULT_CLEAR_HEIGHT_DP=112' "$base"
+          grep -q 'HEIGHTS_DP={0,80,112,144,176}' "$base"
+          grep -q 'getSharedPreferences(CLEAR_PREFS' "$base"
+          grep -q 'shell.addView(blank' "$base"
+          grep -q 'shell.addView(content' "$base"
+          grep -q 'super.setContentView(shell)' "$base"
+          grep -q 'overlayClearBackgroundColor(){return BG;}' "$cockpit"
+          grep -q 'cycleClearanceDp()' "$cockpit"
+          grep -q 'cycleClearanceDp()' "$hub"
+          grep -q 'T1ImmersiveMode.apply(this)' "$base"
+          ! grep -E 'SYSTEM_ALERT_WINDOW|WRITE_SECURE_SETTINGS|policy_control|killBackgroundProcesses' "$base"
       - name: Separate apps and Android APK builds
         run: gradle --no-daemon :sender:assembleDebug :receiver:assembleDebug
       - name: Verify independent identities, permissions and no telemetry
