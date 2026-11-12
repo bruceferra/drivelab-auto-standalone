@@ -17,7 +17,14 @@ public final class T1PremiumInstrumentView extends View {
     private final Paint p=new Paint(Paint.ANTI_ALIAS_FLAG);
     private Float speed,fuel,soc,rpm,currentA;private int powerMode=-1;
     private float animatedSpeed=0f;
+    private boolean compactWithoutSpeed;
     public T1PremiumInstrumentView(Context c){super(c);setLayerType(View.LAYER_TYPE_SOFTWARE,null);}
+    /** Preserve all OEM instrument cards without the large speedometer. */
+    public void setCompactWithoutSpeed(boolean enabled){
+        if(compactWithoutSpeed==enabled)return;
+        compactWithoutSpeed=enabled;
+        requestLayout();invalidate();
+    }
     public void update(Double speed,Double fuel,Double soc,int powerMode,
                        Double rpm,Double currentA){
         this.speed=good(speed,0,220);this.fuel=good(fuel,0,70);
@@ -31,7 +38,7 @@ public final class T1PremiumInstrumentView extends View {
         return n!=null&&Double.isFinite(n)&&n>=min&&n<=max?n.floatValue():null;
     }
     @Override protected void onMeasure(int w,int h){
-        int width=MeasureSpec.getSize(w),height=(int)(width*466f/1200f);
+        int width=MeasureSpec.getSize(w),height=(int)(width*(compactWithoutSpeed?178f:466f)/1200f);
         setMeasuredDimension(width,resolveSize(height,h));
     }
     private void fill(int color){p.setStyle(Paint.Style.FILL);p.setShader(null);p.setColor(color);}
@@ -127,10 +134,74 @@ public final class T1PremiumInstrumentView extends View {
             String.format(Locale.forLanguageTag("es-AR"),"%.1f A · signo por validar",
                 Math.abs(currentA)),921,435,MUTED,14,false);
     }
+    /** Same instruments as the full display: fuel, SOC, thermal engine,
+     * HV battery flow, and drive-mode readback. Only speedometer omitted.
+     * True four-card layout (not stretching/cropping the old speed image).
+     */
+    private void compactInstruments(Canvas c){
+        round(c,0,0,1200,178,18,BG);
+        round(c,4,5,296,172,17,CARD);
+        round(c,304,5,596,172,17,CARD);
+        round(c,604,5,896,172,17,CARD);
+        round(c,904,5,1196,172,17,CARD);
+
+        label(c,"COMBUSTIBLE · CI186",18,35,MUTED,17,false);
+        label(c,fuel==null?"SIN LECTURA":
+            String.format(Locale.forLanguageTag("es-AR"),"%.2f L",fuel),
+            18,98,WHITE,fuel==null?26:48,true);
+        track(c,20,116,278,136,fuel==null?0:fuel/67,GOLD);
+        label(c,"LITROS OEM INDICADOS",20,161,MUTED,14,false);
+
+        label(c,"BATERÍA · SOC TABLERO",318,35,MUTED,17,false);
+        label(c,soc==null?"SIN LECTURA":
+            String.format(Locale.ROOT,"%.1f %%",soc),
+            318,94,WHITE,soc==null?26:46,true);
+        track(c,319,109,577,125,soc==null?0:soc/100,TEAL);
+        int modeColor=powerMode==1?TEAL:powerMode==2?GOLD:BLUE;
+        label(c,"MODO · "+T1ZonePolicy.name(powerMode),
+            319,159,modeColor,18,true);
+
+        T1PowerFlowPolicy.Engine engine=T1PowerFlowPolicy.engine(
+            rpm==null?Double.NaN:rpm);
+        int engineColor=engine==T1PowerFlowPolicy.Engine.ON?GOLD:
+            engine==T1PowerFlowPolicy.Engine.OFF?TEAL:MUTED;
+        label(c,"MOTOR TÉRMICO · 1035",618,35,MUTED,17,false);
+        fill(engineColor);c.drawCircle(634,84,10,p);
+        label(c,T1PowerFlowPolicy.engineLabel(engine),
+            656,93,engineColor,29,true);
+        label(c,rpm==null?"RPM: SIN LECTURA":
+            String.format(Locale.ROOT,"RPM: %.0f",rpm),
+            618,137,WHITE,20,false);
+        label(c,"ESTADO POR RPM · EXP.",618,160,MUTED,14,false);
+
+        T1PowerFlowPolicy.Battery battery=T1PowerFlowPolicy.battery(
+            currentA==null?Double.NaN:currentA);
+        int flowColor=battery==T1PowerFlowPolicy.Battery.CHARGING?TEAL:
+            battery==T1PowerFlowPolicy.Battery.DISCHARGING?GOLD:MUTED;
+        label(c,"BATERÍA HV · 1064",918,35,MUTED,17,false);
+        stroke(0xFFB9D5DE,3);
+        c.drawRoundRect(920,59,974,92,6,6,p);
+        round(c,975,69,981,83,2,0xFFB9D5DE);
+        if(soc!=null)round(c,923,62,923+48f*Math.max(0,
+            Math.min(100,soc))/100f,89,3,
+            battery==T1PowerFlowPolicy.Battery.CHARGING?TEAL:BLUE);
+        label(c,T1PowerFlowPolicy.batteryLabel(battery),
+            994,84,flowColor,19,true);
+        label(c,currentA==null?"A: SIN LECTURA":
+            String.format(Locale.forLanguageTag("es-AR"),
+                "%.1f A · signo por validar",Math.abs(currentA)),
+            918,126,WHITE,currentA==null?18:16,false);
+        label(c,"FLUJO OEM EXPERIMENTAL",918,160,MUTED,14,false);
+    }
     @Override protected void onDraw(Canvas real){
         super.onDraw(real);
         Canvas c=real;float ratio=getWidth()/1200f;
         c.save();c.scale(ratio,ratio);
+        if(compactWithoutSpeed){
+            compactInstruments(c);
+            c.restore();
+            return;
+        }
         round(c,0,0,1200,466,30,BG);
         round(c,430,55,1182,178,20,CARD);
         round(c,430,192,1182,325,20,CARD);
