@@ -39,7 +39,7 @@ public final class T1TripRecorderService extends Service {
         SEG_FUEL_COUNT="seg_fuel_count", SEG_ELEC_COUNT="seg_elec_count",
         SEG_FUEL_LAST="seg_fuel_last", SEG_ELEC_LAST="seg_elec_last",
         SEG_STATUS="seg_status", SEG_FUEL_RAW_SUM="seg_fuel_raw_sum",
-        SEG_ELEC_RAW_SUM="seg_elec_raw_sum";
+        SEG_ELEC_RAW_SUM="seg_elec_raw_sum", LAST_SAMPLE_TIME="last_sample_time";
     private static final String CHANNEL="t1_trip_recorder";
     private static final int NOTIF_ID=7527;
     private volatile boolean stop,running;
@@ -98,6 +98,7 @@ public final class T1TripRecorderService extends Service {
         }while(new File(tripDir(this),"trip_"+name+".csv").exists());
         p().edit().putString(ID,name).putBoolean(RUNNING,true)
             .putLong(START_TIME,System.currentTimeMillis()).remove(END_TIME)
+            .putLong(LAST_SAMPLE_TIME,0L)
             .putFloat(DISTANCE,0).putFloat(GAS_L,0).putFloat(EV_KWH,0)
             .putFloat(CHARGE_KWH,0).putInt(SAMPLES,0)
             .putInt(SEG_FUEL_COUNT,0).putInt(SEG_ELEC_COUNT,0)
@@ -259,7 +260,8 @@ public final class T1TripRecorderService extends Service {
                 sampleCount++;
                 if(sampleCount%5==0)out.flush();
                 if(sampleCount%20==0)T1TripSync.trigger(this,false);
-                p().edit().putFloat(DISTANCE,(float)km)
+                p().edit().putLong(LAST_SAMPLE_TIME,s.timestamp)
+                    .putFloat(DISTANCE,(float)km)
                     .putFloat(GAS_L,(float)liters).putFloat(EV_KWH,(float)hvOut)
                     .putFloat(CHARGE_KWH,(float)hvIn)
                     .putFloat(LAST_FUEL,(float)s.fuel)
