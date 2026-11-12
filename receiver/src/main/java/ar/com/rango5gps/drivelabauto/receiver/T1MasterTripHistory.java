@@ -39,6 +39,41 @@ final class T1MasterTripHistory {
         try{double n=Double.parseDouble(row[idx]);return Double.isFinite(n)?n:Double.NaN;}
         catch(NumberFormatException ex){return Double.NaN;}
     }
+    private static final class EventTotals {
+        int fuelCount,electricCount;
+        double fuelRaw,electricRaw;
+        boolean validFuel=true,validElectric=true;
+    }
+    private static EventTotals readOemEvents(File csv,String id)throws IOException{
+        EventTotals sums=new EventTotals();
+        File events=new File(csv.getParentFile(),"trip_oem_"+id+".csv");
+        if(!events.isFile())return sums;
+        try(BufferedReader reader=new BufferedReader(new java.io.InputStreamReader(
+                new java.io.FileInputStream(events),
+                java.nio.charset.StandardCharsets.UTF_8))){
+            String header=reader.readLine();
+            if(header==null||!header.startsWith("timestamp_epoch_ms,channel,"))
+                return sums;
+            String line;
+            while((line=reader.readLine())!=null){
+                String[] f=line.split(",",-1);
+                if(f.length!=3)continue;
+                double value=number(f,2);
+                if("NAFTA_500_m".equals(f[1])){
+                    sums.fuelCount++;
+                    if(Double.isFinite(value)&&value>=0&&value<=100)
+                        sums.fuelRaw+=value;
+                    else sums.validFuel=false;
+                }else if("ELÉCTRICO_500_m".equals(f[1])){
+                    sums.electricCount++;
+                    if(Double.isFinite(value)&&Math.abs(value)<=150)
+                        sums.electricRaw+=value;
+                    else sums.validElectric=false;
+                }
+            }
+        }
+        return sums;
+    }
     static Entry read(File source)throws IOException{
         if(source==null||!source.isFile()||
             !source.getName().matches("trip_[0-9]{8}_[0-9]{6}\\.csv"))
@@ -98,8 +133,16 @@ final class T1MasterTripHistory {
             Math.abs(rebuilt-witness)<=Math.max(1.5,witness*.08);
         boolean changed=verified&&
             Math.abs(rebuilt-original)>Math.max(.5,original*.03);
-        // Historical fuel proxy km*rolling consumption changes with the wrong
-        // distance and is NOT a measured total. Do not invent trip litres.
+        // The CSV's gas_l_proxy is computed from the RECORDED distance and
+        // is not measured fuel: NEVER reuse it after correcting distance.
+        // Only use the independent raw 500m OEM callback file (same source
+        // as the client's experimental L calculation). Missing/mismatched
+        // callbacks produce an explicit unknown value, never zero litres.
+        EventTotals totals=readOemEvents(source,id);
+        boolean fuelCountMatches=events>0&&totals.fuelCount>0&&
+            Math.abs(events-totals.fuelCount)<=2;
+        double experimentalLiters=fuelCountMatches&&totals.validFuel?
+            totals.fuelRaw*.5/100.0:Double.NaN;
         String status=changed?"CORREGIDA OEM "+events+
             " eventos de 500 m":verified?
             "DISTANCIA CONFIRMADA POR OEM":
@@ -108,7 +151,9 @@ final class T1MasterTripHistory {
             changed?ev:Double.NaN,
             changed?ice:Double.NaN,
             changed?unknown:Double.NaN,
-            Double.NaN,kwh,n,events,changed,verified,status);
+            experimentalLiters,kwh,n,events,changed,verified,status+
+                (Double.isFinite(experimentalLiters)?
+                    " · combustible OEM experimental":" · litros sin confirmar"));
     }
     static ArrayList<Entry> closed(File dir,String currentId,
                                    boolean currentOpen){
