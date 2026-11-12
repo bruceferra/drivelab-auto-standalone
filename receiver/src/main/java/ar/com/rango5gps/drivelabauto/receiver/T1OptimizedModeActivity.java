@@ -32,7 +32,7 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
     private T1OptimizedModePolicy.Road road=T1OptimizedModePolicy.Road.UNKNOWN;
     @Override protected int overlayClearBackgroundColor(){return BG;}
     static final class Profile {
-        Spinner power,strategy,regen;
+        Spinner power,strategy,regen,comparison;
         CheckBox conditional;
         EditText forced,targetMinimum;
     }
@@ -106,23 +106,53 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         regen.addView(p.regen);column(options,regen,1);
 
         LinearLayout second=horizontal();box.addView(second);
-        LinearLayout target=vertical();
-        target.addView(text("SOC FORZADO % (solo si se eligió Forzado)",
-            11,0xFF334B5A,false));
-        p.forced=number(existing.forcedSoc,"50");target.addView(p.forced);
-        column(second,target,1);
+        // Left: a CONDITION on actual observed battery percentage.
+        // Right: separate target percentage requested in FORCED mode.
         LinearLayout threshold=vertical();
+        threshold.addView(text("CONDICIÓN DE BATERÍA (SOC ACTUAL)",
+            12,0xFF334B5A,true));
         p.conditional=new CheckBox(this);
-        p.conditional.setText("EXIGIR SOC >");
+        p.conditional.setText("ACTIVAR CONDICIÓN");
         p.conditional.setChecked(existing.thresholdEnabled);
         threshold.addView(p.conditional);
-        p.targetMinimum=number(existing.minBattery,"30");
-        threshold.addView(p.targetMinimum);
+        LinearLayout thresholdEditor=horizontal();
+        p.comparison=selector(new String[]{
+                "Mayor o igual (≥)","Menor o igual (≤)"},
+            existing.comparison.ordinal());
+        column(thresholdEditor,p.comparison,2);
+        p.targetMinimum=number(existing.minBattery,"Porcentaje");
+        column(thresholdEditor,p.targetMinimum,1);
+        thresholdEditor.addView(text("%",15,0xFF334B5A,true));
+        threshold.addView(thresholdEditor);
         column(second,threshold,1);
+
+        LinearLayout target=vertical();
+        target.addView(text("OBJETIVO SOC FORZADO",12,0xFF334B5A,true));
+        target.addView(text("Porcentaje que se le pediría mantener al auto "+
+            "si elegís SOC FORZADO (distinto de la condición).",
+            11,0xFF40566B,false));
+        LinearLayout targetEditor=horizontal();
+        p.forced=number(existing.forcedSoc,"Porcentaje objetivo");
+        column(targetEditor,p.forced,1);
+        targetEditor.addView(text("%",15,0xFF334B5A,true));
+        target.addView(targetEditor);
+        column(second,target,1);
         profiles.put(which,p);
-        p.conditional.setOnCheckedChangeListener((b,checked)->
-            p.targetMinimum.setEnabled(checked));
+        p.conditional.setOnCheckedChangeListener((b,checked)->{
+            p.targetMinimum.setEnabled(checked);
+            p.comparison.setEnabled(checked);
+        });
         p.targetMinimum.setEnabled(existing.thresholdEnabled);
+        p.comparison.setEnabled(existing.thresholdEnabled);
+        p.forced.setEnabled(existing.strategy==
+            T1OptimizedModePolicy.Strategy.FORCED);
+        p.strategy.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+            @Override public void onItemSelected(android.widget.AdapterView<?> parent,
+                    View view,int position,long id){
+                p.forced.setEnabled(position==T1OptimizedModePolicy.Strategy.FORCED.ordinal());
+            }
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parent){}
+        });
     }
     @Override protected void onCreate(Bundle state){
         super.onCreate(state);
@@ -179,7 +209,9 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         // Even disabled fields must be validated to prevent hidden bad prefs.
         return new T1OptimizedModePolicy.Rule(
             power,strategy,percentage(p.forced),p.conditional.isChecked(),
-            percentage(p.targetMinimum),regen);
+            percentage(p.targetMinimum),
+            T1OptimizedModePolicy.Comparison.values()[
+                p.comparison.getSelectedItemPosition()],regen);
     }
     private void saveProfiles(){
         try{
@@ -209,7 +241,8 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         return "VÍA: "+T1OptimizedModePolicy.roadName(road)+
             " · "+info+"\n"+result.summary()+
             "\nUna condición SOC mínima necesita batería OEM válida. "+
-            "Si la lectura está ausente, se recomienda HEV SMART.";
+            "Si la lectura está ausente, se recomienda HEV SMART. "+
+            "La condición usa el SOC actual, no el objetivo SOC forzado.";
     }
     private void showCurrent(){
         preview.setText(currentRecommendation());
