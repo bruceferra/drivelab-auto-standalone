@@ -48,7 +48,10 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private int selectedScope=1;
     private LinearLayout totalScopeCard,client1ScopeCard,client2ScopeCard;
     private TextView totalScopeTitle,totalScopeKm,secondScopeTitle,secondScopeKm,osmBanner;
-    private LinearLayout secondary;
+    private LinearLayout secondary,historyPickList,historyDetailRow;
+    private TextView historyDetailTitle,historyRepairStatus;
+    private String selectedHistoryKey="";
+    private final AtomicBoolean historyRepairBusy=new AtomicBoolean(false);
     private TextView tripStatus,kmNow,evKmNow,consumptionNow,clientSyncStatus,
         fuelNow,electricNow,costNow,clientNow,
         dayNow,monthNow,historyNow,zoneStatus,feedback,energyNote,
@@ -897,6 +900,18 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         historyNow=text("Todavía no hay trayectos cerrados.",14,MUTED,false);
         historyNow.setBackground(bg(CARD,18));historyNow.setPadding(16,14,16,14);
         secondary.addView(historyNow);
+        historyRepairStatus=text("Correcciones históricas: verificando…",
+            12,MUTED,false);
+        secondary.addView(historyRepairStatus);
+        LinearLayout repairActions=row();secondary.addView(repairActions);
+        compactButton(repairActions,"RECONSTRUIR KM DEL HISTORIAL",TEAL,
+            this::runHistoryRepair);
+        secondary.addView(text("TOCÁ UN VIAJE PARA VER SUS SEIS INDICADORES "+
+            "Y SU DISTANCIA ORIGINAL / CORREGIDA.",12,MUTED,true));
+        historyPickList=col();secondary.addView(historyPickList);
+        historyDetailTitle=text("Elegí un viaje del historial.",14,WHITE,true);
+        secondary.addView(historyDetailTitle);
+        historyDetailRow=row();secondary.addView(historyDetailRow);
         advanced=col();advanced.setPadding(14,12,14,14);
         advanced.setBackground(bg(CARD,20));
         advanced.setVisibility(android.view.View.GONE);
@@ -1302,27 +1317,152 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             "\nRed comprada: "+f(month.gridKwh,1)+" kWh ($"+
             f(month.gridCost,0)+") · no imputada");
 
-        ArrayList<T1JourneyStore.Entry> all=T1JourneyStore.history(this);
-        StringBuilder s=new StringBuilder();
+        ArrayList<HistoryRecord> all=new ArrayList<>();
+        for(T1JourneyStore.Entry e:T1JourneyStore.history(this))
+            all.add(new HistoryRecord(1,e.id,e.label,e.started,e.ended,
+                e.km,e.originalKm,e.evKm,e.liters,e.electricNet,e.fuelCost,
+                e.correctedKm,e.fuelEvents));
+        for(T1JourneyStore2.Entry e:T1JourneyStore2.history(this))
+            all.add(new HistoryRecord(2,e.id,e.label,e.started,e.ended,
+                e.km,e.originalKm,e.evKm,e.liters,e.electricNet,e.fuelCost,
+                e.correctedKm,e.fuelEvents));
+        all.sort((a,b)->Long.compare(b.ended,a.ended));
         SimpleDateFormat dt=new SimpleDateFormat("dd/MM HH:mm",Locale.getDefault());
-        for(int i=all.size()-1;i>=0&&i>=all.size()-5;i--){
-            T1JourneyStore.Entry e=all.get(i);
-            s.append(dt.format(new Date(e.started))).append(" · ")
-                .append(e.label).append("\n")
-                .append(f(e.km,2)).append(" km · ")
-                .append(Double.isFinite(e.evKm)?
-                    f(e.evKm,2)+" km sin térmico (1035) · ":"EV km: histórico no medido · ")
-                .append(Double.isFinite(e.liters)?
-                    f(e.liters,3)+" L exp.":"sin segmento completo")
-                .append(" · $")
-                .append(f(e.fuelCost,0)).append(" nafta exp.")
-                .append("\nElectricidad neta OEM (experimental): ")
-                .append(Double.isFinite(e.electricNet)?
-                    f(e.electricNet,3)+" kWh":"SIN DATO")
-                .append(" · NO representa compra de red\n");
+        StringBuilder summary=new StringBuilder();
+        for(int i=0;i<Math.min(4,all.size());i++){
+            HistoryRecord e=all.get(i);
+            summary.append("VIAJE ").append(e.slot).append(" · ")
+                .append(dt.format(new Date(e.started))).append(" · ")
+                .append(f(e.km,2)).append(" km");
+            if(e.corrected)summary.append(" · RECALCULADO OEM");
+            summary.append("\n");
         }
-        historyNow.setText(s.length()==0?
-            "Sin trayectos de cliente guardados.":s.toString().trim());
+        historyNow.setText(summary.length()==0?
+            "Sin trayectos de cliente guardados.":summary.toString().trim());
+        if(historyPickList!=null){
+            historyPickList.removeAllViews();
+            for(int i=0;i<Math.min(25,all.size());i++){
+                HistoryRecord item=all.get(i);
+                TextView line=text(
+                    (selectedHistoryKey.equals(item.key())?"● ":"○ ")+
+                    "VIAJE "+item.slot+" · "+dt.format(new Date(item.started))+
+                    " · "+f(item.km,2)+" km"+
+                    (item.corrected?" · CORREGIDO":""),
+                    14,selectedHistoryKey.equals(item.key())?TEAL:WHITE,true);
+                line.setPadding(12,9,12,9);
+                line.setBackground(bg(CARD,10));
+                LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);
+                lp.setMargins(2,2,2,2);
+                historyPickList.addView(line,lp);
+                line.setOnClickListener(v->{
+                    selectedHistoryKey=item.key();
+                    showHistoryDetails(item);
+                    lastTotals=0;
+                });
+            }
+            HistoryRecord chosen=null;
+            for(HistoryRecord h:all)
+                if(selectedHistoryKey.equals(h.key())){chosen=h;break;}
+            if(chosen==null&&!all.isEmpty()){
+                chosen=all.get(0);selectedHistoryKey=chosen.key();
+            }
+            if(chosen!=null)showHistoryDetails(chosen);
+            else{
+                historyDetailTitle.setText("Todavía no hay viajes cerrados");
+                historyDetailRow.removeAllViews();
+            }
+        }
+        if(historyRepairStatus!=null&&!historyRepairBusy.get()){
+            int corrected=0,review=0,protectedCount=0;
+            for(T1HistoricalDistanceRepair.Entry e:
+                T1HistoricalDistanceRepair.load(
+                    T1TripRecorderService.tripDir(this)).values()){
+                if(e.applied())corrected++;
+                else if("PROTEGIDO_ULTIMO_VIAJE_2".equals(e.status))
+                    protectedCount++;
+                else if(e.status.startsWith("REVISAR"))review++;
+            }
+            historyRepairStatus.setText(
+                corrected+" viajes con corrección OEM auditada · "+
+                review+" para revisar · "+protectedCount+
+                " Viaje 2 reciente protegido.");
+        }
+    }
+    private static final class HistoryRecord {
+        final int slot,fuelEvents;
+        final String id,label;
+        final long started,ended;
+        final double km,oldKm,evKm,liters,kwh,cost;
+        final boolean corrected;
+        HistoryRecord(int slot,String id,String label,long started,long ended,
+                      double km,double oldKm,double evKm,double liters,
+                      double kwh,double cost,boolean corrected,int events){
+            this.slot=slot;this.id=id;this.label=label;
+            this.started=started;this.ended=ended;
+            this.km=km;this.oldKm=oldKm;this.evKm=evKm;
+            this.liters=liters;this.kwh=kwh;this.cost=cost;
+            this.corrected=corrected;fuelEvents=events;
+        }
+        String key(){return slot+":"+id;}
+    }
+    private void showHistoryDetails(HistoryRecord x){
+        if(historyDetailTitle==null||historyDetailRow==null)return;
+        historyDetailTitle.setText("VIAJE "+x.slot+" · "+
+            new SimpleDateFormat("dd/MM/yyyy HH:mm",Locale.getDefault())
+                .format(new Date(x.started))+
+            " · "+f(x.km,2)+" km"+(x.corrected?
+                " (antes "+f(x.oldKm,2)+" km · OEM corregido)":"")+
+            "\n"+x.label);
+        historyDetailRow.removeAllViews();
+        boolean fuelOk=x.km>0&&Double.isFinite(x.liters)&&x.liters>0;
+        String consumption=fuelOk?
+            f(100*x.liters/x.km,2)+" L/100 · "+
+                f(x.km/x.liters,2)+" km/L":"SIN DATO";
+        compactMetric(historyDetailRow,"CONSUMO",consumption);
+        compactMetric(historyDetailRow,"KM ELÉCTRICOS PUROS",
+            Double.isFinite(x.evKm)?f(x.evKm,2)+" km":"SIN DATO");
+        compactMetric(historyDetailRow,"COMBUSTIBLE CONSUMIDO",
+            Double.isFinite(x.liters)?f(x.liters,3)+" L exp.":"SIN DATO");
+        compactMetric(historyDetailRow,"ELECTRICIDAD CONSUMIDA",
+            Double.isFinite(x.kwh)?f(x.kwh,3)+" kWh exp.":"SIN DATO");
+        compactMetric(historyDetailRow,"COSTO COMBUSTIBLE",
+            Double.isFinite(x.cost)?"$ "+f(x.cost,0)+" exp.":"SIN DATO");
+        // Historical end-of-trip range was not persisted. Never substitute
+        // the current vehicle's autonomy into a completed trip.
+        compactMetric(historyDetailRow,"AUTONOMÍA TOTAL","NO GUARDADA");
+    }
+    private void runHistoryRepair(){
+        if(!historyRepairBusy.compareAndSet(false,true))return;
+        if(historyRepairStatus!=null)
+            historyRepairStatus.setText("Verificando viajes cerrados y "+
+                "eventos OEM independientes…");
+        new Thread(()->{
+            String message;
+            try{
+                java.io.File folder=T1TripRecorderService.tripDir(this);
+                java.util.ArrayList<T1HistoricalDistanceRepair.Entry> list=
+                    T1HistoricalDistanceRepair.calculate(folder);
+                T1HistoricalDistanceRepair.save(folder,list);
+                int fixed=0,pending=0;
+                for(T1HistoricalDistanceRepair.Entry e:list){
+                    if(e.applied())fixed++;
+                    else if(e.status.startsWith("REVISAR"))pending++;
+                }
+                message="Reparación conservadora finalizada: "+fixed+
+                    " viajes corregidos; "+pending+
+                    " para revisar. Originales CSV sin modificar.";
+            }catch(Exception ex){
+                message="No se pudo reconstruir: "+
+                    ex.getClass().getSimpleName()+" · "+ex.getMessage();
+            }
+            final String report=message;
+            ui.post(()->{
+                historyRepairBusy.set(false);
+                if(historyRepairStatus!=null)historyRepairStatus.setText(report);
+                lastTotals=0;
+                if(visible)updateHistory();
+            });
+        },"T1-ClosedTrips-OEM-Rebuild").start();
     }
     private void message(String m){feedback.setText(m);lastTotals=0;updateStats();}
     private void startDay(){
