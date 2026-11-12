@@ -25,9 +25,38 @@ public final class BootReceiver extends BroadcastReceiver {
                         error.getClass().getSimpleName()).apply();
             }
         }
-        // Recirculation has independent explicit opt-in and survives reboot.
-        // The mirror reference D cannot be trusted after a reboot; never
-        // auto-resume mirror movement or trips from BOOT_COMPLETED.
+        // Same user opt-in as Driver Uber's ContinuousTripBootReceiver.
+        // Restart the EXISTING Trip/Customer after vehicle boot or APK update,
+        // never create a new session and never close the user's passenger.
+        // The foreground worker itself reconstructs its CSV/checkpoints.
+        android.content.SharedPreferences trip=context.getSharedPreferences(
+            T1TripRecorderService.PREFS,Context.MODE_PRIVATE);
+        boolean desired=trip.getBoolean(T1TripRecorderService.DESIRED,false);
+        // Migration: the old version had RUNNING but no persistent DESIRED.
+        if(!trip.contains(T1TripRecorderService.DESIRED))
+            desired=trip.getBoolean(T1TripRecorderService.RUNNING,false)||
+                T1JourneyStore.active(context)||T1JourneyStore.pending(context);
+        if(desired){
+            try{
+                Intent restore=new Intent(context,T1TripRecorderService.class)
+                    .setAction(T1TripRecorderService.ACTION_RESTORE);
+                if(Build.VERSION.SDK_INT>=26)
+                    context.startForegroundService(restore);
+                else context.startService(restore);
+                trip.edit().putString(T1TripRecorderService.RESTORE_STATUS,
+                    "Reanudación automática solicitada tras "+
+                    (Intent.ACTION_MY_PACKAGE_REPLACED.equals(action)?
+                        "actualización":"encendido del vehículo")).apply();
+            }catch(RuntimeException error){
+                trip.edit().putString(T1TripRecorderService.RESTORE_STATUS,
+                    "Android bloqueó el reinicio automático: "+
+                    error.getClass().getSimpleName()+
+                    ". Reintentará al abrir el cockpit; NO se perdió el CSV.")
+                    .apply();
+            }
+        }
+        // Recirculation has independent opt-in. Mirror control is NOT
+        // resumed across boot; only data recording is restarted here.
         android.content.SharedPreferences hvac=context.getSharedPreferences(
             RecirculationGuardService.PREFS,Context.MODE_PRIVATE);
         if(RecirculationGuardService.MODE_INTERIOR.equals(hvac.getString(

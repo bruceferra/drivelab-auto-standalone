@@ -38,6 +38,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private long lastTelem=0,lastTotals=0;
     private T1TripTelemetry.Sample lastSample;
     private T1PremiumInstrumentView gauge;
+    private TextView dayRecordingLamp,clientRecordingLamp;
+    private Button dayStartButton,clientStartButton,clientRecoverButton;
     private TextView tripStatus,kmNow,fuelNow,electricNow,costNow,clientNow,
         dayNow,monthNow,historyNow,zoneStatus,feedback,energyNote,
         scopeTitle,scopeProgress,socStrategy,autonomyNow,autonomyDetail;
@@ -115,7 +117,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                     });
                 },"T1-Cockpit-ReadOnly").start();
             }
-            ui.postDelayed(this,1300);
+            ui.postDelayed(this,700);
         }
     };
     private static Double valid(double v,double min,double max){
@@ -136,7 +138,30 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     }
     @Override protected void onResume(){
         super.onResume();visible=true;lastTelem=0;lastTotals=0;
+        ensureContinuousTrip();
         ui.removeCallbacks(ticker);ui.post(ticker);
+    }
+    private void ensureContinuousTrip(){
+        SharedPreferences master=getSharedPreferences(
+            T1TripRecorderService.PREFS,MODE_PRIVATE);
+        boolean desired=master.getBoolean(T1TripRecorderService.DESIRED,
+            master.getBoolean(T1TripRecorderService.RUNNING,false)||
+                T1JourneyStore.active(this));
+        if(!desired)return;
+        long elapsed=System.currentTimeMillis()-
+            master.getLong(T1TripRecorderService.LAST_SAMPLE_TIME,0L);
+        if(elapsed>=0&&elapsed<=15000&&
+            master.getBoolean(T1TripRecorderService.RUNNING,false))return;
+        try{
+            startForegroundService(new Intent(this,T1TripRecorderService.class)
+                .setAction(T1TripRecorderService.ACTION_RESTORE));
+        }catch(RuntimeException ex){
+            master.edit().putString(T1TripRecorderService.RESTORE_STATUS,
+                "Android impidió el auto-reinicio: "+
+                ex.getClass().getSimpleName()+
+                ". Se mantiene abierta la jornada sin borrar datos.")
+                .apply();
+        }
     }
     @Override protected void onPause(){
         visible=false;ui.removeCallbacks(ticker);super.onPause();
@@ -191,7 +216,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         modeAtTop.setText(fresh?
             "ACTUAL: "+T1ManualHevPolicy.currentMode(actual)+
             " (1043="+actual+"). Cambios de DriveLab: "+
-            "solo en P y 0 km/h; EV/EV MAX aún experimentales.":
+            "solo en P y 0 km/h; los tres modos probados en P.":
             "MODO OEM · sin lectura reciente. Sin escrituras.");
     }
     private void askTripleMode(int target){
@@ -230,9 +255,11 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             .setTitle("CAMBIO MANUAL → "+targetName)
             .setMessage("Intentar una vez 1043="+target+
                 " con verificación doble de P/velocidad cero y lectura "+
-                "posterior del modo. EV→HEV se comprobó físicamente "+
-                "estacionado; EV y EV MAX son aún pruebas experimentales. "+
-                "No hay cambios automáticos ni en movimiento.")
+                "posterior del modo. EV, HEV y EV MAX confirmados por "+
+                "lectura 1043 desde DriveLab en P. El control Jetour "+
+                "original puede operar en marcha, pero esta interfaz "+
+                "Android NO fue validada circulando. "+
+                "Sin cambios GPS automáticos.")
             .setNegativeButton("CANCELAR",null)
             .setPositiveButton("PROBAR UNA VEZ",(dialog,which)->{
                 modeAtTop.setText("Consultando OEM; verificando modo…");
@@ -359,7 +386,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         LinearLayout top=row();top.setGravity(Gravity.CENTER_VERTICAL);root.addView(top);
         LinearLayout title=col();
         title.addView(text("DRIVELAB / T1",19,WHITE,true));
-        title.addView(text("COCKPIT · v0.2.42",12,MUTED,false));
+        title.addView(text("COCKPIT · v0.2.43",12,MUTED,false));
         top.addView(title,new LinearLayout.LayoutParams(0,-2,1));
         Button displaySettings=new Button(this);
         displaySettings.setAllCaps(false);
@@ -379,6 +406,14 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         modeAtTop=text("MODO OEM: esperando 1043 · control manual solo detenido en P",
             14,MUTED,false);
         root.addView(modeAtTop);
+        LinearLayout recordingLamps=row();
+        root.addView(recordingLamps);
+        dayRecordingLamp=text("○ JORNADA DETENIDA",17,MUTED,true);
+        clientRecordingLamp=text("○ CLIENTE DETENIDO",17,MUTED,true);
+        recordingLamps.addView(dayRecordingLamp,
+            new LinearLayout.LayoutParams(0,-2,1f));
+        recordingLamps.addView(clientRecordingLamp,
+            new LinearLayout.LayoutParams(0,-2,1f));
 
         gauge=new T1PremiumInstrumentView(this);
         LinearLayout.LayoutParams meterParams=new LinearLayout.LayoutParams(-1,-2);
@@ -471,13 +506,18 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         heading(journey,"01  JORNADA · GRABACIÓN CONTINUA");
         tripStatus=text("Revisando TRIP OEM…",15,MUTED,false);journey.addView(tripStatus);
         LinearLayout dayButtons=row();journey.addView(dayButtons);
-        button(dayButtons,"▶ INICIAR JORNADA",TEAL,this::startDay);
+        dayStartButton=button(dayButtons,"▶ INICIAR JORNADA",TEAL,this::startDay);
         button(dayButtons,"■ CERRAR JORNADA",RED,this::endDay);
         heading(journey,"02  CLIENTE / TRAYECTO INDEPENDIENTE");
         clientNow=text("Sin trayecto activo",16,WHITE,true);journey.addView(clientNow);
         LinearLayout clientButtons=row();journey.addView(clientButtons);
-        button(clientButtons,"+ INICIAR TRAYECTO",BLUE,this::askClient);
+        clientStartButton=button(clientButtons,
+            "+ INICIAR TRAYECTO",BLUE,this::askClient);
         button(clientButtons,"✓ FINALIZAR TRAYECTO",TEAL,this::finishClient);
+        LinearLayout recoveryButtons=row();journey.addView(recoveryButtons);
+        clientRecoverButton=button(recoveryButtons,
+            "⚠ REPARAR CONTINUIDAD SIN CERRAR",RED,this::repairClient);
+        clientRecoverButton.setVisibility(android.view.View.GONE);
 
         LinearLayout aggregate=row();root.addView(aggregate);
         dayNow=metric(tile(aggregate,CARD),"HOY · CLIENTES","—");
@@ -661,6 +701,9 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         setContentView(scroll);
     }
     private void updateStats(){
+        String recovered=T1JourneyStore.reconcileInterrupted(this);
+        if(!recovered.isEmpty()&&feedback!=null)
+            feedback.setText(recovered);
         SharedPreferences m=getSharedPreferences(T1TripRecorderService.PREFS,MODE_PRIVATE);
         boolean running=m.getBoolean(T1TripRecorderService.RUNNING,false);
         long ms=System.currentTimeMillis()-m.getLong(T1TripRecorderService.LAST_SAMPLE_TIME,0L);
@@ -675,6 +718,38 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         boolean client=T1JourneyStore.active(this),
             pending=T1JourneyStore.pending(this);
         T1JourneyMetrics.Result live=client?T1JourneyStore.running(this):null;
+        boolean blink=(android.os.SystemClock.elapsedRealtime()/700L)%2==0;
+        boolean clientLive=client&&fresh&&live!=null;
+        if(dayRecordingLamp!=null){
+            dayRecordingLamp.setText(fresh?
+                (blink?"● ":"○ ")+"JORNADA GRABANDO":
+                running?"◉ ESPERANDO OEM":"○ JORNADA DETENIDA");
+            dayRecordingLamp.setTextColor(fresh?
+                (blink?RED:0xFF743737):
+                running?GOLD:MUTED);
+        }
+        if(clientRecordingLamp!=null){
+            clientRecordingLamp.setText(clientLive?
+                (blink?"● ":"○ ")+"CLIENTE GRABANDO":
+                pending?"◉ INICIANDO CLIENTE":
+                T1JourneyStore.stuck(this)?
+                    "⚠ CLIENTE BLOQUEADO":
+                    client?"◉ CLIENTE SIN DATOS":
+                    "○ CLIENTE DETENIDO");
+            clientRecordingLamp.setTextColor(clientLive?
+                (blink?RED:0xFF743737):
+                (client||pending)?GOLD:MUTED);
+        }
+        if(dayStartButton!=null)
+            dayStartButton.setBackgroundTintList(ColorStateList.valueOf(
+                fresh?RED:TEAL));
+        if(clientStartButton!=null)
+            clientStartButton.setBackgroundTintList(ColorStateList.valueOf(
+                clientLive?RED:BLUE));
+        if(clientRecoverButton!=null)
+            clientRecoverButton.setVisibility(
+                T1JourneyStore.stuck(this)?
+                    android.view.View.VISIBLE:android.view.View.GONE);
         T1CockpitScope.Value scoped=T1CockpitScope.choose(
             fresh,client,pending,live,km,nf,ne,fRaw,eRaw,price);
         switch(scoped.kind){
@@ -718,12 +793,30 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 " · origen distancia "+m.getString(
                     T1TripRecorderService.DIST_SOURCE,"por verificar"));
         }
+        String continuity=m.getString(T1TripRecorderService.RESTORE_STATUS,"");
+        if(!fresh&&m.getBoolean(T1TripRecorderService.DESIRED,false)&&
+            !continuity.isEmpty())
+            tripStatus.append("\n"+continuity);
+        long parkedMs=m.getLong(T1TripRecorderService.PARKED_MS,0);
+        long offlineMs=m.getLong(T1TripRecorderService.OFFLINE_MS,0);
+        tripStatus.append("\nEstacionado: "+
+            f(parkedMs/60000.0,0)+" min · "+
+            "sin telemetría (apagado/reinicio): "+
+            f(offlineMs/60000.0,0)+" min");
         if(client){
             clientNow.setText("● "+T1JourneyStore.activeLabel(this)+
                 (live==null?" · esperando lectura reciente":
                     " · "+f(live.km,2)+" km · "+
                     (live.fuelAvailable?f(live.fuelLitersCandidate,3)+
-                        " L nafta experimental":"esperando 500 m")));
+                        " L nafta experimental":"esperando 500 m"))+
+                "\nDuración (incluye paradas): "+
+                    f(T1JourneyStore.elapsedMillis(this)/60000.0,0)+
+                    " min · detenido conocido "+
+                    f(T1JourneyStore.parkedMillis(this)/60000.0,0)+
+                    " min · interrupción sin datos "+
+                    f(T1JourneyStore.offlineMillis(this)/60000.0,0)+" min"+
+                (T1JourneyStore.partialRecovery(this)?
+                    "\nTRAMO ANTERIOR INCOMPLETO, sin inventar distancia":""));
         }else if(pending){
             clientNow.setText("◉ "+T1JourneyStore.pendingLabel(this)+
                 " · 0,00 km · preparando grabación");
@@ -781,7 +874,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             message("Primero FINALIZÁ o cancelá el trayecto del cliente.");
             return;
         }
-        new AlertDialog.Builder(this).setTitle("Cerrar la jornada")
+        new AlertDialog.Builder(this).setTitle("FINALIZAR JORNADA MANUALMENTE")
             .setMessage("Se termina la grabación continua y se conservan CSV y trayectos.")
             .setNegativeButton("CANCELAR",null)
             .setPositiveButton("CERRAR",(d,w)->{
@@ -826,6 +919,26 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                     message("No se inició: "+ex.getMessage());
                 }
             }).show();
+    }
+    private void repairClient(){
+        if(!T1JourneyStore.stuck(this)){
+            message("El trayecto ya está asociado a la jornada actual.");return;
+        }
+        String recovered=T1JourneyStore.reconcileInterrupted(this);
+        if(!T1JourneyStore.stuck(this)){
+            message(recovered);return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("REPARAR TRAYECTO · SIN FINALIZAR")
+            .setMessage("El cliente seguirá ABIERTO con el mismo nombre "+
+                "e inicio original. Los CSV anteriores no se borrarán. "+
+                "El tramo que no se pudo recuperar quedará marcado como "+
+                "incompleto, sin inventar km ni energía.\n\n"+
+                T1JourneyStore.recoveryNote(this))
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("CONTINUAR MISMO CLIENTE",
+                (d,w)->message(T1JourneyStore.repairWithoutOldCsv(this)))
+            .show();
     }
     private void finishClient(){
         if(T1JourneyStore.pending(this)){

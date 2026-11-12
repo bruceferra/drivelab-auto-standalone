@@ -127,12 +127,21 @@ final class T1TripSync {
     private static JSONArray readBatch(File file,int offset)throws Exception{
         JSONArray arr=new JSONArray();
         try(BufferedReader r=new BufferedReader(new FileReader(file))){
-            String line=r.readLine(); // CSV header
-            if(line==null)return arr;
-            for(int i=0;i<offset;i++)if(r.readLine()==null)return arr;
+            String header=r.readLine();
+            if(header==null)return arr;
+            int required=header.split(",",-1).length;
+            int valid=0;
+            String line;
             while(arr.length()<BATCH&&(line=r.readLine())!=null){
-                if(line.isEmpty())continue;
-                arr.put(parseRow(line));
+                if(line.isEmpty()||line.split(",",-1).length<required)
+                    continue; // interrupted, torn CSV row; preserve raw file
+                JSONObject parsed;
+                try{parsed=parseRow(line);}
+                catch(Exception invalid){continue;}
+                // The upload cursor counts valid OEM samples, NOT broken
+                // physical lines from a sudden power loss.
+                if(valid++<offset)continue;
+                arr.put(parsed);
             }
         }
         return arr;
