@@ -271,7 +271,8 @@ final class ReceiverQuickControls {
         else message("Verificando ventanas antes de enviar comandos…");
     }
     private void avas(){
-        if(busy()){message("Otra operación está en curso");return;}
+        // AVAS has its own single-request guard. Window/mirror background
+        // work must never block the driver's manual acoustic-alert button.
         if(!avas.toggle(r->message(r.summary())))
             message("ALARMA PEATÓN: control ocupado o sin pantalla activa");
         else message("Alarma 2074: cambio manual ON/OFF solicitado…");
