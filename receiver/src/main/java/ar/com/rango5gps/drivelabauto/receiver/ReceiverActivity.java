@@ -69,7 +69,15 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
         SharedPreferences p=prefs();
         quickControls.attach(body); // FIRST and always visible above menus
         label(body,"DRIVELAB AUTO · RECEIVER",23);
-        label(body,"v0.2.38 · pantalla inmersiva con zona libre para Hola Jetour",13);
+        // Read the installed APK metadata, never show a stale hard-coded
+        // version banner (observed earlier 0.2.31 / 0.2.36 screenshot).
+        String installedVersion="desconocida";
+        try{
+            installedVersion=getPackageManager().getPackageInfo(
+                getPackageName(),0).versionName;
+        }catch(Exception ignored){}
+        label(body,"v"+installedVersion+
+            " · pantalla inmersiva + área libre Hola Jetour",13);
         button(body,T1ImmersiveMode.enabled(this)?
             "PANTALLA COMPLETA · ACTIVADA · MOSTRAR BARRAS":
             "PANTALLA COMPLETA · DESACTIVADA · OCULTAR BARRAS",()->{
