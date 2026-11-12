@@ -29,6 +29,13 @@ final class T1TripTelemetry {
             voltageFloat1090=Double.NaN,socTargetFloat=Double.NaN;
         // Integer.MIN_VALUE means getter failed. -1 is preserved: it can be
         // a *real OEM sentinel* rather than an Android exception.
+        // Discovered by vehicle on 12 Nov. Getter/read-only, DO NOT infer
+        // ignition, safety or physical motor operation from these enums.
+        int fuelPct1079=Integer.MIN_VALUE, driveMode2053=Integer.MIN_VALUE,
+            handbrake2204=Integer.MIN_VALUE, highVoltageReady1031=Integer.MIN_VALUE,
+            engineStatus2073=Integer.MIN_VALUE, speedValid1088=Integer.MIN_VALUE,
+            atmosphereSwitch2014=Integer.MIN_VALUE,
+            passengerDoorCem2_2170=Integer.MIN_VALUE;
         int rpmValid1034=-1,oemElectric500mInt=Integer.MIN_VALUE,
             oemFuel500mInt=Integer.MIN_VALUE,voltage1063Int=Integer.MIN_VALUE,
             current1064Int=Integer.MIN_VALUE,raw1090Int=Integer.MIN_VALUE;
@@ -114,6 +121,14 @@ final class T1TripTelemetry {
             withService(VEHICLE_PKG,VEHICLE_CLS,VEHICLE_TOKEN,b->{
                 s.gear=safeInt(()->intValue(b,1033));
                 s.powerMode=safeInt(()->intValue(b,1043)); // read only EV/HEV/EV MAX
+                s.fuelPct1079=diagnosticInt(()->intValue(b,1079));
+                s.driveMode2053=diagnosticInt(()->intValue(b,2053));
+                s.handbrake2204=diagnosticInt(()->intValue(b,2204));
+                s.highVoltageReady1031=diagnosticInt(()->intValue(b,1031));
+                s.engineStatus2073=diagnosticInt(()->intValue(b,2073));
+                s.speedValid1088=diagnosticInt(()->intValue(b,1088));
+                s.atmosphereSwitch2014=diagnosticInt(()->intValue(b,2014));
+                s.passengerDoorCem2_2170=diagnosticInt(()->intValue(b,2170));
                 s.socMode=safeInt(()->intValue(b,1040)); // Smart / Forzado
                 s.socTargetInt=diagnosticInt(()->intValue(b,1041));
                 s.socTargetFloat=safeFloat(()->floatValue(b,1041));
