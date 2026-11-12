@@ -97,7 +97,9 @@ public final class T1TripRecorderService extends Service {
         SharedPreferences before=p();
         boolean wasDesired=before.getBoolean(DESIRED,false);
         // Recover pre-upgrade sessions that still had RUNNING=true.
-        if(!before.contains(DESIRED)&&before.getBoolean(RUNNING,false))
+        if(!before.contains(DESIRED)&&
+            (before.getBoolean(RUNNING,false)||T1JourneyStore.active(this)||
+                T1JourneyStore.pending(this)))
             wasDesired=true;
         boolean oldFile=currentFile(this)!=null&&currentFile(this).isFile();
         // Explicit start only creates a new session after a user STOP.
@@ -124,6 +126,9 @@ public final class T1TripRecorderService extends Service {
             before.edit().putBoolean(DESIRED,true)
                 .putBoolean(RUNNING,true)
                 .putInt(SAMPLES,recovered.samples)
+                .putLong(LAST_SAMPLE_TIME,recovered.timestamp)
+                .putFloat(EV_KWH,(float)recovered.hvOut)
+                .putFloat(CHARGE_KWH,(float)recovered.hvIn)
                 .putFloat(DISTANCE,(float)recovered.km)
                 .putString(RESTORE_STATUS,
                     "MISMO TRIP "+before.getString(ID,"")+
@@ -276,7 +281,7 @@ public final class T1TripRecorderService extends Service {
                 try(java.io.RandomAccessFile raf=new java.io.RandomAccessFile(
                     path,"r")){
                     raf.seek(raf.length()-1);
-                    if(raf.readByte()!='\\n')
+                    if(raf.readByte()!='\n')
                         out.write('\n');
                 }
             }
