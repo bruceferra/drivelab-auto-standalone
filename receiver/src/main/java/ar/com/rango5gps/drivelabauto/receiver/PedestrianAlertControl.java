@@ -15,10 +15,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
- * Explicit manual toggle of the existing OEM pedestrian-warning setting 2074.
+ * Explicit manual ON/OFF requests for OEM pedestrian-warning setting 2074.
  * No boot receiver, no background automation and no writes on startup.
- * The pedestrian warning may be activated in motion; disabling it requires
- * a verified stationary vehicle in any known gear (no modal dialogs).
+ * ON is idempotent and never blocked by a vehicle speed/gear precheck;
+ * OEM still decides whether to accept the command.
+ * OFF requires verified stationarity and gear; no automatic deactivation.
  */
 public final class PedestrianAlertControl {
     public interface Callback{void done(Result result);}
@@ -34,7 +35,7 @@ public final class PedestrianAlertControl {
                 " después="+(after==null?"?":after);
         }
     }
-    private static final int ID=2074,ON=1,OFF=0,COOLDOWN_MS=12000;
+    private static final int ID=2074,ON=1,OFF=0,COOLDOWN_MS=1200;
     private static final String PKG="com.autolink.app.vehicleservice";
     private static final String CLS="com.autolink.app.vehicleservice.VehicleService";
     private static final String TOKEN="com.autolink.app.vehicleservice.IVehicleControl";
@@ -50,8 +51,12 @@ public final class PedestrianAlertControl {
         long t=lastAttemptAt;
         return t!=0&&SystemClock.elapsedRealtime()-t<COOLDOWN_MS;
     }
-    public boolean toggle(Callback callback){
+    /** A tap requests a SPECIFIC state, never an ambiguous toggle.
+     * Activation is safe to request regardless of speed; deactivation is
+     * never sent in motion or with unknown vehicle conditions. */
+    public boolean request(boolean enabled,Callback callback){
         if(!foreground||coolingDown()||!busy.compareAndSet(false,true))return false;
+        final int command=enabled?ON:OFF;
         new Thread(()->{
             Integer before=null,after=null;
             boolean written=false,bound=false;
@@ -78,13 +83,18 @@ public final class PedestrianAlertControl {
                 before=read(b);
                 if(before==null)
                     throw new IllegalStateException("Lectura 2074 no es 0 ni 1");
-                if(!foreground||coolingDown())
-                    throw new IllegalStateException("Aplicación no activa o intervalo de seguridad");
-                // Enable may be requested in motion; do not disable an audible
-                // pedestrian warning while the car is moving.
-                final int command=before==ON?OFF:ON;
-                verifyCommandSafety(b,command);
-                lastAttemptAt=SystemClock.elapsedRealtime();
+                if(!foreground)
+                    throw new IllegalStateException("La pantalla de control ya no está activa");
+                // If state already matches, don't issue an unnecessary OEM write.
+                if(before==command){
+                    after=before;
+                    status=command==ON?"Alerta YA ACTIVADA · OEM confirmado":
+                        "Alerta YA DESACTIVADA · OEM confirmado";
+                }else{
+                    // The OEM setter may reject ON depending on vehicle state;
+                    // do not preemptively require P/0 km/h when enabling.
+                    if(command==OFF)verifySafeToDisable(b);
+                    lastAttemptAt=SystemClock.elapsedRealtime();
                 Parcel data=Parcel.obtain(),reply=Parcel.obtain();
                 try{
                     data.writeInterfaceToken(TOKEN);
@@ -95,12 +105,13 @@ public final class PedestrianAlertControl {
                     reply.readException();
                     written=true;
                 }finally{data.recycle();reply.recycle();}
-                SystemClock.sleep(600);
-                after=read(b);
-                status=(after!=null&&after==command?
-                    "Alerta "+(after==ON?"ACTIVADA":"DESACTIVADA")+
-                    " · lectura OEM confirmada":
-                    "Orden enviada; estado final NO confirmado");
+                    SystemClock.sleep(350);
+                    after=read(b);
+                    status=(after!=null&&after==command?
+                        "Alerta "+(after==ON?"ACTIVADA":"DESACTIVADA")+
+                        " · lectura OEM confirmada":
+                        "Orden enviada; estado final NO confirmado");
+                }
             }catch(Exception e){
                 status=(written?"Orden enviada; ":"SIN ORDEN · ")+
                     e.getClass().getSimpleName()+": "+e.getMessage();
@@ -111,10 +122,10 @@ public final class PedestrianAlertControl {
                 Result result=new Result(before,after,written,status);
                 main.post(()->callback.done(result));
             }
-        },"T1-Pedestrian-ManualToggle").start();
+        },"T1-Pedestrian-Manual-"+(enabled?"ON":"OFF")).start();
         return true;
     }
-    private static void verifyCommandSafety(IBinder b,int command)throws Exception{
+    private static void verifySafeToDisable(IBinder b)throws Exception{
         int gear=readInt(b,1033);
         if(gear<1||gear>4)
             throw new IllegalStateException("Marcha desconocida: "+gear);
@@ -127,9 +138,10 @@ public final class PedestrianAlertControl {
         }catch(Exception ex){speed=readInt(b,1089);}
         if(!Double.isFinite(speed)||speed<0||speed>250)
             throw new IllegalStateException("Velocidad inválida: "+speed);
-        if(command==OFF&&speed>0.5)
-            throw new IllegalStateException("No se desactiva la alerta de "+
-                "peatones en movimiento; detenido se permite P/N/D/R");
+        if(speed>0.5)
+            throw new IllegalStateException("NO se desactiva el aviso "+
+                "de peatones en movimiento (velocidad OEM="+speed+
+                " km/h). Para apagarlo: detener el vehículo.");
     }
     private static int readInt(IBinder b,int id)throws Exception{
         if(id!=1033&&id!=1089)throw new SecurityException("Lectura no autorizada");
