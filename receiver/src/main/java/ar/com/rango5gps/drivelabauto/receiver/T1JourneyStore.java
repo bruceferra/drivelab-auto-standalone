@@ -385,6 +385,7 @@ final class T1JourneyStore {
         if(!master(c).getBoolean(T1TripRecorderService.RUNNING,false))
             return "Primero iniciá JORNADA para grabar el TRIP OEM.";
         T1JourneyMetrics.Checkpoint mark=now(c);
+        label=T1AutoTripLabel.resolve(c,label,1,mark.time);
         boolean ok=p(c).edit().putBoolean(ACTIVE,true)
             .putBoolean(PAUSED,false).putLong(PAUSED_SUM,0L)
             .putLong(ORIGINAL_TIME,mark.time)
