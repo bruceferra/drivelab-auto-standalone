@@ -31,6 +31,8 @@ public final class T1TripRecorderService extends Service {
     public static final String ACTION_START="t1.trip.START";
     public static final String ACTION_STOP="t1.trip.STOP";
     public static final String ACTION_RESTORE="t1.trip.RESTORE";
+    public static final String ACTION_PAUSE="t1.trip.PAUSE";
+    public static final String ACTION_RESUME="t1.trip.RESUME";
     public static final String PREFS="t1_trip_recording";
     public static final String RUNNING="running", STATUS="status", ID="trip_id",
         DISTANCE="distance_km", GAS_L="gas_l_est", EV_KWH="hv_out_kwh",
@@ -41,7 +43,7 @@ public final class T1TripRecorderService extends Service {
         SEG_FUEL_LAST="seg_fuel_last", SEG_ELEC_LAST="seg_elec_last",
         SEG_STATUS="seg_status", SEG_FUEL_RAW_SUM="seg_fuel_raw_sum",
         SEG_ELEC_RAW_SUM="seg_elec_raw_sum", LAST_SAMPLE_TIME="last_sample_time",
-        DESIRED="continuous_user_enabled",PARKED_MS="parked_ms",
+        DESIRED="continuous_user_enabled",PAUSED="user_paused",PARKED_MS="parked_ms",
         OFFLINE_MS="offline_ms",RESTORE_STATUS="trip_restore_status";
     private static final String CHANNEL="t1_trip_recorder";
     private static final int NOTIF_ID=7527;
@@ -69,8 +71,8 @@ public final class T1TripRecorderService extends Service {
     @Override public int onStartCommand(Intent intent,int flags,int id){
         String action=intent==null?null:intent.getAction();
         if(ACTION_STOP.equals(action)){
-            // Only the user's explicit CERRAR ends a continuous TRIP.
-            p().edit().putBoolean(DESIRED,false).commit();
+            // Explicit TERMINAR closes the session even when it is paused.
+            p().edit().putBoolean(DESIRED,false).putBoolean(PAUSED,false).commit();
             stop=true;
             if(running&&worker!=null&&worker.isAlive()){
                 p().edit().putString(STATUS,
@@ -90,12 +92,36 @@ public final class T1TripRecorderService extends Service {
             }
             return START_NOT_STICKY;
         }
-        if(intent==null)action=ACTION_RESTORE; // START_STICKY recreation
-        if(!ACTION_START.equals(action)&&!ACTION_RESTORE.equals(action))
+        if(ACTION_PAUSE.equals(action)){
+            if(p().getBoolean(PAUSED,false))return START_NOT_STICKY;
+            if(!p().getBoolean(DESIRED,false)&&
+               !p().getBoolean(RUNNING,false))return START_NOT_STICKY;
+            // Pause preserves same TRIP ID and CSV. It must never create a
+            // second journey. Stop the worker, flush CSV, remain paused.
+            p().edit().putBoolean(PAUSED,true).putBoolean(DESIRED,true)
+                .putString(STATUS,"JORNADA EN PAUSA MANUAL · CSV conservado").commit();
+            stop=true;
+            if(running&&worker!=null&&worker.isAlive())worker.interrupt();
+            else{
+                running=false;
+                p().edit().putBoolean(RUNNING,false)
+                    .putString(RESTORE_STATUS,"PAUSA MANUAL · reanudar con botón")
+                    .commit();
+                stopSelf();
+            }
             return START_NOT_STICKY;
+        }
+        if(intent==null)action=ACTION_RESTORE; // START_STICKY recreation
+        if(ACTION_RESTORE.equals(action)&&p().getBoolean(PAUSED,false))
+            return START_NOT_STICKY; // never silently resume a manual pause
+        if(ACTION_START.equals(action)&&p().getBoolean(PAUSED,false))
+            action=ACTION_RESUME;
+        if(!ACTION_START.equals(action)&&!ACTION_RESTORE.equals(action)&&
+            !ACTION_RESUME.equals(action))return START_NOT_STICKY;
         if(running)return START_STICKY;
         SharedPreferences before=p();
-        boolean wasDesired=before.getBoolean(DESIRED,false);
+        boolean wasDesired=before.getBoolean(DESIRED,false)||
+            (ACTION_RESUME.equals(action)&&before.getBoolean(PAUSED,false));
         // Recover pre-upgrade sessions that still had RUNNING=true.
         if(!before.contains(DESIRED)&&
             (before.getBoolean(RUNNING,false)||T1JourneyStore.active(this)||
@@ -104,6 +130,12 @@ public final class T1TripRecorderService extends Service {
         boolean oldFile=currentFile(this)!=null&&currentFile(this).isFile();
         // Explicit start only creates a new session after a user STOP.
         restoring=oldFile&&wasDesired;
+        if(ACTION_RESUME.equals(action)&&!restoring){
+            p().edit().putString(STATUS,"No se puede reanudar: falta CSV original").commit();
+            stopSelf();return START_NOT_STICKY;
+        }
+        if(ACTION_RESUME.equals(action))
+            before.edit().putBoolean(PAUSED,false).putBoolean(DESIRED,true).commit();
         if(ACTION_RESTORE.equals(action)&&!wasDesired)
             return START_NOT_STICKY;
         stop=false;running=true;lastGood=null;
@@ -148,7 +180,7 @@ public final class T1TripRecorderService extends Service {
             started+=1000;
         }while(new File(tripDir(this),"trip_"+name+".csv").exists());
         p().edit().putString(ID,name).putBoolean(DESIRED,true)
-            .putBoolean(RUNNING,true)
+            .putBoolean(PAUSED,false).putBoolean(RUNNING,true)
             .putLong(START_TIME,System.currentTimeMillis()).remove(END_TIME)
             .putLong(LAST_SAMPLE_TIME,0L)
             .putLong(PARKED_MS,0L).putLong(OFFLINE_MS,0L)
@@ -392,12 +424,17 @@ public final class T1TripRecorderService extends Service {
             try{locationManager.removeUpdates(locationListener);}catch(Exception ignored){}
         }
         boolean desired=p().getBoolean(DESIRED,false);
+        boolean paused=p().getBoolean(PAUSED,false);
         p().edit().putBoolean(RUNNING,false)
             .putLong(END_TIME,System.currentTimeMillis())
-            .putString(STATUS,desired?
-                "Sesión pausada por Android; recuperación automática pendiente":
+            .putString(STATUS,paused?
+                "JORNADA PAUSADA MANUALMENTE · mismo CSV al reanudar":
+                desired?
+                "Sesión interrumpida por Android; recuperación pendiente":
                 message)
-            .putString(RESTORE_STATUS,desired?
+            .putString(RESTORE_STATUS,paused?
+                "PAUSA MANUAL · grabación detenida, CSV original conservado":
+                desired?
                 "INTERRUMPIDA · se conservaron CSV y checkpoints; reanudará"+
                 " cuando vuelva el servicio":
                 "JORNADA CERRADA SOLO POR USUARIO").commit();
