@@ -66,6 +66,10 @@ public final class T1OptimizedAutoService extends Service {
         prefs(c).edit().putBoolean(ENABLED,true)
             .putString(STATUS,"AUTO ON · esperando 3 lecturas de vía fiables")
             .apply();
+        // The on-screen OSM advisor should show the same map classification
+        // as the independent foreground auto controller.
+        c.getSharedPreferences("t1_osm_advisory_opt_in",Context.MODE_PRIVATE)
+            .edit().putBoolean("osm_lookup_enabled",true).apply();
         try{
             c.startForegroundService(new Intent(c,
                 T1OptimizedAutoService.class).setAction(ACTION_ON));
