@@ -26,15 +26,19 @@ public final class T1RoadTransitionGateTest {
         equal(gate.observe(ROAD),ROAD,"Road sample 2");
         equal(gate.observe(UNKNOWN),null,"Unknown 1");
         equal(gate.observe(UNKNOWN),null,"Unknown 2");
-        equal(gate.observe(UNKNOWN),UNKNOWN,"Unknown 3 stable");
+        for(int i=3;i<7;i++)
+            equal(gate.observe(UNKNOWN),null,"Unknown sample "+i+" ignored");
+        equal(gate.observe(UNKNOWN),UNKNOWN,"Unknown 7 stable");
         equal(gate.observe(UNKNOWN),null,"No repeated unknown");
-        equal(T1RoadTransitionGate.popupText(CITY),"ENTRANDO A CIUDAD","City label");
-        equal(T1RoadTransitionGate.popupText(ROAD),"ENTRANDO A CARRETERA","Road label");
-        equal(T1RoadTransitionGate.popupText(MOTORWAY),"ENTRANDO A AUTOPISTA","Highway label");
-        equal(T1RoadTransitionGate.popupText(UNKNOWN),"ZONA DESCONOCIDA","Unknown label");
+        equal(T1RoadTransitionGate.popupText(CITY),"CIUDAD","City label");
+        equal(T1RoadTransitionGate.popupText(ROAD),"CARRETERA","Road label");
+        equal(T1RoadTransitionGate.popupText(MOTORWAY),"AUTOPISTA","Highway label");
+        equal(T1RoadTransitionGate.popupText(UNKNOWN),"DESCONOCIDO","Unknown label");
         T1RoadTransitionGate fresh=new T1RoadTransitionGate();
         equal(fresh.observe(UNKNOWN),null,"Initial unknown not announced");
         equal(fresh.observe(UNKNOWN),null,"Initial unknown still pending");
+        for(int i=3;i<7;i++)
+            equal(fresh.observe(UNKNOWN),null,"Transient initial unknown "+i);
         equal(fresh.observe(UNKNOWN),UNKNOWN,"Persistent initial unknown shown");
         System.out.println("OK: debounced large road popups only on transitions");
     }
