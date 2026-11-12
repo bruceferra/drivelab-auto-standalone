@@ -52,6 +52,25 @@ Se añadió un **bloque visible** "MOTOR ELÉCTRICO", con **ESTADO SIN VALIDAR /
 
 Para llegar al encendido/apagado y RPM reales del motor eléctrico necesitamos extraer información de un módulo/servicio OEM de propulsión específico o el diagrama de señales CAN, y verificar lectura directa. Un registro **sin dato** es deliberado: no se simulan RPM ni estado.
 
+## Cinturones traseros y volumen de alertas (nuevo explorador)
+
+Se incorporó `T1RearSeatBeltProbe.java` con consultas `getInt` **solo lectura** al ALCarService, con el vehículo en P, y capturas `CINTURONES A · SUELTOS` / `CINTURONES B · ABROCHADO` para cada asiento posterior. En el cockpit expandido se puede **COPIAR INFORME CINTURONES**.
+
+Señales candidatas extraídas del mismo catálogo APK:
+- `557856516` CLUSTER SEC LEFT SEAT BELT.
+- `557856533` CLUSTER SEC MID SEAT BELT.
+- `557856534` CLUSTER SEC RIGHT SEAT BELT.
+- `354421634` SEAT BELT BUCKLED con `area=16,32,64` (lecturas por asiento).
+- `356518832` SEAT OCCUPANCY con `area=16,32,64`.
+- `557843384` CLUSTER MID SEAT WARN, aviso asiento central.
+- **`557847073`** STAT AMP ALARM VOL, estado de volumen del amplificador.
+- **`557862921`** CLUSTER AUDIBLE BEEP RATE, ritmo/frecuencia de avisos.
+- `557867199` SETTINGS VOICE REMINDER, recordatorios de voz distintos y sin vinculación demostrada con cinturones.
+
+El catálogo también contiene `557847072` **SET AMP ALARM VOL** (escribe), pero **NO se llama ni se propone su escritura**: podría afectar alarmas de ABS, colisión, puertas u otros avisos de seguridad, y no hay vínculo probado con la advertencia de cinturón. Los getter se mostrarán como valores crudos/errores. Una lectura sin cambios no excluye fuente por otra ECU. La versión **no** anula, silencia ni deshabilita el recordatorio.
+
+Para el problema reportado de cajas sobre los asientos: probar con los objetos fijados en el baúl y, si hay una preferencia oficial de volumen/tono en la configuración *Audio/Sonido* de la ROM, verificar su alcance antes de usarla; no colocar falsas hebillas ni puentear sensores SRS. La alarma puede depender de lógica de ocupación, del estado de hebilla o de otro ECU.
+
 ## Persistencia y seguridad
 
 * No hay cambios en los CSV existentes, historial de clientes, cargas eléctricas, garantía, ROOT ni OEM UI.
