@@ -296,6 +296,8 @@ public final class T1TripRecorderService extends Service {
         if(path==null){cleanup("TRIP sin identificador");return;}
         String tripId=p().getString(ID,"");
         T1OemConsumptionCallbacks segments=new T1OemConsumptionCallbacks(this);
+        T1MotionSensor motion=new T1MotionSensor(this);
+        motion.start(); // optional headunit sensor; absence means blank CSV
         boolean segmentStarted=segments.startForTrip(tripId);
         p().edit().putString(SEG_STATUS,segmentStarted?
             "Grabando eventos OEM por tramo durante todo el TRIP":
@@ -338,7 +340,9 @@ public final class T1TripRecorderService extends Service {
                 "fuel_pct_1079_raw,hv_enabled_1031_raw,"+
                 "longitudinal_accel_speed_est_mps2,"+
                 "lateral_accel_gps_est_mps2,gps_bearing_deg,gps_alt_m,"+
-                "gps_fix_age_ms,engine_status_2073_raw\n")
+                "gps_fix_age_ms,engine_status_2073_raw,"+
+                "headunit_linacc_x_raw,headunit_linacc_y_raw,"+
+                "headunit_linacc_z_raw,headunit_linacc_age_ms\n")
                 .getBytes(StandardCharsets.UTF_8));
             if(restoring&&path.length()>0){
                 // A partial final line from sudden shutdown must never be
@@ -447,14 +451,19 @@ public final class T1TripRecorderService extends Service {
                     seg.fuelCount+","+seg.electricCount+","+
                     n(seg.fuelLast)+","+n(seg.electricLast)+","+
                     n(seg.fuel50Last)+","+n(seg.electric50Last);
-                if(extendedSchema)line+=","+s.powerMode+","+s.socMode+","+
-                    ni(s.socTargetInt)+","+n(s.socTargetFloat)+","+
-                    ni(s.regen1046)+","+ni(s.chargeSwitch1045)+","+
-                    ni(s.driveMode2053)+","+ni(s.footBrake3011)+","+
-                    ni(s.fuelPct1079)+","+ni(s.highVoltageReady1031)+","+
-                    n(accelLong)+","+n(latAccel)+","+
-                    n(gpsBearing)+","+n(gpsAlt)+","+n(gpsAgeMs)+","+
-                    ni(s.engineStatus2073);
+                if(extendedSchema){
+                    T1MotionSensor.Sample motionNow=motion.snapshot();
+                    line+=","+s.powerMode+","+s.socMode+","+
+                        ni(s.socTargetInt)+","+n(s.socTargetFloat)+","+
+                        ni(s.regen1046)+","+ni(s.chargeSwitch1045)+","+
+                        ni(s.driveMode2053)+","+ni(s.footBrake3011)+","+
+                        ni(s.fuelPct1079)+","+ni(s.highVoltageReady1031)+","+
+                        n(accelLong)+","+n(latAccel)+","+
+                        n(gpsBearing)+","+n(gpsAlt)+","+n(gpsAgeMs)+","+
+                        ni(s.engineStatus2073)+","+
+                        n(motionNow.x)+","+n(motionNow.y)+","+
+                        n(motionNow.z)+","+n(motionNow.ageMs);
+                }
                 line+="\n";
                 out.write(line.getBytes(StandardCharsets.UTF_8));
                 sampleCount++;
@@ -502,6 +511,7 @@ public final class T1TripRecorderService extends Service {
         }catch(Exception ex){
             finalStatus="TRIP interrumpido · "+ex.getClass().getSimpleName();
         }finally{
+            motion.stop();
             segments.stop();
             segments.awaitStopped(7000);
             File events=segments.lastLog();
