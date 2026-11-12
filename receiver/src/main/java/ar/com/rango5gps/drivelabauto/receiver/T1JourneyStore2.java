@@ -479,7 +479,7 @@ final class T1JourneyStore2 {
         }catch(IOException ex){cloudNote=" · desglose local pendiente"; }
         try{
             T1ClientTripSync.persist(c,id,originalStart,ended,tripChain(c),
-                result,evKm,iceKm,unknownKm);
+                result,evKm,iceKm,unknownKm,2);
         }catch(IOException ex){cloudNote+=" · resumen QR local pendiente"; }
         p(c).edit().clear().commit();
         T1TripSync.trigger(c,true);
