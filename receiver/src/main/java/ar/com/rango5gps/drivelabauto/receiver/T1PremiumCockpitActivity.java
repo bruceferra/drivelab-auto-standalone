@@ -250,29 +250,70 @@ public final class T1PremiumCockpitActivity extends Activity {
     private void updateStats(){
         SharedPreferences m=getSharedPreferences(T1TripRecorderService.PREFS,MODE_PRIVATE);
         boolean running=m.getBoolean(T1TripRecorderService.RUNNING,false);
+        long ms=System.currentTimeMillis()-m.getLong(T1TripRecorderService.LAST_SAMPLE_TIME,0L);
+        boolean fresh=running&&ms>=0&&ms<=15000&&
+            m.getInt(T1TripRecorderService.SAMPLES,0)>0;
         double km=m.getFloat(T1TripRecorderService.DISTANCE,0f);
         int nf=m.getInt(T1TripRecorderService.SEG_FUEL_COUNT,0),
             ne=m.getInt(T1TripRecorderService.SEG_ELEC_COUNT,0);
         double fRaw=m.getFloat(T1TripRecorderService.SEG_FUEL_RAW_SUM,0f),
             eRaw=m.getFloat(T1TripRecorderService.SEG_ELEC_RAW_SUM,0f);
         double price=m.getFloat(T1TripRecorderService.FUEL_PRICE,2129f);
-        double lit=nf>0?fRaw*0.005:Double.NaN;
-        double eNet=ne>0?eRaw*0.005:Double.NaN;
-        kmNow.setText(f(km,2)+" km");
-        fuelNow.setText(nf>0?f(lit,3)+" L":"SIN TRAMOS");
-        electricNow.setText(ne>0?f(eNet,3)+" kWh":"SIN TRAMOS");
-        costNow.setText(nf>0?"$ "+f(lit*price,0):"SIN TRAMOS");
-        tripStatus.setText((running?"● JORNADA ABIERTA":"○ JORNADA DETENIDA")+
-            " · "+m.getInt(T1TripRecorderService.SAMPLES,0)+" muestras"+
-            " · "+nf+" tramos OEM de nafta / "+ne+" eléctricos"+
-            "\nFuente de km: "+m.getString(T1TripRecorderService.DIST_SOURCE,"sin dato"));
-        if(T1JourneyStore.active(this)){
-            T1JourneyMetrics.Result live=T1JourneyStore.running(this);
+        boolean client=T1JourneyStore.active(this),
+            pending=T1JourneyStore.pending(this);
+        T1JourneyMetrics.Result live=client?T1JourneyStore.running(this):null;
+        T1CockpitScope.Value scoped=T1CockpitScope.choose(
+            fresh,client,pending,live,km,nf,ne,fRaw,eRaw,price);
+        switch(scoped.kind){
+            case CLIENT:
+                scopeTitle.setText("● CLIENTE EN CURSO · "+T1JourneyStore.activeLabel(this));
+                break;
+            case DAY:scopeTitle.setText("● JORNADA EN CURSO · SIN CLIENTE");break;
+            case PREPARING:
+                scopeTitle.setText("◉ PREPARANDO CLIENTE · "+
+                    T1JourneyStore.pendingLabel(this));break;
+            case UNSYNCED:
+                scopeTitle.setText("⚠ DATOS OEM SIN ACTUALIZAR");break;
+            default:scopeTitle.setText("○ JORNADA ACTUAL · SIN GRABACIÓN");
+        }
+        kmNow.setText(f(scoped.km,2)+" km");
+        fuelNow.setText(scoped.fuelKnown?
+            f(scoped.fuelLiters,3)+" L":"ESPERANDO");
+        electricNow.setText(scoped.electricKnown?
+            f(scoped.electricNetKwh,3)+" kWh":"ESPERANDO");
+        costNow.setText(scoped.fuelKnown?
+            "$ "+f(scoped.fuelCost,0):"SIN DATO");
+        scopeProgress.setText(scoped.kind==T1CockpitScope.Kind.CLIENT||
+            scoped.kind==T1CockpitScope.Kind.DAY?
+            "AVANCE EN VIVO · nafta "+scoped.fuelEvents+
+            " tramos / electricidad "+scoped.electricEvents+
+            " tramos de 500 m · km por velocidad OEM sin calibrar":
+            scoped.kind==T1CockpitScope.Kind.PREPARING?
+            "0,00 km · esperando la primera muestra fresca de DriveLab (≈ 3 s)":
+            scoped.kind==T1CockpitScope.Kind.UNSYNCED?
+            "Sin muestras OEM recientes; comprobá que el grabador siga funcionando":
+            "Iniciá jornada o trayecto. El último viaje NO se cuenta como actual.");
+        if(!running){
+            tripStatus.setText("○ JORNADA DETENIDA · último TRIP "+
+                (m.getInt(T1TripRecorderService.SAMPLES,0)>0?
+                    f(km,2)+" km guardados":"sin historial")+
+                " · el nuevo contador está en cero.");
+        }else{
+            tripStatus.setText((fresh?"● GRABACIÓN CONTINUA":
+                "⚠ ESPERANDO OEM · sin muestra fresca")+
+                " · "+m.getInt(T1TripRecorderService.SAMPLES,0)+" muestras"+
+                " · origen distancia "+m.getString(
+                    T1TripRecorderService.DIST_SOURCE,"por verificar"));
+        }
+        if(client){
             clientNow.setText("● "+T1JourneyStore.activeLabel(this)+
-                (live==null?" · comprobando señal…":
+                (live==null?" · esperando lectura reciente":
                     " · "+f(live.km,2)+" km · "+
                     (live.fuelAvailable?f(live.fuelLitersCandidate,3)+
-                        " L experimentales":"esperando tramo de 500 m")));
+                        " L nafta experimental":"esperando 500 m")));
+        }else if(pending){
+            clientNow.setText("◉ "+T1JourneyStore.pendingLabel(this)+
+                " · 0,00 km · preparando grabación");
         }else clientNow.setText("○ Sin cliente activo · listo para iniciar");
         if(System.currentTimeMillis()-lastTotals>5000){
             lastTotals=System.currentTimeMillis();
@@ -311,7 +352,9 @@ public final class T1PremiumCockpitActivity extends Activity {
     private void message(String m){feedback.setText(m);lastTotals=0;updateStats();}
     private void startDay(){
         SharedPreferences m=getSharedPreferences(T1TripRecorderService.PREFS,MODE_PRIVATE);
-        if(m.getBoolean(T1TripRecorderService.RUNNING,false)){
+        long age=System.currentTimeMillis()-
+            m.getLong(T1TripRecorderService.LAST_SAMPLE_TIME,0L);
+        if(m.getBoolean(T1TripRecorderService.RUNNING,false)&&age>=0&&age<=15000){
             message("La jornada ya está grabando; no se reinició.");return;
         }
         try{
@@ -321,8 +364,8 @@ public final class T1PremiumCockpitActivity extends Activity {
         }catch(Exception ex){message("No se inició: "+ex.getClass().getSimpleName());}
     }
     private void endDay(){
-        if(T1JourneyStore.active(this)){
-            message("Primero FINALIZÁ EL TRAYECTO del cliente para conservar su costo.");
+        if(T1JourneyStore.active(this)||T1JourneyStore.pending(this)){
+            message("Primero FINALIZÁ o cancelá el trayecto del cliente.");
             return;
         }
         new AlertDialog.Builder(this).setTitle("Cerrar la jornada")
@@ -340,14 +383,37 @@ public final class T1PremiumCockpitActivity extends Activity {
         EditText name=new EditText(this);name.setSingleLine(true);
         name.setHint("Ej.: Cliente, traslado, tramo de vuelta");
         new AlertDialog.Builder(this).setTitle("Iniciar trayecto")
-            .setMessage("La jornada sigue grabando. Este tramo tendrá su propio costo.")
+            .setMessage("Empieza en 0,00 km para este cliente; no se reinicia "+
+                "la grabación general. Si aún no hay jornada, se inicia también.")
             .setView(name).setNegativeButton("CANCELAR",null)
             .setPositiveButton("INICIAR",(d,w)->{
-                try{message(T1JourneyStore.start(this,name.getText().toString()));}
-                catch(Exception ex){message("No se inició: "+ex.getMessage());}
+                if(T1JourneyStore.active(this)||T1JourneyStore.pending(this)){
+                    message("Ya hay un trayecto activo o preparándose.");return;
+                }
+                try{
+                    String status=T1JourneyStore.queue(this,name.getText().toString());
+                    SharedPreferences p=getSharedPreferences(
+                        T1TripRecorderService.PREFS,MODE_PRIVATE);
+                    long age=System.currentTimeMillis()-
+                        p.getLong(T1TripRecorderService.LAST_SAMPLE_TIME,0L);
+                    if(!p.getBoolean(T1TripRecorderService.RUNNING,false)||
+                        age<0||age>30000){
+                        startForegroundService(new Intent(this,
+                            T1TripRecorderService.class).setAction(
+                                T1TripRecorderService.ACTION_START));
+                    }
+                    message(status);
+                }catch(Exception ex){
+                    T1JourneyStore.cancelPending(this);
+                    message("No se inició: "+ex.getMessage());
+                }
             }).show();
     }
     private void finishClient(){
+        if(T1JourneyStore.pending(this)){
+            T1JourneyStore.cancelPending(this);
+            message("Se canceló el inicio: no había empezado el trayecto.");return;
+        }
         if(!T1JourneyStore.active(this)){message("No hay trayecto activo.");return;}
         new AlertDialog.Builder(this).setTitle("Finalizar trayecto")
             .setMessage("Se guardará como subviaje sin interrumpir la jornada.")
