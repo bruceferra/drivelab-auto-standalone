@@ -27,7 +27,7 @@ Clase `T1ManualThreeModePilot.java`: un único intento por pulsación, con diál
 ## OpenStreetMap / Overpass — asesor automático de solo lectura
 
 La sección expandida `ZONAS GPS · EV/HEV` incorpora:
-* Botón de consentimiento **OSM · ACTIVAR ASESOR**. De forma predeterminada está **DESACTIVADO**. La consulta de categoría de vía necesita internet y envía coordenadas aproximadas (6 decimales) a un servidor público de Overpass, `https://overpass-api.de/api/interpreter`. No usa Supabase ni publica historiales.
+* Botón de consentimiento **OSM · ACTIVAR ASESOR**. De forma predeterminada está **DESACTIVADO**. La consulta de categoría de vía necesita internet y envía coordenadas GPS del auto (6 decimales, precisión aproximada de decímetros) a un servidor público de Overpass, `https://overpass-api.de/api/interpreter`. No usa Supabase ni publica historiales.
 * Con opt-in, mientras el cockpit está abierto consulta como máximo ~1 vez/95 segundos. Consulta manual `CONSULTAR VÍA OSM · NO ESCRIBE` disponible independientemente. No funciona en segundo plano con cockpit cerrado.
 * Exige ubicación GPS con precisión de **20 m o mejor** y antigüedad de **25 s o menos**, distancia a geometría OSM del segmento seleccionado menor a `min(35, 1.5·accuracy+7)`, y descarta resultados ambiguos (vías paralelas de clases distintas a 8 m).
 * Clasificación conservadora: `highway=motorway` o `motorway_link` → **AUTOPISTA**. `residential`, `living_street`, `service`, `tertiary`, `unclassified` → **CIUDAD/CALLE**. `trunk`, `primary`, `secondary`, caminos desconocidos u otras clases → **SIN CLASIFICACIÓN** (no hay carretera de alta capacidad garantizada solo por etiqueta de jerarquía).
