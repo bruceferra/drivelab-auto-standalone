@@ -1,4 +1,5 @@
 name: Signed Receiver 0.2.50 - independent trip slots, live OSM, steering capture
+# Rebuild after corrected Java cockpit syntax; release only on verified success.
 on:
   push:
     branches: [main]
