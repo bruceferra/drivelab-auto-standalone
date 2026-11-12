@@ -122,6 +122,24 @@ final class T1TripSync {
         putNumber(s,"oem500ElectricRaw",f,39);
         putNumber(s,"oem50FuelCallbackRaw",f,40);
         putNumber(s,"oem50ElectricCallbackRaw",f,41);
+        // Added in 0.2.54. Earlier CSVs intentionally have 42 columns.
+        // Missing new fields become null, not fabricated zeroes.
+        putNumber(s,"powerMode1043",f,42);
+        putNumber(s,"socMode1040",f,43);
+        putNumber(s,"socTarget1041Int",f,44);
+        putNumber(s,"socTarget1041Float",f,45);
+        putNumber(s,"regeneration1046",f,46);
+        putNumber(s,"chargeSwitch1045",f,47);
+        putNumber(s,"driveMode2053",f,48);
+        putNumber(s,"footBrake3011",f,49);
+        putNumber(s,"fuelPct1079",f,50);
+        putNumber(s,"hvEnabled1031",f,51);
+        putNumber(s,"accelLongEstimated",f,52);
+        putNumber(s,"accelLateralGpsEstimated",f,53);
+        putNumber(s,"gpsBearingDeg",f,54);
+        putNumber(s,"gpsAltitudeM",f,55);
+        putNumber(s,"gpsFixAgeMs",f,56);
+        putNumber(s,"engineStatus2073",f,57);
         return s;
     }
     private static JSONArray readBatch(File file,int offset)throws Exception{
