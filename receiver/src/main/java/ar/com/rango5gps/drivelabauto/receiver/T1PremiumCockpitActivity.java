@@ -48,7 +48,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private LinearLayout totalScopeCard,client1ScopeCard,client2ScopeCard;
     private TextView totalScopeTitle,totalScopeKm,secondScopeTitle,secondScopeKm,osmBanner;
     private LinearLayout secondary;
-    private TextView tripStatus,kmNow,evKmNow,clientSyncStatus,
+    private TextView tripStatus,kmNow,evKmNow,consumptionNow,clientSyncStatus,
         fuelNow,electricNow,costNow,clientNow,
         dayNow,monthNow,historyNow,zoneStatus,feedback,energyNote,
         scopeTitle,scopeProgress,socStrategy,autonomyNow,autonomyDetail;
@@ -581,7 +581,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         root.addView(socStrategy);
 
         // Three selectable readings visible together. Selecting a card
-        // switches all trip-dependent values in the five compact tiles.
+        // switches trip-dependent values in the six compact tiles.
         LinearLayout overview=row();root.addView(overview);
         // Viaje TOTAL immediately to the RIGHT of Viaje 1.
         client1ScopeCard=scopeCard(overview,1);
@@ -605,10 +605,11 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         client2ScopeCard.addView(secondScopeKm);
 
         LinearLayout metrics=row();root.addView(metrics);
-        evKmNow=compactMetric(metrics,"KM MOTOR APAGADO · 1035","0,00 km");
-        fuelNow=compactMetric(metrics,"NAFTA · EXP.","—");
-        electricNow=compactMetric(metrics,"ELECTRICIDAD NETA · EXP.","—");
-        costNow=compactMetric(metrics,"COSTO NAFTA · EXP.","—");
+        consumptionNow=compactMetric(metrics,"CONSUMO · EXP.","SIN DATOS");
+        evKmNow=compactMetric(metrics,"KM ELÉCTRICOS PUROS","0,00 km");
+        fuelNow=compactMetric(metrics,"COMBUSTIBLE CONSUMIDO","—");
+        electricNow=compactMetric(metrics,"ELECTRICIDAD CONSUMIDA · EXP.","—");
+        costNow=compactMetric(metrics,"COSTO COMBUSTIBLE · EXP.","—");
         autonomyNow=compactMetric(metrics,"AUTONOMÍA TOTAL · EXP.","SIN DATOS");
         clientSyncStatus=text("CLIENTE QR · verificando pendientes",12,MUTED,false);
         clientSyncStatus.setSingleLine(true);
@@ -949,6 +950,16 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             selectedScope==2?(second?T1JourneyStore2.electricKm(this):0):
             client?T1JourneyStore.electricKm(this):0;
         evKmNow.setText(f(electricRoadKm,2)+" km");
+        // L/100 km = liters * 100 / kilometers; km/L = km / liters.
+        // Neither ratio is meaningful with no verified fuel events, zero
+        // liters, zero distance or a stale client scope.
+        boolean hasConsumption=scoped.fuelKnown&&
+            Double.isFinite(scoped.fuelLiters)&&scoped.fuelLiters>0.000001&&
+            Double.isFinite(scoped.km)&&scoped.km>0.001;
+        consumptionNow.setText(hasConsumption?
+            f(100.0*scoped.fuelLiters/scoped.km,2)+" L/100 · "+
+            f(scoped.km/scoped.fuelLiters,1)+" km/L":"SIN DATOS");
+        consumptionNow.setTextSize(16);
         clientSyncStatus.setText("VIAJES QR · "+T1ClientTripSync.status(this));
         fuelNow.setText(scoped.fuelKnown?
             f(scoped.fuelLiters,3)+" L":"ESPERANDO");
