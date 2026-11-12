@@ -28,10 +28,11 @@ final class T1TripRecoveryState {
             String header=reader.readLine();
             if(header==null||!header.startsWith("timestamp_epoch_ms,gear_1033"))
                 throw new IOException("Formato de TRIP no reconocido");
+            int columns=header.split(",",-1).length;
             String line;
             while((line=reader.readLine())!=null){
                 String[] v=line.split(",",-1);
-                if(v.length<39)continue;
+                if(v.length<columns||v.length<19)continue;
                 try{
                     long t=Long.parseLong(v[0]);
                     double distance=Double.parseDouble(v[16]);
