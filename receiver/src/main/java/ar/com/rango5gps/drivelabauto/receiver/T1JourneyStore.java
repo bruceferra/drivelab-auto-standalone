@@ -102,8 +102,11 @@ final class T1JourneyStore {
         if(active(c))return "Ya hay un trayecto activo; finalizalo primero.";
         if(pending(c))return "Iniciando "+pendingLabel(c)+"; esperando telemetría nueva.";
         SharedPreferences m=master(c);
-        String expected=m.getBoolean(T1TripRecorderService.RUNNING,false)?
-            m.getString(T1TripRecorderService.ID,""):"";
+        long sampleAge=System.currentTimeMillis()-
+            m.getLong(T1TripRecorderService.LAST_SAMPLE_TIME,0L);
+        boolean fresh=m.getBoolean(T1TripRecorderService.RUNNING,false)&&
+            sampleAge>=0&&sampleAge<=15000;
+        String expected=fresh?m.getString(T1TripRecorderService.ID,""):"";
         boolean saved=p(c).edit().putString(PENDING_LABEL,cleanLabel(label))
             .putLong(PENDING_TIME,System.currentTimeMillis())
             .putString(PENDING_TRIP,expected).commit();
