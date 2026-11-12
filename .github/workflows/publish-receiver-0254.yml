@@ -1,4 +1,5 @@
 name: Signed Receiver 0.2.54 - historical what-if simulator and expanded OEM telemetry
+# Rebuild after Java string fix and first-install OSM UNKNOWN diagnosis
 # Rebuild after corrected Java cockpit syntax; release only on verified success.
 on:
   push:
