@@ -22,7 +22,7 @@ import java.util.Map;
  */
 final class T1JourneyStore {
     private static final String PREFS="t1_passenger_journeys";
-    private static final String ACTIVE="active",LABEL="label",TIME="start_time",
+    private static final String ACTIVE="active",PAUSED="client_paused",LABEL="label",TIME="start_time",
         TRIP="trip_id",KM="km",FUEL="fuel",ELEC="electric",N_FUEL="nf",N_ELEC="ne",
         PENDING_LABEL="pending_label",PENDING_TIME="pending_time",
         PENDING_TRIP="pending_trip",RECOVERY_NOTE="last_interruption_note",
@@ -32,7 +32,11 @@ final class T1JourneyStore {
         ORIGINAL_TIME="original_client_start",
         START_PARKED="parked_at_client_start",
         START_OFFLINE="offline_at_client_start",
-        CARRY_UNCERTAIN="carry_has_missing_samples";
+        CARRY_UNCERTAIN="carry_has_missing_samples",
+        PAUSE_KM="pause_total_km",PAUSE_FUEL="pause_total_fuel",
+        PAUSE_ELEC="pause_total_electric",PAUSE_NF="pause_total_nf",
+        PAUSE_NE="pause_total_ne",PAUSE_SINCE="pause_since_epoch_ms",
+        PAUSED_SUM="paused_total_ms";
     private static final String CSV_HEADER=
         "id;inicio;fin;etiqueta;trip_id;km_est_oem_velocidad;eventos_nafta;"+
         "nafta_raw;litros_experimentales;eventos_electricidad;electricidad_raw;"+
@@ -98,10 +102,61 @@ final class T1JourneyStore {
             m.getInt(T1TripRecorderService.SEG_ELEC_COUNT,0));
     }
     static boolean active(Context c){return p(c).getBoolean(ACTIVE,false);}
+    static boolean paused(Context c){return active(c)&&p(c).getBoolean(PAUSED,false);}
     static String activeLabel(Context c){return p(c).getString(LABEL,"");}
     static boolean pending(Context c){return p(c).contains(PENDING_TIME);}
     static String pendingLabel(Context c){return p(c).getString(PENDING_LABEL,"");}
 
+    /** PAUSE captures accumulated values; RESUME starts a new checkpoint in
+     * the SAME master without counting distance/energy during the pause. */
+    static synchronized String pause(Context c){
+        if(!active(c))return "No hay cliente activo para pausar.";
+        if(paused(c))return "Cliente ya pausado.";
+        T1JourneyMetrics.Result result=running(c);
+        if(result==null)return "Esperando muestra OEM fresca; no se pausó.";
+        boolean saved=p(c).edit().putBoolean(PAUSED,true)
+            .putFloat(PAUSE_KM,(float)result.km)
+            .putFloat(PAUSE_FUEL,(float)result.rawFuel)
+            .putFloat(PAUSE_ELEC,(float)result.rawElectric)
+            .putInt(PAUSE_NF,result.fuelEvents)
+            .putInt(PAUSE_NE,result.electricEvents)
+            .putLong(PAUSE_SINCE,System.currentTimeMillis()).commit();
+        return saved?"CLIENTE PAUSADO · km y energía conservados; jornada sigue grabando.":
+            "No se pudo guardar la pausa del cliente.";
+    }
+    static synchronized String resume(Context c){
+        if(!paused(c))return "Cliente no está pausado.";
+        T1JourneyMetrics.Checkpoint mark;
+        try{mark=now(c);}
+        catch(Exception ex){return "Aún sin muestra OEM fresca para reanudar cliente.";}
+        SharedPreferences z=p(c);
+        long start=z.getLong(PAUSE_SINCE,0);
+        long duration=start>0?Math.max(0,System.currentTimeMillis()-start):0;
+        boolean saved=z.edit()
+            .putString(TRIP,mark.tripId).putLong(TIME,mark.time)
+            .putFloat(KM,(float)mark.km)
+            .putFloat(FUEL,(float)mark.rawFuel)
+            .putFloat(ELEC,(float)mark.rawElectric)
+            .putInt(N_FUEL,mark.fuelCount).putInt(N_ELEC,mark.electricCount)
+            .putFloat(CARRY_KM,z.getFloat(PAUSE_KM,0f))
+            .putFloat(CARRY_FUEL,z.getFloat(PAUSE_FUEL,0f))
+            .putFloat(CARRY_ELEC,z.getFloat(PAUSE_ELEC,0f))
+            .putInt(CARRY_NF,z.getInt(PAUSE_NF,0))
+            .putInt(CARRY_NE,z.getInt(PAUSE_NE,0))
+            .putLong(PAUSED_SUM,z.getLong(PAUSED_SUM,0)+duration)
+            .putBoolean(PAUSED,false).remove(PAUSE_SINCE).commit();
+        return saved?"CLIENTE REANUDADO · mismo trayecto, sin sumar tramo pausado.":
+            "Error al reanudar; cliente sigue pausado.";
+    }
+    static synchronized T1JourneyMetrics.Result pausedResult(Context c){
+        if(!paused(c))return null;
+        SharedPreferences z=p(c);
+        return new T1JourneyMetrics.Result(
+            z.getFloat(PAUSE_KM,0f),z.getFloat(PAUSE_FUEL,0f),
+            z.getFloat(PAUSE_ELEC,0f),z.getInt(PAUSE_NF,0),
+            z.getInt(PAUSE_NE,0),master(c).getFloat(
+                T1TripRecorderService.FUEL_PRICE,2129f));
+    }
     /**
      * True continuous passenger journey: the customer stays ACTIVE until the
      * user explicitly taps FINALIZAR. During old-version upgrades, a brand
@@ -228,7 +283,11 @@ final class T1JourneyStore {
         if(!active(c))return 0;
         long began=p(c).getLong(ORIGINAL_TIME,
             p(c).getLong(TIME,System.currentTimeMillis()));
-        return Math.max(0,System.currentTimeMillis()-began);
+        SharedPreferences z=p(c);
+        long pausedTime=z.getLong(PAUSED_SUM,0);
+        if(paused(c))pausedTime+=Math.max(0,System.currentTimeMillis()-
+            z.getLong(PAUSE_SINCE,System.currentTimeMillis()));
+        return Math.max(0,System.currentTimeMillis()-began-pausedTime);
     }
     static long parkedMillis(Context c){
         if(!active(c))return 0;
@@ -302,6 +361,7 @@ final class T1JourneyStore {
             return "Primero iniciá JORNADA para grabar el TRIP OEM.";
         T1JourneyMetrics.Checkpoint mark=now(c);
         boolean ok=p(c).edit().putBoolean(ACTIVE,true)
+            .putBoolean(PAUSED,false).putLong(PAUSED_SUM,0L)
             .putLong(ORIGINAL_TIME,mark.time)
             .putString(CHAIN,mark.tripId)
             .putFloat(CARRY_KM,0f).putFloat(CARRY_FUEL,0f)
@@ -330,6 +390,7 @@ final class T1JourneyStore {
     }
     static synchronized T1JourneyMetrics.Result running(Context c) {
         if(!active(c))return null;
+        if(paused(c))return pausedResult(c);
         try{
             double price=master(c).getFloat(
                 T1TripRecorderService.FUEL_PRICE,2129f);
@@ -340,17 +401,26 @@ final class T1JourneyStore {
     }
     static synchronized String finish(Context c){
         if(!active(c))return "No hay trayecto activo.";
-        T1JourneyMetrics.Checkpoint start=startCheckpoint(c),end=now(c);
-        if(!start.tripId.equals(end.tripId))
-            return "Cambió la jornada: "+reconcileInterrupted(c)+
-                " · no se mezclaron kilómetros entre sesiones.";
+        T1JourneyMetrics.Checkpoint start=startCheckpoint(c);
         T1JourneyMetrics.Result result;
-        try{
-            double price=master(c).getFloat(
-                T1TripRecorderService.FUEL_PRICE,2129f);
-            result=withCarry(c,T1JourneyMetrics.between(start,end,price),price);
+        long ended;
+        if(paused(c)){
+            result=pausedResult(c);
+            ended=p(c).getLong(PAUSE_SINCE,System.currentTimeMillis());
+        }else{
+            T1JourneyMetrics.Checkpoint end=now(c);
+            if(!start.tripId.equals(end.tripId))
+                return "Cambió la jornada: "+reconcileInterrupted(c)+
+                    " · no se mezclaron kilómetros entre sesiones.";
+            try{
+                double price=master(c).getFloat(
+                    T1TripRecorderService.FUEL_PRICE,2129f);
+                result=withCarry(c,T1JourneyMetrics.between(start,end,price),price);
+            }catch(IllegalArgumentException ex){
+                return "Lecturas incoherentes: no se guardó";
+            }
+            ended=end.time;
         }
-        catch(IllegalArgumentException ex){return "Lecturas incoherentes: no se guardó";}
         long originalStart=p(c).getLong(ORIGINAL_TIME,start.time);
         String id=Long.toString(originalStart);
         String label=cleanLabel(activeLabel(c));
@@ -359,7 +429,7 @@ final class T1JourneyStore {
             p(c).edit().clear().commit();
             return "Trayecto anterior ya estaba guardado.";
         }
-        String row=id+";"+originalStart+";"+end.time+";"+label+";"+
+        String row=id+";"+originalStart+";"+ended+";"+label+";"+
             tripChain(c)+
             ";"+db(result.km)+";"+result.fuelEvents+";"+db(result.rawFuel)+
             ";"+db(result.fuelLitersCandidate)+";"+result.electricEvents+
