@@ -48,7 +48,12 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private int selectedScope=1;
     private LinearLayout totalScopeCard,client1ScopeCard,client2ScopeCard;
     private TextView totalScopeTitle,totalScopeKm,secondScopeTitle,secondScopeKm,osmBanner;
-    private LinearLayout secondary,historyPickList,historyDetailRow;
+    private LinearLayout secondary,historyPickList,historyMasterList,historyDetailRow;
+    // Full master CSV scans are strictly BACKGROUND. Rendering history every
+    // five seconds must never read large CSVs on the UI thread.
+    private volatile ArrayList<T1MasterTripHistory.Entry> cachedMasterHistory=
+        new ArrayList<>();
+    private long lastHistoryAuditAt=0L;
     private TextView historyDetailTitle,historyRepairStatus;
     private String selectedHistoryKey="";
     private final AtomicBoolean historyRepairBusy=new AtomicBoolean(false);
@@ -173,6 +178,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         super.onResume();visible=true;lastTelem=0;lastTotals=0;
         T1OptimizedAutoService.ensureRunning(this);
         ensureContinuousTrip();
+        // Recheck every closed client and JOURNADA on startup. Keep raw CSVs.
+        runHistoryRepair(false);
         T1ClientTripSync.trigger(this,false);
         if(T1OfflineRoadMap.checkDue(this))updateOfflineMap(false);
         ui.removeCallbacks(ticker);ui.post(ticker);
@@ -956,7 +963,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         LinearLayout simulatorRow=row();secondary.addView(simulatorRow);
         compactButton(simulatorRow,"SIMULAR HEV SMART / SOC FORZADO",BLUE,
             this::openWhatIf);
-        heading(secondary,"ÚLTIMOS TRAYECTOS");
+        heading(secondary,"HISTORIAL · VIAJES Y JORNADAS");
         historyNow=text("Todavía no hay trayectos cerrados.",14,MUTED,false);
         historyNow.setBackground(bg(CARD,18));historyNow.setPadding(16,14,16,14);
         secondary.addView(historyNow);
@@ -966,10 +973,19 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         LinearLayout repairActions=row();secondary.addView(repairActions);
         compactButton(repairActions,"RECONSTRUIR KM DEL HISTORIAL",TEAL,
             this::runHistoryRepair);
-        secondary.addView(text("TOCÁ UN VIAJE PARA VER SUS SEIS INDICADORES "+
-            "Y SU DISTANCIA ORIGINAL / CORREGIDA.",12,MUTED,true));
-        historyPickList=col();secondary.addView(historyPickList);
-        historyDetailTitle=text("Elegí un viaje del historial.",14,WHITE,true);
+        secondary.addView(text("IZQUIERDA: VIAJES 1/2 · DERECHA: "+
+            "JORNADAS COMPLETAS. Elegí una tarjeta y verás los seis "+
+            "indicadores a lo ancho, con original y corregido.",12,MUTED,true));
+        LinearLayout historyColumns=row();
+        secondary.addView(historyColumns,
+            new LinearLayout.LayoutParams(-1,-2));
+        LinearLayout historyLeft=tile(historyColumns,CARD);
+        LinearLayout historyRight=tile(historyColumns,CARD);
+        historyLeft.addView(text("VIAJES · 1 Y 2",17,WHITE,true));
+        historyRight.addView(text("JORNADAS · TOTAL",17,WHITE,true));
+        historyPickList=col();historyLeft.addView(historyPickList);
+        historyMasterList=col();historyRight.addView(historyMasterList);
+        historyDetailTitle=text("Elegí un viaje o una jornada.",14,WHITE,true);
         secondary.addView(historyDetailTitle);
         historyDetailRow=row();secondary.addView(historyDetailRow);
         advanced=col();advanced.setPadding(14,12,14,14);
@@ -1390,9 +1406,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             recorder.getBoolean(T1TripRecorderService.PAUSED,false);
         double currentFuelPrice=recorder.getFloat(
             T1TripRecorderService.FUEL_PRICE,2129f);
-        for(T1MasterTripHistory.Entry e:T1MasterTripHistory.closed(
-                T1TripRecorderService.tripDir(this),currentMasterId,
-                masterOpen)){
+        for(T1MasterTripHistory.Entry e:cachedMasterHistory){
             double experimentalCost=Double.isFinite(e.liters)?
                 e.liters*currentFuelPrice:Double.NaN;
             all.add(new HistoryRecord(0,e.id,
@@ -1411,7 +1425,11 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         all.sort((a,b)->Long.compare(b.ended,a.ended));
         SimpleDateFormat dt=new SimpleDateFormat("dd/MM HH:mm",Locale.getDefault());
         StringBuilder summary=new StringBuilder();
-        for(int i=0;i<Math.min(4,all.size());i++){
+        int totalClient=0,totalMaster=0;
+        for(HistoryRecord item:all){
+            if(item.slot==0)totalMaster++;else totalClient++;
+        }
+        for(int i=0;i<Math.min(3,all.size());i++){
             HistoryRecord e=all.get(i);
             summary.append(e.displayName()).append(" · ")
                 .append(dt.format(new Date(e.started))).append(" · ")
@@ -1419,29 +1437,30 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             if(e.corrected)summary.append(" · RECALCULADO OEM");
             summary.append("\n");
         }
-        historyNow.setText(summary.length()==0?
-            "Sin trayectos de cliente guardados.":summary.toString().trim());
-        if(historyPickList!=null){
+        historyNow.setText(
+            totalClient+" VIAJES CERRADOS · "+totalMaster+" JORNADAS CERRADAS\n"+
+            (summary.length()==0?"Todavía no hay grabaciones":summary.toString().trim()));
+        if(historyPickList!=null&&historyMasterList!=null){
             historyPickList.removeAllViews();
-            for(int i=0;i<Math.min(25,all.size());i++){
-                HistoryRecord item=all.get(i);
-                TextView line=text(
-                    (selectedHistoryKey.equals(item.key())?"● ":"○ ")+
-                    item.displayName()+" · "+dt.format(new Date(item.started))+
-                    " · "+f(item.km,2)+" km"+
-                    (item.corrected?" · CORREGIDO":""),
-                    14,selectedHistoryKey.equals(item.key())?TEAL:WHITE,true);
-                line.setPadding(12,9,12,9);
-                line.setBackground(bg(CARD,10));
-                LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);
-                lp.setMargins(2,2,2,2);
-                historyPickList.addView(line,lp);
-                line.setOnClickListener(v->{
-                    selectedHistoryKey=item.key();
-                    showHistoryDetails(item);
-                    lastTotals=0;
-                });
+            historyMasterList.removeAllViews();
+            int shownClient=0,shownMaster=0;
+            for(HistoryRecord item:all){
+                if(item.slot==0){
+                    if(shownMaster++>=30)continue;
+                    addHistoryButton(historyMasterList,item,dt);
+                }else{
+                    if(shownClient++>=30)continue;
+                    addHistoryButton(historyPickList,item,dt);
+                }
             }
+            if(totalClient==0)
+                historyPickList.addView(text("Sin viajes 1/2 cerrados",
+                    12,MUTED,false));
+            if(totalMaster==0)
+                historyMasterList.addView(text(
+                    historyRepairBusy.get()?
+                        "Leyendo CSV de jornadas…":"Sin jornadas cerradas",
+                    12,MUTED,false));
             HistoryRecord chosen=null;
             for(HistoryRecord h:all)
                 if(selectedHistoryKey.equals(h.key())){chosen=h;break;}
@@ -1450,25 +1469,50 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             }
             if(chosen!=null)showHistoryDetails(chosen);
             else{
-                historyDetailTitle.setText("Todavía no hay viajes cerrados");
+                historyDetailTitle.setText("Sin viajes ni jornadas cerradas");
                 historyDetailRow.removeAllViews();
             }
         }
         if(historyRepairStatus!=null&&!historyRepairBusy.get()){
-            int corrected=0,review=0,protectedCount=0;
+            int corrected=0,review=0,estimated=0,protectedCount=0;
             for(T1HistoricalDistanceRepair.Entry e:
                 T1HistoricalDistanceRepair.load(
                     T1TripRecorderService.tripDir(this)).values()){
-                if(e.applied())corrected++;
+                if(e.independentlyVerified())corrected++;
+                else if(e.applied())estimated++;
                 else if("PROTEGIDO_ULTIMO_VIAJE_2".equals(e.status))
                     protectedCount++;
                 else if(e.status.startsWith("REVISAR"))review++;
             }
             historyRepairStatus.setText(
-                corrected+" viajes con corrección OEM auditada · "+
+                corrected+" viajes verificados OEM · "+
+                estimated+" estimaciones de velocidad · "+
                 review+" para revisar · "+protectedCount+
                 " Viaje 2 reciente protegido.");
         }
+    }
+    private void addHistoryButton(LinearLayout column,HistoryRecord item,
+                                  SimpleDateFormat dateFormat){
+        boolean selected=selectedHistoryKey.equals(item.key());
+        String label=item.displayName()+" · "+
+            dateFormat.format(new Date(item.started))+"\n"+
+            f(item.km,2)+" km"+
+            (item.corrected?" · "+(item.slot==0?"OEM CORREGIDO":
+                "RECONSTRUIDO"):"");
+        TextView button=text((selected?"● ":"○ ")+label,
+            14,selected?TEAL:WHITE,true);
+        button.setPadding(12,10,12,10);
+        button.setBackground(bg(selected?0xFF173B40:0xFF1C2C38,10));
+        LinearLayout.LayoutParams params=
+            new LinearLayout.LayoutParams(-1,-2);
+        params.setMargins(2,3,2,3);
+        column.addView(button,params);
+        button.setOnClickListener(v->{
+            selectedHistoryKey=item.key();
+            showHistoryDetails(item);
+            // Next refresh also updates highlights in both columns.
+            lastTotals=0;
+        });
     }
     private static final class HistoryRecord {
         final int slot,fuelEvents;
@@ -1514,8 +1558,12 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         // the current vehicle's autonomy into a completed trip.
         compactMetric(historyDetailRow,"AUTONOMÍA TOTAL","NO GUARDADA");
     }
-    private void runHistoryRepair(){
+    private void runHistoryRepair(){runHistoryRepair(true);}
+    private void runHistoryRepair(boolean manual){
+        if(!manual&&lastHistoryAuditAt>0&&
+            System.currentTimeMillis()-lastHistoryAuditAt<120000L)return;
         if(!historyRepairBusy.compareAndSet(false,true))return;
+        lastHistoryAuditAt=System.currentTimeMillis();
         if(historyRepairStatus!=null)
             historyRepairStatus.setText("Verificando viajes cerrados y "+
                 "eventos OEM independientes…");
@@ -1526,14 +1574,27 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 java.util.ArrayList<T1HistoricalDistanceRepair.Entry> list=
                     T1HistoricalDistanceRepair.calculate(folder);
                 T1HistoricalDistanceRepair.save(folder,list);
-                int fixed=0,pending=0;
+                SharedPreferences p=getSharedPreferences(
+                    T1TripRecorderService.PREFS,MODE_PRIVATE);
+                ArrayList<T1MasterTripHistory.Entry> master=
+                    T1MasterTripHistory.closed(folder,
+                        p.getString(T1TripRecorderService.ID,""),
+                        p.getBoolean(T1TripRecorderService.RUNNING,false)||
+                        p.getBoolean(T1TripRecorderService.PAUSED,false));
+                cachedMasterHistory=master;
+                int fixed=0,pending=0,estimated=0,masterFixed=0;
                 for(T1HistoricalDistanceRepair.Entry e:list){
-                    if(e.applied())fixed++;
+                    if(e.independentlyVerified())fixed++;
+                    else if(e.applied())estimated++;
                     else if(e.status.startsWith("REVISAR"))pending++;
                 }
-                message="Reparación conservadora finalizada: "+fixed+
-                    " viajes corregidos; "+pending+
-                    " para revisar. Originales CSV sin modificar.";
+                for(T1MasterTripHistory.Entry e:master)
+                    if(e.corrected)masterFixed++;
+                message="HISTORIAL REVISADO: "+fixed+
+                    " viajes verificados OEM, "+estimated+
+                    " estimados por velocidad (sin testigo 500m), "+
+                    masterFixed+" jornadas corregidas y "+pending+
+                    " viajes pendientes. CSV originales intactos.";
             }catch(Exception ex){
                 message="No se pudo reconstruir: "+
                     ex.getClass().getSimpleName()+" · "+ex.getMessage();
