@@ -246,6 +246,14 @@ jobs:
           grep -q 'COPIAR INFORME LED' "$ui"
           grep -q 'reading.speed>0.5' "$ui"
           grep -q 'T1HorizonLedReadOnlyProbe.Snapshot.transitions' "$ui"
+          thermal=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ThermalMotorProbe.java
+          grep -q 'engineClusterTempRaw' "$thermal"
+          grep -q 'if(i==2&&raw>0' "$thermal"
+          grep -q 'engineTemperatureDisplay()' "$thermal"
+          grep -q 'engineTempSource="CLUSTER ENGINE TEMP · 559940105 · RAW"' "$thermal"
+          grep -q 'tempEngine.setText(result.engineTemperatureDisplay())' "$ui"
+          grep -q 'TEMPERATURA MOTOR · 559940105 · EXP.' "$ui"
+
       - name: Separate apps and Android APK builds
         run: gradle --no-daemon :sender:assembleDebug :receiver:assembleDebug
       - name: Verify independent identities, permissions and no telemetry
