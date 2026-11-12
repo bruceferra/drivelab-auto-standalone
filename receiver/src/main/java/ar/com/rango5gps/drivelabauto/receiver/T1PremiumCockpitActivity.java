@@ -1379,16 +1379,21 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             (day.electricKnownTrips>0?f(day.electricNet,3)+" kWh":
                 "SIN DATO")+
             " · no es electricidad comprada a la red");
-        T1DailyTripSummary.Result masterToday=T1DailyTripSummary.read(
-            T1TripRecorderService.tripDir(this),
-            T1JourneyStore.today().replace("-",""));
-        if(masterToday.sessions>0)
-            dayNow.append("\nJORNADAS HOY: "+f(masterToday.km,2)+
-                " km en "+masterToday.sessions+
-                " sesiones OEM conservadas (no sumadas a clientes)");
-        if(masterToday.unreadable>0)
-            dayNow.append("\n"+masterToday.unreadable+
-                " CSV incompletos/sin lectura");
+        // Reuse background-verified master summaries. The previous
+        // implementation reparsed every master CSV on the UI thread every
+        // five seconds and showed OLD GPS-km totals after reconstruction.
+        double dayMasterKm=0;
+        int dayMasterCount=0;
+        String todayMaster=T1JourneyStore.today().replace("-","");
+        for(T1MasterTripHistory.Entry e:cachedMasterHistory)
+            if(e.id.startsWith(todayMaster)){
+                dayMasterKm+=e.km;dayMasterCount++;
+            }
+        if(dayMasterCount>0)
+            dayNow.append("\nJORNADAS HOY: "+f(dayMasterKm,2)+
+                " km en "+dayMasterCount+
+                " sesiones, distancias verificadas o identificadas "+
+                "como pendientes (sin sumar viajes individuales)");
         monthNow.setText(month.trips+" viajes · "+f(month.km,1)+" km\n"+
             (month.fuelKnownTrips>0?"$ "+f(month.fuelCost,0)+" nafta exp.":
                 "Nafta: sin tramo OEM válido")+
