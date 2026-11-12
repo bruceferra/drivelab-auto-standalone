@@ -38,6 +38,12 @@
             android:foregroundServiceType="dataSync" />
         <service android:name=".RecirculationGuardService" android:exported="false"
             android:foregroundServiceType="dataSync" />
+        <!-- Only after user explicitly selects MODO OPTIMIZADO ON.
+             GPS foreground service continues when Maps becomes visible;
+             never launches on boot without an explicit running service. -->
+        <service android:name=".T1OptimizedAutoService"
+            android:exported="false"
+            android:foregroundServiceType="location" />
         <service android:name=".T1TripRecorderService" android:exported="false"
             android:foregroundServiceType="location|dataSync" />
         <!-- User-started only; bounded PHEV/SOC/wiper/radar and 500m callback probe.
