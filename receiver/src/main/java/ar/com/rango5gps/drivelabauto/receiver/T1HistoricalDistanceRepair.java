@@ -35,7 +35,9 @@ final class T1HistoricalDistanceRepair {
             validIntervals=valid;speedSamples=speed;gpsSamples=gps;
             this.status=status;
         }
-        boolean applied(){return "CORREGIDO".equals(status);}
+        boolean applied(){return "CORREGIDO".equals(status)||
+            "CORREGIDO_ESTIMADO".equals(status);}
+        boolean independentlyVerified(){return "CORREGIDO".equals(status);}
     }
     private static final class Original {
         final int slot;final String id,tripChain;
@@ -76,6 +78,7 @@ final class T1HistoricalDistanceRepair {
     private static final class Aggregate {
         int valid,speed,gps;
         double km,ev,ice,unknown;
+        long measuredMilliseconds=0;
     }
     private static Aggregate scan(File folder,Original trip)throws IOException{
         Aggregate sum=new Aggregate();
@@ -107,6 +110,7 @@ final class T1HistoricalDistanceRepair {
                     double step=speed*elapsed/3600000d*
                         T1TripDistancePolicy.OEM_KM_FACTOR;
                     sum.km+=step;sum.valid++;
+                    sum.measuredMilliseconds+=elapsed;
                     double on=dbl(x[24]);
                     if(on==0)sum.ev+=step;
                     else if(on==1)sum.ice+=step;
@@ -126,14 +130,27 @@ final class T1HistoricalDistanceRepair {
                 Math.abs(a.km-eventsKm)<=Math.max(1.5,eventsKm*.12);
             boolean needsCorrection=Math.abs(a.km-trip.km)>
                 Math.max(.4,trip.km*.03);
-            // On v0.2.56 OEM became authoritative; don't apply a second
-            // adjustment to trips already recorded by the fixed recorder.
-            boolean alreadyOem=a.speed>=5&&a.speed>=a.gps*4;
+            // Mixed old-GPS / newer OEM journeys may have many OEM
+            // samples but still contain underestimated GPS intervals. Do
+            // NOT mark them "YA_OEM" until comparing the full interval sum.
+            boolean alreadyOem=a.speed>=5&&a.gps==0;
             boolean protectedTrip=trip.slot==2&&trip.id.equals(protectedNewestId);
+            long duration=trip.to-trip.from;
+            double covered=duration>0?
+                a.measuredMilliseconds/(double)duration:0;
+            // When the independent OEM 500m callback is missing but >92% of
+            // the trip time has real speed intervals, the reconstruction is
+            // shown as ESTIMATED. It is never called OEM-verified.
+            boolean highCoverage=a.valid>=30&&covered>=.92&&
+                covered<=1.03&&a.km>0;
+            boolean originalGpsLed=a.gps>0&&
+                a.gps>=Math.max(5,a.speed/20);
             if(protectedTrip)status="PROTEGIDO_ULTIMO_VIAJE_2";
-            else if(alreadyOem)status="YA_OEM";
             else if(!needsCorrection)status="SIN_CAMBIO";
             else if(independentOk)status="CORREGIDO";
+            else if(highCoverage&&originalGpsLed&&!alreadyOem)
+                status="CORREGIDO_ESTIMADO";
+            else if(alreadyOem)status="REVISAR_YA_OEM";
             else status="REVISAR_MUESTRAS_OEM";
         }catch(IOException ex){status="SIN_CSV"; }
         return new Entry(trip.slot,trip.id,trip.from,trip.to,trip.km,
