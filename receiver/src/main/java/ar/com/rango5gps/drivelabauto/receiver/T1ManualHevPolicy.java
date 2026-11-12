@@ -32,8 +32,8 @@ final class T1ManualHevPolicy {
         if(powerMode==EV||powerMode==EV_MAX)
             return "LISTO PARA ENSAYO EV→HEV: P confirmada, "+
                 "0 km/h y modo "+(powerMode==EV?"EV":"EV MAX")+
-                ". Escritura 1043=2 todavía SIN VALIDACIÓN FÍSICA. "+
-                "No garantiza que la ROM acepte la orden.";
+                ". Escritura 1043=2 comprobada en P en esta unidad; "+
+                "no está validada en movimiento.";
         return "NO SE ENVIÓ: 1043="+powerMode+
             " no es un modo de partida EV/EV MAX verificado.";
     }
