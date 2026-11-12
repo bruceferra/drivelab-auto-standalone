@@ -102,7 +102,7 @@ jobs:
           java -cp /tmp/t1-cockpit-test ar.com.rango5gps.drivelabauto.receiver.T1CockpitLiveTest
           # Exactly one manual EV→HEV mode target, no GPS or background write.
           grep -q 'POWER_MODE_ID=1043,HEV=2' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ManualHevPolicy.java
-          grep -q 'checkStopped(b,confirmedMode)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ManualHevExperiment.java
+          grep -q 'checkStopped(b,confirmedMode,"CONTROL_2")' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ManualHevExperiment.java
           grep -q 'd.writeInt(T1ManualHevPolicy.HEV)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ManualHevExperiment.java
           ! grep -E 'transact\\(15|setInt\\(' \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ModeZoneStore.java
