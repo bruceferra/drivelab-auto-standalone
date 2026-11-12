@@ -37,9 +37,10 @@ final class T1JourneyRecoveryFile {
             String line=in.readLine();
             if(line==null||!line.startsWith("timestamp_epoch_ms,"))
                 throw new IOException("Encabezado de jornada no reconocido");
+            int columns=line.split(",",-1).length;
             while((line=in.readLine())!=null){
                 String[] v=line.split(",",-1);
-                if(v.length<38)continue; // power cut or partial last record
+                if(v.length<columns||v.length<38)continue; // torn last record
                 try{
                     long t=Long.parseLong(v[0]);
                     double k=Double.parseDouble(v[16]);
