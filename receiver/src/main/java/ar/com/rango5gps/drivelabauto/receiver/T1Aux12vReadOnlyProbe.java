@@ -29,8 +29,8 @@ final class T1Aux12vReadOnlyProbe {
     }
     private static final Item[] ITEMS={
         new Item(559964342,"IBS voltaje de batería auxiliar",true),
-        new Item(559940910,"EXT voltaje de batería",true),
-        new Item(559940911,"EXT corriente de batería",true),
+        new Item(559940910,"EXT voltaje batería · dominio por determinar",true),
+        new Item(559940911,"EXT corriente batería · NO asumir 12 V",true),
         new Item(557867192,"IBS corriente",false),
         new Item(559964408,"IBS corriente en reposo",true),
         new Item(557867191,"IBS SOC",false),
@@ -58,19 +58,27 @@ final class T1Aux12vReadOnlyProbe {
                     .append(ITEMS[i].id).append(": ")
                     .append(readings[i]==null?"SIN DATO":readings[i]);
             }
-            b.append("\n\nLecturas crudas: sin garantía de unidades, "+
-                "escala, polaridad o correspondencia con la batería de 12 V. "+
-                "NO confundir con corriente 1064 de batería de tracción.");
+            b.append("\n\nANÁLISIS CRÍTICO: EXT 559940910: ")
+                .append(T1ElectricalEvidence.report(readings[1]));
+            b.append("\nIBS 559964342 a 0 NO es 0 voltios físicos: "+
+                "significa SIN LECTURA VALIDADA hasta corroborar. "+
+                "Los códigos EXT podrían corresponder al circuito HV. "+
+                "No mezclar con 1064 de tracción ni etiquetar "+
+                "EXT 315 como voltaje de 12 V.");
             return b.toString();
         }
         String headline(){
-            String primary=readings[0],secondary=readings[1];
-            return "BATERÍA AUXILIAR 12 V · "+ok+"/"+ITEMS.length+
-                " propiedades legibles"+
-                "\nIBS voltaje: "+(primary==null?"sin dato":primary)+
-                "\nEXT voltaje: "+(secondary==null?"sin dato":secondary)+
-                "\nVoltaje, SOC y corriente requieren validación con "+
-                "medidor externo y cambios de carga.";
+            String ibs=readings[0];
+            boolean ibsMissing=ibs==null||ibs.equals("RAW float=0.0")||
+                !ibs.startsWith("RAW float=");
+            return "BATERÍA AUXILIAR 12 V · "+
+                (ibsMissing?"SIN VOLTAJE IBS VÁLIDO":
+                    "IBS candidato "+ibs)+
+                "\nEXT 559940910: "+
+                T1ElectricalEvidence.report(readings[1])+
+                "\n"+ok+"/"+ITEMS.length+" getters responden, "+
+                "pero NO son mediciones 12 V confirmadas. "+
+                "No inferir carga, SOC ni amperes auxiliares.";
         }
     }
     Result read(){
