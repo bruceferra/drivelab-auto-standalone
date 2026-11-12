@@ -126,7 +126,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                         updateTopModes();
                         updateVehicleOemSignals();
                         if(osmEnabled()&&
-                            System.currentTimeMillis()-lastOsmQuery>95000)
+                            System.currentTimeMillis()-lastOsmQuery>10000)
                             lookupOsm(false);
                     });
                 },"T1-Cockpit-ReadOnly").start();
@@ -158,6 +158,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         T1ClientTripSync.trigger(this,false);
         if(T1OfflineRoadMap.checkDue(this))updateOfflineMap(false);
         ui.removeCallbacks(ticker);ui.post(ticker);
+        if(osmEnabled())showOsmResult();
     }
     private void ensureContinuousTrip(){
         SharedPreferences master=getSharedPreferences(
@@ -329,15 +330,32 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 osmBanner.setText("OSM ACTIVO · esperando clasificación de la vía");
             return;
         }
-        String suggestion=osmLast.recommendation(motorwayForced());
-        osmStatus.setText(suggestion+"\n"+osmLast.explain()+
-            "\nSolo consejo, no cambia EV/HEV. Las zonas se guardan "+
-            "manualmente con GUARDAR ZONA EV/HEV debajo.");
+        T1OptimizedModePolicy.Road category;
+        try{category=T1OptimizedModePolicy.Road.valueOf(osmLast.road.name());}
+        catch(Exception ignored){category=T1OptimizedModePolicy.Road.UNKNOWN;}
+        T1OptimizedModeStore.markReading(this,category,
+            osmLast.roadTag,osmLast.detail);
+        double soc=lastSample==null?Double.NaN:lastSample.socDisplay;
+        T1OptimizedModePolicy.Decision decision=
+            T1OptimizedModePolicy.evaluate(category,
+                T1OptimizedModeStore.get(this,category),soc);
+        String suggestion=decision.summary();
+        String road=T1OptimizedModePolicy.roadName(category);
+        osmStatus.setText("VÍA: "+road+" · "+osmLast.explain()+
+            "\nMODO OPTIMIZADO · "+suggestion+
+            "\nSOLO SUGERENCIA. No hay control automático de EV/HEV, "+
+            "SOC ni regeneración; las escrituras OEM aún requieren validación.");
         if(osmBanner!=null&&osmEnabled())
-            osmBanner.setText("OSM · "+suggestion+" · "+
-                (osmLast.roadTag.isEmpty()?
-                    osmLast.detail:osmLast.roadTag+" · "+osmLast.name)+
+            osmBanner.setText("OSM OFFLINE · "+road+" · "+suggestion+
                 " · TOCÁ PARA DETALLES");
+    }
+    private void openOptimizedMode(){
+        Intent intent=new Intent(this,T1OptimizedModeActivity.class);
+        if(lastSample!=null){
+            intent.putExtra("soc",lastSample.socDisplay);
+            intent.putExtra("soc_at",lastSample.timestamp);
+        }
+        startActivity(intent);
     }
     private void lookupOsm(boolean userTriggered){
         if(osmStatus==null||!visible)return;
@@ -562,6 +580,12 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         displaySettings.setText("PANTALLA");
         displaySettings.setOnClickListener(v->openDisplaySettings());
         top.addView(displaySettings,new LinearLayout.LayoutParams(-2,52));
+        Button optimized=new Button(this);
+        optimized.setAllCaps(false);
+        optimized.setTextSize(12);
+        optimized.setText("MODO OPTIMIZADO");
+        optimized.setOnClickListener(v->openOptimizedMode());
+        top.addView(optimized,new LinearLayout.LayoutParams(-2,52));
         Button back=new Button(this);
         back.setText("VOLVER");back.setTextSize(12);
         back.setAllCaps(false);back.setOnClickListener(v->finish());
@@ -760,8 +784,19 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         button(rawRow,"COMPARTIR SEÑALES OEM 12/11",BLUE,()->
             shareDiagnostic("senales_oem_12nov",rawVehicleReport(),rawSignalsStatus));
 
+        heading(advanced,"MODO OPTIMIZADO · CUATRO TIPOS DE VÍA");
+        advanced.addView(text("Ciudad, carretera, autopista y desconocido "+
+            "tienen configuraciones independientes. Cada perfil permite "+
+            "EV/HEV/EV MAX, SMART o SOC FORZADO con porcentaje, umbral de "+
+            "batería y regeneración baja/media/alta. Guarda preferencia, "+
+            "NO controla automáticamente la propulsión todavía.",
+            13,MUTED,false));
+        LinearLayout optimizerRow=row();advanced.addView(optimizerRow);
+        button(optimizerRow,"CONFIGURAR 4 PERFILES",TEAL,this::openOptimizedMode);
+
         heading(advanced,"ASESOR OSM OFFLINE · PBA + CABA");
-        advanced.addView(text("CIUDAD → EV. AUTOPISTA → HEV SMART o HEV FORZADO. "+
+        advanced.addView(text("Cuatro clases: CIUDAD, CARRETERA, AUTOPISTA, "+
+            "DESCONOCIDO. Cada una recomienda su perfil configurado. "+
             "Usa un índice SQLite del mapa descargado del mismo servidor "+
             "que DriveLab Uber: SIN Overpass, SIN transmitir coordenadas "+
             "de GPS a ningún servidor. No cambia la propulsión. "+
