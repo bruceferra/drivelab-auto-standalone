@@ -28,7 +28,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /** Practical T1 cockpit: one all-day recorder + local passenger checkpoints.
  * No write/control Binder operation is reachable from this screen.
  * Trips and costs are explicitly estimated until OEM units are validated. */
-public final class T1PremiumCockpitActivity extends Activity {
+public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private static final int BG=0xFF091421,CARD=0xFF142639,WHITE=0xFFF3F8FD,
         MUTED=0xFF9BB0C1,TEAL=0xFF14AFA7,BLUE=0xFF2B789B,
         GOLD=0xFFFFC367,RED=0xFFB65754;
