@@ -5,8 +5,9 @@ package ar.com.rango5gps.drivelabauto.receiver;
  * Pure JVM logic: never invokes vehicle commands or changes driver settings.
  *
  * A first recognized road is announced so the user can test the offline map.
- * Subsequent changes need two consecutive samples, with unknown needing three
- * (to avoid blinking due to brief GPS loss/ambiguous parallel roads).
+ * Subsequent recognized changes need two consecutive samples. UNKNOWN
+ * requires at least 7 observations (~70s at 10s/call) so intermittent GPS
+ * failures don't produce "Desconocido -> Ciudad" popup flicker.
  */
 final class T1RoadTransitionGate {
     private T1OptimizedModePolicy.Road stable;
@@ -29,7 +30,7 @@ final class T1RoadTransitionGate {
         // Immediately show first identified category; don't announce
         // UNKNOWN on first failed GPS read.
         int required=stable==null&&current!=T1OptimizedModePolicy.Road.UNKNOWN?
-            1:current==T1OptimizedModePolicy.Road.UNKNOWN?3:2;
+            1:current==T1OptimizedModePolicy.Road.UNKNOWN?7:2;
         if(votes<required)return null;
         stable=current;
         candidate=null;
@@ -39,10 +40,10 @@ final class T1RoadTransitionGate {
 
     static String popupText(T1OptimizedModePolicy.Road road){
         switch(road){
-            case CITY:return "ENTRANDO A CIUDAD";
-            case ROAD:return "ENTRANDO A CARRETERA";
-            case MOTORWAY:return "ENTRANDO A AUTOPISTA";
-            default:return "ZONA DESCONOCIDA";
+            case CITY:return "CIUDAD";
+            case ROAD:return "CARRETERA";
+            case MOTORWAY:return "AUTOPISTA";
+            default:return "DESCONOCIDO";
         }
     }
 }
