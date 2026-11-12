@@ -197,8 +197,12 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
     }
     private String currentRecommendation(){
         road=T1OptimizedModeStore.lastRoad(this);
-        double soc=Double.NaN;
-        // Vehicle read is bounded to the user-opened diagnostic screen.
+        // A contemporaneous OEM SOC snapshot is handed from the cockpit.
+        // Never reuse stale readings or infer battery state from a mode label.
+        long at=getIntent().getLongExtra("soc_at",0L);
+        double soc=System.currentTimeMillis()-at<15000&&
+            System.currentTimeMillis()-at>=0?
+            getIntent().getDoubleExtra("soc",Double.NaN):Double.NaN;
         String info=T1OptimizedModeStore.lastInfo(this);
         T1OptimizedModePolicy.Decision result=T1OptimizedModePolicy.evaluate(
             road,T1OptimizedModeStore.get(this,road),soc);
