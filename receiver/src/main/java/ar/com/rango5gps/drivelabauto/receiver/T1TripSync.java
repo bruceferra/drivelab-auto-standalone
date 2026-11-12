@@ -136,10 +136,14 @@ final class T1TripSync {
         putNumber(s,"hvEnabled1031",f,51);
         putNumber(s,"accelLongEstimated",f,52);
         putNumber(s,"accelLateralGpsEstimated",f,53);
-        putNumber(s,"gpsBearingDeg",f,54);
-        putNumber(s,"gpsAltitudeM",f,55);
+        // GPS bearing/altitude remain local only; private QR batches never
+        // include route coordinates or location-derived elevation.
         putNumber(s,"gpsFixAgeMs",f,56);
         putNumber(s,"engineStatus2073",f,57);
+        putNumber(s,"headunitLinAccX",f,58);
+        putNumber(s,"headunitLinAccY",f,59);
+        putNumber(s,"headunitLinAccZ",f,60);
+        putNumber(s,"headunitLinAccAgeMs",f,61);
         return s;
     }
     private static JSONArray readBatch(File file,int offset)throws Exception{
