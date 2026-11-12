@@ -41,7 +41,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private Button dayStartButton,dayPauseButton,dayEndButton,
         clientStartButton,clientPauseButton,clientEndButton,clientRecoverButton;
     private LinearLayout secondary;
-    private TextView tripStatus,kmNow,fuelNow,electricNow,costNow,clientNow,
+    private TextView tripStatus,kmNow,evKmNow,clientSyncStatus,
+        fuelNow,electricNow,costNow,clientNow,
         dayNow,monthNow,historyNow,zoneStatus,feedback,energyNote,
         scopeTitle,scopeProgress,socStrategy,autonomyNow,autonomyDetail;
     private LinearLayout advanced;
@@ -142,6 +143,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     @Override protected void onResume(){
         super.onResume();visible=true;lastTelem=0;lastTotals=0;
         ensureContinuousTrip();
+        T1ClientTripSync.trigger(this,false);
         ui.removeCallbacks(ticker);ui.post(ticker);
     }
     private void ensureContinuousTrip(){
@@ -373,7 +375,11 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         Button b=new Button(this);
         b.setAllCaps(false);b.setText(caption);b.setTextSize(13);
         b.setTextColor(WHITE);
-        b.setBackgroundTintList(ColorStateList.valueOf(color));
+        // Disabled journey actions visibly stay GRAY; never look tappable.
+        b.setBackgroundTintList(new ColorStateList(
+            new int[][]{new int[]{android.R.attr.state_enabled},
+                        new int[]{-android.R.attr.state_enabled}},
+            new int[]{color,0xFF45525E}));
         b.setOnClickListener(v->run.run());
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,46,1f);
         lp.setMargins(2,1,2,1);parent.addView(b,lp);
@@ -481,9 +487,12 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         range.addView(adjust,new LinearLayout.LayoutParams(-1,36));
 
         LinearLayout metrics=row();root.addView(metrics);
+        evKmNow=compactMetric(metrics,"KM MOTOR APAGADO · 1035","0,00 km");
         fuelNow=compactMetric(metrics,"NAFTA · EXP.","—");
         electricNow=compactMetric(metrics,"ELECTRICIDAD NETA · EXP.","—");
         costNow=compactMetric(metrics,"COSTO NAFTA · EXP.","—");
+        clientSyncStatus=text("CLIENTE QR · verificando pendientes",12,MUTED,false);
+        root.addView(clientSyncStatus);
 
         feedback=text("Listo · trayectos locales y CSV intactos.",
             12,0xFFB2DDD9,false);
@@ -731,11 +740,13 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         }
         if(dayStartButton!=null){
             dayStartButton.setText(dayPaused?"REANUDAR":"INICIAR");
-            dayStartButton.setEnabled(dayPaused||!dayDesired);
+            dayStartButton.setEnabled(
+                dayPaused&&!running||(!dayDesired&&!running));
         }
         if(dayPauseButton!=null)dayPauseButton.setEnabled(
-            !dayPaused&&running&&fresh);
-        if(dayEndButton!=null)dayEndButton.setEnabled(dayDesired||dayPaused);
+            !dayPaused&&running&&fresh&&(!client||clientPaused)&&!pending);
+        if(dayEndButton!=null)dayEndButton.setEnabled(
+            (dayDesired||dayPaused)&&!client&&!pending);
         if(clientStartButton!=null){
             clientStartButton.setText(clientPaused?"REANUDAR":"INICIAR");
             clientStartButton.setEnabled(clientPaused||!client&&!pending);
@@ -765,6 +776,10 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             default:scopeTitle.setText("○ JORNADA ACTUAL · SIN GRABACIÓN");
         }
         kmNow.setText(f(scoped.km,2)+" km");
+        double electricRoadKm=client?T1JourneyStore.electricKm(this):
+            fresh||dayPaused?m.getFloat(T1TripRecorderService.EV_DISTANCE,0f):0;
+        evKmNow.setText(f(electricRoadKm,2)+" km");
+        clientSyncStatus.setText("CLIENTE QR · "+T1ClientTripSync.status(this));
         fuelNow.setText(scoped.fuelKnown?
             f(scoped.fuelLiters,3)+" L":"ESPERANDO");
         electricNow.setText(scoped.electricKnown?
@@ -777,7 +792,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             scoped.kind==T1CockpitScope.Kind.DAY?
             "AVANCE EN VIVO · nafta "+scoped.fuelEvents+
             " tramos / electricidad "+scoped.electricEvents+
-            " tramos de 500 m · km por velocidad OEM sin calibrar":
+            " tramos de 500 m · km por velocidad OEM ajustada provisionalmente":
             scoped.kind==T1CockpitScope.Kind.PREPARING?
             "0,00 km · esperando la primera muestra fresca de DriveLab (≈ 3 s)":
             scoped.kind==T1CockpitScope.Kind.UNSYNCED?
@@ -863,6 +878,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             s.append(dt.format(new Date(e.started))).append(" · ")
                 .append(e.label).append("\n")
                 .append(f(e.km,2)).append(" km · ")
+                .append(Double.isFinite(e.evKm)?
+                    f(e.evKm,2)+" km sin térmico (1035) · ":"EV km: histórico no medido · ")
                 .append(Double.isFinite(e.liters)?
                     f(e.liters,3)+" L exp.":"sin segmento completo")
                 .append(" · $")
