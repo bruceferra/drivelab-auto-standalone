@@ -603,6 +603,9 @@ public final class ReceiverVehicleActivity extends T1ImmersiveActivity {
             "3011 es SOLO DIAGNÓSTICO, no un requisito para cambiar modo en D. "+
             "En P, registrá freno de pie suelto, pisado y suelto otra vez, "+
             "manteniendo el vehículo inmóvil y el freno de estacionamiento.",13);
+        button(body,"DETECTAR BOTONES VOLANTE · KEYEVENT",()->
+            startActivity(new android.content.Intent(this,
+                T1SteeringKeysActivity.class)));
         button(body,"INICIAR DIAGNÓSTICO OEM · 3 MIN EN SEGUNDO PLANO",()->{
             try{
                 startForegroundService(new android.content.Intent(this,
