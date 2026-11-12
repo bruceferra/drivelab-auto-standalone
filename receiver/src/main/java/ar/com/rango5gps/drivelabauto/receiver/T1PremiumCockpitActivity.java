@@ -24,9 +24,9 @@ import java.text.SimpleDateFormat;
 import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-/** T1 cockpit: trip recorder, compact manually confirmed OEM mode experiments
- * and read-only road suggestions. Powertrain writes never come from GPS.
- * Trips and costs remain estimated until OEM units are validated. */
+/** T1 cockpit: trips, manual OEM controls, offline road advisory and
+ * EXPLICIT user-opted automated OEM1043 mode selection, delegated to an
+ * independent foreground service with strict OEM preflight and readback. */
 public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private static final int BG=0xFF091421,CARD=0xFF142639,WHITE=0xFFF3F8FD,
         MUTED=0xFF9BB0C1,TEAL=0xFF14AFA7,BLUE=0xFF2B789B,
@@ -70,7 +70,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         tempEngine,tempBattery,electricMotorStatus,electricMotorRpm;
     private T1ManualHevExperiment hevPilot;
     private T1ManualThreeModePilot threeModePilot;
-    private Button modeEvButton,modeHevButton,modeMaxButton;
+    private Button modeEvButton,modeHevButton,modeMaxButton,autoModeButton;
+    private TextView autoModeLive;
     private TextView modeAtTop,osmStatus,vehicleModeStatus,rawSignalsStatus;
     private Button osmEnabledButton,osmSocButton;
     private TextView offlineMapStatus;
@@ -170,6 +171,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     }
     @Override protected void onResume(){
         super.onResume();visible=true;lastTelem=0;lastTotals=0;
+        T1OptimizedAutoService.ensureRunning(this);
         ensureContinuousTrip();
         T1ClientTripSync.trigger(this,false);
         if(T1OfflineRoadMap.checkDue(this))updateOfflineMap(false);
@@ -268,9 +270,12 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         }
         modeAtTop.setText(fresh?
             "ACTUAL: "+T1ManualHevPolicy.currentMode(actual)+
-            " (1043="+actual+"). Cambio manual EV/HEV/EV MAX: "+
-            "P/0 o D; solo toque explícito, sin GPS automático.":
-            "MODO OEM · sin lectura reciente. Sin escrituras.");
+            " (1043="+actual+"). "+
+            (T1OptimizedAutoService.enabled(this)?
+                "MODO OPTIMIZADO AUTO ON · controles OEM verificados":
+                "MODO MANUAL · modo optimizado apagado"):
+            "MODO OEM · sin lectura reciente; sin escrituras.");
+        updateAutoModeUi();
     }
     /** One tap = one manual OEM request. No confirmation or result dialogs.
      * All direct OEM gear/speed/mode checks remain inside the pilot.
@@ -304,6 +309,44 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             modeAtTop.setText(result);
             lastTelem=0;
         })))modeAtTop.setText("Orden ocupada: "+targetName+" no enviado.");
+    }
+    private void updateAutoModeUi(){
+        boolean enabled=T1OptimizedAutoService.enabled(this);
+        if(autoModeButton!=null){
+            autoModeButton.setText(enabled?"AUTO · ON":"AUTO · OFF");
+            autoModeButton.setBackgroundTintList(
+                ColorStateList.valueOf(enabled?TEAL:RED));
+        }
+        if(autoModeLive!=null)
+            autoModeLive.setText(T1OptimizedAutoService.status(this));
+    }
+    private void toggleAutomaticMode(){
+        if(T1OptimizedAutoService.enabled(this)){
+            T1OptimizedAutoService.disable(this);
+            updateAutoModeUi();
+            showOsmResult();
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("MODO OPTIMIZADO · ACTIVAR")
+            .setMessage("DriveLab aplicará automáticamente EV, HEV o EV MAX "+
+                "con el mapa OFFLINE y los perfiles guardados, incluso en "+
+                "segundo plano. Requiere GPS preciso, tres lecturas "+
+                "estables, modo OEM válido y doble comprobación de P/0 "+
+                "o D con velocidad válida. SMART/FORZADO y regeneración "+
+                "se mantienen como preferencias: NO escribe todavía "+
+                "1040/1041/1046. Si 1043 no confirma, AUTO se desactiva "+
+                "sin repetir órdenes. Podés apagarlo aquí o desde la "+
+                "notificación del servicio.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("ACTIVAR",(d,w)->{
+                String result=T1OptimizedAutoService.activate(this);
+                updateAutoModeUi();
+                showOsmResult();
+                message(result);
+                if(T1OptimizedAutoService.enabled(this))
+                    lookupOsm(true);
+            }).show();
     }
     private void updateOsmControls(){
         if(osmEnabledButton==null)return;
@@ -376,10 +419,15 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 T1OptimizedModeStore.get(this,category),soc);
         String suggestion=decision.summary();
         String road=T1OptimizedModePolicy.roadName(category);
+        boolean auto=T1OptimizedAutoService.enabled(this);
         osmStatus.setText("VÍA: "+road+" · "+osmLast.explain()+
             "\nMODO OPTIMIZADO · "+suggestion+
-            "\nSOLO SUGERENCIA. No hay control automático de EV/HEV, "+
-            "SOC ni regeneración; las escrituras OEM aún requieren validación.");
+            (auto?"\nAUTO ON: propulsión 1043 activa por mapa tras "+
+                "confirmación OEM. SOC forzado/SMART y regeneración "+
+                "NO se escriben todavía.\n"+
+                T1OptimizedAutoService.status(this):
+                "\nAUTO OFF · solo sugerencia; tocá AUTO ON para "+
+                "aplicar EV/HEV/EV MAX en la Jetour."));
         if(osmBanner!=null&&osmEnabled())
             osmBanner.setText(category==T1OptimizedModePolicy.Road.UNKNOWN?
                 "OSM · DESCONOCIDO · "+shortOsmProblem(osmLast.detail)+
@@ -692,6 +740,12 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         simulator.setText("SIMULADOR");
         simulator.setOnClickListener(v->openWhatIf());
         top.addView(simulator,new LinearLayout.LayoutParams(-2,52));
+        autoModeButton=new Button(this);
+        autoModeButton.setAllCaps(false);
+        autoModeButton.setTextSize(13);
+        autoModeButton.setText("AUTO · OFF");
+        autoModeButton.setOnClickListener(v->toggleAutomaticMode());
+        top.addView(autoModeButton,new LinearLayout.LayoutParams(-2,52));
         Button optimized=new Button(this);
         optimized.setAllCaps(false);
         optimized.setTextSize(12);
@@ -710,6 +764,9 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         modeAtTop=text("MODO OEM: esperando 1043 · controles manuales P o D",
             14,MUTED,false);
         root.addView(modeAtTop);
+        autoModeLive=text("MODO OPTIMIZADO OFF · sin comandos",13,TEAL,true);
+        root.addView(autoModeLive);
+        updateAutoModeUi();
         vehicleModeStatus=text("MODO CONDUCCIÓN · 2053: esperando OEM   |   "+
             "COMBUSTIBLE · 1079: esperando OEM",12,WHITE,true);
         vehicleModeStatus.setSingleLine(true);
@@ -933,8 +990,9 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         advanced.addView(text("Ciudad, carretera, autopista y desconocido "+
             "tienen configuraciones independientes. Cada perfil permite "+
             "EV/HEV/EV MAX, SMART o SOC FORZADO con porcentaje, umbral de "+
-            "batería y regeneración baja/media/alta. Guarda preferencia, "+
-            "NO controla automáticamente la propulsión todavía.",
+            "batería y regeneración baja/media/alta. El interruptor "+
+            "AUTO ON aplica solo EV/HEV/EV MAX (1043) con OEM validado; "+
+            "SOC forzado y regeneración continúan como preferencias.",
             13,MUTED,false));
         LinearLayout optimizerRow=row();advanced.addView(optimizerRow);
         button(optimizerRow,"CONFIGURAR 4 PERFILES",TEAL,this::openOptimizedMode);
@@ -944,7 +1002,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             "DESCONOCIDO. Cada una recomienda su perfil configurado. "+
             "Usa un índice SQLite del mapa descargado del mismo servidor "+
             "que DriveLab Uber: SIN Overpass, SIN transmitir coordenadas "+
-            "de GPS a ningún servidor. No cambia la propulsión. "+
+            "de GPS a ningún servidor. Con AUTO OFF solo sugiere; "+
+            "con AUTO ON el servicio aparte aplica 1043 tras validación. "+
             "Revisa la versión del mapa cada 24 h cuando la app está abierta "+
             "y hay Wi-Fi; con datos móviles solo descarga por acción manual.",
             13,MUTED,false));
