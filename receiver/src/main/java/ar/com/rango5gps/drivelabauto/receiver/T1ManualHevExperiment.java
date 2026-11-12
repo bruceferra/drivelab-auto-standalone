@@ -98,8 +98,10 @@ final class T1ManualHevExperiment {
                     " km/h; 1043="+mode+"; apto="+readback.canRequest);
                 return "LECTURA OEM COMPLETADA: P/1033="+readback.gear+
                     ", velocidad="+readback.speed+" km/h, 1043="+mode+
-                    ". Comando NO enviado. "+(readback.canRequest?
-                    "Las precondiciones se cumplen.":"Bloqueado por P/velocidad/modo.");
+                    " ("+T1ManualHevPolicy.currentMode(mode)+"). "+
+                    "Comando NO enviado. "+
+                    T1ManualHevPolicy.preflightReason(
+                        readback.gear,readback.speed,mode,0);
             }
             checkStopped(b,mode,"CONTROL_1");
             SystemClock.sleep(350);
@@ -150,9 +152,10 @@ final class T1ManualHevExperiment {
             "; apto="+check.canRequest);
         if(!check.canRequest)
             throw new IllegalStateException(
-                "NO SE ESCRIBIÓ. Se exige P=1, velocidad 0 y modo EV=1 o EV MAX=3. "+
-                "Leídos: 1033="+check.gear+", velocidad="+check.speed+
-                ", 1043="+mode);
+                T1ManualHevPolicy.preflightReason(
+                    check.gear,check.speed,mode,0)+
+                " · Binder: 1033="+check.gear+
+                ", velocidad="+check.speed+", 1043="+mode);
     }
     private static int readInt(IBinder b,int id)throws Exception{
         Parcel d=Parcel.obtain(),r=Parcel.obtain();
