@@ -33,7 +33,14 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
     public static boolean isVisible(){return visible;}
     private SharedPreferences prefs(){return getSharedPreferences(ReceiverService.PREFS,MODE_PRIVATE);}
     @Override public void onCreate(Bundle state){
-        super.onCreate(state);quickControls=new ReceiverQuickControls(this);render();
+        super.onCreate(state);
+        // Fresh app launch: user requested cabin-air recirculation to become
+        // the DEFAULT without touching its button. The existing foreground
+        // guard continues while other screens/Maps are in front and survives
+        // reboot through BootReceiver. OEM safety PAUSED is respected.
+        RecirculationGuardService.activateOnAppOpen(this);
+        quickControls=new ReceiverQuickControls(this);
+        render();
     }
     @Override protected void onResume(){
         super.onResume();visible=true;quickControls.onResume();render();
