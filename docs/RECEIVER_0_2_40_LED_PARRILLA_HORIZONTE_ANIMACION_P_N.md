@@ -45,6 +45,14 @@ En **COCKPIT T1 → ZONAS GPS · EV/HEV (desplegar) → PARRILLA LED DELANTERA �
 
 La prensa y manuales de otras marcas ofrecen ejemplos de animación configurable, pero **no confirman que Jetour T1 argentina disponga de tal menú o del estado fijo en P**.
 
+## Corrección térmica confirmada por prueba del propietario
+
+Con motor térmico encendido y calentándose, el propietario observó que la mayoría de candidatos del panel térmico devolvieron **0 constante**, mientras **559940105 (CLUSTER ENGINE TEMP)** fue el único valor que **aumentó progresivamente**. Eso respalda su correlación con la temperatura del motor, pero **no demuestra aún si está expresado en °C, décimas, un índice de barras o una escala propia**.
+
+A partir de esta revisión el cockpit prioriza automáticamente **559940105** para la tarjeta **TEMPERATURA MOTOR · 559940105 · EXP.**, etiquetada `RAW (exp.)`, y ya no muestra 0 °C ficticios de `ENGINE_COOLANT_TEMP=291504897` cuando esa propiedad está sin datos. Se mantiene el AOSP como lectura secundaria únicamente si ofrece una temperatura positiva plausible y el cluster alternativo no informa nada. `ENGINE_OIL_TEMP=291504900` y `CLUSTER BATT TEMP=557860127` constantes a 0 se muestran como **SIN LECTURA**, no como temperatura válida. Las revoluciones del motor térmico en el instrumento siguen leyendo el **1035 validado**; los 9 dígitos `ENGINE_RPM=291504901` devolvieron 0 y no sustituyen al código útil.
+
+**Prueba de calibración pendiente:** dos lecturas crudas de 559940105 con motor frío/caliente y comparación contra la escala de temperatura del cuadro OEM; hasta entonces no indicar °C de forma concluyente.
+
 ## Limitación, seguridad y próximos pasos
 
 Todavía **no existe** una opción DriveLab para dejar fijas las tiras en P. Esta versión busca primero demostrar qué señal cambia, manteniendo los faros normales y los DRL sin intervención.
