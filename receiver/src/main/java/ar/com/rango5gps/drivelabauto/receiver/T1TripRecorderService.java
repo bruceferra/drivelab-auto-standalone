@@ -275,6 +275,9 @@ public final class T1TripRecorderService extends Service {
                     .putString(STATUS,"Grabando TRIP · "+sampleCount+
                         " muestras · tramos 500m nafta="+seg.fuelCount+
                         " electricidad="+seg.electricCount).apply();
+                // A passenger may request a new journey before the first
+                // sample. Resolve it here, never from an old persisted TRIP.
+                T1JourneyStore.fulfillPending(this);
                 try{Thread.sleep(3000);}catch(InterruptedException e){if(stop)break;}
             }
             out.flush();
