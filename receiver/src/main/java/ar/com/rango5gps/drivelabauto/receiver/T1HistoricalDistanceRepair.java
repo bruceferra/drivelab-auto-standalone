@@ -99,7 +99,8 @@ final class T1HistoricalDistanceRepair {
                     if(now<trip.from||now>trip.to)continue;
                     if(elapsed<500||elapsed>10000)continue;
                     if(!Double.isFinite(speed)||speed<0||speed>220)continue;
-                    String source=x[15];
+                    // notes (column 22), NOT gps accuracy (column 15)
+                    String source=x[22];
                     if(source.startsWith("GPS"))sum.gps++;
                     if(source.startsWith("OEM_SPEED")||source.startsWith("OEM_SPEED_ZERO"))
                         sum.speed++;
@@ -168,12 +169,16 @@ final class T1HistoricalDistanceRepair {
             }
             out.getFD().sync();
         }
+        File backup=new File(dir,FILE+".backup");
+        if(backup.exists()&&!backup.delete())
+            throw new IOException("No se puede limpiar respaldo anterior");
+        if(dest.exists()&&!dest.renameTo(backup))
+            throw new IOException("No se puede respaldar informe previo");
         if(!tmp.renameTo(dest)){
-            // Backward-compatible Android filesystem fallback. Preserve the
-            // existing corrections if replacement fails.
-            if(dest.exists()&&!dest.delete()||!tmp.renameTo(dest))
-                throw new IOException("No se guardó informe de correcciones");
+            if(backup.exists())backup.renameTo(dest);
+            throw new IOException("No se guardó informe de correcciones");
         }
+        if(backup.exists())backup.delete();
     }
     static Map<String,Entry> load(File folder){
         Map<String,Entry> out=new HashMap<>();
