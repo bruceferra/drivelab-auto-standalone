@@ -54,6 +54,16 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private TextView hevStatus,lightStatus,aux12vStatus,rearSeatStatus,
         tempEngine,tempBattery,electricMotorStatus,electricMotorRpm;
     private T1ManualHevExperiment hevPilot;
+    private T1ManualThreeModePilot threeModePilot;
+    private Button modeEvButton,modeHevButton,modeMaxButton;
+    private TextView modeAtTop,osmStatus;
+    private Button osmEnabledButton,osmSocButton;
+    private T1OsmRoadAdvisor.Result osmLast;
+    private final AtomicBoolean osmReading=new AtomicBoolean(false);
+    private long lastOsmQuery=0;
+    private static final String OSM_PREFS="t1_osm_advisory_opt_in";
+    private static final String OSM_ENABLED="osm_lookup_enabled";
+    private static final String OSM_FORCED="motorway_soc_forced";
     private T1CabinLightReadOnlyProbe lightProbe;
     private T1CabinLightReadOnlyProbe.Snapshot lightBefore;
     private T1RearSeatLightsProbe seatProbe;
@@ -98,6 +108,10 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                         updateSoc();
                         updateAutonomy();
                         updateZone();
+                        updateTopModes();
+                        if(osmEnabled()&&
+                            System.currentTimeMillis()-lastOsmQuery>95000)
+                            lookupOsm(false);
                     });
                 },"T1-Cockpit-ReadOnly").start();
             }
@@ -111,6 +125,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     @Override public void onCreate(Bundle b){
         super.onCreate(b);
         hevPilot=new T1ManualHevExperiment(this);
+        threeModePilot=new T1ManualThreeModePilot(this);
         lightProbe=new T1CabinLightReadOnlyProbe(this);
         seatProbe=new T1RearSeatLightsProbe(this);
         rearBeltProbe=new T1RearSeatBeltProbe(this);
@@ -125,6 +140,181 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     }
     @Override protected void onPause(){
         visible=false;ui.removeCallbacks(ticker);super.onPause();
+    }
+    private boolean osmEnabled(){
+        return getSharedPreferences(OSM_PREFS,MODE_PRIVATE)
+            .getBoolean(OSM_ENABLED,false);
+    }
+    private boolean motorwayForced(){
+        return getSharedPreferences(OSM_PREFS,MODE_PRIVATE)
+            .getBoolean(OSM_FORCED,false);
+    }
+    private void openDisplaySettings(){
+        String[] choices={
+            T1ImmersiveMode.enabled(this)?"MOSTRAR BARRAS":"PANTALLA COMPLETA",
+            "ESPACIO JETOUR · "+clearanceDp()+" dp (ajustar)"
+        };
+        new AlertDialog.Builder(this).setTitle("PANTALLA T1")
+            .setItems(choices,(dialog,index)->{
+                if(index==0)T1ImmersiveMode.setEnabled(this,
+                    !T1ImmersiveMode.enabled(this));
+                if(index==1){
+                    int value=cycleClearanceDp();
+                    message("Espacio Jetour: "+value+" dp (ajustable).");
+                }
+            }).setNegativeButton("CERRAR",null).show();
+    }
+    private Button topModeButton(LinearLayout parent,String name,int target){
+        Button b=new Button(this);
+        b.setAllCaps(false);b.setText(name);b.setTextSize(18);
+        b.setTypeface(null,android.graphics.Typeface.BOLD);
+        b.setTextColor(WHITE);
+        b.setBackgroundTintList(ColorStateList.valueOf(BLUE));
+        b.setOnClickListener(v->askTripleMode(target));
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,57,1f);
+        lp.setMargins(3,2,3,2);parent.addView(b,lp);
+        return b;
+    }
+    private void updateTopModes(){
+        if(modeEvButton==null||modeHevButton==null||modeMaxButton==null)
+            return;
+        int actual=lastSample==null?-1:lastSample.powerMode;
+        long age=lastSample==null?Long.MAX_VALUE:
+            System.currentTimeMillis()-lastSample.timestamp;
+        boolean fresh=age>=0&&age<=10000;
+        Button[] buttons={modeEvButton,modeHevButton,modeMaxButton};
+        for(int i=0;i<buttons.length;i++){
+            int expected=i+1;
+            buttons[i].setBackgroundTintList(ColorStateList.valueOf(
+                fresh&&actual==expected?TEAL:BLUE));
+        }
+        modeAtTop.setText(fresh?
+            "ACTUAL: "+T1ManualHevPolicy.currentMode(actual)+
+            " (1043="+actual+"). Cambios de DriveLab: "+
+            "solo en P y 0 km/h; EV/EV MAX aún experimentales.":
+            "MODO OEM · sin lectura reciente. Sin escrituras.");
+    }
+    private void askTripleMode(int target){
+        if(lastSample==null){
+            modeAtTop.setText("SIN TELEMETRÍA OEM. No se envió comando.");
+            return;
+        }
+        long age=System.currentTimeMillis()-lastSample.timestamp;
+        if(age<0||age>10000||lastSample.gear!=1||
+            !Double.isFinite(lastSample.speed)||lastSample.speed<0||
+            lastSample.speed>0.001){
+            new AlertDialog.Builder(this)
+                .setTitle("CAMBIO MANUAL · SIN ESCRITURA")
+                .setMessage("La Jetour permite cambios de modo desde su "+
+                    "interfaz original en marcha. La transacción de DriveLab "+
+                    "solo está probada estacionado, por lo que "+
+                    "no se anulan sus comprobaciones. "+
+                    "Lecturas: P/1033="+lastSample.gear+
+                    ", velocidad="+f(lastSample.speed,2)+
+                    " km/h; edad="+age+" ms.")
+                .setPositiveButton("ENTENDIDO",null).show();
+            return;
+        }
+        if(lastSample.powerMode==target){
+            modeAtTop.setText("Ya está en "+
+                T1ManualHevPolicy.currentMode(target)+
+                " · no se envió nada.");
+            return;
+        }
+        if(threeModePilot.busy()||hevPilot.busy()){
+            modeAtTop.setText("Otro ensayo OEM está en curso.");
+            return;
+        }
+        String targetName=T1ManualHevPolicy.currentMode(target);
+        new AlertDialog.Builder(this)
+            .setTitle("CAMBIO MANUAL → "+targetName)
+            .setMessage("Intentar una vez 1043="+target+
+                " con verificación doble de P/velocidad cero y lectura "+
+                "posterior del modo. EV→HEV se comprobó físicamente "+
+                "estacionado; EV y EV MAX son aún pruebas experimentales. "+
+                "No hay cambios automáticos ni en movimiento.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("PROBAR UNA VEZ",(dialog,which)->{
+                modeAtTop.setText("Consultando OEM; verificando modo…");
+                if(!threeModePilot.request(target,()->visible,
+                        result->ui.post(()->{
+                    if(!visible||isFinishing()||isDestroyed())return;
+                    modeAtTop.setText(result);
+                    lastTelem=0;
+                    new AlertDialog.Builder(this)
+                        .setTitle("RESULTADO MANUAL · "+targetName)
+                        .setMessage(result)
+                        .setPositiveButton("CERRAR",null).show();
+                })))modeAtTop.setText("Ensayo ocupado. No se envió nada.");
+            }).show();
+    }
+    private void updateOsmControls(){
+        if(osmEnabledButton==null)return;
+        osmEnabledButton.setText(osmEnabled()?
+            "OSM · DESACTIVAR ASESOR":"OSM · ACTIVAR ASESOR");
+        osmSocButton.setText(motorwayForced()?
+            "AUTOPISTA · HEV FORZADO":"AUTOPISTA · HEV SMART");
+    }
+    private void toggleOsm(){
+        if(osmEnabled()){
+            getSharedPreferences(OSM_PREFS,MODE_PRIVATE)
+                .edit().putBoolean(OSM_ENABLED,false).apply();
+            updateOsmControls();
+            osmStatus.setText("Asesor OSM desactivado. Sin envíos GPS.");
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("ASESOR OSM · SOLO RECOMENDACIONES")
+            .setMessage("Al activarlo, mientras el cockpit esté abierto "+
+                "se consultará cada ~95 segundos la clase de la vía "+
+                "en Overpass/OpenStreetMap, enviando tus coordenadas "+
+                "aproximadas al servicio público. NO cambiará EV/HEV "+
+                "ni SOC; solo mostrará sugerencias. "+
+                "Si falla GPS o el mapa es ambiguo, no recomienda nada.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("ACTIVAR",(d,w)->{
+                getSharedPreferences(OSM_PREFS,MODE_PRIVATE).edit()
+                    .putBoolean(OSM_ENABLED,true).apply();
+                lastOsmQuery=0;
+                updateOsmControls();
+                lookupOsm(false);
+            }).show();
+    }
+    private void toggleOsmSoc(){
+        boolean forced=!motorwayForced();
+        getSharedPreferences(OSM_PREFS,MODE_PRIVATE).edit()
+            .putBoolean(OSM_FORCED,forced).apply();
+        updateOsmControls();
+        showOsmResult();
+    }
+    private void showOsmResult(){
+        if(osmStatus==null)return;
+        if(osmLast==null){
+            osmStatus.setText("OSM sin clasificación: ciudad → EV / "+
+                "autopista → HEV "+(motorwayForced()?"FORZADO":"SMART")+
+                ". SIN ESCRITURA.");
+            return;
+        }
+        osmStatus.setText(osmLast.recommendation(motorwayForced())+
+            "\n"+osmLast.explain()+
+            "\nASESOR OSM: SOLO LECTURA, NO CAMBIA EL VEHÍCULO.");
+    }
+    private void lookupOsm(boolean userTriggered){
+        if(osmStatus==null||!visible)return;
+        if(!userTriggered&&!osmEnabled())return;
+        if(!osmReading.compareAndSet(false,true))return;
+        lastOsmQuery=System.currentTimeMillis();
+        android.location.Location loc=T1ModeZoneStore.location(this);
+        osmStatus.setText("Verificando vía OSM… "+
+            "(consulta GPS; sin órdenes al vehículo)");
+        new Thread(()->{
+            T1OsmRoadAdvisor.Result result=T1OsmRoadAdvisor.lookup(loc);
+            ui.post(()->{
+                osmReading.set(false);
+                if(!visible||isFinishing()||isDestroyed())return;
+                osmLast=result;showOsmResult();
+            });
+        },"T1-OpenStreetMap-Road-ReadOnly").start();
     }
     private GradientDrawable bg(int color,int radius){
         GradientDrawable g=new GradientDrawable();g.setColor(color);
@@ -168,28 +358,28 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         scroll.addView(root);
         LinearLayout top=row();top.setGravity(Gravity.CENTER_VERTICAL);root.addView(top);
         LinearLayout title=col();
-        title.addView(text("DRIVELAB  /  JETOUR T1",22,WHITE,true));
-        title.addView(text("COCKPIT · v0.2.41 · telemetría OEM",13,MUTED,false));
+        title.addView(text("DRIVELAB / T1",19,WHITE,true));
+        title.addView(text("COCKPIT · v0.2.42",12,MUTED,false));
         top.addView(title,new LinearLayout.LayoutParams(0,-2,1));
-        Button systemBars=new Button(this);
-        systemBars.setText(T1ImmersiveMode.enabled(this)?"MOSTRAR BARRAS":"PANTALLA COMPLETA");
-        systemBars.setAllCaps(false);
-        systemBars.setOnClickListener(v->{
-            T1ImmersiveMode.setEnabled(this,!T1ImmersiveMode.enabled(this));
-            systemBars.setText(T1ImmersiveMode.enabled(this)?
-                "MOSTRAR BARRAS":"PANTALLA COMPLETA");
-        });
-        top.addView(systemBars);
-        Button topMargin=new Button(this);
-        topMargin.setAllCaps(false);
-        topMargin.setText("ESPACIO JETOUR · "+clearanceDp()+"dp");
-        topMargin.setOnClickListener(v->{
-            int value=cycleClearanceDp();
-            topMargin.setText("ESPACIO JETOUR · "+value+"dp");
-        });
-        top.addView(topMargin);
-        Button back=new Button(this);back.setText("VOLVER AL T1");
-        back.setAllCaps(false);back.setOnClickListener(v->finish());top.addView(back);
+        Button displaySettings=new Button(this);
+        displaySettings.setAllCaps(false);
+        displaySettings.setTextSize(12);
+        displaySettings.setText("PANTALLA");
+        displaySettings.setOnClickListener(v->openDisplaySettings());
+        top.addView(displaySettings,new LinearLayout.LayoutParams(-2,52));
+        Button back=new Button(this);
+        back.setText("VOLVER");back.setTextSize(12);
+        back.setAllCaps(false);back.setOnClickListener(v->finish());
+        top.addView(back,new LinearLayout.LayoutParams(-2,52));
+
+        LinearLayout modes=row();root.addView(modes);
+        modeEvButton=topModeButton(modes,"EV",1);
+        modeHevButton=topModeButton(modes,"HEV",2);
+        modeMaxButton=topModeButton(modes,"EV MAX",3);
+        modeAtTop=text("MODO OEM: esperando 1043 · control manual solo detenido en P",
+            14,MUTED,false);
+        root.addView(modeAtTop);
+
         gauge=new T1PremiumInstrumentView(this);
         LinearLayout.LayoutParams meterParams=new LinearLayout.LayoutParams(-1,-2);
         meterParams.setMargins(0,6,0,8);root.addView(gauge,meterParams);
@@ -311,6 +501,25 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         advanced.setBackground(bg(CARD,20));
         advanced.setVisibility(android.view.View.GONE);
         root.addView(advanced);
+        heading(advanced,"REGLA CIUDAD / AUTOPISTA · OPENSTREETMAP");
+        advanced.addView(text("CIUDAD → EV. AUTOPISTA → HEV SMART o HEV FORZADO. "+
+            "La lectura de carretera OSM es aproximada y NO cambia "+
+            "la propulsión: solo sugiere. Si activás el asesor, "+
+            "se consultan coordenadas GPS en un servicio público "+
+            "de OpenStreetMap mientras el cockpit está abierto.",
+            13,MUTED,false));
+        LinearLayout osmButtons=row();advanced.addView(osmButtons);
+        osmEnabledButton=button(osmButtons,
+            "OSM · ACTIVAR ASESOR",BLUE,this::toggleOsm);
+        osmSocButton=button(osmButtons,
+            "AUTOPISTA · HEV SMART",TEAL,this::toggleOsmSoc);
+        LinearLayout osmCheckRow=row();advanced.addView(osmCheckRow);
+        button(osmCheckRow,"CONSULTAR VÍA OSM · NO ESCRIBE",
+            BLUE,()->lookupOsm(true));
+        osmStatus=text("OSM no iniciado: sin clasificación de vía.",
+            14,WHITE,false);
+        advanced.addView(osmStatus);
+        updateOsmControls();
         heading(advanced,"ZONAS DE SUGERENCIA EV / HEV");
         advanced.addView(text("Experimental: detecta GPS solo con el panel abierto. "+
             "NO modifica la propulsión. La elección real se hace en controles Jetour.",
