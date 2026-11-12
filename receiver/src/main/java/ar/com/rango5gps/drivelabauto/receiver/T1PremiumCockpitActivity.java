@@ -264,9 +264,10 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         readAux.setText("LEER 12 V");readAux.setAllCaps(false);
         readAux.setOnClickListener(v->readAux12v());
         auxTitle.addView(readAux);
-        auxiliary.addView(text("Voltaje, corriente y SOC auxiliares: "+
-            "datos HAL experimentales, sin escala ni sentido de carga confirmados. "+
-            "El 1064 pertenece a la batería de tracción, no a 12 V.",
+        auxiliary.addView(text("IBS=0 NO confirma 0 V ni SOC de 12 V. "+
+            "EXT BATT=315 (si son voltios) apunta a ALTA TENSIÓN HV, "+
+            "NO a batería auxiliar. No mezclar con 1064 de tracción. "+
+            "Lecturas brutas experimentales.",
             12,MUTED,false));
         energyNote=text("Km calculados desde velocidad OEM (sin calibrar). "+
             "Nafta y energía: hipótesis de unidades OEM 500 m. "+
