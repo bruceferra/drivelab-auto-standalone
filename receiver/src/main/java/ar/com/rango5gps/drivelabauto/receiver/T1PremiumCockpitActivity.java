@@ -191,7 +191,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         modeAtTop.setText(fresh?
             "ACTUAL: "+T1ManualHevPolicy.currentMode(actual)+
             " (1043="+actual+"). Cambios de DriveLab: "+
-            "solo en P y 0 km/h; EV/EV MAX aún experimentales.":
+            "solo en P y 0 km/h; los tres modos probados en P.":
             "MODO OEM · sin lectura reciente. Sin escrituras.");
     }
     private void askTripleMode(int target){
@@ -230,9 +230,11 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             .setTitle("CAMBIO MANUAL → "+targetName)
             .setMessage("Intentar una vez 1043="+target+
                 " con verificación doble de P/velocidad cero y lectura "+
-                "posterior del modo. EV→HEV se comprobó físicamente "+
-                "estacionado; EV y EV MAX son aún pruebas experimentales. "+
-                "No hay cambios automáticos ni en movimiento.")
+                "posterior del modo. EV, HEV y EV MAX confirmados por "+
+                "lectura 1043 desde DriveLab en P. El control Jetour "+
+                "original puede operar en marcha, pero esta interfaz "+
+                "Android NO fue validada circulando. "+
+                "Sin cambios GPS automáticos.")
             .setNegativeButton("CANCELAR",null)
             .setPositiveButton("PROBAR UNA VEZ",(dialog,which)->{
                 modeAtTop.setText("Consultando OEM; verificando modo…");
@@ -359,7 +361,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         LinearLayout top=row();top.setGravity(Gravity.CENTER_VERTICAL);root.addView(top);
         LinearLayout title=col();
         title.addView(text("DRIVELAB / T1",19,WHITE,true));
-        title.addView(text("COCKPIT · v0.2.42",12,MUTED,false));
+        title.addView(text("COCKPIT · v0.2.43",12,MUTED,false));
         top.addView(title,new LinearLayout.LayoutParams(0,-2,1));
         Button displaySettings=new Button(this);
         displaySettings.setAllCaps(false);
