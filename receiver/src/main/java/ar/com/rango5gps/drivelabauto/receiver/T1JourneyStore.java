@@ -36,11 +36,16 @@ final class T1JourneyStore {
         PAUSE_KM="pause_total_km",PAUSE_FUEL="pause_total_fuel",
         PAUSE_ELEC="pause_total_electric",PAUSE_NF="pause_total_nf",
         PAUSE_NE="pause_total_ne",PAUSE_SINCE="pause_since_epoch_ms",
-        PAUSED_SUM="paused_total_ms";
+        PAUSED_SUM="paused_total_ms",
+        CLIENT_EV_KM="client_ev_km_1035",CLIENT_ICE_KM="client_ice_km_1035",
+        CLIENT_UNKNOWN_KM="client_unknown_km_1035";
     private static final String CSV_HEADER=
         "id;inicio;fin;etiqueta;trip_id;km_est_oem_velocidad;eventos_nafta;"+
         "nafta_raw;litros_experimentales;eventos_electricidad;electricidad_raw;"+
         "kwh_neto_experimental;costo_nafta_experimental;precio_nafta\n";
+    private static final String DRIVE_KM_HEADER=
+        "id;km_electricos_motor_apagado_1035;km_termicos_motor_prendido_1035;"+
+        "km_estado_motor_desconocido_1035\n";
     private static final String CHARGES_HEADER=
         "fecha_epoch_ms;kwh_red_medidos;precio_kwh;importe_ars;nota\n";
 
@@ -48,6 +53,7 @@ final class T1JourneyStore {
         final String id,label,tripId;
         final long started,ended;
         final double km,liters,electricNet,fuelCost;
+        double evKm=Double.NaN,iceKm=Double.NaN,unknownKm=Double.NaN;
         final int fuelEvents,electricEvents;
         Entry(String id,long started,long ended,String label,String tripId,
               double km,int fuelEvents,double liters,int electricEvents,
@@ -102,6 +108,25 @@ final class T1JourneyStore {
             m.getInt(T1TripRecorderService.SEG_ELEC_COUNT,0));
     }
     static boolean active(Context c){return p(c).getBoolean(ACTIVE,false);}
+    /** The recorder calls this after each new OEM sample. Pause excludes
+     * the interval and finishing prevents accidental attribution to the
+     * next passenger. Unknown RPM never becomes "electric". */
+    static synchronized void recordMovement(Context c,int engineOn,double km){
+        if(!Double.isFinite(km)||km<=0||km>1.0||!active(c)||paused(c))return;
+        SharedPreferences z=p(c);
+        String key=engineOn==0?CLIENT_EV_KM:
+            engineOn==1?CLIENT_ICE_KM:CLIENT_UNKNOWN_KM;
+        z.edit().putFloat(key,z.getFloat(key,0f)+(float)km).apply();
+    }
+    static double electricKm(Context c){
+        return p(c).getFloat(CLIENT_EV_KM,0f);
+    }
+    static double thermalKm(Context c){
+        return p(c).getFloat(CLIENT_ICE_KM,0f);
+    }
+    static double unknownKm(Context c){
+        return p(c).getFloat(CLIENT_UNKNOWN_KM,0f);
+    }
     static boolean paused(Context c){return active(c)&&p(c).getBoolean(PAUSED,false);}
     static String activeLabel(Context c){return p(c).getString(LABEL,"");}
     static boolean pending(Context c){return p(c).contains(PENDING_TIME);}
@@ -372,6 +397,8 @@ final class T1JourneyStore {
                 T1TripRecorderService.OFFLINE_MS,0))
             .putInt(CARRY_NF,0).putInt(CARRY_NE,0)
             .putBoolean(CARRY_UNCERTAIN,false)
+            .putFloat(CLIENT_EV_KM,0f).putFloat(CLIENT_ICE_KM,0f)
+            .putFloat(CLIENT_UNKNOWN_KM,0f)
             .remove(RECOVERY_NOTE)
             .putString(LABEL,cleanLabel(label)).putString(TRIP,mark.tripId)
             .putLong(TIME,mark.time).putFloat(KM,(float)mark.km)
@@ -424,6 +451,7 @@ final class T1JourneyStore {
         long originalStart=p(c).getLong(ORIGINAL_TIME,start.time);
         String id=Long.toString(originalStart);
         String label=cleanLabel(activeLabel(c));
+        double evKm=electricKm(c),iceKm=thermalKm(c),unknownKm=unknownKm(c);
         // Idempotent even when Android crashes between CSV flush and clearing prefs.
         for(Entry e:history(c))if(id.equals(e.id)){
             p(c).edit().clear().commit();
@@ -439,10 +467,28 @@ final class T1JourneyStore {
         try{
             append(new File(T1TripRecorderService.tripDir(c),"client_trips.csv"),CSV_HEADER,row);
         }catch(IOException ex){return "No se guardó: "+ex.getClass().getSimpleName();}
+        // Keep legacy client_trips.csv schema unchanged. The sidecar is
+        // keyed by stable client ID, and the QR upload is a separate
+        // GPS-free, label-free, idempotent private diagnostic CSV.
+        String driveRow=id+";"+db(evKm)+";"+db(iceKm)+";"+
+            db(unknownKm)+"\n";
+        String cloudNote="";
+        try{
+            append(new File(T1TripRecorderService.tripDir(c),"client_drive_km.csv"),
+                DRIVE_KM_HEADER,driveRow);
+        }catch(IOException ex){cloudNote=" · desglose local pendiente"; }
+        try{
+            T1ClientTripSync.persist(c,id,originalStart,ended,tripChain(c),
+                result,evKm,iceKm,unknownKm);
+        }catch(IOException ex){cloudNote+=" · resumen QR local pendiente"; }
         p(c).edit().clear().commit();
-        return "FINALIZADO SOLO POR USUARIO: "+label+" · "+
+        T1TripSync.trigger(c,true);
+        T1ClientTripSync.trigger(c,true);
+        return "GUARDADO: "+label+" · "+
             T1JourneyMetrics.fmt(result.km,2)+
-            " km (OEM velocidad, sin calibrar) · "+
+            " km (velocidad OEM, ajuste provisional) · "+
+            T1JourneyMetrics.fmt(evKm,2)+" km eléctricos 1035 · "+
+            "sincronización QR en curso/pendiente"+cloudNote+" · "+
             (result.fuelAvailable?T1JourneyMetrics.fmt(result.fuelLitersCandidate,3)+
             " L experimentales":"sin tramo OEM completo")+
             " · costo de nafta experimental, NO costo total";
@@ -478,6 +524,19 @@ final class T1JourneyStore {
     }
     static ArrayList<Entry> history(Context c) {
         ArrayList<Entry> out=new ArrayList<>();
+        // Historical V1 clients predate RPM 1035 distance split; they stay
+        // unknown rather than being labelled zero-electric.
+        Map<String,double[]> drive=new LinkedHashMap<>();
+        File driveFile=new File(T1TripRecorderService.tripDir(c),"client_drive_km.csv");
+        if(driveFile.isFile())try(BufferedReader d=new BufferedReader(
+                new FileReader(driveFile))){
+            String line=d.readLine();
+            while((line=d.readLine())!=null){
+                String[] f=line.split(";",-1);
+                if(f.length>=4)drive.put(f[0],new double[]{
+                    number(f[1]),number(f[2]),number(f[3])});
+            }
+        }catch(IOException ignored){}
         File file=new File(T1TripRecorderService.tripDir(c),"client_trips.csv");
         if(!file.isFile())return out;
         LinkedHashMap<String,Entry> dedup=new LinkedHashMap<>();
@@ -491,6 +550,10 @@ final class T1JourneyStore {
                 int nf=Integer.parseInt(f[6]),ne=Integer.parseInt(f[9]);
                 Entry e=new Entry(f[0],a,b,f[3],f[4],number(f[5]),
                     nf,number(f[8]),ne,number(f[11]),number(f[12]));
+                double[] mode=drive.get(e.id);
+                if(mode!=null){
+                    e.evKm=mode[0];e.iceKm=mode[1];e.unknownKm=mode[2];
+                }
                 dedup.put(f[0],e);
             }
         }catch(IOException|NumberFormatException ignored){}
