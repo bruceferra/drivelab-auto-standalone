@@ -832,7 +832,11 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         dayNow.setText(day.trips+" viajes · "+f(day.km,1)+" km\n"+
             (day.fuelKnownTrips>0?"$ "+f(day.fuelCost,0)+
                 " nafta exp. ("+day.fuelKnownTrips+" tramos registrados)":
-                "Nafta: sin tramo OEM válido"));
+                "Nafta: sin tramo OEM válido")+
+            "\nElectricidad neta OEM experimental: "+
+            (day.electricKnownTrips>0?f(day.electricNet,3)+" kWh":
+                "SIN DATO")+
+            " · no es electricidad comprada a la red");
         monthNow.setText(month.trips+" viajes · "+f(month.km,1)+" km\n"+
             (month.fuelKnownTrips>0?"$ "+f(month.fuelCost,0)+" nafta exp.":
                 "Nafta: sin tramo OEM válido")+
@@ -850,7 +854,11 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 .append(Double.isFinite(e.liters)?
                     f(e.liters,3)+" L exp.":"sin segmento completo")
                 .append(" · $")
-                .append(f(e.fuelCost,0)).append(" nafta exp.\n");
+                .append(f(e.fuelCost,0)).append(" nafta exp.")
+                .append("\nElectricidad neta OEM (experimental): ")
+                .append(Double.isFinite(e.electricNet)?
+                    f(e.electricNet,3)+" kWh":"SIN DATO")
+                .append(" · NO representa compra de red\n");
         }
         historyNow.setText(s.length()==0?
             "Sin trayectos de cliente guardados.":s.toString().trim());
