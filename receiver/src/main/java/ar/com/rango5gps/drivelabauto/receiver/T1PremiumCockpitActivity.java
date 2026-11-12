@@ -35,6 +35,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private boolean visible=false;
     private long lastTelem=0,lastTotals=0;
     private T1TripTelemetry.Sample lastSample;
+    // Compact OEM gauges: keep fuel, SOC, engine and HV battery, no speedometer.
+    private T1PremiumInstrumentView gauge;
     private TextView dayRecordingLamp,clientRecordingLamp;
     private Button dayStartButton,dayPauseButton,dayEndButton,
         clientStartButton,clientPauseButton,clientEndButton,clientRecoverButton;
@@ -103,6 +105,11 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                         reading.set(false);
                         if(!visible||isFinishing()||isDestroyed())return;
                         lastSample=s;
+                        if(gauge!=null)gauge.update(
+                            valid(s.speed,0,220),valid(s.fuel,0,70),
+                            valid(s.socDisplay,0,100),s.powerMode,
+                            valid(s.rpm,0,12000),
+                            valid(s.current,-1500,1500));
                         updateSoc();
                         updateAutonomy();
                         updateZone();
@@ -401,8 +408,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         modeAtTop=text("MODO OEM: esperando 1043 · controles manuales P o D",
             14,MUTED,false);
         root.addView(modeAtTop);
-        // One-screen dashboard: no redundant full-size speedometer.
-        // Everything above "DETALLES" fits on the first display.
+        // One-screen dashboard: restore all compact OEM instrument cards.
+        // Only the redundant full-size speedometer is removed.
         LinearLayout controls=row();root.addView(controls);
         LinearLayout dayControl=col();
         dayControl.setPadding(6,3,6,3);dayControl.setBackground(bg(CARD,14));
@@ -425,6 +432,15 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         clientStartButton=compactButton(clientActions,"INICIAR",BLUE,this::askClient);
         clientPauseButton=compactButton(clientActions,"PAUSAR",GOLD,this::pauseClient);
         clientEndButton=compactButton(clientActions,"TERMINAR",RED,this::finishClient);
+
+        // Restore the user's original instrument cards. Only remove the
+        // oversize speedometer; the 4 non-speed gauges retain their live OEM
+        // sources, colored bars, motor and HV battery flow indicators.
+        gauge=new T1PremiumInstrumentView(this);
+        gauge.setCompactWithoutSpeed(true);
+        LinearLayout.LayoutParams meterParams=new LinearLayout.LayoutParams(-1,-2);
+        meterParams.setMargins(0,3,0,3);
+        root.addView(gauge,meterParams);
 
         LinearLayout powertrain=row();root.addView(powertrain);
         tempEngine=compactMetric(powertrain,"TEMP. MOTOR · RAW EXP.","SIN LECTURA");
