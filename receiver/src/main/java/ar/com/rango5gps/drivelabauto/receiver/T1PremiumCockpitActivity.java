@@ -51,6 +51,9 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private final AtomicBoolean lightReading=new AtomicBoolean(false),
         aux12vReading=new AtomicBoolean(false);
     private static final String RANGE_PREFS="t1_cockpit_range_settings";
+    // Jetour voice assistant remains floating above the upper-left corner.
+    // Keep the permanent empty strip the same dark color as the cockpit.
+    @Override protected int overlayClearBackgroundColor(){return BG;}
     private final Runnable ticker=new Runnable(){
         @Override public void run(){
             if(!visible)return;
@@ -139,7 +142,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         LinearLayout top=row();top.setGravity(Gravity.CENTER_VERTICAL);root.addView(top);
         LinearLayout title=col();
         title.addView(text("DRIVELAB  /  JETOUR T1",22,WHITE,true));
-        title.addView(text("COCKPIT · v0.2.37 · telemetría OEM",13,MUTED,false));
+        title.addView(text("COCKPIT · v0.2.38 · telemetría OEM",13,MUTED,false));
         top.addView(title,new LinearLayout.LayoutParams(0,-2,1));
         Button systemBars=new Button(this);
         systemBars.setText(T1ImmersiveMode.enabled(this)?"MOSTRAR BARRAS":"PANTALLA COMPLETA");
@@ -150,6 +153,14 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 "MOSTRAR BARRAS":"PANTALLA COMPLETA");
         });
         top.addView(systemBars);
+        Button topMargin=new Button(this);
+        topMargin.setAllCaps(false);
+        topMargin.setText("ESPACIO JETOUR · "+clearanceDp()+"dp");
+        topMargin.setOnClickListener(v->{
+            int value=cycleClearanceDp();
+            topMargin.setText("ESPACIO JETOUR · "+value+"dp");
+        });
+        top.addView(topMargin);
         Button back=new Button(this);back.setText("VOLVER AL T1");
         back.setAllCaps(false);back.setOnClickListener(v->finish());top.addView(back);
         gauge=new T1PremiumInstrumentView(this);
