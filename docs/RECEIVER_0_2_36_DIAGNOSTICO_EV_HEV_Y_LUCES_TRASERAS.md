@@ -59,6 +59,35 @@ En `COCKPIT → ZONAS GPS · EV/HEV` (panel diagnóstico expandido) se añade un
 ### Próximo paso técnico (NO integrado)
 Si alguno cambia al accionar la luz original, investigar la ruta exacta del OEM (permiso, `CarPropertyConfig`, area id para asientos, capacidad read/write) y, solo si el hardware lo permite, diseñar controles manuales + automatización por puertas con temporizador, sin interferir con plafones OEM, seguridad o consumo en reposo. Aún no hay ningún comando seguro de encendido confirmado.
 
+## Batería auxiliar de 12 V y conversor DC-DC — investigación agregada
+
+El usuario observó carga pequeña negativa en `1064` (batería HV), aunque el motor térmico estaba apagado, y sospecha que la batería de 12 V recarga la HV. **Eso NO está demostrado**. En un PHEV lo usual es que el conversor DC-DC alimente el circuito de 12 V desde el paquete HV, no viceversa. Sin lectura de tensión HV simultánea, signo/polaridad confirmados y medición de IBS 12 V, no atribuir −1 A a ninguna transferencia específica.
+
+Nuevas candidatas halladas en `Jetour_T1_Catalogo_HAL_2117_APK.csv` (2.117 etiquetas APK; NO se comprobó su disponibilidad operativa):
+
+| ID HAL decimal | Nombre catálogo | Tipo según nibble de propiedad |
+| ---: | --- | --- |
+| **559964342** | SETTINGS IBS VOLTAGE (lee) | FLOAT |
+| **559940910** | EXT.BATT VOLT (lee) | FLOAT |
+| **559940911** | EXT.BATT CURRENT (lee) | FLOAT |
+| **557867192** | SETTINGS IBS CURRENT | INT |
+| **559964408** | SETTINGS IBS QUIESCENT CURRENT (lee) | FLOAT |
+| **557867191** | SETTINGS IBS SOC (lee) | INT |
+| **557867252** | SETTINGS IBS STAT SOC (lee) | INT |
+| **557867255** | SETTINGS IBS SOH (lee) | INT |
+| **557867257** | SETTINGS IBS CURRENT RANGE (lee) | INT |
+| **557867264** | SETTINGS IBS BATTERY TEMP (lee) | INT |
+| **557856583** | CLUSTER DCDC ENABLE STS | INT |
+| **557867051** | SETTINGS DCLC WORKING | INT |
+| **557843182** | CLUSTER DCDC SYSFAULT | INT |
+| **557843808** | EXT.BATT POWER (lee) | INT |
+
+El nuevo recuadro del cockpit **BATERÍA AUXILIAR 12 V · IBS / DC-DC** ofrece **LEER 12 V**, con resultado y errores específicos por código, y copia del informe. La consulta usa solamente `IALCar.getInt` Binder transacción 2 o `IALCar.getFloat` transacción 9, `area=0`. No implementa escrituras. Requiere estacionar en P con velocidad cero. Hasta contrastar con multímetro externo, muestra **RAW int/float**, no afirma carga, descarga o SOC real.
+
+El catálogo no asegura que `EXT.BATT` pertenezca a 12 V y no a una subfunción de la batería de tracción. Verificar comparando voltajes de rango 12–15 V, corriente y estado DC-DC con equipo real. `IBS` habitualmente significa **Intelligent Battery Sensor** de batería auxiliar y monitorea voltaje, corriente y temperatura, pero eso debe comprobarse en esta T1.
+
+Fuentes metodológicas: [HELLA: Intelligent Battery Sensor](https://www.hella.com/techworld/ae/technical/sensors-and-actuators/intelligent-battery-sensor-%28ibs%29-design-function-and-diagnostics/), [Vicor: sistema HV→12V de HEV/EV](https://edit.vicorpower.com/resource-library/white-papers/distributing-power-hevev-with-dcms).
+
 ## Pruebas mínimas
 * Verificar que el nuevo botón **DIAGNOSTICAR · NO ESCRIBE** consulta sin modificar EV/HEV; si modo actual HEV, el informe debe decir no apto, **NO ENVIADO**.
 * Ver que el botón de ensayo manual muestra `BLOQUEO_EN_UI` explícito cuando falta P/marcha/EV/muestra, en lugar de quedar aparentemente inactivo.
