@@ -50,6 +50,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private String ledReport="";
     private T1HorizonLedReadOnlyProbe ledProbe;
     private final AtomicBoolean ledRecording=new AtomicBoolean(false);
+    private TextView hevModeLive;
     private TextView hevStatus,lightStatus,aux12vStatus,rearSeatStatus,
         tempEngine,tempBattery,electricMotorStatus,electricMotorRpm;
     private T1ManualHevExperiment hevPilot;
@@ -168,7 +169,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         LinearLayout top=row();top.setGravity(Gravity.CENTER_VERTICAL);root.addView(top);
         LinearLayout title=col();
         title.addView(text("DRIVELAB  /  JETOUR T1",22,WHITE,true));
-        title.addView(text("COCKPIT · v0.2.40 · telemetría OEM",13,MUTED,false));
+        title.addView(text("COCKPIT · v0.2.41 · telemetría OEM",13,MUTED,false));
         top.addView(title,new LinearLayout.LayoutParams(0,-2,1));
         Button systemBars=new Button(this);
         systemBars.setText(T1ImmersiveMode.enabled(this)?"MOSTRAR BARRAS":"PANTALLA COMPLETA");
@@ -327,6 +328,9 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             .setPositiveButton("BORRAR",(d,w)->{
                 T1ModeZoneStore.clear(this);updateZone();
             }).show());
+        hevModeLive=text("ESTADO EV/HEV · esperando 1043 OEM…",
+            16,TEAL,true);
+        advanced.addView(hevModeLive);
         LinearLayout oneShot=row();advanced.addView(oneShot);
         button(oneShot,"PRUEBA MANUAL · EV → HEV · SOLO EN P",GOLD,
             this::askHevExperiment);
@@ -724,23 +728,37 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             }).show();
     }
     private void askHevExperiment(){
-        if(!parked()||lastSample==null||
-           !T1ManualHevPolicy.canRequest(lastSample.gear,
-               lastSample.speed,lastSample.powerMode)){
+        long age=lastSample==null?Long.MAX_VALUE:
+            System.currentTimeMillis()-lastSample.timestamp;
+        boolean permitted=lastSample!=null&&parked()&&
+            T1ManualHevPolicy.canRequest(lastSample.gear,
+                lastSample.speed,lastSample.powerMode);
+        if(!permitted){
+            int mode=lastSample==null?-1:lastSample.powerMode;
             String raw=lastSample==null?"sin telemetría OEM":
                 "1033="+lastSample.gear+" (P=1); 2148="+
                 f(lastSample.speed,2)+" km/h; 1043="+
-                lastSample.powerMode+"; edad="+
-                (System.currentTimeMillis()-lastSample.timestamp)+" ms";
-            String diagnostic="BLOQUEADO ANTES DE ESCRIBIR: "+
-                "No se cumplió P, velocidad 0, EV/EV MAX o lectura reciente. "+
-                "Valores: "+raw;
-            T1OemDiagnosticLog.begin(this,"Toque de botón EV→HEV");
-            T1OemDiagnosticLog.add(this,"BLOQUEO_EN_UI",diagnostic);
+                mode+" ("+T1ManualHevPolicy.currentMode(mode)+
+                "); edad="+age+" ms";
+            String reason=lastSample==null?
+                "No hay telemetría OEM reciente.":
+                T1ManualHevPolicy.preflightReason(
+                    lastSample.gear,lastSample.speed,mode,age);
+            String diagnostic=reason+"\n\nLECTURAS: "+raw+
+                "\nNo hay transacción de escritura en este intento.";
+            T1OemDiagnosticLog.begin(this,"Toque de botón EV→HEV; revisión de precondiciones");
+            T1OemDiagnosticLog.add(this,
+                mode==T1ManualHevPolicy.HEV?"YA_EN_HEV_SIN_ESCRITURA":
+                    "BLOQUEO_EN_UI",diagnostic);
             hevStatus.setText(diagnostic);
-            new AlertDialog.Builder(this).setTitle("EV→HEV · NO SE ENVIÓ COMANDO")
-                .setMessage(diagnostic+"\n\nPodés usar DIAGNOSTICAR · NO ESCRIBE "+
-                    "para comprobar el motivo leyendo el Binder original.")
+            new AlertDialog.Builder(this)
+                .setTitle(mode==T1ManualHevPolicy.HEV?
+                    "YA ESTÁS EN HEV · NO HIZO FALTA ESCRIBIR":
+                    "EV→HEV · NO SE ENVIÓ COMANDO")
+                .setMessage(diagnostic+
+                    "\n\nPara estudiar la transición real, podés "+
+                    "usar ENSAYO EV/HEV · SOLO LECTURA y cambiar "+
+                    "de modo desde el menú Jetour original.")
                 .setPositiveButton("ENTENDIDO",null).show();
             return;
         }
@@ -1049,6 +1067,17 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         zoneStatus.setText("Modo OEM 1043: "+T1ZonePolicy.name(mode)+
             "\n"+T1ModeZoneStore.suggestion(this,mode)+
             "\nZonas locales guardadas: "+T1ModeZoneStore.zones(this).size());
+        if(hevModeLive!=null){
+            long age=lastSample==null?Long.MAX_VALUE:
+                System.currentTimeMillis()-lastSample.timestamp;
+            String preflight=lastSample==null?
+                "SIN DATOS OEM · se espera una muestra nueva":
+                T1ManualHevPolicy.preflightReason(
+                    lastSample.gear,lastSample.speed,mode,age);
+            hevModeLive.setText("MODO ACTUAL: "+
+                T1ManualHevPolicy.currentMode(mode)+
+                " · 1043="+mode+"\n"+preflight);
+        }
     }
     private void readModeExperiment(){
         if(!parked()){
