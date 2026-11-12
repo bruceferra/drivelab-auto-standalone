@@ -46,6 +46,10 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private T1RearSeatBeltProbe rearBeltProbe;
     private T1RearSeatBeltProbe.Snapshot rearBeltBefore;
     private String rearBeltReport="";
+    private TextView ledStatus;
+    private String ledReport="";
+    private T1HorizonLedReadOnlyProbe ledProbe;
+    private final AtomicBoolean ledRecording=new AtomicBoolean(false);
     private TextView hevStatus,lightStatus,aux12vStatus,rearSeatStatus,
         tempEngine,tempBattery,electricMotorStatus,electricMotorRpm;
     private T1ManualHevExperiment hevPilot;
@@ -109,6 +113,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         lightProbe=new T1CabinLightReadOnlyProbe(this);
         seatProbe=new T1RearSeatLightsProbe(this);
         rearBeltProbe=new T1RearSeatBeltProbe(this);
+        ledProbe=new T1HorizonLedReadOnlyProbe(this);
         thermalProbe=new T1ThermalMotorProbe(this);
         aux12vProbe=new T1Aux12vReadOnlyProbe(this);
         draw();
@@ -163,7 +168,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         LinearLayout top=row();top.setGravity(Gravity.CENTER_VERTICAL);root.addView(top);
         LinearLayout title=col();
         title.addView(text("DRIVELAB  /  JETOUR T1",22,WHITE,true));
-        title.addView(text("COCKPIT · v0.2.39 · telemetría OEM",13,MUTED,false));
+        title.addView(text("COCKPIT · v0.2.40 · telemetría OEM",13,MUTED,false));
         top.addView(title,new LinearLayout.LayoutParams(0,-2,1));
         Button systemBars=new Button(this);
         systemBars.setText(T1ImmersiveMode.enabled(this)?"MOSTRAR BARRAS":"PANTALLA COMPLETA");
@@ -189,7 +194,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         meterParams.setMargins(0,6,0,8);root.addView(gauge,meterParams);
         LinearLayout powertrain=row();root.addView(powertrain);
         tempEngine=metric(tile(powertrain,CARD),
-            "REFRIGERANTE MOTOR · °C","SIN LECTURA");
+            "TEMPERATURA MOTOR · 559940105 · EXP.","SIN LECTURA");
         tempBattery=metric(tile(powertrain,CARD),
             "TEMP. BATERÍA HV · OEM","SIN LECTURA");
         LinearLayout electricTile=tile(powertrain,CARD);
@@ -201,10 +206,12 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         LinearLayout thermalRow=row();root.addView(thermalRow);
         button(thermalRow,"TEMPERATURAS / MOTOR · VER CÓDIGOS",BLUE,
             ()->readThermal(true));
-        root.addView(text("Refrigerante OEM estándar en °C; batería "+
-            "muestra valor crudo hasta calibrar. No hay ID de RPM "+
-            "del motor eléctrico confirmado: no se infiere ON/OFF "+
-            "de EV o velocidad.",12,MUTED,false));
+        root.addView(text("Temperatura motor: 559940105, lectura que "+
+            "aumentó al calentarse en tu T1; escala aún sin confirmar "+
+            "(RAW, no °C garantizados). Refrigerante AOSP y batería "+
+            "han devuelto 0 sin datos útiles. RPM térmicas=1035; "+
+            "motor eléctrico sin señal de RPM confirmada.",
+            12,MUTED,false));
         socStrategy=text("GESTIÓN SOC: SIN LECTURA · OBJETIVO: SIN DATO",
             17,WHITE,true);root.addView(socStrategy);
         LinearLayout scope=col();
@@ -332,6 +339,34 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         LinearLayout debugRow=row();advanced.addView(debugRow);
         button(debugRow,"DIAGNOSTICAR · NO ESCRIBE",BLUE,this::diagnoseHev);
         button(debugRow,"VER / COPIAR INFORME",BLUE,this::showHevReport);
+        heading(advanced,"PARRILLA LED DELANTERA · EFECTO EN P");
+        advanced.addView(text("NUEVO · Registro SOLO LECTURA de 30 segundos "+
+            "de la tira LED «horizonte»: LIGHT SHOW, DRL, WELCOME "+
+            "y configuración de estacionamiento. Empieza solo en P "+
+            "y velocidad 0. No cambia las luces ni la marcha. "+
+            "Si comparás P con N, aplicá freno de estacionamiento, "+
+            "mantené freno de pie y no toques la pantalla en N. "+
+            "Cancelamos el registro si el vehículo se mueve.",
+            13,MUTED,false));
+        LinearLayout ledButtons=row();advanced.addView(ledButtons);
+        button(ledButtons,"REGISTRAR LED 30 S · NO ESCRIBE",
+            TEAL,this::recordHorizonLed);
+        button(ledButtons,"COPIAR INFORME LED",BLUE,()->{
+            if(ledReport.isEmpty()){
+                ledStatus.setText("No existe informe. Empezá con REGISTRAR LED.");
+                return;
+            }
+            ClipboardManager clipboard=(ClipboardManager)
+                getSystemService(CLIPBOARD_SERVICE);
+            if(clipboard!=null)clipboard.setPrimaryClip(
+                ClipData.newPlainText("Jetour T1 tira LED P N",ledReport));
+            ledStatus.setText("Informe de LED copiado. "+
+                "Compartí el texto para comparar P y N.");
+        });
+        ledStatus=text("LED delantero: sin registro todavía. "+
+            "Los códigos de show mode están identificados pero NO validados.",
+            13,WHITE,false);
+        advanced.addView(ledStatus);
         heading(advanced,"LUCES TRASERAS / BAÚL · SOLO LECTURA");
         advanced.addView(text("Buscamos diferencias entre dos lecturas OEM. "+
             "No se fuerza ninguna luz. Guardá CAPTURA A, accioná "+
@@ -805,8 +840,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 thermalReading.set(false);
                 if(!visible||isFinishing()||isDestroyed())return;
                 lastThermal=result;
-                tempEngine.setText(Double.isFinite(result.engineCoolantC)?
-                    f(result.engineCoolantC,1)+" °C":"SIN LECTURA");
+                tempEngine.setText(result.engineTemperatureDisplay());
                 tempBattery.setText(result.batteryTempRaw);
                 // No supported motor-electric RPM or confirmed ON/OFF signal.
                 electricMotorStatus.setText("ESTADO SIN VALIDAR");
@@ -827,6 +861,69 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 }
             });
         },"T1-Thermal-Motor-ReadOnly").start();
+    }
+    private void recordHorizonLed(){
+        if(!parked()){
+            ledStatus.setText("Registro de LED solo se inicia estacionado "+
+                "en P con 0 km/h y telemetría reciente.");
+            return;
+        }
+        if(!ledRecording.compareAndSet(false,true)){
+            ledStatus.setText("Registro de LED ya está en curso.");
+            return;
+        }
+        ledReport="";
+        ledStatus.setText("REGISTRANDO 30 S · luces/parrilla OEM "+
+            "y marcha 1033, sin comandos de escritura…");
+        new Thread(()->{
+            java.util.ArrayList<T1HorizonLedReadOnlyProbe.Snapshot> frames=
+                new java.util.ArrayList<>();
+            java.util.ArrayList<Integer> gears=new java.util.ArrayList<>();
+            String issue="";
+            long deadline=android.os.SystemClock.elapsedRealtime()+30000L;
+            for(int i=0;i<16&&
+                android.os.SystemClock.elapsedRealtime()<deadline;i++){
+                if(!visible){issue="Pantalla cerrada: registro suspendido";break;}
+                T1TripTelemetry.Sample reading=new T1TripTelemetry(this).snapshot();
+                if(!Double.isFinite(reading.speed)||
+                    reading.speed>0.5||reading.speed<0){
+                    issue="Vehículo en movimiento o velocidad OEM no "+
+                        "verificable; registro detenido sin modificar luces.";
+                    break;
+                }
+                frames.add(ledProbe.read());
+                gears.add(reading.gear);
+                final int count=frames.size(),gear=reading.gear;
+                ui.post(()->{
+                    if(!isFinishing()&&!isDestroyed()&&ledStatus!=null)
+                        ledStatus.setText("LED · "+count+
+                            " muestras; marcha OEM 1033="+gear+
+                            "; solamente leyendo. No toques pantalla en N.");
+                });
+                try{Thread.sleep(1300);}catch(InterruptedException ex){
+                    Thread.currentThread().interrupt();
+                    issue="Registro interrumpido";break;
+                }
+            }
+            String report=T1HorizonLedReadOnlyProbe.Snapshot.transitions(
+                frames,gears);
+            if(!issue.isEmpty())report+="\n\nAVISO: "+issue;
+            final String finalReport=report;
+            ui.post(()->{
+                ledRecording.set(false);
+                ledReport=finalReport;
+                if(!visible||isFinishing()||isDestroyed()||ledStatus==null)return;
+                ledStatus.setText("LED · Registro completo ("+
+                    frames.size()+" muestras). Volvé a P y "+
+                    "tocá COPIAR INFORME LED para compartir.");
+                new AlertDialog.Builder(this)
+                    .setTitle("LED DELANTERO · REGISTRO P/N")
+                    .setMessage("Lectura completada. "+
+                        "No se modificaron luces ni marchas. "+
+                        "Volvé a P antes de usar la pantalla.")
+                    .setPositiveButton("CERRAR",null).show();
+            });
+        },"T1-Horizon-LED-ReadOnly").start();
     }
     private void captureRearBelts(boolean after){
         if(!parked()){
