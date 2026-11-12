@@ -37,9 +37,10 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private boolean visible=false;
     private long lastTelem=0,lastTotals=0;
     private T1TripTelemetry.Sample lastSample;
-    private T1PremiumInstrumentView gauge;
     private TextView dayRecordingLamp,clientRecordingLamp;
-    private Button dayStartButton,clientStartButton,clientRecoverButton;
+    private Button dayStartButton,dayPauseButton,dayEndButton,
+        clientStartButton,clientPauseButton,clientEndButton,clientRecoverButton;
+    private LinearLayout secondary;
     private TextView tripStatus,kmNow,fuelNow,electricNow,costNow,clientNow,
         dayNow,monthNow,historyNow,zoneStatus,feedback,energyNote,
         scopeTitle,scopeProgress,socStrategy,autonomyNow,autonomyDetail;
@@ -103,10 +104,6 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                         reading.set(false);
                         if(!visible||isFinishing()||isDestroyed())return;
                         lastSample=s;
-                        gauge.update(valid(s.speed,0,220),valid(s.fuel,0,70),
-                            valid(s.socDisplay,0,100),s.powerMode,
-                            valid(s.rpm,0,12000),
-                            valid(s.current,-1500,1500));
                         updateSoc();
                         updateAutonomy();
                         updateZone();
@@ -147,7 +144,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         boolean desired=master.getBoolean(T1TripRecorderService.DESIRED,
             master.getBoolean(T1TripRecorderService.RUNNING,false)||
                 T1JourneyStore.active(this));
-        if(!desired)return;
+        if(!desired||master.getBoolean(T1TripRecorderService.PAUSED,false))return;
         long elapsed=System.currentTimeMillis()-
             master.getLong(T1TripRecorderService.LAST_SAMPLE_TIME,0L);
         if(elapsed>=0&&elapsed<=15000&&
@@ -358,6 +355,24 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,58,1f);
         lp.setMargins(3,3,3,3);parent.addView(b,lp);return b;
     }
+    private TextView compactMetric(LinearLayout parent,String label,String value){
+        LinearLayout container=tile(parent,CARD);
+        container.setPadding(9,5,9,5);
+        container.addView(text(label,11,MUTED,false));
+        TextView number=text(value,20,WHITE,true);
+        container.addView(number);
+        return number;
+    }
+    private Button compactButton(LinearLayout parent,String caption,int color,Runnable run){
+        Button b=new Button(this);
+        b.setAllCaps(false);b.setText(caption);b.setTextSize(13);
+        b.setTextColor(WHITE);
+        b.setBackgroundTintList(ColorStateList.valueOf(color));
+        b.setOnClickListener(v->run.run());
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,46,1f);
+        lp.setMargins(2,1,2,1);parent.addView(b,lp);
+        return b;
+    }
     private void heading(LinearLayout c,String s){c.addView(text(s,19,WHITE,true));}
     private void draw(){
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);
@@ -387,137 +402,140 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         modeAtTop=text("MODO OEM: esperando 1043 · controles manuales P o D",
             14,MUTED,false);
         root.addView(modeAtTop);
-        LinearLayout recordingLamps=row();
-        root.addView(recordingLamps);
-        dayRecordingLamp=text("○ JORNADA DETENIDA",17,MUTED,true);
-        clientRecordingLamp=text("○ CLIENTE DETENIDO",17,MUTED,true);
-        recordingLamps.addView(dayRecordingLamp,
-            new LinearLayout.LayoutParams(0,-2,1f));
-        recordingLamps.addView(clientRecordingLamp,
-            new LinearLayout.LayoutParams(0,-2,1f));
+        // One-screen dashboard: no redundant full-size speedometer.
+        // Everything above "DETALLES" fits on the first display.
+        LinearLayout controls=row();root.addView(controls);
+        LinearLayout dayControl=col();
+        dayControl.setPadding(6,3,6,3);dayControl.setBackground(bg(CARD,14));
+        LinearLayout.LayoutParams dayCardLp=new LinearLayout.LayoutParams(0,-2,1f);
+        dayCardLp.setMargins(2,2,3,2);controls.addView(dayControl,dayCardLp);
+        dayRecordingLamp=text("○ JORNADA DETENIDA",14,MUTED,true);
+        dayControl.addView(dayRecordingLamp);
+        LinearLayout dayActions=row();dayControl.addView(dayActions);
+        dayStartButton=compactButton(dayActions,"INICIAR",TEAL,this::startDay);
+        dayPauseButton=compactButton(dayActions,"PAUSAR",GOLD,this::pauseDay);
+        dayEndButton=compactButton(dayActions,"TERMINAR",RED,this::endDay);
+        LinearLayout clientControl=col();
+        clientControl.setPadding(6,3,6,3);clientControl.setBackground(bg(CARD,14));
+        LinearLayout.LayoutParams clientCardLp=new LinearLayout.LayoutParams(0,-2,1f);
+        clientCardLp.setMargins(3,2,2,2);
+        controls.addView(clientControl,clientCardLp);
+        clientRecordingLamp=text("○ CLIENTE DETENIDO",14,MUTED,true);
+        clientControl.addView(clientRecordingLamp);
+        LinearLayout clientActions=row();clientControl.addView(clientActions);
+        clientStartButton=compactButton(clientActions,"INICIAR",BLUE,this::askClient);
+        clientPauseButton=compactButton(clientActions,"PAUSAR",GOLD,this::pauseClient);
+        clientEndButton=compactButton(clientActions,"TERMINAR",RED,this::finishClient);
 
-        gauge=new T1PremiumInstrumentView(this);
-        LinearLayout.LayoutParams meterParams=new LinearLayout.LayoutParams(-1,-2);
-        meterParams.setMargins(0,6,0,8);root.addView(gauge,meterParams);
         LinearLayout powertrain=row();root.addView(powertrain);
-        tempEngine=metric(tile(powertrain,CARD),
-            "TEMPERATURA MOTOR · 559940105 · EXP.","SIN LECTURA");
-        tempBattery=metric(tile(powertrain,CARD),
-            "TEMP. BATERÍA HV · OEM","SIN LECTURA");
-        LinearLayout electricTile=tile(powertrain,CARD);
-        electricTile.addView(text("MOTOR ELÉCTRICO",13,MUTED,false));
-        electricMotorStatus=text("ESTADO SIN VALIDAR",20,GOLD,true);
-        electricTile.addView(electricMotorStatus);
-        electricMotorRpm=text("RPM: SIN LECTURA",14,WHITE,false);
-        electricTile.addView(electricMotorRpm);
-        LinearLayout thermalRow=row();root.addView(thermalRow);
-        button(thermalRow,"TEMPERATURAS / MOTOR · VER CÓDIGOS",BLUE,
-            ()->readThermal(true));
-        root.addView(text("Temperatura motor: 559940105, lectura que "+
-            "aumentó al calentarse en tu T1; escala aún sin confirmar "+
-            "(RAW, no °C garantizados). Refrigerante AOSP y batería "+
-            "han devuelto 0 sin datos útiles. RPM térmicas=1035; "+
-            "motor eléctrico sin señal de RPM confirmada.",
-            12,MUTED,false));
-        socStrategy=text("GESTIÓN SOC: SIN LECTURA · OBJETIVO: SIN DATO",
-            17,WHITE,true);root.addView(socStrategy);
-        LinearLayout scope=col();
-        scope.setBackground(bg(0xFF123950,22));
-        scope.setPadding(20,13,20,13);
-        LinearLayout.LayoutParams scopeParams=new LinearLayout.LayoutParams(-1,-2);
-        scopeParams.setMargins(0,8,0,8);
-        root.addView(scope,scopeParams);
-        scopeTitle=text("JORNADA ACTUAL · SIN GRABACIÓN",16,0xFFB5DAEC,true);
-        scope.addView(scopeTitle);
-        kmNow=text("0,00 km",45,0xFF5BE2D0,true);scope.addView(kmNow);
-        scopeProgress=text("Iniciá una jornada o un trayecto; acá verás el avance.",
-            15,WHITE,false);
-        scope.addView(scopeProgress);
-        LinearLayout metrics=row();root.addView(metrics);
-        fuelNow=metric(tile(metrics,CARD),"NAFTA 500 m · EXPERIMENTAL","—");
-        electricNow=metric(tile(metrics,CARD),"ELECTRICIDAD NETA · EXP.","—");
-        costNow=metric(tile(metrics,CARD),"COSTO NAFTA · EXP.","—");
+        tempEngine=compactMetric(powertrain,"TEMP. MOTOR · RAW EXP.","SIN LECTURA");
+        tempBattery=compactMetric(powertrain,"TEMP. BATERÍA HV · OEM","SIN LECTURA");
+        socStrategy=text("SOC · ESPERANDO OEM",12,WHITE,true);
+        root.addView(socStrategy);
 
-        LinearLayout range=col();range.setBackground(bg(CARD,20));
-        range.setPadding(14,9,14,12);
-        LinearLayout.LayoutParams rangeParams=new LinearLayout.LayoutParams(-1,-2);
-        rangeParams.setMargins(0,8,0,5);root.addView(range,rangeParams);
-        LinearLayout rangeTop=row();rangeTop.setGravity(Gravity.CENTER_VERTICAL);
-        range.addView(rangeTop);
-        LinearLayout rangeInfo=col();
-        rangeInfo.addView(text("AUTONOMÍA TOTAL · EXPERIMENTAL",15,MUTED,true));
-        autonomyNow=text("SIN DATOS",30,WHITE,true);rangeInfo.addView(autonomyNow);
-        rangeTop.addView(rangeInfo,new LinearLayout.LayoutParams(0,-2,1f));
+        LinearLayout overview=row();root.addView(overview);
+        LinearLayout scope=col();
+        scope.setBackground(bg(0xFF123950,14));
+        scope.setPadding(10,6,10,7);
+        LinearLayout.LayoutParams scopeParams=new LinearLayout.LayoutParams(0,-2,2f);
+        scopeParams.setMargins(2,2,4,2);
+        overview.addView(scope,scopeParams);
+        scopeTitle=text("VIAJE ACTIVO · SIN GRABACIÓN",14,0xFFB5DAEC,true);
+        scope.addView(scopeTitle);
+        kmNow=text("0,00 km",33,0xFF5BE2D0,true);
+        scope.addView(kmNow);
+        scopeProgress=text("Iniciá jornada o cliente",11,MUTED,false);
+        scopeProgress.setMaxLines(2);
+        scope.addView(scopeProgress);
+
+        LinearLayout range=col();
+        range.setBackground(bg(CARD,14));
+        range.setPadding(9,6,9,7);
+        LinearLayout.LayoutParams rangeParams=new LinearLayout.LayoutParams(0,-2,1f);
+        rangeParams.setMargins(4,2,2,2);overview.addView(range,rangeParams);
+        range.addView(text("AUTONOMÍA TOTAL · EXP.",12,MUTED,true));
+        autonomyNow=text("SIN DATOS",25,WHITE,true);
+        range.addView(autonomyNow);
+        autonomyDetail=text("Estimación OEM · calibración pendiente",
+            10,MUTED,false);
+        autonomyDetail.setMaxLines(2);range.addView(autonomyDetail);
         Button adjust=new Button(this);adjust.setText("AJUSTAR");
-        adjust.setAllCaps(false);adjust.setOnClickListener(v->adjustAutonomy());
-        rangeTop.addView(adjust);
-        autonomyDetail=text("Combustible (CI186) + SOC eléctrico; pendiente de calibración",
-            13,MUTED,false);range.addView(autonomyDetail);
-        LinearLayout auxiliary=col();
-        auxiliary.setBackground(bg(CARD,20));
-        auxiliary.setPadding(14,10,14,12);
-        LinearLayout.LayoutParams auxParams=new LinearLayout.LayoutParams(-1,-2);
-        auxParams.setMargins(0,6,0,7);
-        root.addView(auxiliary,auxParams);
+        adjust.setAllCaps(false);adjust.setTextSize(11);
+        adjust.setMinHeight(30);adjust.setHeight(36);
+        adjust.setOnClickListener(v->adjustAutonomy());
+        range.addView(adjust,new LinearLayout.LayoutParams(-1,36));
+
+        LinearLayout metrics=row();root.addView(metrics);
+        fuelNow=compactMetric(metrics,"NAFTA · EXP.","—");
+        electricNow=compactMetric(metrics,"ELECTRICIDAD NETA · EXP.","—");
+        costNow=compactMetric(metrics,"COSTO NAFTA · EXP.","—");
+
+        feedback=text("Listo · trayectos locales y CSV intactos.",
+            12,0xFFB2DDD9,false);
+        feedback.setMaxLines(3);root.addView(feedback);
+        LinearLayout expandRow=row();root.addView(expandRow);
+        compactButton(expandRow,"DETALLES / HISTORIAL",BLUE,()->
+            secondary.setVisibility(secondary.getVisibility()==android.view.View.GONE?
+                android.view.View.VISIBLE:android.view.View.GONE));
+        compactButton(expandRow,"ZONAS / DIAGNÓSTICOS",BLUE,()->{
+            advanced.setVisibility(advanced.getVisibility()==android.view.View.GONE?
+                android.view.View.VISIBLE:android.view.View.GONE);
+            updateZone();
+        });
+
+        secondary=col();secondary.setVisibility(android.view.View.GONE);
+        secondary.setPadding(8,7,8,7);
+        root.addView(secondary);
+        LinearLayout electricTile=col();
+        electricTile.setBackground(bg(CARD,14));secondary.addView(electricTile);
+        electricTile.addView(text("MOTOR ELÉCTRICO",12,MUTED,false));
+        electricMotorStatus=text("ESTADO SIN VALIDAR",17,GOLD,true);
+        electricTile.addView(electricMotorStatus);
+        electricMotorRpm=text("RPM: SIN LECTURA",12,WHITE,false);
+        electricTile.addView(electricMotorRpm);
+        LinearLayout thermalRow=row();secondary.addView(thermalRow);
+        compactButton(thermalRow,"TEMPERATURAS / MOTOR · VER CÓDIGOS",
+            BLUE,()->readThermal(true));
+        secondary.addView(text("559940105 temperatura motor RAW: escala sin validar. "+
+            "RPM térmicas=1035; sin RPM eléctrico confirmado.",
+            11,MUTED,false));
+        LinearLayout auxiliary=col();auxiliary.setBackground(bg(CARD,14));
+        auxiliary.setPadding(9,5,9,5);secondary.addView(auxiliary);
         LinearLayout auxTitle=row();auxTitle.setGravity(Gravity.CENTER_VERTICAL);
         auxiliary.addView(auxTitle);
         LinearLayout auxText=col();
-        auxText.addView(text("BATERÍA AUXILIAR 12 V · IBS / DC-DC",16,MUTED,true));
-        aux12vStatus=text("SIN MEDICIÓN VALIDADA · pulsá LEER 12 V",15,WHITE,false);
+        auxText.addView(text("BATERÍA 12 V · IBS / DC-DC",13,MUTED,true));
+        aux12vStatus=text("SIN MEDICIÓN VALIDADA",13,WHITE,false);
         auxText.addView(aux12vStatus);
         auxTitle.addView(auxText,new LinearLayout.LayoutParams(0,-2,1f));
         Button readAux=new Button(this);
         readAux.setText("LEER 12 V");readAux.setAllCaps(false);
         readAux.setOnClickListener(v->readAux12v());
         auxTitle.addView(readAux);
-        auxiliary.addView(text("IBS=0 NO confirma 0 V ni SOC de 12 V. "+
-            "EXT BATT=315 (si son voltios) apunta a ALTA TENSIÓN HV, "+
-            "NO a batería auxiliar. No mezclar con 1064 de tracción. "+
-            "Lecturas brutas experimentales.",
-            12,MUTED,false));
-        energyNote=text("Km calculados desde velocidad OEM (sin calibrar). "+
-            "Nafta y energía: hipótesis de unidades OEM 500 m. "+
-            "Costo eléctrico total aún sin medidor validado.",12,MUTED,false);
-        root.addView(energyNote);
-
-        LinearLayout journey=col();journey.setBackground(bg(CARD,20));
-        journey.setPadding(12,10,12,10);
-        LinearLayout.LayoutParams pad=new LinearLayout.LayoutParams(-1,-2);
-        pad.setMargins(0,10,0,12);root.addView(journey,pad);
-        heading(journey,"01  JORNADA · GRABACIÓN CONTINUA");
-        tripStatus=text("Revisando TRIP OEM…",15,MUTED,false);journey.addView(tripStatus);
-        LinearLayout dayButtons=row();journey.addView(dayButtons);
-        dayStartButton=button(dayButtons,"▶ INICIAR JORNADA",TEAL,this::startDay);
-        button(dayButtons,"■ CERRAR JORNADA",RED,this::endDay);
-        heading(journey,"02  CLIENTE / TRAYECTO INDEPENDIENTE");
-        clientNow=text("Sin trayecto activo",16,WHITE,true);journey.addView(clientNow);
-        LinearLayout clientButtons=row();journey.addView(clientButtons);
-        clientStartButton=button(clientButtons,
-            "+ INICIAR TRAYECTO",BLUE,this::askClient);
-        button(clientButtons,"✓ FINALIZAR TRAYECTO",TEAL,this::finishClient);
-        LinearLayout recoveryButtons=row();journey.addView(recoveryButtons);
-        clientRecoverButton=button(recoveryButtons,
-            "⚠ REPARAR CONTINUIDAD SIN CERRAR",RED,this::repairClient);
+        auxiliary.addView(text("Valores brutos: no confundir IBS=0 con 0 V.",
+            11,MUTED,false));
+        energyNote=text("Km OEM estimados · nafta y electricidad por callbacks "+
+            "500 m experimentales; la electricidad neta NO equivale a red comprada.",
+            11,MUTED,false);
+        secondary.addView(energyNote);
+        tripStatus=text("Revisando TRIP OEM…",12,MUTED,false);
+        secondary.addView(tripStatus);
+        clientNow=text("Sin trayecto activo",13,WHITE,true);
+        secondary.addView(clientNow);
+        LinearLayout recoveryButtons=row();secondary.addView(recoveryButtons);
+        clientRecoverButton=compactButton(recoveryButtons,
+            "REPARAR CONTINUIDAD SIN CERRAR",RED,this::repairClient);
         clientRecoverButton.setVisibility(android.view.View.GONE);
+        LinearLayout chargeActions=row();secondary.addView(chargeActions);
+        compactButton(chargeActions,"CARGAS Y ECONOMÍA",BLUE,this::openChargeDialog);
 
-        LinearLayout aggregate=row();root.addView(aggregate);
+        LinearLayout aggregate=row();secondary.addView(aggregate);
         dayNow=metric(tile(aggregate,CARD),"HOY · CLIENTES","—");
         monthNow=metric(tile(aggregate,CARD),"ESTE MES · CLIENTES","—");
-        heading(root,"ÚLTIMOS TRAYECTOS");
+        heading(secondary,"ÚLTIMOS TRAYECTOS");
         historyNow=text("Todavía no hay trayectos cerrados.",14,MUTED,false);
         historyNow.setBackground(bg(CARD,18));historyNow.setPadding(16,14,16,14);
-        root.addView(historyNow);
-        feedback=text("Los viajes se guardan localmente. "+
-            "El TRIP continuo y sus CSV anteriores permanecen intactos.",
-            14,0xFFB2DDD9,false);root.addView(feedback);
-
-        LinearLayout expandRow=row();root.addView(expandRow);
-        button(expandRow,"CARGAS Y ECONOMÍA",BLUE,()->openChargeDialog());
-        button(expandRow,"ZONAS GPS · EV/HEV",BLUE,()->{
-            advanced.setVisibility(advanced.getVisibility()==android.view.View.GONE?
-                android.view.View.VISIBLE:android.view.View.GONE);
-            updateZone();
-        });
+        secondary.addView(historyNow);
         advanced=col();advanced.setPadding(14,12,14,14);
         advanced.setBackground(bg(CARD,20));
         advanced.setVisibility(android.view.View.GONE);
@@ -675,7 +693,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         button(extra,"DIAGNÓSTICO OEM",BLUE,()->startActivity(
             new Intent(this,ReceiverVehicleActivity.class)
                 .putExtra("open_tab",3)));
-        root.addView(text("Este cockpit no reemplaza el velocímetro homologado ni "+
+        secondary.addView(text("Este cockpit no reemplaza el velocímetro homologado ni "+
             "el sistema Jetour. No usar para controlar EV/HEV en marcha. "+
             "No se guardan coordenadas de clientes, ni se envían las zonas a la nube.",
             12,MUTED,false));
