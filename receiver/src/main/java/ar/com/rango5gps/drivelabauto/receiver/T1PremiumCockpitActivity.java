@@ -335,7 +335,6 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                     osmLast.detail:osmLast.roadTag+" · "+osmLast.name)+
                 " · TOCÁ PARA DETALLES");
     }
-    }
     private void lookupOsm(boolean userTriggered){
         if(osmStatus==null||!visible)return;
         if(!userTriggered&&!osmEnabled())return;
