@@ -681,14 +681,6 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         // Three independent button sets: JORNADA, VIAJE 1 and VIAJE 2.
         // Disabled is gray, only available actions retain colored tint.
         LinearLayout controls=row();root.addView(controls);
-        LinearLayout dayControl=controlCard(controls,"",0);
-        dayRecordingLamp=text("○ VIAJE TOTAL DETENIDO",13,MUTED,true);
-        dayControl.addView(dayRecordingLamp);
-        LinearLayout dayActions=row();dayControl.addView(dayActions);
-        dayStartButton=compactButton(dayActions,"INICIAR",TEAL,this::startDay);
-        dayPauseButton=compactButton(dayActions,"PAUSAR",GOLD,this::pauseDay);
-        dayEndButton=compactButton(dayActions,"TERMINAR",RED,this::endDay);
-
         LinearLayout clientControl=controlCard(controls,"",1);
         clientRecordingLamp=text("○ VIAJE 1 DETENIDO",13,MUTED,true);
         clientControl.addView(clientRecordingLamp);
@@ -696,6 +688,14 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         clientStartButton=compactButton(clientActions,"INICIAR",BLUE,this::askClient);
         clientPauseButton=compactButton(clientActions,"PAUSAR",GOLD,this::pauseClient);
         clientEndButton=compactButton(clientActions,"TERMINAR",RED,this::finishClient);
+
+        LinearLayout dayControl=controlCard(controls,"",0);
+        dayRecordingLamp=text("○ VIAJE TOTAL DETENIDO",13,MUTED,true);
+        dayControl.addView(dayRecordingLamp);
+        LinearLayout dayActions=row();dayControl.addView(dayActions);
+        dayStartButton=compactButton(dayActions,"INICIAR",TEAL,this::startDay);
+        dayPauseButton=compactButton(dayActions,"PAUSAR",GOLD,this::pauseDay);
+        dayEndButton=compactButton(dayActions,"TERMINAR",RED,this::endDay);
 
         LinearLayout secondControl=controlCard(controls,"",2);
         secondRecordingLamp=text("○ VIAJE 2 DETENIDO",13,MUTED,true);
@@ -838,7 +838,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         root.addView(advanced);
         heading(advanced,"SEÑALES OEM NUEVAS · SOLO LECTURA");
         advanced.addView(text("1079 porcentaje combustible · 2053 modo "+
-            "Eco/Sport/Snow (tabla numérica pendiente) · 2204 freno de mano · "+
+            "0 Eco / 1 Normal / 2 Sport / 3 Snow (validado propietario) · "+
+            "2204 freno de mano · "+
             "1031 alta tensión activada · 2073 estado general del motor "+
             "(NO RPM térmicas) · 1088 validez de velocidad · 2014 iluminación "+
             "ambiente · 2170 puerta acompañante. Sin escritura.",12,MUTED,false));
@@ -1355,89 +1356,47 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 }catch(Exception ex){message("Error: "+ex.getClass().getSimpleName());}
             }).show();
     }
-    private void askClient(){
-        if(T1JourneyStore.paused(this)){
-            message(T1JourneyStore.resume(this));return;
+    private void askClient(){startSubTrip(1);}
+    private void askSecond(){startSubTrip(2);}
+    /** One touch only: never ask a passenger name. If the total recorder has
+     * not produced a fresh OEM sample, queue the slot and generate its label
+     * when the first genuine checkpoint arrives. */
+    private void startSubTrip(int slot){
+        boolean second=slot==2;
+        if(second?T1JourneyStore2.paused(this):T1JourneyStore.paused(this)){
+            message(second?T1JourneyStore2.resume(this):T1JourneyStore.resume(this));
+            return;
         }
-        if(T1JourneyStore.active(this)||T1JourneyStore.pending(this)){
-            message("Ya hay un cliente activo o iniciándose.");return;
+        if(second?(T1JourneyStore2.active(this)||T1JourneyStore2.pending(this)):
+            (T1JourneyStore.active(this)||T1JourneyStore.pending(this))){
+            message("Viaje "+slot+" ya está activo o iniciándose.");
+            return;
         }
-        EditText name=new EditText(this);name.setSingleLine(true);
-        name.setHint("Ej.: Cliente, traslado, tramo de vuelta");
-        new AlertDialog.Builder(this).setTitle("Iniciar trayecto")
-            .setMessage("Empieza en 0,00 km para este cliente; no se reinicia "+
-                "la grabación general. Si aún no hay jornada, se inicia también.")
-            .setView(name).setNegativeButton("CANCELAR",null)
-            .setPositiveButton("INICIAR",(d,w)->{
-                if(T1JourneyStore.active(this)||T1JourneyStore.pending(this)){
-                    message("Ya hay un trayecto activo o preparándose.");return;
-                }
-                try{
-                    SharedPreferences p=getSharedPreferences(
-                        T1TripRecorderService.PREFS,MODE_PRIVATE);
-                    long age=System.currentTimeMillis()-
-                        p.getLong(T1TripRecorderService.LAST_SAMPLE_TIME,0L);
-                    boolean live=p.getBoolean(T1TripRecorderService.RUNNING,false)
-                        &&age>=0&&age<=15000;
-                    if(live){
-                        // Immediate checkpoint; do not reset the all-day trip.
-                        message(T1JourneyStore.start(this,name.getText().toString()));
-                    }else{
-                        String status=T1JourneyStore.queue(this,
-                            name.getText().toString());
-                        startForegroundService(new Intent(this,
-                            T1TripRecorderService.class).setAction(
-                                T1TripRecorderService.ACTION_START));
-                        message(status+" · Jornada iniciada automáticamente "+
-                            "para grabar el cliente en el mismo TRIP.");
-                    }
-                }catch(Exception ex){
-                    T1JourneyStore.cancelPending(this);
-                    message("No se inició: "+ex.getMessage());
-                }
-            }).show();
-    }
-    private void askSecond(){
-        if(T1JourneyStore2.paused(this)){
-            message(T1JourneyStore2.resume(this));return;
+        String label=T1AutoTripLabel.token(slot);
+        try{
+            SharedPreferences p=getSharedPreferences(
+                T1TripRecorderService.PREFS,MODE_PRIVATE);
+            long age=System.currentTimeMillis()-
+                p.getLong(T1TripRecorderService.LAST_SAMPLE_TIME,0L);
+            boolean live=p.getBoolean(T1TripRecorderService.RUNNING,false)&&
+                age>=0&&age<=15000;
+            if(live){
+                message(second?T1JourneyStore2.start(this,label):
+                    T1JourneyStore.start(this,label));
+            }else{
+                String status=second?T1JourneyStore2.queue(this,label):
+                    T1JourneyStore.queue(this,label);
+                startForegroundService(new Intent(this,
+                    T1TripRecorderService.class).setAction(
+                        T1TripRecorderService.ACTION_START));
+                message(status+" · Viaje "+slot+" comienza con la primera "+
+                    "muestra OEM; nombre automático por fecha y GPS disponible.");
+            }
+        }catch(Exception ex){
+            if(second)T1JourneyStore2.cancelPending(this);
+            else T1JourneyStore.cancelPending(this);
+            message("No se inició Viaje "+slot+": "+ex.getMessage());
         }
-        if(T1JourneyStore2.active(this)||T1JourneyStore2.pending(this)){
-            message("Ya hay un Viaje 2 activo o iniciándose.");return;
-        }
-        EditText name=new EditText(this);name.setSingleLine(true);
-        name.setHint("Ej.: Viaje 2, traslado, tramo de vuelta");
-        new AlertDialog.Builder(this).setTitle("Iniciar Viaje 2")
-            .setMessage("Empieza en 0,00 km para este Viaje 2; no se reinicia "+
-                "la grabación general. Si aún no hay jornada, se inicia también.")
-            .setView(name).setNegativeButton("CANCELAR",null)
-            .setPositiveButton("INICIAR",(d,w)->{
-                if(T1JourneyStore2.active(this)||T1JourneyStore2.pending(this)){
-                    message("Ya hay un Viaje 2 activo o preparándose.");return;
-                }
-                try{
-                    SharedPreferences p=getSharedPreferences(
-                        T1TripRecorderService.PREFS,MODE_PRIVATE);
-                    long age=System.currentTimeMillis()-
-                        p.getLong(T1TripRecorderService.LAST_SAMPLE_TIME,0L);
-                    boolean live=p.getBoolean(T1TripRecorderService.RUNNING,false)
-                        &&age>=0&&age<=15000;
-                    if(live){
-                        // Immediate checkpoint; do not reset the all-day trip.
-                        message(T1JourneyStore2.start(this,name.getText().toString()));
-                    }else{
-                        String status=T1JourneyStore2.queue(this,
-                            name.getText().toString());
-                        startForegroundService(new Intent(this,
-                            T1TripRecorderService.class).setAction(
-                                T1TripRecorderService.ACTION_START));
-                        message(status+" · Jornada iniciada automáticamente "+
-                            "para grabar el Viaje 2 en el mismo TRIP.");
-                    }
-                }catch(Exception ex){
-                    T1JourneyStore2.cancelPending(this);
-                    message("No se inició: "+ex.getMessage());
-                }
-            }).show();
     }
     private void repairClient(){
         if(!T1JourneyStore.stuck(this)){
@@ -1515,6 +1474,15 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 }catch(Exception e){message("No se guardó la carga: revisá kWh y precio.");}
             }).show();
     }
+    private static String driveModeName2053(int raw){
+        switch(raw){
+            case 0:return "ECO";
+            case 1:return "NORMAL";
+            case 2:return "SPORT";
+            case 3:return "SNOW";
+            default:return raw==Integer.MIN_VALUE?"SIN DATO":"DESCONOCIDO";
+        }
+    }
     private static String rawCode(int raw){
         return raw==Integer.MIN_VALUE?"SIN DATO":Integer.toString(raw);
     }
@@ -1522,8 +1490,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         if(lastSample==null)return;
         T1TripTelemetry.Sample x=lastSample;
         if(vehicleModeStatus!=null)
-            vehicleModeStatus.setText("CONDUCCIÓN · 2053="+rawCode(x.driveMode2053)+
-                " (Eco/Sport/Snow · valores sin calibrar)"+
+            vehicleModeStatus.setText("CONDUCCIÓN · "+driveModeName2053(x.driveMode2053)+
+                " (2053="+rawCode(x.driveMode2053)+")"+
                 "   |   COMBUSTIBLE · 1079="+rawCode(x.fuelPct1079)+
                 (x.fuelPct1079>=0&&x.fuelPct1079<=100?" %":""));
         if(rawSignalsStatus!=null)
@@ -1535,8 +1503,9 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         return "JETOUR T1 · SEÑALES OEM · SOLO LECTURA\n"+
             "Marca temporal: "+x.timestamp+"\n"+
             "1079 · COMBUSTIBLE % OEM: "+rawCode(x.fuelPct1079)+"\n"+
-            "2053 · MODO CONDUCCIÓN Eco/Sport/Snow: "+
-                rawCode(x.driveMode2053)+" (MAPA NO VALIDADO)\n"+
+            "2053 · MODO CONDUCCIÓN: "+
+                driveModeName2053(x.driveMode2053)+" (RAW "+
+                rawCode(x.driveMode2053)+")\n"+
             "2204 · FRENO DE MANO: "+rawCode(x.handbrake2204)+"\n"+
             "1031 · ALTA TENSIÓN HABILITADA (estado, NO voltaje): "+
                 rawCode(x.highVoltageReady1031)+"\n"+
