@@ -112,7 +112,7 @@ jobs:
           import json
           m=json.load(open('output/receiver.json'))
           assert m['versionName']=='0.2.49'
-          assert m['versionCode']==49, 'manifest code mismatch'
+          assert m['versionCode']==50, 'manifest code mismatch'
           assert m['packageName']=='ar.com.rango5gps.drivelabauto.receiver'
           assert m['apkUrl']=='https://github.com/bruceferra/drivelab-auto-standalone/releases/download/v0.2.49/DriveLab-Auto-Receiver-v0.2.49.apk'
           assert len(m['sha256'])==64
