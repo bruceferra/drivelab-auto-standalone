@@ -21,6 +21,8 @@ final class T1OptimizedModeStore {
             p.getInt(k+"soc",d.forcedSoc),
             p.getBoolean(k+"threshold_enabled",d.thresholdEnabled),
             p.getInt(k+"min_pct",d.minBattery),
+            enumOr(T1OptimizedModePolicy.Comparison.class,
+                p.getString(k+"comparison",d.comparison.name()),d.comparison),
             enumOr(T1OptimizedModePolicy.Regen.class,
                 p.getString(k+"regen",d.regeneration.name()),d.regeneration));
     }
@@ -33,6 +35,7 @@ final class T1OptimizedModeStore {
             .putInt(k+"soc",v.forcedSoc)
             .putBoolean(k+"threshold_enabled",v.thresholdEnabled)
             .putInt(k+"min_pct",v.minBattery)
+            .putString(k+"comparison",v.comparison.name())
             .putString(k+"regen",v.regeneration.name())
             .apply();
     }
