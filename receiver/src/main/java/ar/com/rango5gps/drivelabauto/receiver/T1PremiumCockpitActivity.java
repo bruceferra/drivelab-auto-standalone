@@ -719,15 +719,21 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         osmBanner.setOnClickListener(v->{
             String detail=osmLast==null?"Todavía no hay lectura del GPS.":
                 osmLast.explain();
+            String report=T1OfflineRoadMap.status(this)+"\n"+
+                "Asesor: "+(osmEnabled()?"ACTIVADO":"DESACTIVADO")+
+                "\nClasificación: "+(osmLast==null?"NO DISPONIBLE":
+                    osmLast.road.name())+
+                "\n"+detail+"\n"+
+                "Modo optimizado solo lectura; sin comandos a vehículo. "+
+                "Sin coordenadas GPS, nombres ni VIN.";
             new AlertDialog.Builder(this)
                 .setTitle("DIAGNÓSTICO · OSM OFFLINE")
-                .setMessage(T1OfflineRoadMap.status(this)+"\n\n"+
-                    "Asesor: "+(osmEnabled()?"ACTIVADO":"DESACTIVADO")+
-                    "\n"+detail+"\n\n"+
-                    "Si falta el mapa, descargalo por Wi-Fi desde el "+
-                    "servidor DriveLab. No se envían coordenadas.")
+                .setMessage(report+"\n\n"+
+                    "Si falta el mapa, descargalo por Wi-Fi. "+
+                    "Tocá COMPARTIR para enviar el informe QR sin copiar nada.")
                 .setNegativeButton("CERRAR",null)
-                .setNeutralButton("REVISAR GPS",(d,w)->lookupOsm(true))
+                .setNeutralButton("COMPARTIR",(d,w)->
+                    shareDiagnostic("osm_offline",report,offlineMapStatus))
                 .setPositiveButton("DESCARGAR MAPA",(d,w)->updateOfflineMap(true))
                 .show();
         });
