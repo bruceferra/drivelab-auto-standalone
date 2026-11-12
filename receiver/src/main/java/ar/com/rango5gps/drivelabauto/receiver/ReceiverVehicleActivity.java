@@ -27,7 +27,7 @@ import java.util.Map;
  * this activity or issue OEM operations. All writes need an explicit foreground
  * button press, and all data remain labeled as unverified OEM observations.
  */
-public final class ReceiverVehicleActivity extends Activity {
+public final class ReceiverVehicleActivity extends T1ImmersiveActivity {
     private final String[] tabNames={"VEHÍCULO","ENERGÍA","CODE","DIAGNÓSTICO"};
     private int activeTab=0;
     private ScrollView currentScroll;
