@@ -3,7 +3,9 @@ package ar.com.rango5gps.drivelabauto.receiver;
 /**
  * Observed OEM HVAC state 1004: 2 = exterior intake/recirculation OFF;
  * 1 = recirculation ON. These are observations, not motor commands.
- * Deliberately offers only one desired action: ON, no startup automation.
+ * The owner now requests automatic interior-air preference on app launch.
+ * This pure policy ONLY supports 1004=1; OEM defog/visibility overrides
+ * take precedence over repeated writes.
  */
 public final class RecirculationPolicy {
     public static final int ID=1004;
