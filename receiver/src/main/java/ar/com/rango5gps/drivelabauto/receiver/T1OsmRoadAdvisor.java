@@ -54,11 +54,11 @@ final class T1OsmRoadAdvisor {
         return Road.UNKNOWN;
     }
     static Result lookup(Location loc){
-        if(loc==null||!loc.hasAccuracy()||loc.getAccuracy()>20||
+        if(loc==null||!loc.hasAccuracy()||loc.getAccuracy()>35||
             SystemClock.elapsedRealtimeNanos()-loc.getElapsedRealtimeNanos()>
-                25000000000L)
+                35000000000L)
             return new Result(Road.UNKNOWN,"", "",Double.NaN,
-                "GPS desactualizado o impreciso (se requiere <=20 m y <=25 s).");
+                "GPS desactualizado o impreciso (requiere precisión <=35 m y <=35 s).");
         HttpURLConnection conn=null;
         try{
             double lat=loc.getLatitude(),lon=loc.getLongitude();
