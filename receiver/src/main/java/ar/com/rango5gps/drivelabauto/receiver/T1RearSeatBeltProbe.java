@@ -34,6 +34,10 @@ final class T1RearSeatBeltProbe {
         new Property(557856513,0,"CLUSTER cinturón acompañante delantero (control)"),
         new Property(557856554,0,"CLUSTER interruptor cinturón conductor (control)"),
         new Property(557856579,0,"CLUSTER aviso cinturones delanteros (control)"),
+        new Property(557843384,0,"CLUSTER MID SEAT WARN (advertencia del asiento central)"),
+        new Property(557847073,0,"STAT AMP ALARM VOL (volumen global de alarma)"),
+        new Property(557862921,0,"CLUSTER AUDIBLE BEEP RATE (ritmo pitidos)"),
+        new Property(557867199,0,"SETTINGS VOICE REMINDER (otro aviso; sin relación confirmada)"),
         new Property(354421634,16,"SEAT_BELT_BUCKLED · atrás izquierda / area 16"),
         new Property(354421634,32,"SEAT_BELT_BUCKLED · atrás centro / area 32"),
         new Property(354421634,64,"SEAT_BELT_BUCKLED · atrás derecha / area 64"),
@@ -64,7 +68,8 @@ final class T1RearSeatBeltProbe {
             }
             return s.append("\n\nValores crudos: 0, 1 u otros aún "+
                 "NO equivalen a abrochado ni a alarma validada. "+
-                "No hay comandos de escritura.").toString();
+                "STAT AMP ALARM VOL podría abarcar más avisos que los cinturones. "+
+                "NO hay comandos de escritura ni ajustes de volumen en DriveLab.").toString();
         }
         static String compare(Snapshot before,Snapshot after) {
             StringBuilder s=new StringBuilder("CINTURONES · DIFERENCIAS A/B\n");
