@@ -38,7 +38,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * Gasoline cost is explicitly a historical mixed-mode proxy; HV current is
  * NOT a metered charger or proof of grid-billed kWh.
  */
-public final class T1TankDashboardActivity extends Activity {
+public final class T1TankDashboardActivity extends T1ImmersiveActivity {
     private static final int NAVY=0xFF102638,TEAL=0xFF087F7A,
         GRAY=0xFF647585,PALE=0xFFEFF4F7,RED=0xFFA44833,BLUE=0xFF24689A,
         WHITE=Color.WHITE,ASK_GPS=6021,SAVE_CSV=6022;
