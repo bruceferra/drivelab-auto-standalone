@@ -20,9 +20,10 @@ import java.util.function.BooleanSupplier;
  * 1043, target=2, only after two independent P/0 km/h readbacks and an
  * explicit confirmation dialog in a still-visible Activity.
  *
- * VehicleService setter transaction 15 is proven for window properties but
- * NOT independently validated for power mode 1043 on this firmware. A
- * transaction success is not proof of mode transition; readback is required.
+ * VehicleService setter transaction 15 for 1043=2 has been physically
+ * confirmed by this Jetour owner while parked. In-motion behaviour and
+ * the reverse EV/EV MAX transitions are NOT validated. A binder success
+ * alone is not proof of transition; readback is required.
  */
 final class T1ManualHevExperiment {
     interface Callback {void complete(String report);}
