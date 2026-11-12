@@ -194,7 +194,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         meterParams.setMargins(0,6,0,8);root.addView(gauge,meterParams);
         LinearLayout powertrain=row();root.addView(powertrain);
         tempEngine=metric(tile(powertrain,CARD),
-            "REFRIGERANTE MOTOR · °C","SIN LECTURA");
+            "TEMPERATURA MOTOR · 559940105 · EXP.","SIN LECTURA");
         tempBattery=metric(tile(powertrain,CARD),
             "TEMP. BATERÍA HV · OEM","SIN LECTURA");
         LinearLayout electricTile=tile(powertrain,CARD);
@@ -206,10 +206,12 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         LinearLayout thermalRow=row();root.addView(thermalRow);
         button(thermalRow,"TEMPERATURAS / MOTOR · VER CÓDIGOS",BLUE,
             ()->readThermal(true));
-        root.addView(text("Refrigerante OEM estándar en °C; batería "+
-            "muestra valor crudo hasta calibrar. No hay ID de RPM "+
-            "del motor eléctrico confirmado: no se infiere ON/OFF "+
-            "de EV o velocidad.",12,MUTED,false));
+        root.addView(text("Temperatura motor: 559940105, lectura que "+
+            "aumentó al calentarse en tu T1; escala aún sin confirmar "+
+            "(RAW, no °C garantizados). Refrigerante AOSP y batería "+
+            "han devuelto 0 sin datos útiles. RPM térmicas=1035; "+
+            "motor eléctrico sin señal de RPM confirmada.",
+            12,MUTED,false));
         socStrategy=text("GESTIÓN SOC: SIN LECTURA · OBJETIVO: SIN DATO",
             17,WHITE,true);root.addView(socStrategy);
         LinearLayout scope=col();
@@ -838,8 +840,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 thermalReading.set(false);
                 if(!visible||isFinishing()||isDestroyed())return;
                 lastThermal=result;
-                tempEngine.setText(Double.isFinite(result.engineCoolantC)?
-                    f(result.engineCoolantC,1)+" °C":"SIN LECTURA");
+                tempEngine.setText(result.engineTemperatureDisplay());
                 tempBattery.setText(result.batteryTempRaw);
                 // No supported motor-electric RPM or confirmed ON/OFF signal.
                 electricMotorStatus.setText("ESTADO SIN VALIDAR");
