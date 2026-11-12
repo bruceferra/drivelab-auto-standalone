@@ -451,6 +451,103 @@ public final class T1PremiumCockpitActivity extends Activity {
                 }catch(Exception e){message("No se guardó la carga: revisá kWh y precio.");}
             }).show();
     }
+    private void updateSoc(){
+        if(socStrategy==null||lastSample==null)return;
+        double goal=T1SocModePolicy.socTarget(lastSample.socTargetInt,
+            lastSample.socTargetFloat);
+        socStrategy.setText("GESTIÓN SOC: "+
+            T1SocModePolicy.name(lastSample.socMode)+
+            "    |    OBJETIVO: "+
+            (Double.isFinite(goal)?f(goal,0)+" %":"SIN DATO")+
+            "    |    SOC ACTUAL: "+
+            (Double.isFinite(lastSample.socDisplay)?
+                f(lastSample.socDisplay,1)+" %":"SIN DATO"));
+    }
+    private void updateAutonomy(){
+        if(autonomyNow==null||lastSample==null)return;
+        SharedPreferences p=getSharedPreferences(RANGE_PREFS,MODE_PRIVATE);
+        double l100=p.getFloat("fuel_l100",(float)T1ExperimentalRange.DEFAULT_L100),
+            fullEv=p.getFloat("full_ev_km",100f);
+        T1ExperimentalRange.Estimate e=T1ExperimentalRange.estimate(
+            lastSample.fuel,lastSample.socDisplay,l100,fullEv);
+        autonomyNow.setText(Double.isFinite(e.totalKm)?
+            "~ "+f(e.totalKm,0)+" km":"SIN ESTIMACIÓN TOTAL");
+        autonomyDetail.setText("Nafta: "+(e.fuelOk?"~ "+f(e.fuelKm,0)+" km":
+            "NO FIABLE / SIN DATO")+"  +  eléctrico: "+
+            (e.electricOk?"~ "+f(e.electricKm,0)+" km":"SIN DATO")+
+            " · cálculo EXPERIMENTAL con "+f(l100,2)+" L/100 km, "+
+            f(fullEv,0)+" km EV a SOC 100 %, reserva 5,3 L. "+
+            "No sustituye la autonomía original Jetour.");
+    }
+    private void adjustAutonomy(){
+        LinearLayout form=col();form.setPadding(25,12,25,5);
+        form.addView(text("Fórmula experimental: "+
+            "km nafta=(litros CI186 − 5,3 L) × 100 / consumo L/100. "+
+            "Km EV=(SOC actual / 100) × alcance EV al 100 %. "+
+            "Total estimado=suma de ambos, supone utilización secuencial.",
+            14,Color.DKGRAY,false));
+        SharedPreferences p=getSharedPreferences(RANGE_PREFS,MODE_PRIVATE);
+        EditText fuel=new EditText(this);
+        fuel.setHint("L/100 km nafta (3 a 20)");
+        fuel.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        fuel.setText(String.format(Locale.ROOT,"%.2f",p.getFloat("fuel_l100",
+            (float)T1ExperimentalRange.DEFAULT_L100)));
+        form.addView(fuel);
+        EditText ev=new EditText(this);
+        ev.setHint("Autonomía EV con SOC 100 % (20 a 180 km)");
+        ev.setInputType(InputType.TYPE_CLASS_NUMBER|InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        ev.setText(String.format(Locale.ROOT,"%.0f",
+            p.getFloat("full_ev_km",100f)));
+        form.addView(ev);
+        new AlertDialog.Builder(this).setTitle("AUTONOMÍA EXPERIMENTAL")
+            .setView(form).setNegativeButton("CANCELAR",null)
+            .setPositiveButton("GUARDAR",(d,w)->{
+                try{
+                    double l=Double.parseDouble(fuel.getText().toString().replace(",","."));
+                    double e=Double.parseDouble(ev.getText().toString().replace(",","."));
+                    if(!Double.isFinite(l)||l<3||l>20||
+                        !Double.isFinite(e)||e<20||e>180)
+                        throw new IllegalArgumentException("Fuera de rango");
+                    p.edit().putFloat("fuel_l100",(float)l)
+                        .putFloat("full_ev_km",(float)e).apply();
+                    updateAutonomy();
+                    message("Autonomía experimental ajustada. "+
+                        "No modifica los datos del vehículo.");
+                }catch(Exception ex){
+                    message("No se aplicó: verificá consumo de 3–20 L/100 "+
+                        "y autonomía eléctrica de 20–180 km.");
+                }
+            }).show();
+    }
+    private void askHevExperiment(){
+        if(!parked()||lastSample==null||
+           !T1ManualHevPolicy.canRequest(lastSample.gear,
+               lastSample.speed,lastSample.powerMode)){
+            message("Prueba EV→HEV solo con lectura reciente: P, 0 km/h "+
+                "y modo EV o EV MAX. No se envió ningún comando.");
+            return;
+        }
+        if(hevPilot.busy()){message("Ya hay una prueba en curso.");return;}
+        new AlertDialog.Builder(this)
+            .setTitle("EV → HEV · COMANDO EXPERIMENTAL")
+            .setMessage("Solo estando ESTACIONADO en P, freno de "+
+                "estacionamiento y velocidad cero. Se intentará UNA VEZ "+
+                "la orden OEM 1043=2. La escritura no fue validada aún "+
+                "con la ROM de esta Jetour. El sistema volverá a comprobar "+
+                "P, velocidad, EV/EV MAX y la lectura final HEV. "+
+                "No realiza cambios por GPS ni en movimiento. "+
+                "Si hay un rechazo o un estado inesperado, verificá "+
+                "manualmente el modo original del auto.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("PROBAR UNA VEZ",(d,w)->{
+                message("Comprobando dos veces P, velocidad y modo OEM…");
+                if(!hevPilot.request(()->visible,report->ui.post(()->{
+                    if(!isFinishing()&&!isDestroyed()){
+                        message(report);lastTelem=0;updateZone();
+                    }
+                })))message("Prueba ocupada; no se envió otra orden.");
+            }).show();
+    }
     private boolean parked(){
         return lastSample!=null &&
             System.currentTimeMillis()-lastSample.timestamp<10000&&
