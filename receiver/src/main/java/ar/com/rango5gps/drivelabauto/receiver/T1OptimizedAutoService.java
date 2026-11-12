@@ -127,7 +127,10 @@ public final class T1OptimizedAutoService extends Service {
                     LocationManager.GPS_PROVIDER,
                     LocationManager.NETWORK_PROVIDER}){
                 if(!locations.isProviderEnabled(provider))continue;
-                locations.requestLocationUpdates(provider,2500,3f,
+                // No minimum movement: a parked P/0 vehicle still receives
+                // independent fresh fixes and can reach three stable
+                // observations. Earlier 3m filter stalled at P.
+                locations.requestLocationUpdates(provider,2500,0f,
                     listener,Looper.getMainLooper());
             }
         }catch(Exception ex){
