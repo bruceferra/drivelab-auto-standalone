@@ -1412,16 +1412,16 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             all.add(new HistoryRecord(0,e.id,
                 "JORNADA "+e.id+" · "+e.status,
                 e.started,e.ended,e.km,e.originalKm,e.evKm,e.liters,
-                e.electricityKwh,experimentalCost,e.corrected,e.fuelEvents));
+                e.electricityKwh,experimentalCost,e.corrected,false,e.fuelEvents));
         }
         for(T1JourneyStore.Entry e:T1JourneyStore.history(this))
             all.add(new HistoryRecord(1,e.id,e.label,e.started,e.ended,
                 e.km,e.originalKm,e.evKm,e.liters,e.electricNet,e.fuelCost,
-                e.correctedKm,e.fuelEvents));
+                e.correctedKm,e.estimatedDistance,e.fuelEvents));
         for(T1JourneyStore2.Entry e:T1JourneyStore2.history(this))
             all.add(new HistoryRecord(2,e.id,e.label,e.started,e.ended,
                 e.km,e.originalKm,e.evKm,e.liters,e.electricNet,e.fuelCost,
-                e.correctedKm,e.fuelEvents));
+                e.correctedKm,e.estimatedDistance,e.fuelEvents));
         all.sort((a,b)->Long.compare(b.ended,a.ended));
         SimpleDateFormat dt=new SimpleDateFormat("dd/MM HH:mm",Locale.getDefault());
         StringBuilder summary=new StringBuilder();
@@ -1497,8 +1497,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         String label=item.displayName()+" · "+
             dateFormat.format(new Date(item.started))+"\n"+
             f(item.km,2)+" km"+
-            (item.corrected?" · "+(item.slot==0?"OEM CORREGIDO":
-                "RECONSTRUIDO"):"");
+            (item.corrected?" · "+(item.estimated?
+                "ESTIMADO OEM":"CORREGIDO OEM"):"");
         TextView button=text((selected?"● ":"○ ")+label,
             14,selected?TEAL:WHITE,true);
         button.setPadding(12,10,12,10);
@@ -1519,15 +1519,17 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         final String id,label;
         final long started,ended;
         final double km,oldKm,evKm,liters,kwh,cost;
-        final boolean corrected;
+        final boolean corrected,estimated;
         HistoryRecord(int slot,String id,String label,long started,long ended,
                       double km,double oldKm,double evKm,double liters,
-                      double kwh,double cost,boolean corrected,int events){
+                      double kwh,double cost,boolean corrected,
+                      boolean estimated,int events){
             this.slot=slot;this.id=id;this.label=label;
             this.started=started;this.ended=ended;
             this.km=km;this.oldKm=oldKm;this.evKm=evKm;
             this.liters=liters;this.kwh=kwh;this.cost=cost;
-            this.corrected=corrected;fuelEvents=events;
+            this.corrected=corrected;this.estimated=estimated;
+            fuelEvents=events;
         }
         String key(){return slot+":"+id;}
         String displayName(){return slot==0?"VIAJE TOTAL":"VIAJE "+slot;}
@@ -1538,13 +1540,16 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             new SimpleDateFormat("dd/MM/yyyy HH:mm",Locale.getDefault())
                 .format(new Date(x.started))+
             " · "+f(x.km,2)+" km"+(x.corrected?
-                " (antes "+f(x.oldKm,2)+" km · OEM corregido)":"")+
+                " (antes "+f(x.oldKm,2)+" km · "+
+                (x.estimated?"ESTIMACIÓN DE VELOCIDAD SIN VALIDACIÓN 500m":
+                    "CORREGIDO OEM VERIFICADO")+")":"")+
             "\n"+x.label);
         historyDetailRow.removeAllViews();
         boolean fuelOk=x.km>0&&Double.isFinite(x.liters)&&x.liters>0;
         String consumption=fuelOk?
             f(100*x.liters/x.km,2)+" L/100 · "+
-                f(x.km/x.liters,2)+" km/L":"SIN DATO";
+                f(x.km/x.liters,2)+" km/L"+
+                (x.estimated?" · ESTIMADO":""):"SIN DATO";
         compactMetric(historyDetailRow,"CONSUMO",consumption);
         compactMetric(historyDetailRow,"KM ELÉCTRICOS PUROS",
             Double.isFinite(x.evKm)?f(x.evKm,2)+" km":"SIN DATO");
