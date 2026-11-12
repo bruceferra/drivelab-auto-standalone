@@ -407,6 +407,9 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         roadTransitionPopup.announceForAccessibility(label);
         ui.postDelayed(hideRoadTransitionPopup,4500L);
     }
+    private void openWhatIf(){
+        startActivity(new Intent(this,T1WhatIfActivity.class));
+    }
     private void openOptimizedMode(){
         Intent intent=new Intent(this,T1OptimizedModeActivity.class);
         if(lastSample!=null){
@@ -644,6 +647,12 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         displaySettings.setText("PANTALLA");
         displaySettings.setOnClickListener(v->openDisplaySettings());
         top.addView(displaySettings,new LinearLayout.LayoutParams(-2,52));
+        Button simulator=new Button(this);
+        simulator.setAllCaps(false);
+        simulator.setTextSize(12);
+        simulator.setText("SIMULADOR");
+        simulator.setOnClickListener(v->openWhatIf());
+        top.addView(simulator,new LinearLayout.LayoutParams(-2,52));
         Button optimized=new Button(this);
         optimized.setAllCaps(false);
         optimized.setTextSize(12);
@@ -828,6 +837,9 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         LinearLayout aggregate=row();secondary.addView(aggregate);
         dayNow=metric(tile(aggregate,CARD),"HOY · CLIENTES","—");
         monthNow=metric(tile(aggregate,CARD),"ESTE MES · CLIENTES","—");
+        LinearLayout simulatorRow=row();secondary.addView(simulatorRow);
+        compactButton(simulatorRow,"SIMULAR HEV SMART / SOC FORZADO",BLUE,
+            this::openWhatIf);
         heading(secondary,"ÚLTIMOS TRAYECTOS");
         historyNow=text("Todavía no hay trayectos cerrados.",14,MUTED,false);
         historyNow.setBackground(bg(CARD,18));historyNow.setPadding(16,14,16,14);
