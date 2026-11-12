@@ -54,6 +54,11 @@ final class T1ClientTripSync {
     static void persist(Context c,String clientId,long started,long ended,
                         String chain,T1JourneyMetrics.Result r,
                         double evKm,double iceKm,double unknownKm)throws IOException{
+        persist(c,clientId,started,ended,chain,r,evKm,iceKm,unknownKm,1);
+    }
+    static void persist(Context c,String clientId,long started,long ended,
+                        String chain,T1JourneyMetrics.Result r,
+                        double evKm,double iceKm,double unknownKm,int slot)throws IOException{
         if(clientId==null||!clientId.matches("[0-9]{12,16}")||
             ended<started||r==null)
             throw new IOException("Identificador o resumen de cliente inválido");
@@ -67,7 +72,7 @@ final class T1ClientTripSync {
             tick+=1000;
         }while(dest.exists()&&tick-ended<3600000L);
         if(dest.exists())throw new IOException("Sin nombre de informe disponible");
-        String row="CLIENT_FINISHED_V1;"+clientId+";"+started+";"+ended+";"+
+        String row=(slot==2?"VIAJE_2_FINISHED_V1":"CLIENT_FINISHED_V1")+";"+clientId+";"+started+";"+ended+";"+
             safelyScoped+";"+n(r.km)+";"+n(evKm)+";"+n(iceKm)+";"+
             n(unknownKm)+";"+r.fuelEvents+";"+n(r.rawFuel)+";"+
             n(r.fuelLitersCandidate)+";"+r.electricEvents+";"+
