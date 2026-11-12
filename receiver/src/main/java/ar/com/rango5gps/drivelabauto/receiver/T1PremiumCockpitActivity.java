@@ -446,7 +446,10 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private TextView compactMetric(LinearLayout parent,String label,String value){
         LinearLayout container=tile(parent,CARD);
         container.setPadding(9,5,9,5);
-        container.addView(text(label,11,MUTED,false));
+        TextView descriptor=text(label,10,MUTED,false);
+        descriptor.setSingleLine(true);
+        descriptor.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        container.addView(descriptor);
         TextView number=text(value,20,WHITE,true);
         container.addView(number);
         return number;
@@ -527,6 +530,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             14,MUTED,false);
         root.addView(modeAtTop);
         osmBanner=text("OSM · esperando vía…",12,0xFFB3E9F1,true);
+        osmBanner.setSingleLine(true);
+        osmBanner.setEllipsize(android.text.TextUtils.TruncateAt.END);
         osmBanner.setOnClickListener(v->{
             advanced.setVisibility(android.view.View.VISIBLE);
             lookupOsm(true);
@@ -607,6 +612,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         costNow=compactMetric(metrics,"COSTO NAFTA · EXP.","—");
         autonomyNow=compactMetric(metrics,"AUTONOMÍA TOTAL · EXP.","SIN DATOS");
         clientSyncStatus=text("CLIENTE QR · verificando pendientes",12,MUTED,false);
+        clientSyncStatus.setSingleLine(true);
+        clientSyncStatus.setEllipsize(android.text.TextUtils.TruncateAt.END);
         root.addView(clientSyncStatus);
 
         feedback=text("Listo · trayectos locales y CSV intactos.",
