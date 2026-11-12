@@ -285,6 +285,34 @@ jobs:
           # Physical EV/HEV test still manual & single shot, no new setters.
           grep -q 'checkStopped(b,confirmedMode,"CONTROL_2")' \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ManualHevExperiment.java
+      - name: Three compact modes and OSM advisor must preserve parked-only Binder writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          pilot=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ManualThreeModePilot.java
+          osm=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OsmRoadAdvisor.java
+          cockpit=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
+          grep -q 'gear!=1' "$pilot"
+          grep -q 'speed>0.001' "$pilot"
+          grep -q 'SystemClock.sleep(420)' "$pilot"
+          grep -q 'b.transact(15,data,reply,0)' "$pilot"
+          grep -q 'T1OemDiagnosticLog.add(app,"READBACK_1043"' "$pilot"
+          grep -q 'if(mode==target)' "$pilot"
+          grep -q 'modeEvButton=topModeButton(modes,"EV",1)' "$cockpit"
+          grep -q 'modeHevButton=topModeButton(modes,"HEV",2)' "$cockpit"
+          grep -q 'modeMaxButton=topModeButton(modes,"EV MAX",3)' "$cockpit"
+          grep -q 'threeModePilot.request(target' "$cockpit"
+          grep -q 'OSM_ENABLED,false' "$cockpit"
+          grep -q 'T1OsmRoadAdvisor.lookup(loc)' "$cockpit"
+          grep -q 'loc.getAccuracy()>20' "$osm"
+          grep -q 'overpass-api.de/api/interpreter' "$osm"
+          grep -q '"motorway".equals(tag)' "$osm"
+          grep -q '"residential".equals(tag)' "$osm"
+          # OSM may never import or call a vehicle write interface.
+          ! grep -E 'VehicleService|IVehicleControl|transact\\(15|setProperty\\(|1043.*write' "$osm"
+          # No code path may invoke the triple mode pilot from a GPS callback:
+          ! grep -E 'threeModePilot|T1ManualThreeModePilot' \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OsmRoadAdvisor.java
       - name: Separate apps and Android APK builds
         run: gradle --no-daemon :sender:assembleDebug :receiver:assembleDebug
       - name: Verify independent identities, permissions and no telemetry
