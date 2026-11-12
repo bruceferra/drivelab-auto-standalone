@@ -35,7 +35,9 @@ public final class T1TripRecorderService extends Service {
     public static final String ACTION_RESUME="t1.trip.RESUME";
     public static final String PREFS="t1_trip_recording";
     public static final String RUNNING="running", STATUS="status", ID="trip_id",
-        DISTANCE="distance_km", GAS_L="gas_l_est", EV_KWH="hv_out_kwh",
+        DISTANCE="distance_km", EV_DISTANCE="ev_distance_km",
+        ICE_DISTANCE="ice_distance_km", UNKNOWN_DISTANCE="unknown_distance_km",
+        GAS_L="gas_l_est", EV_KWH="hv_out_kwh",
         CHARGE_KWH="hv_in_kwh", LAST_FUEL="last_oem_fuel", SAMPLES="samples",
         DIST_SOURCE="distance_source", START_TIME="start_time", END_TIME="end_time",
         FUEL_PRICE="fuel_price", KWH_PRICE="kwh_price",
@@ -55,6 +57,10 @@ public final class T1TripRecorderService extends Service {
     private volatile double gpsKm=0;
     private volatile double distanceKm=0;
     private volatile boolean gpsMode=false;
+    // Provisional road comparison: dashboard 22.9 km / raw integrated
+    // 24.55 km, corroborated by the OEM 500 m event counts of 12 Nov.
+    // Preserve original speed in the CSV and old trip history unchanged.
+    private static final double OEM_SPEED_KM_FACTOR=22.9/24.55;
 
     @Override public IBinder onBind(Intent intent){return null;}
     private SharedPreferences p(){return getSharedPreferences(PREFS,MODE_PRIVATE);}
@@ -186,7 +192,9 @@ public final class T1TripRecorderService extends Service {
             .putLong(PARKED_MS,0L).putLong(OFFLINE_MS,0L)
             .putString(RESTORE_STATUS,"Nueva jornada; solo CERRAR la finaliza")
             .putFloat(DISTANCE,0).putFloat(GAS_L,0).putFloat(EV_KWH,0)
-            .putFloat(CHARGE_KWH,0).putInt(SAMPLES,0)
+            .putFloat(CHARGE_KWH,0).putFloat(EV_DISTANCE,0)
+            .putFloat(ICE_DISTANCE,0).putFloat(UNKNOWN_DISTANCE,0)
+            .putInt(SAMPLES,0)
             .putInt(SEG_FUEL_COUNT,0).putInt(SEG_ELEC_COUNT,0)
             .putFloat(SEG_FUEL_RAW_SUM,0f).putFloat(SEG_ELEC_RAW_SUM,0f)
             .remove(SEG_FUEL_LAST).remove(SEG_ELEC_LAST)
@@ -275,6 +283,10 @@ public final class T1TripRecorderService extends Service {
         double parkedMs=p().getLong(PARKED_MS,0);
         long offlineMs=p().getLong(OFFLINE_MS,0);
         long previousActiveTick=0;
+        double classifiedKm=distanceKm;
+        double evDistance=p().getFloat(EV_DISTANCE,0f);
+        double iceDistance=p().getFloat(ICE_DISTANCE,0f);
+        double unknownDistance=p().getFloat(UNKNOWN_DISTANCE,0f);
         String finalStatus="TRIP terminado";
         File path=currentFile(this);
         if(path==null){cleanup("TRIP sin identificador");return;}
@@ -335,7 +347,17 @@ public final class T1TripRecorderService extends Service {
                 previousSample=s.timestamp;
                 if(!gpsMode&&dt>0&&dt<=10000&&Double.isFinite(s.speed)&&
                         s.speed>=0&&s.speed<220)
-                    distanceKm+=s.speed*dt/3600000.0; // unit OEM needs road validation
+                    distanceKm+=s.speed*dt/3600000.0*OEM_SPEED_KM_FACTOR;
+                // Assign only observed incremental distance using RPM1035.
+                // Missing RPM is unknown, never classified as electric.
+                double intervalKm=dt>0&&dt<=10000?
+                    Math.max(0,distanceKm-classifiedKm):0;
+                classifiedKm=distanceKm;
+                if(intervalKm>0){
+                    if(s.motorOn==0)evDistance+=intervalKm;
+                    else if(s.motorOn==1)iceDistance+=intervalKm;
+                    else unknownDistance+=intervalKm;
+                }
                 hvOut+=T1TripMath.grossHvDischargeKwh(s.voltage,s.current,dt);
                 hvIn+=T1TripMath.grossHvChargeKwh(s.voltage,s.current,dt);
                 double km=Math.max(0,distanceKm);
@@ -358,7 +380,7 @@ public final class T1TripRecorderService extends Service {
                     s.recirc+","+s.recircChange+","+s.fold+","+loc+
                     n(km)+","+n(hvOut)+","+n(hvIn)+","+
                     n(liters)+","+n(gasCost)+","+n(evCost)+","+
-                    (gpsMode?"GPS":"OEM_SPEED_UNIT_CANDIDATE")+","+
+                    (gpsMode?"GPS":"OEM_SPEED_CAL_0.9328_PRELIMINAR")+","+
                     n(s.rpm)+","+s.motorOn+","+
                     n(s.oemElectricRolling50)+","+n(s.oemFuelRolling50)+","+
                     n(s.oemElectricAverage500m)+","+n(s.oemFuelAverage500m)+","+
@@ -372,9 +394,15 @@ public final class T1TripRecorderService extends Service {
                 out.write(line.getBytes(StandardCharsets.UTF_8));
                 sampleCount++;
                 if(sampleCount%5==0)out.flush();
-                if(sampleCount%20==0)T1TripSync.trigger(this,false);
+                if(sampleCount%20==0){
+                    T1TripSync.trigger(this,false);
+                    T1ClientTripSync.trigger(this,false);
+                }
                 p().edit().putLong(LAST_SAMPLE_TIME,s.timestamp)
                     .putFloat(DISTANCE,(float)km)
+                    .putFloat(EV_DISTANCE,(float)evDistance)
+                    .putFloat(ICE_DISTANCE,(float)iceDistance)
+                    .putFloat(UNKNOWN_DISTANCE,(float)unknownDistance)
                     .putFloat(GAS_L,(float)liters).putFloat(EV_KWH,(float)hvOut)
                     .putFloat(CHARGE_KWH,(float)hvIn)
                     .putFloat(LAST_FUEL,(float)s.fuel)
@@ -388,10 +416,12 @@ public final class T1TripRecorderService extends Service {
                     .putString(SEG_STATUS,segments.snapshot())
                     .putString(SEG_FUEL_LAST,n(seg.fuelLast))
                     .putString(SEG_ELEC_LAST,n(seg.electricLast))
-                    .putString(DIST_SOURCE,gpsMode?"GPS":"VELOCIDAD_OEM_ESTIMADA")
+                    .putString(DIST_SOURCE,gpsMode?"GPS":
+                        "VELOCIDAD_OEM_CALIBRACION_PROVISIONAL_0_9328")
                     .putString(STATUS,"Grabando TRIP · "+sampleCount+
                         " muestras · tramos 500m nafta="+seg.fuelCount+
                         " electricidad="+seg.electricCount).apply();
+                if(intervalKm>0)T1JourneyStore.recordMovement(this,s.motorOn,intervalKm);
                 // A passenger may request a new journey before the first
                 // sample. Resolve it here, never from an old persisted TRIP.
                 T1JourneyStore.fulfillPending(this);
@@ -399,6 +429,7 @@ public final class T1TripRecorderService extends Service {
             }
             out.flush();
             T1TripSync.trigger(this,true);
+            T1ClientTripSync.trigger(this,true);
         }catch(Exception ex){
             finalStatus="TRIP interrumpido · "+ex.getClass().getSimpleName();
         }finally{
