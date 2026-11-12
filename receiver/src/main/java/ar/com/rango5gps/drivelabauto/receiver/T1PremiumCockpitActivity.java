@@ -372,10 +372,13 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         advanced.addView(rearSeatStatus);
         heading(advanced,"CINTURONES TRASEROS · ESTADO Y AVISO OEM");
         advanced.addView(text("Nueva prueba SOLO LECTURA: cinturones "+
-            "segunda fila izquierdo, central y derecho; sensor de ocupación "+
-            "por asiento, y señal de aviso. Con el vehículo en P, sin "+
-            "pasajeros en movimiento: capturá A con cinturones sueltos, "+
-            "abrochá uno y capturá B. Repetí por asiento.",13,MUTED,false));
+            "izquierdo, central y derecho; ocupación; aviso del asiento "+
+            "central; volumen general de alarma y frecuencia de pitidos. "+
+            "Con el vehículo en P, capturá A con cinturones sueltos, "+
+            "abrochá uno y capturá B. Repetí por asiento. "+
+            "NO desactiva ni reduce alarmas de seguridad. "+
+            "Para cajas, usá el baúl o sujetalas correctamente en lugar "+
+            "de anular la advertencia.",13,MUTED,false));
         LinearLayout beltButtons=row();advanced.addView(beltButtons);
         button(beltButtons,"CINTURONES A · SUELTOS",BLUE,
             ()->captureRearBelts(false));
