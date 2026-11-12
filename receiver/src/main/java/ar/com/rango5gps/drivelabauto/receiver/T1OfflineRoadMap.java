@@ -81,7 +81,7 @@ final class T1OfflineRoadMap {
         if(installed(ctx)&&checksum.equals(
                 ctx.getSharedPreferences(PREFS,Context.MODE_PRIVATE)
                     .getString("sha256",""))){
-            if(progress!=null)if(progress!=null)progress.update("Mapa PBA+CABA ya actualizado",100);
+            if(progress!=null)progress.update("Mapa PBA+CABA ya actualizado",100);
             ctx.getSharedPreferences(PREFS,Context.MODE_PRIVATE).edit()
                 .putLong("checked_at",System.currentTimeMillis()).apply();
             return;
@@ -146,9 +146,22 @@ final class T1OfflineRoadMap {
         }
     }
     static boolean checkDue(Context c){
-        return installed(c)&&System.currentTimeMillis()-
+        // Also install on first launch: the old logic returned false when
+        // there was NO map, leaving OSM permanently UNKNOWN after enabling GPS.
+        if(!installed(c))return true;
+        return System.currentTimeMillis()-
             c.getSharedPreferences(PREFS,Context.MODE_PRIVATE)
                 .getLong("checked_at",0L)>24L*60*60*1000;
+    }
+    static boolean automaticRetryAllowed(Context c){
+        long last=c.getSharedPreferences(PREFS,Context.MODE_PRIVATE)
+            .getLong("last_auto_attempt",0L);
+        long now=System.currentTimeMillis();
+        return last<=0||now-last>=30L*60L*1000||now<last;
+    }
+    static void markAutoAttempt(Context c){
+        c.getSharedPreferences(PREFS,Context.MODE_PRIVATE).edit()
+            .putLong("last_auto_attempt",System.currentTimeMillis()).apply();
     }
     static String status(Context c){
         return installed(c)?"MAPA PBA+CABA INSTALADO · consulta offline":
@@ -226,7 +239,7 @@ final class T1OfflineRoadMap {
     static T1OsmRoadAdvisor.Result roadAt(Context context,android.location.Location here){
         if(!installed(context))return unknown("Mapa offline no instalado. "+
             "Tocá DESCARGAR MAPA PBA+CABA una sola vez.");
-        if(here==null||!here.hasAccuracy()||here.getAccuracy()>45||
+        if(here==null||!here.hasAccuracy()||here.getAccuracy()>65||
                 android.os.SystemClock.elapsedRealtimeNanos()-
                 here.getElapsedRealtimeNanos()>60000000000L)
             return unknown("Falta GPS reciente o precisión suficiente para "+
@@ -245,7 +258,7 @@ final class T1OfflineRoadMap {
         String highway="",ref="";
         T1OsmRoadAdvisor.Road best=T1OsmRoadAdvisor.Road.UNKNOWN,
             next=T1OsmRoadAdvisor.Road.UNKNOWN;
-        int checked=0;
+        int checked=0,ignoredUnknown=0;
         try(SQLiteDatabase db=SQLiteDatabase.openDatabase(
                 dataset(context).getAbsolutePath(),null,
                 SQLiteDatabase.OPEN_READONLY|SQLiteDatabase.NO_LOCALIZED_COLLATORS);
@@ -261,9 +274,17 @@ final class T1OfflineRoadMap {
                 double meters=distanceToRoad(lat,lon,bytes);
                 if(!Double.isFinite(meters))continue;
                 T1OsmRoadAdvisor.Road kind=T1OsmRoadAdvisor.classify(type);
+                // The original nearest-road selector also chose pedestrian
+                // paths, cycleways and non-driveable UNKNOWN classes. That
+                // could hide a perfectly valid city street 2 m further away.
+                if(kind==T1OsmRoadAdvisor.Road.UNKNOWN){
+                    ignoredUnknown++;continue;
+                }
                 checked++;
                 if(meters<nearest){
-                    runner=nearest;next=best;
+                    if(kind!=best){
+                        runner=nearest;next=best;
+                    }
                     nearest=meters;best=kind;
                     highway=type;ref=rows.getString(1);
                 }else if(meters<runner&&kind!=best){
@@ -271,14 +292,22 @@ final class T1OfflineRoadMap {
                 }
             }
         }catch(Exception ex){
-            return unknown("Error de lectura local SQLite: "+
-                ex.getClass().getSimpleName());
+            String detail=ex.getMessage();
+            if(detail==null||detail.isEmpty())detail=ex.getClass().getSimpleName();
+            if(detail.length()>130)detail=detail.substring(0,130);
+            return unknown("Error de lectura SQLite local: "+
+                ex.getClass().getSimpleName()+" · "+detail);
         }
-        double max=Math.min(40,here.getAccuracy()*1.5+7);
+        // Advisory classification only: accept usable GPS fixes but retain
+        // uncertainty when a different road type is almost equally near.
+        double max=Math.min(65,Math.max(30,here.getAccuracy()*1.5+10));
         if(checked==0||nearest>max)
-            return unknown("Sin calle del mapa a menos de "+
+            return unknown("No se encontró calle vehicular a "+
                 String.format(Locale.ROOT,"%.0f",max)+
-                " m del GPS. Fuera de cobertura o posición imprecisa.");
+                " m del GPS. Calles consideradas="+checked+
+                ", rutas no compatibles="+ignoredUnknown+
+                ", precisión GPS="+
+                String.format(Locale.ROOT,"%.0f",here.getAccuracy())+" m.");
         if(next!=best&&Double.isFinite(runner)&&runner-nearest<=8)
             return unknown("Vías cercanas de distinta categoría: "+
                 "clasificación ambigua, sin sugerencia.");
