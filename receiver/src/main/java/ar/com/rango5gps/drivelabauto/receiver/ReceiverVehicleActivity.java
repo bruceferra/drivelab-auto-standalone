@@ -469,7 +469,8 @@ public final class ReceiverVehicleActivity extends T1ImmersiveActivity {
             operationView.setText(s);
     }
     private void confirmPedestrian(){
-        if(vehicleBusy()){updateAlert("Otra operación OEM está en curso");return;}
+        // Independent of active mirrors, windows and diagnostics; AVAS
+        // owns its own atomic busy gate and never auto-writes on startup.
         if(!pedestrian.toggle(r->updateAlert(r.summary())))
             updateAlert("Sin orden: app no visible o control en espera");
         else updateAlert("Consultando 2074 y enviando cambio manual ON/OFF…");
