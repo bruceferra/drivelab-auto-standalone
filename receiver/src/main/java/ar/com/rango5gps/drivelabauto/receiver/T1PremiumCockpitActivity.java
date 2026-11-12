@@ -1380,6 +1380,26 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             f(month.gridCost,0)+") · no imputada");
 
         ArrayList<HistoryRecord> all=new ArrayList<>();
+        // Viaje Total is a separate MASTER CSV, never a sum of overlapping
+        // client slots. Closed files are shown alongside Viaje 1/2.
+        SharedPreferences recorder=getSharedPreferences(
+            T1TripRecorderService.PREFS,MODE_PRIVATE);
+        String currentMasterId=recorder.getString(T1TripRecorderService.ID,"");
+        boolean masterOpen=recorder.getBoolean(
+            T1TripRecorderService.RUNNING,false)||
+            recorder.getBoolean(T1TripRecorderService.PAUSED,false);
+        double currentFuelPrice=recorder.getFloat(
+            T1TripRecorderService.FUEL_PRICE,2129f);
+        for(T1MasterTripHistory.Entry e:T1MasterTripHistory.closed(
+                T1TripRecorderService.tripDir(this),currentMasterId,
+                masterOpen)){
+            double experimentalCost=Double.isFinite(e.liters)?
+                e.liters*currentFuelPrice:Double.NaN;
+            all.add(new HistoryRecord(0,e.id,
+                "JORNADA "+e.id+" · "+e.status,
+                e.started,e.ended,e.km,e.originalKm,e.evKm,e.liters,
+                e.electricityKwh,experimentalCost,e.corrected,e.fuelEvents));
+        }
         for(T1JourneyStore.Entry e:T1JourneyStore.history(this))
             all.add(new HistoryRecord(1,e.id,e.label,e.started,e.ended,
                 e.km,e.originalKm,e.evKm,e.liters,e.electricNet,e.fuelCost,
@@ -1393,7 +1413,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         StringBuilder summary=new StringBuilder();
         for(int i=0;i<Math.min(4,all.size());i++){
             HistoryRecord e=all.get(i);
-            summary.append("VIAJE ").append(e.slot).append(" · ")
+            summary.append(e.displayName()).append(" · ")
                 .append(dt.format(new Date(e.started))).append(" · ")
                 .append(f(e.km,2)).append(" km");
             if(e.corrected)summary.append(" · RECALCULADO OEM");
@@ -1407,7 +1427,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 HistoryRecord item=all.get(i);
                 TextView line=text(
                     (selectedHistoryKey.equals(item.key())?"● ":"○ ")+
-                    "VIAJE "+item.slot+" · "+dt.format(new Date(item.started))+
+                    item.displayName()+" · "+dt.format(new Date(item.started))+
                     " · "+f(item.km,2)+" km"+
                     (item.corrected?" · CORREGIDO":""),
                     14,selectedHistoryKey.equals(item.key())?TEAL:WHITE,true);
@@ -1466,10 +1486,11 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             this.corrected=corrected;fuelEvents=events;
         }
         String key(){return slot+":"+id;}
+        String displayName(){return slot==0?"VIAJE TOTAL":"VIAJE "+slot;}
     }
     private void showHistoryDetails(HistoryRecord x){
         if(historyDetailTitle==null||historyDetailRow==null)return;
-        historyDetailTitle.setText("VIAJE "+x.slot+" · "+
+        historyDetailTitle.setText(x.displayName()+" · "+
             new SimpleDateFormat("dd/MM/yyyy HH:mm",Locale.getDefault())
                 .format(new Date(x.started))+
             " · "+f(x.km,2)+" km"+(x.corrected?
