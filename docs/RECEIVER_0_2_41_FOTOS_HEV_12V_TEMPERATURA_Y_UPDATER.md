@@ -13,7 +13,7 @@ Cambios 0.2.41:
 
 Para investigar sin enviar órdenes: estando parado, usar ENSAYO EV/HEV · SOLO LECTURA (registro 3 minutos) y cambiar modo desde el menú original del vehículo. Para ensayar la escritura manual existente, primero seleccionar EV original y confirmar 1043=1 (o EV MAX 1043=3), luego comprobar P/0 km/h y confirmar una única prueba si se decide hacerla. No repetir un fallo a ciegas.
 
-La forense previa identifica los métodos OEM VehicleSettingCarPropertyManager.setCarPropertyValue y la definición VC_VENDOR_PHEV_POWER_MODE_WRITE, pero no demuestra que una app tercera pueda usar transacción 15 para cambiar propulsión. Requiere investigación de contrato, permiso y correspondencia con el código 1043.
+La forense previa identifica los métodos OEM VehicleSettingCarPropertyManager.setCarPropertyValue y la definición VC_VENDOR_PHEV_POWER_MODE_WRITE, pero no demuestra que una app tercera pueda usar transacción 15 para cambiar propulsión. El catálogo técnico de 2.117 propiedades identifica HAL 557867211 como LECTURA PHEV POWER MODE y HAL 557843642 como ESCRITURA PHEV POWER MODE candidata. Por eso la función DIAGNOSTICAR · NO ESCRIBE de esta versión lee también 557867211 mediante IALCar.getInt (Binder transact 2, area 0) y la compara con VehicleService 1043. Si coinciden al cambiar EV/HEV desde el menú original, se confirmará una correlación entre dos interfaces. La propiedad de escritura 557843642 NO se ejecuta; falta validar permisos, tipos, valores, efectos y condiciones antes de cualquier ensayo.
 
 ## Temperatura del motor
 
