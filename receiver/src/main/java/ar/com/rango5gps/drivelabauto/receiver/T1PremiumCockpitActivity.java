@@ -825,8 +825,11 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     }
     private void updateStats(){
         String recovered=T1JourneyStore.reconcileInterrupted(this);
-        if(!recovered.isEmpty()&&feedback!=null)
-            feedback.setText(recovered);
+        String recovered2=T1JourneyStore2.reconcileInterrupted(this);
+        if(feedback!=null){
+            if(!recovered.isEmpty())feedback.setText("VIAJE 1 · "+recovered);
+            if(!recovered2.isEmpty())feedback.setText("VIAJE 2 · "+recovered2);
+        }
         SharedPreferences m=getSharedPreferences(T1TripRecorderService.PREFS,MODE_PRIVATE);
         boolean running=m.getBoolean(T1TripRecorderService.RUNNING,false);
         long ms=System.currentTimeMillis()-m.getLong(T1TripRecorderService.LAST_SAMPLE_TIME,0L);
