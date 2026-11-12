@@ -131,7 +131,8 @@ public final class T1TripRecorderService extends Service {
         // Recover pre-upgrade sessions that still had RUNNING=true.
         if(!before.contains(DESIRED)&&
             (before.getBoolean(RUNNING,false)||T1JourneyStore.active(this)||
-                T1JourneyStore.pending(this)))
+                T1JourneyStore.pending(this)||T1JourneyStore2.active(this)||
+                T1JourneyStore2.pending(this)))
             wasDesired=true;
         boolean oldFile=currentFile(this)!=null&&currentFile(this).isFile();
         // Explicit start only creates a new session after a user STOP.
@@ -421,10 +422,14 @@ public final class T1TripRecorderService extends Service {
                     .putString(STATUS,"Grabando TRIP · "+sampleCount+
                         " muestras · tramos 500m nafta="+seg.fuelCount+
                         " electricidad="+seg.electricCount).apply();
-                if(intervalKm>0)T1JourneyStore.recordMovement(this,s.motorOn,intervalKm);
+                if(intervalKm>0){
+                    T1JourneyStore.recordMovement(this,s.motorOn,intervalKm);
+                    T1JourneyStore2.recordMovement(this,s.motorOn,intervalKm);
+                }
                 // A passenger may request a new journey before the first
                 // sample. Resolve it here, never from an old persisted TRIP.
                 T1JourneyStore.fulfillPending(this);
+                T1JourneyStore2.fulfillPending(this);
                 try{Thread.sleep(3000);}catch(InterruptedException e){if(stop)break;}
             }
             out.flush();
