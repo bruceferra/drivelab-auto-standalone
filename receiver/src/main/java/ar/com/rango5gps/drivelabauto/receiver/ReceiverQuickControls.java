@@ -181,8 +181,8 @@ final class ReceiverQuickControls {
 
         LinearLayout c=row(root);
         button(c,"ALARMA PEATÓN ON/OFF",RED,()->avas());
-        interiorMode=button(c,"SIEMPRE AIRE INTERIOR",GREEN,()->setAir(false));
-        airAuto=button(c,"AIRE AUTO",GREY,()->setAir(true));
+        interiorMode=button(c,"AIRE INTERIOR · AUTO",GREEN,()->setAir(false));
+        airAuto=button(c,"AIRE EXTERIOR · OEM",GREY,()->setAir(true));
         button(c,"TABLERO / TRIP",BLUE,()->activity.startActivity(
             new Intent(activity,T1TankDashboardActivity.class)));
 
@@ -225,7 +225,7 @@ final class ReceiverQuickControls {
             " · servicio de fondo: "+(serviceActive?"ACTIVO":
                 (on?"SIN SERVICIO · revisar estado":"detenido"))+
             "  · pasos por lado: IZQ "+l+" / DER "+r+
-            "  · aire: "+(interior?"SIEMPRE INTERIOR":"AUTO")+
+            "  · aire: "+(interior?"INTERIOR VIGILADO 1004=1":"CLIMATIZADOR ORIGINAL")+
             (a.getBoolean(RecirculationGuardService.PAUSED,false)?
                 " (HVAC PAUSADO POR OEM)":
                 interior?(a.getBoolean(RecirculationGuardService.MONITORING,false)&&
@@ -273,8 +273,8 @@ final class ReceiverQuickControls {
     private void avas(){
         if(busy()){message("Otra operación está en curso");return;}
         if(!avas.toggle(r->message(r.summary())))
-            message("Alarma peatón: espera OEM/no se inició");
-        else message("Verificando si se puede cambiar alarma peatonal…");
+            message("ALARMA PEATÓN: control ocupado o sin pantalla activa");
+        else message("Alarma 2074: cambio manual ON/OFF solicitado…");
     }
     private void setMirrorMode(boolean auto){
         try{
@@ -327,8 +327,11 @@ final class ReceiverQuickControls {
                     RecirculationGuardService.ACTION_INTERIOR);
             if(auto)activity.startService(intent);
             else activity.startForegroundService(intent);
-            message(auto?"Aire AUTO: el climatizador decide":"Modo interior: "+
-                "Receiver mantendrá 1004=1 y vigilará cambios OEM");
+            message(auto?
+                "AIRE OEM para esta sesión; al reabrir DriveLab se "+
+                    "restablecerá la preferencia automática de aire interior":
+                "AIRE INTERIOR: supervisor de fondo activado; "+
+                    "1004=1 se verifica cada 3 segundos");
             refresh();
         }catch(Exception ex){message("Climatización: "+ex.getMessage());}
     }
