@@ -196,6 +196,40 @@ jobs:
           grep -q 'cycleClearanceDp()' "$hub"
           grep -q 'T1ImmersiveMode.apply(this)' "$base"
           ! grep -E 'SYSTEM_ALERT_WINDOW|WRITE_SECURE_SETTINGS|policy_control|killBackgroundProcesses' "$base"
+      - name: Rear seat light area read-only and cockpit thermal motor instrumentation
+        shell: bash
+        run: |
+          set -euo pipefail
+          seat=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1RearSeatLightsProbe.java
+          thermal=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ThermalMotorProbe.java
+          cockpit=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
+          grep -q 'AREAS={0,16,32,64}' "$seat"
+          grep -q 'IDS={356519683,356519684}' "$seat"
+          grep -q 'binder.transact(2,data,reply,0)' "$seat"
+          grep -q 'new Candidate(291504897' "$thermal"
+          grep -q 'new Candidate(557860127' "$thermal"
+          grep -q 'new Candidate(557867145' "$thermal"
+          grep -q 'binder.transact(9,d,r,0)' "$thermal"
+          ! grep -E 'transact\\(15|setInt\\(|setFloat\\(|setProperty\\(' "$seat" "$thermal"
+          grep -q 'ASIENTOS A · APAGADAS' "$cockpit"
+          grep -q 'ASIENTOS B · ENCENDIDAS' "$cockpit"
+          grep -q 'COPIAR INFORME ASIENTOS' "$cockpit"
+          grep -q 'TEMPERATURAS / MOTOR · VER CÓDIGOS' "$cockpit"
+          grep -q 'ESTADO SIN VALIDAR' "$cockpit"
+          grep -q 'RPM: SIN LECTURA' "$cockpit"
+          # Rear-seat warning, occupancy, volume and buzzer read-only.
+          belt=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1RearSeatBeltProbe.java
+          grep -q '557856516' "$belt"
+          grep -q '557856533' "$belt"
+          grep -q '557856534' "$belt"
+          grep -q '354421634,16' "$belt"
+          grep -q '356518832,64' "$belt"
+          grep -q '557847073' "$belt"
+          grep -q '557862921' "$belt"
+          grep -q 'b.transact(2,data,reply,0)' "$belt"
+          ! grep -E 'transact\\(15|setInt\\(|setFloat\\(|setProperty\\(' "$belt"
+          grep -q 'CINTURONES A · SUELTOS' "$cockpit"
+          grep -q 'CINTURONES B · ABROCHADO' "$cockpit"
       - name: Separate apps and Android APK builds
         run: gradle --no-daemon :sender:assembleDebug :receiver:assembleDebug
       - name: Verify independent identities, permissions and no telemetry
