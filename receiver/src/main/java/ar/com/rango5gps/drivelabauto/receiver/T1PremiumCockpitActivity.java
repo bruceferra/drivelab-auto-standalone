@@ -158,7 +158,14 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         T1ClientTripSync.trigger(this,false);
         if(T1OfflineRoadMap.checkDue(this))updateOfflineMap(false);
         ui.removeCallbacks(ticker);ui.post(ticker);
-        if(osmEnabled())showOsmResult();
+        // Do not re-stamp a road observed before leaving the cockpit.
+        if(osmEnabled()){
+            if(lastOsmQuery==0||System.currentTimeMillis()-lastOsmQuery>45000L){
+                osmLast=null;
+                lastOsmQuery=0;
+            }
+            showOsmResult();
+        }
     }
     private void ensureContinuousTrip(){
         SharedPreferences master=getSharedPreferences(
