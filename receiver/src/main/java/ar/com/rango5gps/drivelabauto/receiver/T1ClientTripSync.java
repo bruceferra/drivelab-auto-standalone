@@ -115,7 +115,7 @@ final class T1ClientTripSync {
                         km,fuelRaw,electricRaw,nf,ne,price);
                     persist(c,id,start,end,f[4],result,
                         Double.NaN,Double.NaN,Double.NaN);
-                }catch(NumberFormatException|IllegalArgumentException ignored){
+                }catch(IllegalArgumentException ignored){
                     // Malformed historical line remains unchanged on disk.
                 }
             }
