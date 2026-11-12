@@ -69,6 +69,7 @@
             </intent-filter>
         </activity>
         <activity android:name=".ReceiverVehicleActivity" android:exported="false" />
+        <activity android:name=".T1SteeringKeysActivity" android:exported="false" />
         <!-- Optional premium cockpit, never a default HOME nor OEM control surface. -->
         <activity android:name=".T1PremiumCockpitActivity" android:exported="false" />
         <!-- Isolated historical/read-only T1 fuel dashboard; no OEM writes. -->
