@@ -14,7 +14,7 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 
 /**
- * User-confirmed, ONE-SHOT manual EV/HEV/EV MAX selector (1043=1/2/3).
+ * User-confirmed, ONE-SHOT OEM EV/HEV/EV MAX selector (1043=1/2/3).
  * In P the original Owner tests confirmed all three commands and readbacks.
  * The user independently confirmed 1033=4 means D and OEM selector changes
  * modes while in D. D write from DriveLab remains an EXPERIMENT and the OEM
@@ -23,8 +23,10 @@ import java.util.function.BooleanSupplier;
  * Two fresh direct OEM preflight readings are mandatory: stable 1033=1 and
  * exactly 0 km/h, OR stable 1033=4 with finite plausible speed 0..160 km/h.
  * No pedal requirement: 3011 brake status is diagnostic only (0/1).
- * Never from GPS, route detection, boot, background or a hidden Activity.
- * The OEM remains responsible for accepting/rejecting the mode transition.
+ * May be invoked by the user's explicitly ON optimized-mode foreground
+ * service as well as by the manual cockpit button; both use identical strict
+ * double preflight, a shared single-command gate and verified OEM readback.
+ * Never act on stale/unknown readings. The OEM remains final authority.
  */
 final class T1ManualThreeModePilot {
     interface Callback { void complete(String result); }
@@ -32,15 +34,16 @@ final class T1ManualThreeModePilot {
     private static final String CLS="com.autolink.app.vehicleservice.VehicleService";
     private static final String TOKEN="com.autolink.app.vehicleservice.IVehicleControl";
     private final Context app;
-    private final AtomicBoolean busy=new AtomicBoolean(false);
+    private static final AtomicBoolean GLOBAL_BUSY=new AtomicBoolean(false);
     T1ManualThreeModePilot(Context c){app=c.getApplicationContext();}
-    boolean busy(){return busy.get();}
+    boolean busy(){return GLOBAL_BUSY.get();}
     boolean request(int target,BooleanSupplier screenVisible,Callback cb){
         if(target!=1&&target!=2&&target!=3)return false;
-        if(!busy.compareAndSet(false,true))return false;
+        if(!GLOBAL_BUSY.compareAndSet(false,true))return false;
         T1OemDiagnosticLog.begin(app,
             "Control manual triple · objetivo 1043="+target+
-            ". Sin GPS; solo toque manual P o D, doble preflight OEM.");
+            ". Preflight OEM doble: P/0 o D/velocidad válida; "+
+            "control único compartido manual/optimizado.");
         new Thread(()->{
             String result;
             try{result=attempt(target,screenVisible);}
@@ -52,7 +55,7 @@ final class T1ManualThreeModePilot {
                     ". No reiterar a ciegas. Consultar modo OEM.";
             }
             T1OemDiagnosticLog.add(app,"FINAL_TRIPLE",result);
-            busy.set(false);
+            GLOBAL_BUSY.set(false);
             cb.complete(result);
         },"T1-Manual-Three-Modes").start();
         return true;
