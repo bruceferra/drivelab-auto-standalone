@@ -138,6 +138,25 @@ jobs:
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1Aux12vReadOnlyProbe.java
           grep -q 'LEER 12 V' \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
+      - name: Jetour T1 immersive fullscreen and reversible navigation bars
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -f receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ImmersiveMode.java
+          test -f receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ImmersiveActivity.java
+          for activity in ReceiverActivity ReceiverVehicleActivity T1PremiumCockpitActivity T1TankDashboardActivity; do
+            grep -q "class $activity extends T1ImmersiveActivity" \
+              "receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/$activity.java"
+          done
+          grep -q 'FLAG_FULLSCREEN' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ImmersiveMode.java
+          grep -q 'SYSTEM_UI_FLAG_IMMERSIVE_STICKY' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ImmersiveMode.java
+          grep -q 'setDecorFitsSystemWindows(false)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ImmersiveMode.java
+          grep -q 'WindowInsets.Type.navigationBars()' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ImmersiveMode.java
+          grep -q 'setDecorFitsSystemWindows(true)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ImmersiveMode.java
+          grep -q 'T1ImmersiveMode.setEnabled(this' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/ReceiverActivity.java
+          grep -q 'T1ImmersiveMode.setEnabled(this' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
+          ! grep -E 'CATEGORY_HOME|WRITE_SECURE_SETTINGS|SYSTEM_ALERT_WINDOW.*new' \
+            receiver/src/main/AndroidManifest.xml
       - name: Mirror parking R/D policy regression (pure JVM)
         shell: bash
         run: |

@@ -28,7 +28,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /** Practical T1 cockpit: one all-day recorder + local passenger checkpoints.
  * No write/control Binder operation is reachable from this screen.
  * Trips and costs are explicitly estimated until OEM units are validated. */
-public final class T1PremiumCockpitActivity extends Activity {
+public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private static final int BG=0xFF091421,CARD=0xFF142639,WHITE=0xFFF3F8FD,
         MUTED=0xFF9BB0C1,TEAL=0xFF14AFA7,BLUE=0xFF2B789B,
         GOLD=0xFFFFC367,RED=0xFFB65754;
@@ -139,8 +139,17 @@ public final class T1PremiumCockpitActivity extends Activity {
         LinearLayout top=row();top.setGravity(Gravity.CENTER_VERTICAL);root.addView(top);
         LinearLayout title=col();
         title.addView(text("DRIVELAB  /  JETOUR T1",22,WHITE,true));
-        title.addView(text("COCKPIT · v0.2.36 · telemetría OEM",13,MUTED,false));
+        title.addView(text("COCKPIT · v0.2.37 · telemetría OEM",13,MUTED,false));
         top.addView(title,new LinearLayout.LayoutParams(0,-2,1));
+        Button systemBars=new Button(this);
+        systemBars.setText(T1ImmersiveMode.enabled(this)?"MOSTRAR BARRAS":"PANTALLA COMPLETA");
+        systemBars.setAllCaps(false);
+        systemBars.setOnClickListener(v->{
+            T1ImmersiveMode.setEnabled(this,!T1ImmersiveMode.enabled(this));
+            systemBars.setText(T1ImmersiveMode.enabled(this)?
+                "MOSTRAR BARRAS":"PANTALLA COMPLETA");
+        });
+        top.addView(systemBars);
         Button back=new Button(this);back.setText("VOLVER AL T1");
         back.setAllCaps(false);back.setOnClickListener(v->finish());top.addView(back);
         gauge=new T1PremiumInstrumentView(this);
