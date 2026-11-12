@@ -42,11 +42,14 @@ public final class T1PremiumCockpitActivity extends Activity {
         dayNow,monthNow,historyNow,zoneStatus,feedback,energyNote,
         scopeTitle,scopeProgress,socStrategy,autonomyNow,autonomyDetail;
     private LinearLayout advanced;
-    private TextView hevStatus,lightStatus;
+    private TextView hevStatus,lightStatus,aux12vStatus;
     private T1ManualHevExperiment hevPilot;
     private T1CabinLightReadOnlyProbe lightProbe;
     private T1CabinLightReadOnlyProbe.Snapshot lightBefore;
-    private final AtomicBoolean lightReading=new AtomicBoolean(false);
+    private T1Aux12vReadOnlyProbe aux12vProbe;
+    private String aux12vReport="";
+    private final AtomicBoolean lightReading=new AtomicBoolean(false),
+        aux12vReading=new AtomicBoolean(false);
     private static final String RANGE_PREFS="t1_cockpit_range_settings";
     private final Runnable ticker=new Runnable(){
         @Override public void run(){
@@ -83,6 +86,7 @@ public final class T1PremiumCockpitActivity extends Activity {
         super.onCreate(b);
         hevPilot=new T1ManualHevExperiment(this);
         lightProbe=new T1CabinLightReadOnlyProbe(this);
+        aux12vProbe=new T1Aux12vReadOnlyProbe(this);
         draw();
     }
     @Override protected void onResume(){
@@ -176,6 +180,27 @@ public final class T1PremiumCockpitActivity extends Activity {
         rangeTop.addView(adjust);
         autonomyDetail=text("Combustible (CI186) + SOC eléctrico; pendiente de calibración",
             13,MUTED,false);range.addView(autonomyDetail);
+        LinearLayout auxiliary=col();
+        auxiliary.setBackground(bg(CARD,20));
+        auxiliary.setPadding(14,10,14,12);
+        LinearLayout.LayoutParams auxParams=new LinearLayout.LayoutParams(-1,-2);
+        auxParams.setMargins(0,6,0,7);
+        root.addView(auxiliary,auxParams);
+        LinearLayout auxTitle=row();auxTitle.setGravity(Gravity.CENTER_VERTICAL);
+        auxiliary.addView(auxTitle);
+        LinearLayout auxText=col();
+        auxText.addView(text("BATERÍA AUXILIAR 12 V · IBS / DC-DC",16,MUTED,true));
+        aux12vStatus=text("SIN MEDICIÓN VALIDADA · pulsá LEER 12 V",15,WHITE,false);
+        auxText.addView(aux12vStatus);
+        auxTitle.addView(auxText,new LinearLayout.LayoutParams(0,-2,1f));
+        Button readAux=new Button(this);
+        readAux.setText("LEER 12 V");readAux.setAllCaps(false);
+        readAux.setOnClickListener(v->readAux12v());
+        auxTitle.addView(readAux);
+        auxiliary.addView(text("Voltaje, corriente y SOC auxiliares: "+
+            "datos HAL experimentales, sin escala ni sentido de carga confirmados. "+
+            "El 1064 pertenece a la batería de tracción, no a 12 V.",
+            12,MUTED,false));
         energyNote=text("Km calculados desde velocidad OEM (sin calibrar). "+
             "Nafta y energía: hipótesis de unidades OEM 500 m. "+
             "Costo eléctrico total aún sin medidor validado.",12,MUTED,false);
@@ -598,6 +623,34 @@ public final class T1PremiumCockpitActivity extends Activity {
                     }
                 })))message("Prueba ocupada; no se envió otra orden.");
             }).show();
+    }
+    private void readAux12v(){
+        if(!parked()){
+            aux12vStatus.setText("Estacioná en P, velocidad cero y "+
+                "esperá telemetría OEM reciente antes de leer 12 V.");
+            return;
+        }
+        if(!aux12vReading.compareAndSet(false,true))return;
+        aux12vStatus.setText("Consultando IBS, batería auxiliar y DC-DC…");
+        new Thread(()->{
+            T1Aux12vReadOnlyProbe.Result result=aux12vProbe.read();
+            ui.post(()->{
+                aux12vReading.set(false);
+                if(isFinishing()||isDestroyed())return;
+                aux12vReport=result.show();
+                aux12vStatus.setText(result.headline());
+                new AlertDialog.Builder(this).setTitle("12 V · LECTURA OEM")
+                    .setMessage(aux12vReport)
+                    .setNegativeButton("CERRAR",null)
+                    .setPositiveButton("COPIAR INFORME",(d,w)->{
+                        ClipboardManager clipboard=(ClipboardManager)
+                            getSystemService(CLIPBOARD_SERVICE);
+                        if(clipboard!=null)clipboard.setPrimaryClip(
+                            ClipData.newPlainText(
+                                "Jetour T1 bateria 12V",aux12vReport));
+                    }).show();
+            });
+        },"T1-12V-IBS-ReadOnly").start();
     }
     /** This button is read-only: uses the same OEM Binder but no setter. */
     private void diagnoseHev(){
