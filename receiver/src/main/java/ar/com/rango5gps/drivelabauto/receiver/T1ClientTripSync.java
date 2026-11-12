@@ -27,7 +27,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 final class T1ClientTripSync {
     private static final String PREFS="t1_client_trip_sync_v1";
-    private static final String SENT="sent_";
+    private static final String SENT="sent_",STAGED="staged_",LEGACY_DONE="legacy_imported_v1";
     private static final String STATUS="status";
     private static final AtomicBoolean ACTIVE=new AtomicBoolean(false);
     private static volatile long lastAttempt;
@@ -83,8 +83,46 @@ final class T1ClientTripSync {
             moved=tmp.renameTo(dest);
             if(!moved)throw new IOException("No se pudo confirmar el resumen local");
         }finally{if(!moved)tmp.delete();}
-        p(c).edit().putString(STATUS,
-            "Cliente guardado · resumen en cola para servidor QR").apply();
+        p(c).edit().putBoolean(STAGED+clientId,true)
+            .putString(STATUS,
+                "Cliente guardado · resumen en cola para servidor QR").commit();
+    }
+    /** Stage older client_trips.csv into the same private QR queue once,
+     * so rides completed before upgrading are analyzable too. Historical
+     * engine-state split was not recorded: empty fields, never invented 0s.
+     * Client labels are deliberately omitted from uploaded summaries. */
+    private static void stageLegacyLocalHistory(Context c){
+        if(p(c).getBoolean(LEGACY_DONE,false))return;
+        File source=new File(T1TripRecorderService.tripDir(c),"client_trips.csv");
+        if(!source.isFile()){
+            p(c).edit().putBoolean(LEGACY_DONE,true).commit();return;
+        }
+        try(BufferedReader in=new BufferedReader(new FileReader(source))){
+            String line=in.readLine();
+            while((line=in.readLine())!=null){
+                String[] f=line.split(";",-1);
+                if(f.length<14||p(c).getBoolean(STAGED+f[0],false))continue;
+                try{
+                    String id=f[0];long start=Long.parseLong(f[1]);
+                    long end=Long.parseLong(f[2]);
+                    double km=Double.parseDouble(f[5]);
+                    int nf=Integer.parseInt(f[6]),ne=Integer.parseInt(f[9]);
+                    double fuelRaw=f[7].isEmpty()?0:Double.parseDouble(f[7]);
+                    double electricRaw=f[10].isEmpty()?0:Double.parseDouble(f[10]);
+                    double price=Double.parseDouble(f[13]);
+                    if(!Double.isFinite(km)||km<0)continue;
+                    T1JourneyMetrics.Result result=new T1JourneyMetrics.Result(
+                        km,fuelRaw,electricRaw,nf,ne,price);
+                    persist(c,id,start,end,f[4],result,
+                        Double.NaN,Double.NaN,Double.NaN);
+                }catch(NumberFormatException|IllegalArgumentException ignored){
+                    // Malformed historical line remains unchanged on disk.
+                }
+            }
+            p(c).edit().putBoolean(LEGACY_DONE,true).commit();
+        }catch(IOException ignored){
+            // Next trigger retries staging; never remove the historical CSV.
+        }
     }
     private static boolean isClientSummary(File file){
         if(!file.isFile()||!file.getName().matches(
@@ -100,12 +138,15 @@ final class T1ClientTripSync {
         if(!ACTIVE.compareAndSet(false,true))return;
         lastAttempt=now;
         try{
+            stageLegacyLocalHistory(app);
             File[] files=T1TripRecorderService.tripDir(app).listFiles(
                 f->f.getName().startsWith("code_diag_")&&f.isFile());
             if(files==null||files.length==0){
                 ACTIVE.set(false);return;
             }
-            Arrays.sort(files,(a,b)->a.getName().compareTo(b.getName()));
+            // Newest clients first; don't delay the just-completed ride
+            // behind years of historical backfill.
+            Arrays.sort(files,(a,b)->b.getName().compareTo(a.getName()));
             File pending=null;
             for(File file:files){
                 if(p(app).getBoolean(SENT+file.getName(),false))continue;
