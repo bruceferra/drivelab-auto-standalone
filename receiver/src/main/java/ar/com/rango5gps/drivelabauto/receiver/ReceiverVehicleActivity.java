@@ -596,7 +596,11 @@ public final class ReceiverVehicleActivity extends T1ImmersiveActivity {
             "1/2/3. SOLO LECTURA.",13);
         label(body,"El registro continúa en segundo plano al abrir la pantalla "+
             "original Jetour, Waze o Maps. Se detiene automáticamente en 3 minutos "+
-            "y no cambia ningún modo ni ningún control de seguridad.",13);
+            "y no cambia ningún modo ni ningún control de seguridad. "+
+            "El CSV ahora incluye 557867210 (freno candidato) y 557867238 "+
+            "(validez candidata): valores crudos, SIN interpretación ni escritura. "+
+            "En P, registrá freno de pie suelto, pisado y suelto otra vez, "+
+            "manteniendo el vehículo inmóvil y el freno de estacionamiento.",13);
         button(body,"INICIAR DIAGNÓSTICO OEM · 3 MIN EN SEGUNDO PLANO",()->{
             try{
                 startForegroundService(new android.content.Intent(this,
