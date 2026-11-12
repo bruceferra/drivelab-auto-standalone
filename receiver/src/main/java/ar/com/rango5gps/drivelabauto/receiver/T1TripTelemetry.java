@@ -35,7 +35,10 @@ final class T1TripTelemetry {
             handbrake2204=Integer.MIN_VALUE, highVoltageReady1031=Integer.MIN_VALUE,
             engineStatus2073=Integer.MIN_VALUE, speedValid1088=Integer.MIN_VALUE,
             atmosphereSwitch2014=Integer.MIN_VALUE,
-            passengerDoorCem2_2170=Integer.MIN_VALUE;
+            passengerDoorCem2_2170=Integer.MIN_VALUE,
+            // Read-only mode/driver demand inputs for future what-if study.
+            regen1046=Integer.MIN_VALUE, chargeSwitch1045=Integer.MIN_VALUE,
+            footBrake3011=Integer.MIN_VALUE;
         int rpmValid1034=-1,oemElectric500mInt=Integer.MIN_VALUE,
             oemFuel500mInt=Integer.MIN_VALUE,voltage1063Int=Integer.MIN_VALUE,
             current1064Int=Integer.MIN_VALUE,raw1090Int=Integer.MIN_VALUE;
@@ -132,6 +135,9 @@ final class T1TripTelemetry {
                 s.socMode=safeInt(()->intValue(b,1040)); // Smart / Forzado
                 s.socTargetInt=diagnosticInt(()->intValue(b,1041));
                 s.socTargetFloat=safeFloat(()->floatValue(b,1041));
+                s.regen1046=diagnosticInt(()->intValue(b,1046));
+                s.chargeSwitch1045=diagnosticInt(()->intValue(b,1045));
+                s.footBrake3011=diagnosticInt(()->intValue(b,3011));
                 // RPM 1035 is an OEM candidate, not a proven motor state.
                 s.rpmValid1034=safeInt(()->intValue(b,1034));
                 s.rpm=safeFloat(()->floatValue(b,1035));
