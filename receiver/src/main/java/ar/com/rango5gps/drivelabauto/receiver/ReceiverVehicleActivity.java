@@ -597,8 +597,10 @@ public final class ReceiverVehicleActivity extends T1ImmersiveActivity {
         label(body,"El registro continúa en segundo plano al abrir la pantalla "+
             "original Jetour, Waze o Maps. Se detiene automáticamente en 3 minutos "+
             "y no cambia ningún modo ni ningún control de seguridad. "+
-            "El CSV ahora incluye 557867210 (freno candidato) y 557867238 "+
-            "(validez candidata): valores crudos, SIN interpretación ni escritura. "+
+            "El CSV incluye 3011 (freno de pie: 0 suelto, 1 pisado "+
+            "según prueba directa en esta Jetour) y antiguos 557867210/238 "+
+            "(no interpretables, permanecieron en 0). "+
+            "3011 es SOLO DIAGNÓSTICO, no un requisito para cambiar modo en D. "+
             "En P, registrá freno de pie suelto, pisado y suelto otra vez, "+
             "manteniendo el vehículo inmóvil y el freno de estacionamiento.",13);
         button(body,"INICIAR DIAGNÓSTICO OEM · 3 MIN EN SEGUNDO PLANO",()->{
