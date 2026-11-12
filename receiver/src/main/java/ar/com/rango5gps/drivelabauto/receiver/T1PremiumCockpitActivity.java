@@ -809,8 +809,14 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                     " · "+f(live.km,2)+" km · "+
                     (live.fuelAvailable?f(live.fuelLitersCandidate,3)+
                         " L nafta experimental":"esperando 500 m"))+
+                "\nDuración (incluye paradas): "+
+                    f(T1JourneyStore.elapsedMillis(this)/60000.0,0)+
+                    " min · detenido conocido "+
+                    f(T1JourneyStore.parkedMillis(this)/60000.0,0)+
+                    " min · interrupción sin datos "+
+                    f(T1JourneyStore.offlineMillis(this)/60000.0,0)+" min"+
                 (T1JourneyStore.partialRecovery(this)?
-                    " · TRAMO ANTERIOR INCOMPLETO":""));
+                    "\nTRAMO ANTERIOR INCOMPLETO, sin inventar distancia":""));
         }else if(pending){
             clientNow.setText("◉ "+T1JourneyStore.pendingLabel(this)+
                 " · 0,00 km · preparando grabación");
