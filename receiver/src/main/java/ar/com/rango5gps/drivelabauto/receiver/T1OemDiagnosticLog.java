@@ -11,12 +11,14 @@ import java.util.Locale;
  * Deliberately small and bounded; visible from cockpit even after Activity exit. */
 final class T1OemDiagnosticLog {
     static final String TAG="DriveLabHevDiag";
-    private static final String PREFS="t1_hev_command_diagnostics",KEY="last_report";
+    private static final String PREFS="t1_hev_command_diagnostics",KEY="last_report",
+        PREVIOUS="previous_report";
     private static SharedPreferences p(Context c){
         return c.getApplicationContext().getSharedPreferences(PREFS,Context.MODE_PRIVATE);
     }
     static synchronized void begin(Context c,String reason){
-        p(c).edit().putString(KEY,"").commit();
+        String old=p(c).getString(KEY,"");
+        p(c).edit().putString(PREVIOUS,old).putString(KEY,"").commit();
         add(c,"INICIO",reason);
     }
     static synchronized void add(Context c,String step,String detail){
@@ -33,9 +35,12 @@ final class T1OemDiagnosticLog {
     }
     static String report(Context c){
         String r=p(c).getString(KEY,"");
-        return r.isEmpty()?"Todavía no existe ningún diagnóstico EV/HEV.":
-            "DriveLab · último ensayo EV/HEV\n"+
-            "Registro local, solo códigos y valores OEM:\n\n"+r;
+        String previous=p(c).getString(PREVIOUS,"");
+        if(r.isEmpty()&&previous.isEmpty())
+            return "Todavía no existe ningún diagnóstico EV/HEV.";
+        return "DriveLab · informe EV/HEV (códigos OEM, sin GPS/VIN)\n\n"+
+            "ÚLTIMO INTENTO:\n"+(r.isEmpty()?"Sin datos":r)+
+            (previous.isEmpty()?"":"\nINTENTO ANTERIOR:\n"+previous);
     }
     private T1OemDiagnosticLog(){}
 }
