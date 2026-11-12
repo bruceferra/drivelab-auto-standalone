@@ -53,14 +53,17 @@ public final class T1TripRecorderService extends Service {
     private Thread worker;
     private LocationManager locationManager;
     private LocationListener locationListener;
-    private Location lastGood;
+    private volatile Location lastGood;
+    // GPS is a diagnostic/backup source only. The primary trip odometer is
+    // updated EXCLUSIVELY on the recorder worker from OEM speed samples.
+    // Previous builds switched to GPS-only when LOCATION was permitted,
+    // losing ~half the distance in recent T1 trips.
+    private final Object gpsDistanceLock=new Object();
+    private double pendingGpsKm=0;
+    private long latestGpsUptimeMs=0;
     private volatile double gpsKm=0;
     private volatile double distanceKm=0;
     private volatile boolean gpsMode=false;
-    // Provisional road comparison: dashboard 22.9 km / raw integrated
-    // 24.55 km, corroborated by the OEM 500 m event counts of 12 Nov.
-    // Preserve original speed in the CSV and old trip history unchanged.
-    private static final double OEM_SPEED_KM_FACTOR=22.9/24.55;
 
     @Override public IBinder onBind(Intent intent){return null;}
     private SharedPreferences p(){return getSharedPreferences(PREFS,MODE_PRIVATE);}
@@ -146,6 +149,9 @@ public final class T1TripRecorderService extends Service {
         if(ACTION_RESTORE.equals(action)&&!wasDesired)
             return START_NOT_STICKY;
         stop=false;running=true;lastGood=null;
+        synchronized(gpsDistanceLock){
+            pendingGpsKm=0;latestGpsUptimeMs=0;
+        }
         if(restoring){
             T1TripRecoveryState.State recovered;
             try{recovered=T1TripRecoveryState.read(currentFile(this));}
@@ -160,7 +166,7 @@ public final class T1TripRecorderService extends Service {
                 return START_NOT_STICKY;
             }
             distanceKm=recovered.km;
-            gpsKm=recovered.km;
+            gpsKm=0; // diagnostic GPS accumulator is NOT the trip odometer
             gpsMode=false;
             before.edit().putBoolean(DESIRED,true)
                 .putBoolean(RUNNING,true)
@@ -254,16 +260,23 @@ public final class T1TripRecorderService extends Service {
                 @Override public void onLocationChanged(Location location){
                     if(location==null||!location.hasAccuracy()||
                             location.getAccuracy()>40)return;
-                    if(lastGood!=null){
-                        float meters=lastGood.distanceTo(location);
-                        long dt=location.getElapsedRealtimeNanos()-
-                            lastGood.getElapsedRealtimeNanos();
-                        if(dt>1000000000L&&dt<30000000000L&&meters>=0&&
-                                meters<=(dt/1000000000.0)*55)
-                            gpsKm+=meters/1000.0;
+                    synchronized(gpsDistanceLock){
+                        if(lastGood!=null){
+                            float meters=lastGood.distanceTo(location);
+                            long dt=location.getElapsedRealtimeNanos()-
+                                lastGood.getElapsedRealtimeNanos();
+                            if(dt>1000000000L&&dt<30000000000L&&
+                                    meters>=0&&meters<=(dt/1000000000.0)*55){
+                                gpsKm+=meters/1000.0;
+                                pendingGpsKm+=meters/1000.0;
+                                latestGpsUptimeMs=SystemClock.elapsedRealtime();
+                            }
+                        }
+                        lastGood=location;
                     }
-                    lastGood=location;
-                    distanceKm=gpsKm;
+                    // Never assign distanceKm here. GPS callbacks are
+                    // asynchronous and must not reset/rebase the OEM trip.
+
                 }
             };
             locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER,
@@ -287,7 +300,6 @@ public final class T1TripRecorderService extends Service {
         double priorSpeed=Double.NaN;
         long priorGpsEpochNs=0L;
         double priorGpsBearing=Double.NaN;
-        double classifiedKm=distanceKm;
         double evDistance=p().getFloat(EV_DISTANCE,0f);
         double iceDistance=p().getFloat(ICE_DISTANCE,0f);
         double unknownDistance=p().getFloat(UNKNOWN_DISTANCE,0f);
@@ -370,14 +382,23 @@ public final class T1TripRecorderService extends Service {
                     parkedMs+=dt;
                 previousActiveTick=tick;
                 previousSample=s.timestamp;
-                if(!gpsMode&&dt>0&&dt<=10000&&Double.isFinite(s.speed)&&
-                        s.speed>=0&&s.speed<220)
-                    distanceKm+=s.speed*dt/3600000.0*OEM_SPEED_KM_FACTOR;
-                // Assign only observed incremental distance using RPM1035.
-                // Missing RPM is unknown, never classified as electric.
-                double intervalKm=dt>0&&dt<=10000?
-                    Math.max(0,distanceKm-classifiedKm):0;
-                classifiedKm=distanceKm;
+                double gpsCandidate;long gpsAge;
+                synchronized(gpsDistanceLock){
+                    gpsCandidate=pendingGpsKm;
+                    gpsAge=latestGpsUptimeMs==0?Long.MAX_VALUE:
+                        SystemClock.elapsedRealtime()-latestGpsUptimeMs;
+                    // Consume this GPS interval even if OEM data exists:
+                    // a later single missing OEM sample must not replay
+                    // several previous intervals and double count distance.
+                    pendingGpsKm=0;
+                }
+                T1TripDistancePolicy.Step measure=
+                    T1TripDistancePolicy.integrate(
+                        s.speed,dt,gpsCandidate,gpsAge);
+                distanceKm+=measure.km;
+                // This SAME interval is distributed to all three journey
+                // slots. No GPS switch can silently halve any of them.
+                double intervalKm=measure.km;
                 if(intervalKm>0){
                     if(s.motorOn==0)evDistance+=intervalKm;
                     else if(s.motorOn==1)iceDistance+=intervalKm;
@@ -440,7 +461,7 @@ public final class T1TripRecorderService extends Service {
                     s.recirc+","+s.recircChange+","+s.fold+","+loc+
                     n(km)+","+n(hvOut)+","+n(hvIn)+","+
                     n(liters)+","+n(gasCost)+","+n(evCost)+","+
-                    (gpsMode?"GPS":"OEM_SPEED_CAL_0.9328_PRELIMINAR")+","+
+                    measure.sourceNote()+","+
                     n(s.rpm)+","+s.motorOn+","+
                     n(s.oemElectricRolling50)+","+n(s.oemFuelRolling50)+","+
                     n(s.oemElectricAverage500m)+","+n(s.oemFuelAverage500m)+","+
@@ -490,8 +511,7 @@ public final class T1TripRecorderService extends Service {
                     .putString(SEG_STATUS,segments.snapshot())
                     .putString(SEG_FUEL_LAST,n(seg.fuelLast))
                     .putString(SEG_ELEC_LAST,n(seg.electricLast))
-                    .putString(DIST_SOURCE,gpsMode?"GPS":
-                        "VELOCIDAD_OEM_CALIBRACION_PROVISIONAL_0_9328")
+                    .putString(DIST_SOURCE,measure.sourceNote())
                     .putString(STATUS,"Grabando TRIP · "+sampleCount+
                         " muestras · tramos 500m nafta="+seg.fuelCount+
                         " electricidad="+seg.electricCount).apply();
