@@ -579,12 +579,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         // Three selectable readings visible together. Selecting a card
         // switches all trip-dependent values in the five compact tiles.
         LinearLayout overview=row();root.addView(overview);
-        totalScopeCard=scopeCard(overview,0);
-        totalScopeTitle=text("VIAJE TOTAL · ESPERANDO",13,MUTED,true);
-        totalScopeCard.addView(totalScopeTitle);
-        totalScopeKm=text("0,00 km",27,0xFF5BE2D0,true);
-        totalScopeCard.addView(totalScopeKm);
-
+        // Viaje TOTAL immediately to the RIGHT of Viaje 1.
         client1ScopeCard=scopeCard(overview,1);
         scopeTitle=text("VIAJE 1 · ESPERANDO",13,MUTED,true);
         client1ScopeCard.addView(scopeTitle);
@@ -592,6 +587,12 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         client1ScopeCard.addView(kmNow);
         scopeProgress=text("",10,MUTED,false);
         scopeProgress.setMaxLines(1);client1ScopeCard.addView(scopeProgress);
+
+        totalScopeCard=scopeCard(overview,0);
+        totalScopeTitle=text("VIAJE TOTAL · ESPERANDO",13,MUTED,true);
+        totalScopeCard.addView(totalScopeTitle);
+        totalScopeKm=text("0,00 km",27,0xFF5BE2D0,true);
+        totalScopeCard.addView(totalScopeKm);
 
         client2ScopeCard=scopeCard(overview,2);
         secondScopeTitle=text("VIAJE 2 · ESPERANDO",13,MUTED,true);
