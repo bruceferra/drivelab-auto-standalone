@@ -76,9 +76,13 @@ final class T1JourneyStore {
     static T1JourneyMetrics.Checkpoint now(Context c) {
         SharedPreferences m=master(c);
         String trip=m.getString(T1TripRecorderService.ID,"");
-        if(!trip.matches("[0-9]{8}_[0-9]{6}")||
-                m.getInt(T1TripRecorderService.SAMPLES,0)<1)
-            throw new IllegalStateException("Primero iniciá JORNADA y esperá una muestra");
+        long lastSample=m.getLong(T1TripRecorderService.LAST_SAMPLE_TIME,0L);
+        long age=System.currentTimeMillis()-lastSample;
+        if(!m.getBoolean(T1TripRecorderService.RUNNING,false)||
+           !trip.matches("[0-9]{8}_[0-9]{6}")||
+           m.getInt(T1TripRecorderService.SAMPLES,0)<1||
+           lastSample<=0||age<0||age>15000)
+            throw new IllegalStateException("Esperando muestra OEM nueva de la jornada");
         return new T1JourneyMetrics.Checkpoint(trip,
             System.currentTimeMillis(),m.getFloat(T1TripRecorderService.DISTANCE,0f),
             m.getFloat(T1TripRecorderService.SEG_FUEL_RAW_SUM,0f),
