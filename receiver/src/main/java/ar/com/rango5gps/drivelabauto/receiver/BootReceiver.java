@@ -34,7 +34,8 @@ public final class BootReceiver extends BroadcastReceiver {
         boolean desired=trip.getBoolean(T1TripRecorderService.DESIRED,false);
         // Migration: the old version had RUNNING but no persistent DESIRED.
         if(!trip.contains(T1TripRecorderService.DESIRED))
-            desired=trip.getBoolean(T1TripRecorderService.RUNNING,false);
+            desired=trip.getBoolean(T1TripRecorderService.RUNNING,false)||
+                T1JourneyStore.active(context)||T1JourneyStore.pending(context);
         if(desired){
             try{
                 Intent restore=new Intent(context,T1TripRecorderService.class)
