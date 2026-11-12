@@ -108,6 +108,27 @@ jobs:
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ModeZoneStore.java
           grep -q 'LAST_SAMPLE_TIME' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripRecorderService.java
           grep -q 'T1JourneyStore.fulfillPending' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripRecorderService.java
+      - name: EV/HEV trace and cabin light read-only boundaries (static)
+        shell: bash
+        run: |
+          set -euo pipefail
+          # A new light probe must perform NO property setter or unsafe OEM write.
+          ! grep -E 'transact\\(15|writeHev|setProperty\\(' \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CabinLightReadOnlyProbe.java
+          grep -q 'b.transact(2,in,out,0)' \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CabinLightReadOnlyProbe.java
+          grep -q 'T1OemDiagnosticLog.add(app,"CONTROL_1"' \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ManualHevExperiment.java || \
+          grep -q 'checkStopped(b,mode,"CONTROL_1")' \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ManualHevExperiment.java
+          grep -q 'NO SE ENVIÓ COMANDO' \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
+          grep -q 'DIAGNOSTICAR · NO ESCRIBE' \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
+          grep -q 'CAPTURA A · ANTES' \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
+          grep -q 'CAPTURA B · DESPUÉS' \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
       - name: Mirror parking R/D policy regression (pure JVM)
         shell: bash
         run: |
