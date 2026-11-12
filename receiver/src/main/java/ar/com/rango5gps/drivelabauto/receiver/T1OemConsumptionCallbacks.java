@@ -239,11 +239,55 @@ final class T1OemConsumptionCallbacks {
                 .format(new Date());
             File file=new File(dir,tripMode?
                 "trip_oem_"+tripId+".csv":"oem_callbacks_"+time+".csv");
-            if(tripMode&&file.exists())
-                throw new IllegalStateException("CSV OEM del viaje ya existe");
-            try(FileOutputStream out=new FileOutputStream(file,false)){
-                out.write("timestamp_epoch_ms,channel,value_float_raw\n"
-                    .getBytes(StandardCharsets.UTF_8));
+            boolean resume=tripMode&&file.isFile()&&file.length()>0;
+            if(resume){
+                // Rebuild counts and raw sums from the original event log.
+                // No previous 500 m event is duplicated or discarded merely
+                // because Android restarted a foreground service.
+                try(java.io.BufferedReader reader=new java.io.BufferedReader(
+                        new java.io.FileReader(file))){
+                    String line=reader.readLine();
+                    if(line==null||!line.startsWith("timestamp_epoch_ms,channel,"))
+                        throw new IllegalStateException(
+                            "CSV OEM anterior con formato desconocido");
+                    while((line=reader.readLine())!=null){
+                        String[] fields=line.split(",",-1);
+                        if(fields.length<3)continue;
+                        int channel=-1;
+                        for(int i=0;i<LABELS.length;i++)
+                            if(LABELS[i].replace(" ","_").equals(fields[1])){
+                                channel=i;break;
+                            }
+                        if(channel<0)continue;
+                        try{
+                            float value=Float.parseFloat(fields[2]);
+                            synchronized(dataLock){
+                                count[channel]++;
+                                last[channel]=Float.toString(value);
+                                lastRaw[channel]=value;
+                                if(channel<2&&Float.isFinite(value))
+                                    rawSums[channel]+=value;
+                            }
+                        }catch(NumberFormatException ignored){}
+                    }
+                }
+            }
+            if(!resume){
+                try(FileOutputStream out=new FileOutputStream(file,false)){
+                    out.write("timestamp_epoch_ms,channel,value_float_raw\n"
+                        .getBytes(StandardCharsets.UTF_8));
+                }
+            }else{
+                // Isolate a torn final record from subsequent full lines.
+                try(java.io.RandomAccessFile raf=new java.io.RandomAccessFile(
+                        file,"rw")){
+                    if(raf.length()>0){
+                        raf.seek(raf.length()-1);
+                        if(raf.readByte()!='\n'){
+                            raf.seek(raf.length());raf.writeByte('\n');
+                        }
+                    }
+                }
             }
             logFile=file;
             CountDownLatch ready=new CountDownLatch(1);
