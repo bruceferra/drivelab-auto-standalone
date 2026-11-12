@@ -22,9 +22,10 @@ public final class RecirculationGuardService extends Service {
     public static final String PREFS="t1_recirc_control";
     public static final String MODE="mode",MODE_AUTO="AUTO",MODE_INTERIOR="INTERIOR";
     public static final String STATUS="status",LAST_VALUE="last_1004",LAST_EVENT="last_2101",
-        PAUSED="paused";
+        PAUSED="paused",MONITORING="monitoring",LAST_POLL="last_poll";
     public static final String ACTION_INTERIOR="t1.recirc.INTERIOR";
     public static final String ACTION_AUTO="t1.recirc.AUTO";
+    public static final String ACTION_RESTORE="t1.recirc.RESTORE";
     private static final int ID=7525;
     private static final String CHANNEL="t1_recirc_guard";
     private volatile boolean stop;
@@ -46,8 +47,15 @@ public final class RecirculationGuardService extends Service {
             return START_NOT_STICKY;
         }
         if(ACTION_INTERIOR.equals(action)){
+            // Only an explicit tap may clear an OEM safety pause.
             pref().edit().putString(MODE,MODE_INTERIOR).putBoolean(PAUSED,false)
                 .putString(STATUS,"SIEMPRE SIN AIRE EXTERIOR · verificando 1004").apply();
+        }else if(ACTION_RESTORE.equals(action)){
+            // Boot / package replace / app reopening: DO NOT clear PAUSED.
+            if(!MODE_INTERIOR.equals(pref().getString(MODE,MODE_AUTO))||
+                pref().getBoolean(PAUSED,false)){
+                stopSelf();return START_NOT_STICKY;
+            }
         }
         if(!MODE_INTERIOR.equals(pref().getString(MODE,MODE_AUTO))||
             pref().getBoolean(PAUSED,false)){
@@ -56,6 +64,8 @@ public final class RecirculationGuardService extends Service {
         if(running)return START_STICKY;
         running=true;stop=false;
         foreground();
+        pref().edit().putBoolean(MONITORING,true)
+            .putLong(LAST_POLL,System.currentTimeMillis()).apply();
         worker=new Thread(this::monitor,"T1-HVAC-Recirculation");
         worker.start();
         return START_STICKY;
@@ -78,6 +88,7 @@ public final class RecirculationGuardService extends Service {
         try{
             while(!stop && MODE_INTERIOR.equals(pref().getString(MODE,MODE_AUTO))){
                 if(pref().getBoolean(PAUSED,false))break;
+                pref().edit().putLong(LAST_POLL,System.currentTimeMillis()).apply();
                 try(RecirculationOem vehicle=new RecirculationOem(this)){
                     int state=vehicle.read(1004);
                     if(!RecirculationPolicy.valid(state))
@@ -128,11 +139,13 @@ public final class RecirculationGuardService extends Service {
             }
         }finally{
             running=false;
+            pref().edit().putBoolean(MONITORING,false).apply();
             stopForeground(STOP_FOREGROUND_REMOVE);
             stopSelf();
         }
     }
     @Override public void onDestroy(){
+        pref().edit().putBoolean(MONITORING,false).apply();
         stop=true;
         if(worker!=null)worker.interrupt();
         super.onDestroy();
