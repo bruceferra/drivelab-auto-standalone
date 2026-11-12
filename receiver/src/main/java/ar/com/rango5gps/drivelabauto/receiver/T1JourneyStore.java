@@ -352,7 +352,8 @@ final class T1JourneyStore {
         boolean saved=p(c).edit().putString(PENDING_LABEL,cleanLabel(label))
             .putLong(PENDING_TIME,System.currentTimeMillis())
             .putString(PENDING_TRIP,expected).commit();
-        return saved?"Preparando trayecto: "+cleanLabel(label)+
+        return saved?"Preparando trayecto: "+
+            (T1AutoTripLabel.token(1).equals(label)?"VIAJE 1":cleanLabel(label))+
             ". Quedará en 0,00 km cuando llegue la primera muestra nueva.":
             "Error al preparar trayecto";
     }
