@@ -2,6 +2,8 @@ package ar.com.rango5gps.drivelabauto.receiver;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
@@ -40,7 +42,11 @@ public final class T1PremiumCockpitActivity extends Activity {
         dayNow,monthNow,historyNow,zoneStatus,feedback,energyNote,
         scopeTitle,scopeProgress,socStrategy,autonomyNow,autonomyDetail;
     private LinearLayout advanced;
+    private TextView hevStatus,lightStatus;
     private T1ManualHevExperiment hevPilot;
+    private T1CabinLightReadOnlyProbe lightProbe;
+    private T1CabinLightReadOnlyProbe.Snapshot lightBefore;
+    private final AtomicBoolean lightReading=new AtomicBoolean(false);
     private static final String RANGE_PREFS="t1_cockpit_range_settings";
     private final Runnable ticker=new Runnable(){
         @Override public void run(){
@@ -76,6 +82,7 @@ public final class T1PremiumCockpitActivity extends Activity {
     @Override public void onCreate(Bundle b){
         super.onCreate(b);
         hevPilot=new T1ManualHevExperiment(this);
+        lightProbe=new T1CabinLightReadOnlyProbe(this);
         draw();
     }
     @Override protected void onResume(){
@@ -128,7 +135,7 @@ public final class T1PremiumCockpitActivity extends Activity {
         LinearLayout top=row();top.setGravity(Gravity.CENTER_VERTICAL);root.addView(top);
         LinearLayout title=col();
         title.addView(text("DRIVELAB  /  JETOUR T1",22,WHITE,true));
-        title.addView(text("COCKPIT · v0.2.35 · telemetría OEM",13,MUTED,false));
+        title.addView(text("COCKPIT · v0.2.36 · telemetría OEM",13,MUTED,false));
         top.addView(title,new LinearLayout.LayoutParams(0,-2,1));
         Button back=new Button(this);back.setText("VOLVER AL T1");
         back.setAllCaps(false);back.setOnClickListener(v->finish());top.addView(back);
@@ -235,6 +242,24 @@ public final class T1PremiumCockpitActivity extends Activity {
         advanced.addView(text("Comando único 1043=2, sin GPS ni automatismos. "+
             "Requiere P, 0 km/h, doble lectura y confirmación manual. "+
             "Puede ser rechazado por los permisos OEM.",13,MUTED,false));
+        hevStatus=text("EV/HEV: aún sin diagnóstico. "+
+            "Si el botón no funciona, tocá DIAGNOSTICAR para saber por qué.",14,GOLD,true);
+        advanced.addView(hevStatus);
+        LinearLayout debugRow=row();advanced.addView(debugRow);
+        button(debugRow,"DIAGNOSTICAR · NO ESCRIBE",BLUE,this::diagnoseHev);
+        button(debugRow,"VER / COPIAR INFORME",BLUE,this::showHevReport);
+        heading(advanced,"LUCES TRASERAS / BAÚL · SOLO LECTURA");
+        advanced.addView(text("Buscamos diferencias entre dos lecturas OEM. "+
+            "No se fuerza ninguna luz. Guardá CAPTURA A, accioná "+
+            "el interruptor original de las luces o abrí una puerta "+
+            "y después CAPTURA B, siempre estacionado.",13,MUTED,false));
+        LinearLayout lightButtons=row();advanced.addView(lightButtons);
+        button(lightButtons,"CAPTURA A · ANTES",BLUE,()->captureLights(false));
+        button(lightButtons,"CAPTURA B · DESPUÉS",TEAL,()->captureLights(true));
+        lightStatus=text("Esperando lectura del HAL de luces/puertas. "+
+            "El resultado aparece acá; no hay comandos de iluminación habilitados.",
+            13,WHITE,false);
+        advanced.addView(lightStatus);
         LinearLayout extra=row();root.addView(extra);
         button(extra,"TABLERO TÉCNICO / CSV",BLUE,()->startActivity(
             new Intent(this,T1TankDashboardActivity.class)));
@@ -528,8 +553,21 @@ public final class T1PremiumCockpitActivity extends Activity {
         if(!parked()||lastSample==null||
            !T1ManualHevPolicy.canRequest(lastSample.gear,
                lastSample.speed,lastSample.powerMode)){
-            message("Prueba EV→HEV solo con lectura reciente: P, 0 km/h "+
-                "y modo EV o EV MAX. No se envió ningún comando.");
+            String raw=lastSample==null?"sin telemetría OEM":
+                "1033="+lastSample.gear+" (P=1); 2148="+
+                f(lastSample.speed,2)+" km/h; 1043="+
+                lastSample.powerMode+"; edad="+
+                (System.currentTimeMillis()-lastSample.timestamp)+" ms";
+            String diagnostic="BLOQUEADO ANTES DE ESCRIBIR: "+
+                "No se cumplió P, velocidad 0, EV/EV MAX o lectura reciente. "+
+                "Valores: "+raw;
+            T1OemDiagnosticLog.begin(this,"Toque de botón EV→HEV");
+            T1OemDiagnosticLog.add(this,"BLOQUEO_EN_UI",diagnostic);
+            hevStatus.setText(diagnostic);
+            new AlertDialog.Builder(this).setTitle("EV→HEV · NO SE ENVIÓ COMANDO")
+                .setMessage(diagnostic+"\n\nPodés usar DIAGNOSTICAR · NO ESCRIBE "+
+                    "para comprobar el motivo leyendo el Binder original.")
+                .setPositiveButton("ENTENDIDO",null).show();
             return;
         }
         if(hevPilot.busy()){message("Ya hay una prueba en curso.");return;}
@@ -545,13 +583,85 @@ public final class T1PremiumCockpitActivity extends Activity {
                 "manualmente el modo original del auto.")
             .setNegativeButton("CANCELAR",null)
             .setPositiveButton("PROBAR UNA VEZ",(d,w)->{
+                hevStatus.setText("Intento confirmado. Leyendo VehicleService, "+
+                    "P/1033, velocidad y modo; se registrará cada etapa…");
                 message("Comprobando dos veces P, velocidad y modo OEM…");
                 if(!hevPilot.request(()->visible,report->ui.post(()->{
                     if(!isFinishing()&&!isDestroyed()){
+                        hevStatus.setText(report);
                         message(report);lastTelem=0;updateZone();
+                        new AlertDialog.Builder(this)
+                            .setTitle("RESULTADO EV→HEV · VERIFICADO POR ETAPAS")
+                            .setMessage(report+"\n\nAbrí VER / COPIAR INFORME "+
+                                "para conocer exactamente dónde se detuvo.")
+                            .setPositiveButton("CERRAR",null).show();
                     }
                 })))message("Prueba ocupada; no se envió otra orden.");
             }).show();
+    }
+    /** This button is read-only: uses the same OEM Binder but no setter. */
+    private void diagnoseHev(){
+        if(hevPilot.busy()){
+            hevStatus.setText("Hay un diagnóstico o ensayo EV/HEV en curso.");
+            return;
+        }
+        hevStatus.setText("Consultando 1033 / velocidad / 1043 en modo "+
+            "SOLO LECTURA…");
+        if(!hevPilot.inspect(()->visible,report->ui.post(()->{
+            if(isFinishing()||isDestroyed())return;
+            hevStatus.setText(report);
+            new AlertDialog.Builder(this).setTitle("DIAGNÓSTICO EV/HEV")
+                .setMessage(report+"\n\nSi el botón había fallado, "+
+                    "VER / COPIAR INFORME muestra las etapas y errores OEM.")
+                .setPositiveButton("CERRAR",null).show();
+        })))hevStatus.setText("No se pudo iniciar: diagnóstico ocupado.");
+    }
+    private void showHevReport(){
+        String report=T1OemDiagnosticLog.report(this);
+        new AlertDialog.Builder(this).setTitle("INFORME EV/HEV")
+            .setMessage(report)
+            .setNegativeButton("CERRAR",null)
+            .setPositiveButton("COPIAR",(d,w)->{
+                ClipboardManager clipboard=(ClipboardManager)
+                    getSystemService(CLIPBOARD_SERVICE);
+                if(clipboard!=null)clipboard.setPrimaryClip(
+                    ClipData.newPlainText("DriveLab EV/HEV",report));
+                hevStatus.setText("Informe copiado. No contiene "+
+                    "coordenadas ni datos personales.");
+            }).show();
+    }
+    private void captureLights(boolean after){
+        if(!parked()){
+            lightStatus.setText("Para la prueba de luces, primero estacioná "+
+                "en P con velocidad 0 y esperá una lectura reciente.");
+            return;
+        }
+        if(after&&lightBefore==null){
+            lightStatus.setText("Primero hacé CAPTURA A con el botón OEM "+
+                "en su estado inicial.");
+            return;
+        }
+        if(!lightReading.compareAndSet(false,true))return;
+        lightStatus.setText("Leyendo señales de luces y puertas del ALCarService… "+
+            "(SIN escrituras)");
+        new Thread(()->{
+            T1CabinLightReadOnlyProbe.Snapshot snap=lightProbe.read();
+            ui.post(()->{
+                lightReading.set(false);
+                if(isFinishing()||isDestroyed())return;
+                if(!after){
+                    lightBefore=snap;
+                    lightStatus.setText("CAPTURA A GUARDADA · "+
+                        "cambiá el interruptor de luz trasera/portón original "+
+                        "y tocá CAPTURA B.\n"+snap.describe());
+                }else{
+                    lightStatus.setText(
+                        T1CabinLightReadOnlyProbe.Snapshot.compare(
+                            lightBefore,snap));
+                    lightBefore=null;
+                }
+            });
+        },"T1-Interior-Lighting-ReadOnly").start();
     }
     private boolean parked(){
         return lastSample!=null &&
