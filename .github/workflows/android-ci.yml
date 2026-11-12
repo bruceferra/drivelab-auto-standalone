@@ -270,6 +270,15 @@ jobs:
           grep -q 'YA ESTÁS EN HEV' "$cockpit"
           grep -q 'preflightReason' "$cockpit"
           grep -q 'T1ElectricalEvidence.report(readings\[1\])' "$probe"
+          # The new HAL side-channel is ONLY a getter. The candidate
+          # 557843642 MUST NOT be transmitted as a write.
+          hal=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PhevHalModeProbe.java
+          grep -q 'HAL_PHEV_POWER_MODE_READ=557867211' "$hal"
+          grep -q 'HAL_PHEV_POWER_MODE_WRITE_UNTESTED=557843642' "$hal"
+          grep -q 'b.transact(2,d,r,0)' "$hal"
+          ! grep -E 'transact\\(15|setInt\\(|setFloat\\(|setProperty\\(' "$hal"
+          grep -q 'T1PhevHalModeProbe.inspect(app,mode)' \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ManualHevExperiment.java
           grep -q 'getPackageInfo(' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/ReceiverActivity.java
           grep -q 'messageView.setTextColor(android.graphics.Color.BLACK)' \
             common/src/main/java/ar/com/rango5gps/drivelabauto/common/Updater.java
