@@ -14,6 +14,7 @@ import android.text.InputType;
 import android.view.Gravity;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.FrameLayout;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -74,6 +75,18 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private T1OsmRoadAdvisor.Result osmLast;
     private final AtomicBoolean osmReading=new AtomicBoolean(false);
     private long lastOsmQuery=0;
+    private final T1RoadTransitionGate roadTransitionGate=new T1RoadTransitionGate();
+    private TextView roadTransitionPopup;
+    private final Runnable hideRoadTransitionPopup=()->{
+        if(roadTransitionPopup!=null){
+            roadTransitionPopup.animate().cancel();
+            roadTransitionPopup.animate().alpha(0f).setDuration(360L)
+                .withEndAction(()->{
+                    if(roadTransitionPopup!=null)
+                        roadTransitionPopup.setVisibility(android.view.View.GONE);
+                }).start();
+        }
+    };
     private static final String OSM_PREFS="t1_osm_advisory_opt_in";
     private static final String OSM_ENABLED="osm_lookup_enabled";
     private static final String OSM_FORCED="motorway_soc_forced";
@@ -190,7 +203,14 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         }
     }
     @Override protected void onPause(){
-        visible=false;ui.removeCallbacks(ticker);super.onPause();
+        visible=false;
+        ui.removeCallbacks(ticker);
+        ui.removeCallbacks(hideRoadTransitionPopup);
+        if(roadTransitionPopup!=null){
+            roadTransitionPopup.animate().cancel();
+            roadTransitionPopup.setVisibility(android.view.View.GONE);
+        }
+        super.onPause();
     }
     private boolean osmEnabled(){
         return getSharedPreferences(OSM_PREFS,MODE_PRIVATE)
@@ -301,6 +321,11 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             getSharedPreferences(OSM_PREFS,MODE_PRIVATE)
                 .edit().putBoolean(OSM_ENABLED,false).apply();
             updateOsmControls();
+            ui.removeCallbacks(hideRoadTransitionPopup);
+            if(roadTransitionPopup!=null){
+                roadTransitionPopup.animate().cancel();
+                roadTransitionPopup.setVisibility(android.view.View.GONE);
+            }
             osmStatus.setText("Asesor OSM desactivado. Sin envíos GPS.");
             return;
         }
@@ -356,6 +381,32 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             osmBanner.setText("OSM OFFLINE · "+road+" · "+suggestion+
                 " · TOCÁ PARA DETALLES");
     }
+    /** Read-only road transition indicator. Stays at top even on scroll.
+     * Never intercepts touch, never sends OEM commands, never needs an
+     * Android overlay permission or opens a blocking dialog. */
+    private void showRoadTransitionIfChanged(T1OsmRoadAdvisor.Result observed){
+        if(!visible||!osmEnabled()||observed==null||
+            roadTransitionPopup==null)return;
+        T1OptimizedModePolicy.Road category;
+        try{category=T1OptimizedModePolicy.Road.valueOf(observed.road.name());}
+        catch(Exception ignored){category=T1OptimizedModePolicy.Road.UNKNOWN;}
+        T1OptimizedModePolicy.Road entered=roadTransitionGate.observe(category);
+        if(entered==null)return;
+        String label=T1RoadTransitionGate.popupText(entered);
+        roadTransitionPopup.animate().cancel();
+        ui.removeCallbacks(hideRoadTransitionPopup);
+        roadTransitionPopup.setText(label);
+        roadTransitionPopup.setBackground(bg(
+            entered==T1OptimizedModePolicy.Road.UNKNOWN?0xFF4A5566:
+            entered==T1OptimizedModePolicy.Road.MOTORWAY?0xFF15527C:
+            entered==T1OptimizedModePolicy.Road.ROAD?0xFF6C4C1D:
+            0xFF126358,17));
+        roadTransitionPopup.setAlpha(1f);
+        roadTransitionPopup.setVisibility(android.view.View.VISIBLE);
+        roadTransitionPopup.bringToFront();
+        roadTransitionPopup.announceForAccessibility(label);
+        ui.postDelayed(hideRoadTransitionPopup,4500L);
+    }
     private void openOptimizedMode(){
         Intent intent=new Intent(this,T1OptimizedModeActivity.class);
         if(lastSample!=null){
@@ -387,7 +438,9 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 T1OsmRoadAdvisor.Road.UNKNOWN,"","",Double.NaN,
                 "Falta permiso GPS de Receiver. Habilitá Ubicación "+
                 "para esta app Android y probá CONSULTAR VÍA OSM.");
-            showOsmResult();return;
+            showOsmResult();
+            showRoadTransitionIfChanged(osmLast);
+            return;
         }
         try{
             android.location.LocationManager mgr=(android.location.LocationManager)
@@ -414,6 +467,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                     "Sin GPS reciente en 16 s. Revisá permisos Android y GPS "+
                     "y reintentá CONSULTAR VÍA OSM.");
                 showOsmResult();
+                showRoadTransitionIfChanged(osmLast);
             },16000L);
         }catch(Exception ex){
             osmReading.set(false);
@@ -422,6 +476,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 "GPS no disponible: "+ex.getClass().getSimpleName()+
                 ". Revisá ubicación del vehículo.");
             showOsmResult();
+            showRoadTransitionIfChanged(osmLast);
         }
     }
     private void runOsmQuery(android.location.Location loc){
@@ -435,7 +490,9 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 if(attempt!=lastOsmQuery)return;
                 osmReading.set(false);
                 if(!visible||isFinishing()||isDestroyed())return;
-                osmLast=result;showOsmResult();
+                osmLast=result;
+                showOsmResult();
+                showRoadTransitionIfChanged(result);
             });
         },"T1-OSM-Offline-SQLite-ReadOnly").start();
     }
@@ -950,7 +1007,25 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             "el sistema Jetour. No usar para controlar EV/HEV en marcha. "+
             "No se guardan coordenadas de clientes, ni se envían las zonas a la nube.",
             12,MUTED,false));
-        setContentView(scroll);
+        // The popup is pinned above scrolling content, but BELOW the fixed
+        // voice-assistant clearance strip owned by T1ImmersiveActivity.
+        FrameLayout cockpitFrame=new FrameLayout(this);
+        cockpitFrame.addView(scroll,new FrameLayout.LayoutParams(-1,-1));
+        roadTransitionPopup=text("ENTRANDO A CIUDAD",26,WHITE,true);
+        roadTransitionPopup.setGravity(Gravity.CENTER);
+        int pad=Math.round(13*getResources().getDisplayMetrics().density);
+        roadTransitionPopup.setPadding(pad,pad,pad,pad);
+        roadTransitionPopup.setClickable(false);
+        roadTransitionPopup.setFocusable(false);
+        roadTransitionPopup.setElevation(
+            12*getResources().getDisplayMetrics().density);
+        roadTransitionPopup.setVisibility(android.view.View.GONE);
+        FrameLayout.LayoutParams popupParams=new FrameLayout.LayoutParams(
+            -1,-2,Gravity.TOP|Gravity.CENTER_HORIZONTAL);
+        int side=Math.round(55*getResources().getDisplayMetrics().density);
+        popupParams.setMargins(side,pad,side,0);
+        cockpitFrame.addView(roadTransitionPopup,popupParams);
+        setContentView(cockpitFrame);
     }
     private void updateStats(){
         String recovered=T1JourneyStore.reconcileInterrupted(this);
