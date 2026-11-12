@@ -284,6 +284,9 @@ public final class T1TripRecorderService extends Service {
         double parkedMs=p().getLong(PARKED_MS,0);
         long offlineMs=p().getLong(OFFLINE_MS,0);
         long previousActiveTick=0;
+        double priorSpeed=Double.NaN;
+        long priorGpsEpochNs=0L;
+        double priorGpsBearing=Double.NaN;
         double classifiedKm=distanceKm;
         double evDistance=p().getFloat(EV_DISTANCE,0f);
         double iceDistance=p().getFloat(ICE_DISTANCE,0f);
@@ -300,6 +303,15 @@ public final class T1TripRecorderService extends Service {
         long lastTick=SystemClock.elapsedRealtime();
         boolean anchored=T1FuelCalibration.p(this).getBoolean(T1FuelCalibration.ANCHORED,false);
         double baselineKm=T1FuelCalibration.p(this).getFloat(T1FuelCalibration.SINCE_KM,0f);
+        // Old open journeys must retain their ORIGINAL CSV column count.
+        // New journeys get the richer physics/strategy schema. Never append
+        // more columns than an older header declares after app updates.
+        boolean extendedSchema=!restoring;
+        if(restoring)try(java.io.BufferedReader head=new java.io.BufferedReader(
+                new java.io.FileReader(path))){
+            String header=head.readLine();
+            extendedSchema=header!=null&&header.contains("mode_1043_raw");
+        }catch(Exception ignored){}
         try(FileOutputStream out=new FileOutputStream(path,restoring)){
             if(!restoring)out.write(("timestamp_epoch_ms,gear_1033,speed_oem_raw,fuel_ci186_oem_l,"+
                 "soc_1042_raw,soc_1062_raw,volt_1063_raw,amp_1064_raw,"+
@@ -318,7 +330,15 @@ public final class T1TripRecorderService extends Service {
                 "oem_1090_float_raw,oem_1090_int_raw,"+
                 "oem_500m_fuel_event_count,oem_500m_electric_event_count,"+
                 "oem_500m_fuel_last_raw,oem_500m_electric_last_raw,"+
-                "oem_50km_fuel_callback_raw,oem_50km_electric_callback_raw\n")
+                "oem_50km_fuel_callback_raw,oem_50km_electric_callback_raw,"+
+                "mode_1043_raw,soc_strategy_1040_raw,"+
+                "soc_target_1041_int_raw,soc_target_1041_float_raw,"+
+                "regeneration_1046_raw,charge_1045_raw,"+
+                "driving_2053_raw,footbrake_3011_raw,"+
+                "fuel_pct_1079_raw,hv_enabled_1031_raw,"+
+                "longitudinal_accel_speed_est_mps2,"+
+                "lateral_accel_gps_est_mps2,gps_bearing_deg,gps_alt_m,"+
+                "gps_fix_age_ms,engine_status_2073_raw\n")
                 .getBytes(StandardCharsets.UTF_8));
             if(restoring&&path.length()>0){
                 // A partial final line from sudden shutdown must never be
@@ -368,7 +388,42 @@ public final class T1TripRecorderService extends Service {
                 double gasPrice=p().getFloat(FUEL_PRICE,2129f);
                 double kwhPrice=p().getFloat(KWH_PRICE,0f);
                 double gasCost=liters*gasPrice,evCost=hvOut*kwhPrice;
+                // Distinct from measured accelerometer signals: these are
+                // derived from velocity and heading differences with a
+                // validated time interval. No invented OEM accel IDs.
+                double accelLong=Double.NaN;
+                if(Double.isFinite(priorSpeed)&&Double.isFinite(s.speed)&&
+                    priorSpeed>=0&&s.speed>=0&&dt>=500&&dt<=10000)
+                    accelLong=(s.speed-priorSpeed)/(3.6*dt/1000.0);
+                priorSpeed=Double.isFinite(s.speed)?s.speed:Double.NaN;
                 Location latest=lastGood;
+                double latAccel=Double.NaN,gpsBearing=Double.NaN,
+                    gpsAlt=Double.NaN,gpsAgeMs=Double.NaN;
+                if(latest!=null){
+                    long ageNs=SystemClock.elapsedRealtimeNanos()-
+                        latest.getElapsedRealtimeNanos();
+                    if(ageNs>=0&&ageNs<20000000000L){
+                        gpsAgeMs=ageNs/1000000.0;
+                        if(latest.hasAltitude())gpsAlt=latest.getAltitude();
+                        if(latest.hasBearing()&&latest.hasAccuracy()&&
+                            latest.getAccuracy()<=25){
+                            gpsBearing=latest.getBearing();
+                            long ns=latest.getElapsedRealtimeNanos();
+                            if(priorGpsEpochNs>0&&ns>priorGpsEpochNs&&
+                                ns-priorGpsEpochNs<=12000000000L&&
+                                Double.isFinite(priorGpsBearing)&&
+                                Double.isFinite(s.speed)&&s.speed>5){
+                                double change=(gpsBearing-priorGpsBearing+540)%360-180;
+                                latAccel=(s.speed/3.6)*Math.toRadians(change)/
+                                    ((ns-priorGpsEpochNs)/1.0e9);
+                                if(Math.abs(latAccel)>9.81*1.5)
+                                    latAccel=Double.NaN; // GPS jitter
+                            }
+                            priorGpsEpochNs=ns;
+                            priorGpsBearing=gpsBearing;
+                        }
+                    }
+                }
                 String loc=latest==null?",,,":
                     n(latest.getLatitude())+","+n(latest.getLongitude())+","+
                         n(latest.getAccuracy())+",";
@@ -391,7 +446,16 @@ public final class T1TripRecorderService extends Service {
                     n(s.voltageFloat1090)+","+ni(s.raw1090Int)+","+
                     seg.fuelCount+","+seg.electricCount+","+
                     n(seg.fuelLast)+","+n(seg.electricLast)+","+
-                    n(seg.fuel50Last)+","+n(seg.electric50Last)+"\n";
+                    n(seg.fuel50Last)+","+n(seg.electric50Last);
+                if(extendedSchema)line+=","+s.powerMode+","+s.socMode+","+
+                    ni(s.socTargetInt)+","+n(s.socTargetFloat)+","+
+                    ni(s.regen1046)+","+ni(s.chargeSwitch1045)+","+
+                    ni(s.driveMode2053)+","+ni(s.footBrake3011)+","+
+                    ni(s.fuelPct1079)+","+ni(s.highVoltageReady1031)+","+
+                    n(accelLong)+","+n(latAccel)+","+
+                    n(gpsBearing)+","+n(gpsAlt)+","+n(gpsAgeMs)+","+
+                    ni(s.engineStatus2073);
+                line+="\n";
                 out.write(line.getBytes(StandardCharsets.UTF_8));
                 sampleCount++;
                 if(sampleCount%5==0)out.flush();
