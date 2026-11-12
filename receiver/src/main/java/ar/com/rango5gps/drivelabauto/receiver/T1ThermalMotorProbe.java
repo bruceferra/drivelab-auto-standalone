@@ -48,12 +48,23 @@ final class T1ThermalMotorProbe {
     static final class Snapshot {
         long ts;
         final String[] readouts=new String[CANDIDATES.length];
-        double engineCoolantC=Double.NaN,engineOilC=Double.NaN;
+        double engineCoolantC=Double.NaN,engineOilC=Double.NaN,
+            engineClusterTempRaw=Double.NaN;
+        String engineTempSource="SIN LECTURA";
         String batteryTempRaw="SIN LECTURA",flowRaw="SIN LECTURA";
+        String engineTemperatureDisplay(){
+            if(Double.isFinite(engineClusterTempRaw)&&engineClusterTempRaw>0)
+                return String.format(Locale.forLanguageTag("es-AR"),
+                    "%.1f · RAW (exp.)",engineClusterTempRaw);
+            if(Double.isFinite(engineCoolantC)&&engineCoolantC>0)
+                return temp(engineCoolantC);
+            return "SIN LECTURA";
+        }
         int ok=0;
         String issue="";
         String summary(){
-            return "MOTOR TÉRMICO: "+temp(engineCoolantC)+
+            return "MOTOR TÉRMICO: "+engineTemperatureDisplay()+
+                " · fuente "+engineTempSource+
                 " · aceite "+temp(engineOilC)+
                 "\nBATERÍA TRACCIÓN: "+batteryTempRaw+
                 " (valor crudo, no °C validados)"+
@@ -72,10 +83,12 @@ final class T1ThermalMotorProbe {
                 b.append("\n").append(c.name).append(" [").append(c.id)
                     .append("] ").append(readouts[i]);
             }
-            b.append("\n\nNota: señal estándar ENGINE_COOLANT_TEMP usa °C. "+
-                "BATT TEMP, estados/flujo y unidades alternativas requieren "+
-                "verificación frente al cuadro OEM. Ningún ID de RPM "+
-                "eléctricas confirmado en el catálogo actual.");
+            b.append("\n\nNota: 559940105 cambia al calentarse, "+
+                "confirmado en prueba del propietario. La escala RAW NO "+
+                "está calibrada a °C. AOSP 291504897, aceite, RPM AOSP y "+
+                "temperatura batería han devuelto cero: cero NO equivale "+
+                "a lectura verificada. RPM térmicas de cockpit=1035. "+
+                "RPM eléctricas sin código validado.");
             return b.toString();
         }
         private static String temp(double c){
@@ -116,9 +129,11 @@ final class T1ThermalMotorProbe {
                         "FLOAT "+Float.toString((float)raw):
                         "INT "+Long.toString((long)raw);
                     snap.ok++;
-                    if(i==0&&raw>=-40&&raw<=180)snap.engineCoolantC=raw;
-                    if(i==1&&raw>=-40&&raw<=180)snap.engineOilC=raw;
-                    if(i==5)snap.batteryTempRaw=snap.readouts[i];
+                    if(i==0&&raw>0&&raw<=180)snap.engineCoolantC=raw;
+                    if(i==1&&raw>0&&raw<=180)snap.engineOilC=raw;
+                    if(i==2&&raw>0&&raw<5000)
+                        snap.engineClusterTempRaw=raw;
+                    if(i==5&&raw!=0)snap.batteryTempRaw=snap.readouts[i];
                     if(i==10)snap.flowRaw=snap.readouts[i];
                 }catch(Exception ex){
                     String msg=ex.getMessage()==null?"":ex.getMessage();
@@ -132,6 +147,10 @@ final class T1ThermalMotorProbe {
             for(int i=0;i<CANDIDATES.length;i++)
                 snap.readouts[i]="SIN ACCESO";
         }finally{if(bound)try{app.unbindService(sc);}catch(Exception ignored){}}
+        if(Double.isFinite(snap.engineClusterTempRaw))
+            snap.engineTempSource="CLUSTER ENGINE TEMP · 559940105 · RAW";
+        else if(Double.isFinite(snap.engineCoolantC))
+            snap.engineTempSource="AOSP ENGINE COOLANT · 291504897 · °C";
         return snap;
     }
     private static int getInt(IBinder binder,int id)throws Exception{
