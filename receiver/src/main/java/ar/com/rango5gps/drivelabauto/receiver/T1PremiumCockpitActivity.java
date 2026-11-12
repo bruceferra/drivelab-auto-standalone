@@ -37,8 +37,11 @@ public final class T1PremiumCockpitActivity extends Activity {
     private T1TripTelemetry.Sample lastSample;
     private T1PremiumInstrumentView gauge;
     private TextView tripStatus,kmNow,fuelNow,electricNow,costNow,clientNow,
-        dayNow,monthNow,historyNow,zoneStatus,feedback,energyNote;
+        dayNow,monthNow,historyNow,zoneStatus,feedback,energyNote,
+        scopeTitle,scopeProgress,socStrategy,autonomyNow,autonomyDetail;
     private LinearLayout advanced;
+    private T1ManualHevExperiment hevPilot;
+    private static final String RANGE_PREFS="t1_cockpit_range_settings";
     private final Runnable ticker=new Runnable(){
         @Override public void run(){
             if(!visible)return;
@@ -54,7 +57,11 @@ public final class T1PremiumCockpitActivity extends Activity {
                         if(!visible||isFinishing()||isDestroyed())return;
                         lastSample=s;
                         gauge.update(valid(s.speed,0,220),valid(s.fuel,0,70),
-                            valid(s.socDisplay,0,100),s.powerMode);
+                            valid(s.socDisplay,0,100),s.powerMode,
+                            valid(s.rpm,0,12000),
+                            valid(s.current,-1500,1500));
+                        updateSoc();
+                        updateAutonomy();
                         updateZone();
                     });
                 },"T1-Cockpit-ReadOnly").start();
@@ -66,7 +73,11 @@ public final class T1PremiumCockpitActivity extends Activity {
         return Double.isFinite(v)&&v>=min&&v<=max?v:null;
     }
     private static String f(double v,int digits){return T1JourneyMetrics.fmt(v,digits);}
-    @Override public void onCreate(Bundle b){super.onCreate(b);draw();}
+    @Override public void onCreate(Bundle b){
+        super.onCreate(b);
+        hevPilot=new T1ManualHevExperiment(this);
+        draw();
+    }
     @Override protected void onResume(){
         super.onResume();visible=true;lastTelem=0;lastTotals=0;
         ui.removeCallbacks(ticker);ui.post(ticker);
@@ -117,19 +128,47 @@ public final class T1PremiumCockpitActivity extends Activity {
         LinearLayout top=row();top.setGravity(Gravity.CENTER_VERTICAL);root.addView(top);
         LinearLayout title=col();
         title.addView(text("DRIVELAB  /  JETOUR T1",22,WHITE,true));
-        title.addView(text("COCKPIT · v0.2.34 · telemetría OEM",13,MUTED,false));
+        title.addView(text("COCKPIT · v0.2.35 · telemetría OEM",13,MUTED,false));
         top.addView(title,new LinearLayout.LayoutParams(0,-2,1));
         Button back=new Button(this);back.setText("VOLVER AL T1");
         back.setAllCaps(false);back.setOnClickListener(v->finish());top.addView(back);
         gauge=new T1PremiumInstrumentView(this);
         LinearLayout.LayoutParams meterParams=new LinearLayout.LayoutParams(-1,-2);
-        meterParams.setMargins(0,6,0,12);root.addView(gauge,meterParams);
-
+        meterParams.setMargins(0,6,0,8);root.addView(gauge,meterParams);
+        socStrategy=text("GESTIÓN SOC: SIN LECTURA · OBJETIVO: SIN DATO",
+            17,WHITE,true);root.addView(socStrategy);
+        LinearLayout scope=col();
+        scope.setBackground(bg(0xFF123950,22));
+        scope.setPadding(20,13,20,13);
+        LinearLayout.LayoutParams scopeParams=new LinearLayout.LayoutParams(-1,-2);
+        scopeParams.setMargins(0,8,0,8);
+        root.addView(scope,scopeParams);
+        scopeTitle=text("JORNADA ACTUAL · SIN GRABACIÓN",16,0xFFB5DAEC,true);
+        scope.addView(scopeTitle);
+        kmNow=text("0,00 km",45,0xFF5BE2D0,true);scope.addView(kmNow);
+        scopeProgress=text("Iniciá una jornada o un trayecto; acá verás el avance.",
+            15,WHITE,false);
+        scope.addView(scopeProgress);
         LinearLayout metrics=row();root.addView(metrics);
-        kmNow=metric(tile(metrics,CARD),"DISTANCIA · VELOCIDAD OEM","0,00 km");
         fuelNow=metric(tile(metrics,CARD),"NAFTA 500 m · EXPERIMENTAL","—");
         electricNow=metric(tile(metrics,CARD),"ELECTRICIDAD NETA · EXP.","—");
         costNow=metric(tile(metrics,CARD),"COSTO NAFTA · EXP.","—");
+
+        LinearLayout range=col();range.setBackground(bg(CARD,20));
+        range.setPadding(14,9,14,12);
+        LinearLayout.LayoutParams rangeParams=new LinearLayout.LayoutParams(-1,-2);
+        rangeParams.setMargins(0,8,0,5);root.addView(range,rangeParams);
+        LinearLayout rangeTop=row();rangeTop.setGravity(Gravity.CENTER_VERTICAL);
+        range.addView(rangeTop);
+        LinearLayout rangeInfo=col();
+        rangeInfo.addView(text("AUTONOMÍA TOTAL · EXPERIMENTAL",15,MUTED,true));
+        autonomyNow=text("SIN DATOS",30,WHITE,true);rangeInfo.addView(autonomyNow);
+        rangeTop.addView(rangeInfo,new LinearLayout.LayoutParams(0,-2,1f));
+        Button adjust=new Button(this);adjust.setText("AJUSTAR");
+        adjust.setAllCaps(false);adjust.setOnClickListener(v->adjustAutonomy());
+        rangeTop.addView(adjust);
+        autonomyDetail=text("Combustible (CI186) + SOC eléctrico; pendiente de calibración",
+            13,MUTED,false);range.addView(autonomyDetail);
         energyNote=text("Km calculados desde velocidad OEM (sin calibrar). "+
             "Nafta y energía: hipótesis de unidades OEM 500 m. "+
             "Costo eléctrico total aún sin medidor validado.",12,MUTED,false);
@@ -190,6 +229,12 @@ public final class T1PremiumCockpitActivity extends Activity {
             .setPositiveButton("BORRAR",(d,w)->{
                 T1ModeZoneStore.clear(this);updateZone();
             }).show());
+        LinearLayout oneShot=row();advanced.addView(oneShot);
+        button(oneShot,"PRUEBA MANUAL · EV → HEV · SOLO EN P",GOLD,
+            this::askHevExperiment);
+        advanced.addView(text("Comando único 1043=2, sin GPS ni automatismos. "+
+            "Requiere P, 0 km/h, doble lectura y confirmación manual. "+
+            "Puede ser rechazado por los permisos OEM.",13,MUTED,false));
         LinearLayout extra=row();root.addView(extra);
         button(extra,"TABLERO TÉCNICO / CSV",BLUE,()->startActivity(
             new Intent(this,T1TankDashboardActivity.class)));
