@@ -11,7 +11,7 @@ import java.util.*;
 import ar.com.rango5gps.drivelabauto.common.Updater;
 
 /** Receiver hub with separate quick-control pilots; navigation service unchanged. */
-public final class ReceiverActivity extends Activity {
+public final class ReceiverActivity extends T1ImmersiveActivity {
     private static volatile boolean visible;
     private String message="";
     private ReceiverQuickControls quickControls;
