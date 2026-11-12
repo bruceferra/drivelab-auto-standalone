@@ -1,0 +1,168 @@
+name: Signed Receiver 0.2.54 - historical what-if simulator and expanded OEM telemetry
+# Rebuild after corrected Java cockpit syntax; release only on verified success.
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-receiver-0254.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: signed-drivelabauto-publication
+  cancel-in-progress: false
+jobs:
+  receiver:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    env:
+      RECEIVER_STORE_PASSWORD: ${{ secrets.RECEIVER_STORE_PASSWORD }}
+      RECEIVER_KEY_ALIAS: ${{ secrets.RECEIVER_KEY_ALIAS }}
+      RECEIVER_KEY_PASSWORD: ${{ secrets.RECEIVER_KEY_PASSWORD }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Android SDK 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool=$(command -v sdkmanager || find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)
+          "$tool" 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Restore original Receiver signing certificate
+        shell: bash
+        env:
+          RECEIVER_KEYSTORE_B64: ${{ secrets.RECEIVER_KEYSTORE_B64 }}
+        run: |
+          set -euo pipefail
+          test -n "$RECEIVER_KEYSTORE_B64"
+          test -n "$RECEIVER_STORE_PASSWORD" && test -n "$RECEIVER_KEY_ALIAS" && test -n "$RECEIVER_KEY_PASSWORD"
+          printf %s "$RECEIVER_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/receiver.p12"
+          chmod 600 "$RUNNER_TEMP/receiver.p12"
+          echo "RECEIVER_KEYSTORE=$RUNNER_TEMP/receiver.p12" >> "$GITHUB_ENV"
+      - name: Pure JVM daily-session rollup regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/rollup-classes
+          javac -d /tmp/rollup-classes \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1DailyTripSummary.java \
+            receiver/tests/T1DailyTripSummaryTest.java
+          java -cp /tmp/rollup-classes ar.com.rango5gps.drivelabauto.receiver.T1DailyTripSummaryTest
+      - name: Verify manual drive-mode gate with pure JVM test
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/modegate-classes
+          javac -d /tmp/modegate-classes \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1DriveModeGate.java \
+            receiver/tests/T1DriveModeGateTest.java
+          java -cp /tmp/modegate-classes ar.com.rango5gps.drivelabauto.receiver.T1DriveModeGateTest
+      - name: Test four-road optimized profiles (pure JVM)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/optimized-classes
+          javac -d /tmp/optimized-classes \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModePolicy.java \
+            receiver/tests/T1OptimizedModePolicyTest.java
+          java -cp /tmp/optimized-classes ar.com.rango5gps.drivelabauto.receiver.T1OptimizedModePolicyTest
+      - name: Test road-entry banners and debounce (pure JVM)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/road-popup-classes
+          javac -d /tmp/road-popup-classes \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModePolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1RoadTransitionGate.java \
+            receiver/tests/T1RoadTransitionGateTest.java
+          java -cp /tmp/road-popup-classes ar.com.rango5gps.drivelabauto.receiver.T1RoadTransitionGateTest
+      - name: Verify historical energy-balance simulator and CSV compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/whatif-classes
+          javac -d /tmp/whatif-classes \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1WhatIfEnergyModel.java \
+            receiver/tests/T1WhatIfEnergyModelTest.java
+          java -cp /tmp/whatif-classes ar.com.rango5gps.drivelabauto.receiver.T1WhatIfEnergyModelTest
+      - name: Build Receiver and verify unchanged signing identity / Sender OTA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'bruceferra/drivelab-auto-standalone'
+          test "$GITHUB_REF_NAME" = main
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.53
+          ! gh release view v0.2.54 >/dev/null 2>&1
+          mkdir -p /tmp/prior output
+          gh release download v0.2.53 --pattern 'DriveLab-Auto-Receiver-v0.2.53.apk' --dir /tmp/prior
+          gh release download v0.2.53 --pattern 'sender.json' --dir /tmp/prior
+          cp /tmp/prior/sender.json output/sender.json
+          python3 - <<'PY'
+          import json
+          m=json.load(open('output/sender.json'))
+          assert m['packageName']=='ar.com.rango5gps.drivelabauto.sender'
+          assert m['versionCode']==17 and m['versionName']=='0.2.16'
+          assert m['apkUrl']=='https://github.com/bruceferra/drivelab-auto-standalone/releases/download/v0.2.16/DriveLab-Auto-Sender-v0.2.16.apk'
+          PY
+          gradle --no-daemon :receiver:assembleRelease
+          apk='receiver/build/outputs/apk/release/receiver-release.apk'
+          test -s "$apk"
+          sig="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          "$sig" verify --print-certs "$apk"
+          "$sig" verify --print-certs /tmp/prior/DriveLab-Auto-Receiver-v0.2.53.apk
+          oldcert=$("$sig" verify --print-certs /tmp/prior/DriveLab-Auto-Receiver-v0.2.53.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          newcert=$("$sig" verify --print-certs "$apk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          test -n "$oldcert" && test "$oldcert" = "$newcert"
+          badge=$("$aapt" dump badging "$apk" | head -1)
+          echo "$badge"
+          echo "$badge" | grep -F "package: name='ar.com.rango5gps.drivelabauto.receiver'"
+          echo "$badge" | grep -F "versionCode='55'"
+          echo "$badge" | grep -F "versionName='0.2.54'"
+          name='DriveLab-Auto-Receiver-v0.2.54.apk'
+          cp "$apk" "output/$name"
+          export RECEIVER_SHA=$(sha256sum "output/$name" | awk '{print $1}')
+          python3 - <<'PY'
+          import json,os
+          m={'packageName':'ar.com.rango5gps.drivelabauto.receiver',
+             'versionName':'0.2.54','versionCode':55,
+             'sha256':os.environ['RECEIVER_SHA'],
+             'apkUrl':'https://github.com/bruceferra/drivelab-auto-standalone/releases/download/v0.2.54/DriveLab-Auto-Receiver-v0.2.54.apk'}
+          with open('output/receiver.json','w') as f:json.dump(m,f,indent=2)
+          PY
+          # Prevent regression: manifest code must match the signed APK.
+          python3 - <<'PY'
+          import json
+          m=json.load(open('output/receiver.json'))
+          assert m['versionName']=='0.2.54'
+          assert m['versionCode']==55, 'manifest code mismatch'
+          assert m['packageName']=='ar.com.rango5gps.drivelabauto.receiver'
+          assert m['apkUrl']=='https://github.com/bruceferra/drivelab-auto-standalone/releases/download/v0.2.54/DriveLab-Auto-Receiver-v0.2.54.apk'
+          assert len(m['sha256'])==64
+          print('OK: APK code55 == OTA manifest code55')
+          PY
+          sha256sum "output/$name" > output/receiver.sha256
+      - name: Publish Receiver 0.2.54 as latest, preserve Sender 0.2.16
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.53
+          gh release create v0.2.54 \
+            output/DriveLab-Auto-Receiver-v0.2.54.apk \
+            output/receiver.json output/sender.json output/receiver.sha256 \
+            --target "$GITHUB_SHA" --latest \
+            --title 'DriveLab Auto Receiver 0.2.54 - Simulador de viajes y registro OEM avanzado' \
+            --notes 'DriveLab Auto Receiver v0.2.54 code55. SIMULADOR HISTÓRICO de viajes accesible desde cockpit e historial: seleccionar CSV local real (compatible con viajes anteriores), SOC inicial original o elegido, estrategia HEV SMART vs SOC FORZADO y objetivo %, EV/HEV/EV MAX, conducción Eco/Normal/Sport/Snow, regeneración baja/media/alta, kWh útiles supuestos, masa y litros reales opcionales. Muestra recorrido, SOC y RPM reales, kilómetros térmico apagado/encendido, cobertura de voltaje HV/modo/freno, límite superior cinético de frenadas y balance energético teórico para finalizar al objetivo SOC. NO inventa litros consumidos por un modo alternativo: solo equivalencia de energía con rango hipotético 1.8–3.2 kWh útiles/L, no predicción ECU ni reproducción del motor eléctrico; modos y regeneración se evalúan como hipótesis NO cuantificadas hasta obtener combustible real y voltaje HV válido. NUEVAS 20 columnas OEM a futuros TRIP: EV/HEV (1043), SOC Smart/Forzado (1040), target (1041 int/float), regen (1046), charge (1045), modo conducción confirmado 2053 0 ECO 1 NORMAL 2 SPORT 3 SNOW, freno 3011, combustible% 1079, HV1031, 2073, aceleración longitudinal estimada por delta velocidad, lateral GPS estimada por rumbo, rumbo/altitud GPS SOLO LOCALES, y aceleración lineal XYZ del sensor Android si está disponible (ejes sin calibrar). Supabase QR drivelab-auto-diagnostics v5 permite campos sin nombres, VIN ni GPS. Botoneras superiores e inferiores perfectamente alineadas VIAJE 1 | VIAJE TOTAL | VIAJE 2. INICIAR Viaje1/2 sin solicitar nombres: genera etiqueta local con fecha/hora real y coordenadas GPS si hay fix reciente, nunca se sube como identificador. No toca controles automáticos de propulsión ni regeneración, conserva OSM offline, cuatro perfiles MODO OPTIMIZADO y banner grande, seis métricas, triple viaje, OTA Sender 0.2.16 intacto y firma del Receiver. Documento docs/RECEIVER_0_2_54_SIMULADOR_TELEMETRIA_NOMBRES_ORDEN.md.'
+          mkdir -p verify
+          gh release download v0.2.54 --pattern 'sender.json' --dir verify
+          gh release download v0.2.54 --pattern 'receiver.json' --dir verify
+          cmp output/sender.json verify/sender.json
+          cmp output/receiver.json verify/receiver.json
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.54
+          gh release view v0.2.54 --json assets --jq '.assets[].name'
