@@ -18,7 +18,7 @@ import java.util.Locale;
  * Never writes vehicle signals. Network calls only off the UI thread.
  */
 final class T1OsmRoadAdvisor {
-    enum Road { CITY, MOTORWAY, UNKNOWN }
+    enum Road { CITY, ROAD, MOTORWAY, UNKNOWN }
     static final class Result {
         final Road road;
         final String roadTag,name,detail;
@@ -32,7 +32,9 @@ final class T1OsmRoadAdvisor {
             if(road==Road.MOTORWAY)
                 return forced?"SUGERENCIA: HEV · SOC FORZADO":
                     "SUGERENCIA: HEV · SOC SMART";
-            return "SIN CAMBIO SUGERIDO · vía no confirmada";
+            if(road==Road.ROAD)
+                return "CARRETERA · perfil configurable (solo sugerencia)";
+            return "VÍA DESCONOCIDA · usar perfil configurable";
         }
         String explain(){
             return (name.isEmpty()?"Vía sin nombre":name)+
@@ -49,8 +51,12 @@ final class T1OsmRoadAdvisor {
             "service".equals(tag)||"tertiary".equals(tag)||
             "unclassified".equals(tag))
             return Road.CITY;
-        // trunk, primary, secondary or road may be expressways or ordinary
-        // routes depending on the country: NEVER infer motorways.
+        // Trunk/primary/secondary are treated as CARRETERA, never as motorway.
+        // Generic road/unmapped classes remain UNKNOWN rather than guessed.
+        if("trunk".equals(tag)||"trunk_link".equals(tag)||
+            "primary".equals(tag)||"primary_link".equals(tag)||
+            "secondary".equals(tag)||"secondary_link".equals(tag))
+            return Road.ROAD;
         return Road.UNKNOWN;
     }
     static Result lookup(Location loc){
