@@ -268,7 +268,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             .setMessage("Al activarlo, mientras el cockpit esté abierto "+
                 "se consultará cada ~95 segundos la clase de la vía "+
                 "en Overpass/OpenStreetMap, enviando tus coordenadas "+
-                "aproximadas al servicio público. NO cambiará EV/HEV "+
+                "de ubicación al servicio público. NO cambiará EV/HEV "+
                 "ni SOC; solo mostrará sugerencias. "+
                 "Si falla GPS o el mapa es ambiguo, no recomienda nada.")
             .setNegativeButton("CANCELAR",null)
