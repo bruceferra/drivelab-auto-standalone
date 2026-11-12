@@ -37,9 +37,16 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private T1TripTelemetry.Sample lastSample;
     // Compact OEM gauges: keep fuel, SOC, engine and HV battery, no speedometer.
     private T1PremiumInstrumentView gauge;
-    private TextView dayRecordingLamp,clientRecordingLamp;
+
+    private TextView dayRecordingLamp,clientRecordingLamp,secondRecordingLamp;
     private Button dayStartButton,dayPauseButton,dayEndButton,
-        clientStartButton,clientPauseButton,clientEndButton,clientRecoverButton;
+        clientStartButton,clientPauseButton,clientEndButton,
+        secondStartButton,secondPauseButton,secondEndButton,clientRecoverButton;
+    // 0=total; 1=Viaje 1; 2=Viaje 2. Selection only affects display,
+    // never the independent recording checkpoint of either slot.
+    private int selectedScope=1;
+    private LinearLayout totalScopeCard,client1ScopeCard,client2ScopeCard;
+    private TextView totalScopeTitle,totalScopeKm,secondScopeTitle,secondScopeKm,osmBanner;
     private LinearLayout secondary;
     private TextView tripStatus,kmNow,evKmNow,clientSyncStatus,
         fuelNow,electricNow,costNow,clientNow,
@@ -138,6 +145,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         ledProbe=new T1HorizonLedReadOnlyProbe(this);
         thermalProbe=new T1ThermalMotorProbe(this);
         aux12vProbe=new T1Aux12vReadOnlyProbe(this);
+        selectedScope=Math.max(0,Math.min(2,getSharedPreferences(
+            "t1_cockpit_selected_scope",MODE_PRIVATE).getInt("slot",1)));
         draw();
     }
     @Override protected void onResume(){
@@ -385,6 +394,38 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         lp.setMargins(2,1,2,1);parent.addView(b,lp);
         return b;
     }
+    private LinearLayout controlCard(LinearLayout parent,String title,int slot){
+        LinearLayout card=col();
+        card.setPadding(5,3,5,3);
+        card.setBackground(bg(CARD,13));
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-2,1f);
+        lp.setMargins(2,2,2,2);
+        parent.addView(card,lp);
+        return card;
+    }
+    private LinearLayout scopeCard(LinearLayout parent,int scope){
+        LinearLayout card=col();
+        card.setPadding(9,5,9,5);
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,-2,1f);
+        lp.setMargins(2,2,2,2);
+        parent.addView(card,lp);
+        card.setOnClickListener(v->selectScope(scope));
+        return card;
+    }
+    private void selectScope(int which){
+        selectedScope=which;
+        getSharedPreferences("t1_cockpit_selected_scope",MODE_PRIVATE)
+            .edit().putInt("slot",which).apply();
+        updateStats();
+    }
+    private void refreshScopeSelection(){
+        if(totalScopeCard!=null)
+            totalScopeCard.setBackground(bg(selectedScope==0?0xFF17546D:CARD,13));
+        if(client1ScopeCard!=null)
+            client1ScopeCard.setBackground(bg(selectedScope==1?0xFF17546D:CARD,13));
+        if(client2ScopeCard!=null)
+            client2ScopeCard.setBackground(bg(selectedScope==2?0xFF17546D:CARD,13));
+    }
     private void heading(LinearLayout c,String s){c.addView(text(s,19,WHITE,true));}
     private void draw(){
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);
@@ -414,30 +455,32 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         modeAtTop=text("MODO OEM: esperando 1043 · controles manuales P o D",
             14,MUTED,false);
         root.addView(modeAtTop);
-        // One-screen dashboard: restore all compact OEM instrument cards.
-        // Only the redundant full-size speedometer is removed.
+        // Three independent button sets: JORNADA, VIAJE 1 and VIAJE 2.
+        // Disabled is gray, only available actions retain colored tint.
         LinearLayout controls=row();root.addView(controls);
-        LinearLayout dayControl=col();
-        dayControl.setPadding(6,3,6,3);dayControl.setBackground(bg(CARD,14));
-        LinearLayout.LayoutParams dayCardLp=new LinearLayout.LayoutParams(0,-2,1f);
-        dayCardLp.setMargins(2,2,3,2);controls.addView(dayControl,dayCardLp);
-        dayRecordingLamp=text("○ JORNADA DETENIDA",14,MUTED,true);
+        LinearLayout dayControl=controlCard(controls,"",0);
+        dayRecordingLamp=text("○ VIAJE TOTAL DETENIDO",13,MUTED,true);
         dayControl.addView(dayRecordingLamp);
         LinearLayout dayActions=row();dayControl.addView(dayActions);
         dayStartButton=compactButton(dayActions,"INICIAR",TEAL,this::startDay);
         dayPauseButton=compactButton(dayActions,"PAUSAR",GOLD,this::pauseDay);
         dayEndButton=compactButton(dayActions,"TERMINAR",RED,this::endDay);
-        LinearLayout clientControl=col();
-        clientControl.setPadding(6,3,6,3);clientControl.setBackground(bg(CARD,14));
-        LinearLayout.LayoutParams clientCardLp=new LinearLayout.LayoutParams(0,-2,1f);
-        clientCardLp.setMargins(3,2,2,2);
-        controls.addView(clientControl,clientCardLp);
-        clientRecordingLamp=text("○ CLIENTE DETENIDO",14,MUTED,true);
+
+        LinearLayout clientControl=controlCard(controls,"",1);
+        clientRecordingLamp=text("○ VIAJE 1 DETENIDO",13,MUTED,true);
         clientControl.addView(clientRecordingLamp);
         LinearLayout clientActions=row();clientControl.addView(clientActions);
         clientStartButton=compactButton(clientActions,"INICIAR",BLUE,this::askClient);
         clientPauseButton=compactButton(clientActions,"PAUSAR",GOLD,this::pauseClient);
         clientEndButton=compactButton(clientActions,"TERMINAR",RED,this::finishClient);
+
+        LinearLayout secondControl=controlCard(controls,"",2);
+        secondRecordingLamp=text("○ VIAJE 2 DETENIDO",13,MUTED,true);
+        secondControl.addView(secondRecordingLamp);
+        LinearLayout secondActions=row();secondControl.addView(secondActions);
+        secondStartButton=compactButton(secondActions,"INICIAR",BLUE,this::askSecond);
+        secondPauseButton=compactButton(secondActions,"PAUSAR",GOLD,this::pauseSecond);
+        secondEndButton=compactButton(secondActions,"TERMINAR",RED,this::finishSecond);
 
         // Restore the user's original instrument cards. Only remove the
         // oversize speedometer; the 4 non-speed gauges retain their live OEM
@@ -454,43 +497,35 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         socStrategy=text("SOC · ESPERANDO OEM",12,WHITE,true);
         root.addView(socStrategy);
 
+        // Three selectable readings visible together. Selecting a card
+        // switches all trip-dependent values in the five compact tiles.
         LinearLayout overview=row();root.addView(overview);
-        LinearLayout scope=col();
-        scope.setBackground(bg(0xFF123950,14));
-        scope.setPadding(10,6,10,7);
-        LinearLayout.LayoutParams scopeParams=new LinearLayout.LayoutParams(0,-2,2f);
-        scopeParams.setMargins(2,2,4,2);
-        overview.addView(scope,scopeParams);
-        scopeTitle=text("VIAJE ACTIVO · SIN GRABACIÓN",14,0xFFB5DAEC,true);
-        scope.addView(scopeTitle);
-        kmNow=text("0,00 km",33,0xFF5BE2D0,true);
-        scope.addView(kmNow);
-        scopeProgress=text("Iniciá jornada o cliente",11,MUTED,false);
-        scopeProgress.setMaxLines(2);
-        scope.addView(scopeProgress);
+        totalScopeCard=scopeCard(overview,0);
+        totalScopeTitle=text("VIAJE TOTAL · ESPERANDO",13,MUTED,true);
+        totalScopeCard.addView(totalScopeTitle);
+        totalScopeKm=text("0,00 km",27,0xFF5BE2D0,true);
+        totalScopeCard.addView(totalScopeKm);
 
-        LinearLayout range=col();
-        range.setBackground(bg(CARD,14));
-        range.setPadding(9,6,9,7);
-        LinearLayout.LayoutParams rangeParams=new LinearLayout.LayoutParams(0,-2,1f);
-        rangeParams.setMargins(4,2,2,2);overview.addView(range,rangeParams);
-        range.addView(text("AUTONOMÍA TOTAL · EXP.",12,MUTED,true));
-        autonomyNow=text("SIN DATOS",25,WHITE,true);
-        range.addView(autonomyNow);
-        autonomyDetail=text("Estimación OEM · calibración pendiente",
-            10,MUTED,false);
-        autonomyDetail.setMaxLines(2);range.addView(autonomyDetail);
-        Button adjust=new Button(this);adjust.setText("AJUSTAR");
-        adjust.setAllCaps(false);adjust.setTextSize(11);
-        adjust.setMinHeight(30);adjust.setHeight(36);
-        adjust.setOnClickListener(v->adjustAutonomy());
-        range.addView(adjust,new LinearLayout.LayoutParams(-1,36));
+        client1ScopeCard=scopeCard(overview,1);
+        scopeTitle=text("VIAJE 1 · ESPERANDO",13,MUTED,true);
+        client1ScopeCard.addView(scopeTitle);
+        kmNow=text("0,00 km",27,0xFF5BE2D0,true);
+        client1ScopeCard.addView(kmNow);
+        scopeProgress=text("",10,MUTED,false);
+        scopeProgress.setMaxLines(1);client1ScopeCard.addView(scopeProgress);
+
+        client2ScopeCard=scopeCard(overview,2);
+        secondScopeTitle=text("VIAJE 2 · ESPERANDO",13,MUTED,true);
+        client2ScopeCard.addView(secondScopeTitle);
+        secondScopeKm=text("0,00 km",27,0xFF5BE2D0,true);
+        client2ScopeCard.addView(secondScopeKm);
 
         LinearLayout metrics=row();root.addView(metrics);
         evKmNow=compactMetric(metrics,"KM MOTOR APAGADO · 1035","0,00 km");
         fuelNow=compactMetric(metrics,"NAFTA · EXP.","—");
         electricNow=compactMetric(metrics,"ELECTRICIDAD NETA · EXP.","—");
         costNow=compactMetric(metrics,"COSTO NAFTA · EXP.","—");
+        autonomyNow=compactMetric(metrics,"AUTONOMÍA TOTAL · EXP.","SIN DATOS");
         clientSyncStatus=text("CLIENTE QR · verificando pendientes",12,MUTED,false);
         root.addView(clientSyncStatus);
 
@@ -510,6 +545,16 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         secondary=col();secondary.setVisibility(android.view.View.GONE);
         secondary.setPadding(8,7,8,7);
         root.addView(secondary);
+        LinearLayout rangeDetails=col();
+        rangeDetails.setBackground(bg(CARD,14));
+        secondary.addView(rangeDetails);
+        rangeDetails.addView(text("AUTONOMÍA TOTAL · cálculo OEM EXPERIMENTAL",
+            12,MUTED,true));
+        autonomyDetail=text("Estimación OEM · calibración pendiente",
+            11,MUTED,false);
+        rangeDetails.addView(autonomyDetail);
+        LinearLayout adjustRow=row();rangeDetails.addView(adjustRow);
+        compactButton(adjustRow,"AJUSTAR AUTONOMÍA",BLUE,this::adjustAutonomy);
         LinearLayout electricTile=col();
         electricTile.setBackground(bg(CARD,14));secondary.addView(electricTile);
         electricTile.addView(text("MOTOR ELÉCTRICO",12,MUTED,false));
