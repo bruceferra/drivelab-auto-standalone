@@ -716,46 +716,57 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         double price=m.getFloat(T1TripRecorderService.FUEL_PRICE,2129f);
         boolean client=T1JourneyStore.active(this),
             pending=T1JourneyStore.pending(this);
+        boolean dayPaused=m.getBoolean(T1TripRecorderService.PAUSED,false);
+        boolean clientPaused=T1JourneyStore.paused(this);
+        boolean dayDesired=m.getBoolean(T1TripRecorderService.DESIRED,false);
         T1JourneyMetrics.Result live=client?T1JourneyStore.running(this):null;
         boolean blink=(android.os.SystemClock.elapsedRealtime()/700L)%2==0;
-        boolean clientLive=client&&fresh&&live!=null;
+        boolean clientLive=client&&!clientPaused&&fresh&&live!=null;
         if(dayRecordingLamp!=null){
-            dayRecordingLamp.setText(fresh?
-                (blink?"● ":"○ ")+"JORNADA GRABANDO":
-                running?"◉ ESPERANDO OEM":"○ JORNADA DETENIDA");
-            dayRecordingLamp.setTextColor(fresh?
-                (blink?RED:0xFF743737):
-                running?GOLD:MUTED);
+            dayRecordingLamp.setText(dayPaused?"Ⅱ JORNADA EN PAUSA":
+                fresh?(blink?"● ":"◉ ")+"JORNADA GRABANDO":
+                running?"◉ ESPERANDO OEM":
+                dayDesired?"◉ RECUPERANDO JORNADA":"○ JORNADA DETENIDA");
+            dayRecordingLamp.setTextColor(dayPaused?GOLD:
+                fresh?TEAL:running||dayDesired?GOLD:MUTED);
         }
         if(clientRecordingLamp!=null){
-            clientRecordingLamp.setText(clientLive?
-                (blink?"● ":"○ ")+"CLIENTE GRABANDO":
+            clientRecordingLamp.setText(clientPaused?"Ⅱ CLIENTE EN PAUSA":
+                clientLive?(blink?"● ":"◉ ")+"CLIENTE GRABANDO":
                 pending?"◉ INICIANDO CLIENTE":
-                T1JourneyStore.stuck(this)?
-                    "⚠ CLIENTE BLOQUEADO":
-                    client?"◉ CLIENTE SIN DATOS":
-                    "○ CLIENTE DETENIDO");
-            clientRecordingLamp.setTextColor(clientLive?
-                (blink?RED:0xFF743737):
-                (client||pending)?GOLD:MUTED);
+                T1JourneyStore.stuck(this)?"⚠ CLIENTE BLOQUEADO":
+                client?"◉ CLIENTE SIN DATOS":"○ CLIENTE DETENIDO");
+            clientRecordingLamp.setTextColor(clientPaused?GOLD:
+                clientLive?TEAL:(client||pending)?GOLD:MUTED);
         }
-        if(dayStartButton!=null)
-            dayStartButton.setBackgroundTintList(ColorStateList.valueOf(
-                fresh?RED:TEAL));
-        if(clientStartButton!=null)
-            clientStartButton.setBackgroundTintList(ColorStateList.valueOf(
-                clientLive?RED:BLUE));
+        if(dayStartButton!=null){
+            dayStartButton.setText(dayPaused?"REANUDAR":"INICIAR");
+            dayStartButton.setEnabled(dayPaused||!dayDesired);
+        }
+        if(dayPauseButton!=null)dayPauseButton.setEnabled(
+            !dayPaused&&running&&fresh);
+        if(dayEndButton!=null)dayEndButton.setEnabled(dayDesired||dayPaused);
+        if(clientStartButton!=null){
+            clientStartButton.setText(clientPaused?"REANUDAR":"INICIAR");
+            clientStartButton.setEnabled(clientPaused||!client&&!pending);
+        }
+        if(clientPauseButton!=null)
+            clientPauseButton.setEnabled(client&&!clientPaused&&fresh);
+        if(clientEndButton!=null)
+            clientEndButton.setEnabled(client||pending);
         if(clientRecoverButton!=null)
             clientRecoverButton.setVisibility(
                 T1JourneyStore.stuck(this)?
                     android.view.View.VISIBLE:android.view.View.GONE);
         T1CockpitScope.Value scoped=T1CockpitScope.choose(
-            fresh,client,pending,live,km,nf,ne,fRaw,eRaw,price);
+            fresh||dayPaused,client,pending,live,km,nf,ne,fRaw,eRaw,price);
         switch(scoped.kind){
             case CLIENT:
-                scopeTitle.setText("● CLIENTE EN CURSO · "+T1JourneyStore.activeLabel(this));
+                scopeTitle.setText((clientPaused?"Ⅱ CLIENTE PAUSADO · ":"● CLIENTE ACTIVO · ")+
+                    T1JourneyStore.activeLabel(this));
                 break;
-            case DAY:scopeTitle.setText("● JORNADA EN CURSO · SIN CLIENTE");break;
+            case DAY:scopeTitle.setText(dayPaused?"Ⅱ JORNADA PAUSADA":
+                "● JORNADA ACTIVA · SIN CLIENTE");break;
             case PREPARING:
                 scopeTitle.setText("◉ PREPARANDO CLIENTE · "+
                     T1JourneyStore.pendingLabel(this));break;
@@ -770,7 +781,9 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             f(scoped.electricNetKwh,3)+" kWh":"ESPERANDO");
         costNow.setText(scoped.fuelKnown?
             "$ "+f(scoped.fuelCost,0):"SIN DATO");
-        scopeProgress.setText(scoped.kind==T1CockpitScope.Kind.CLIENT||
+        scopeProgress.setText(clientPaused?"Pausado · valores conservados":
+            dayPaused?"Jornada pausada · al reanudar continúa mismo CSV":
+            scoped.kind==T1CockpitScope.Kind.CLIENT||
             scoped.kind==T1CockpitScope.Kind.DAY?
             "AVANCE EN VIVO · nafta "+scoped.fuelEvents+
             " tramos / electricidad "+scoped.electricEvents+
@@ -781,7 +794,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             "Sin muestras OEM recientes; comprobá que el grabador siga funcionando":
             "Iniciá jornada o trayecto. El último viaje NO se cuenta como actual.");
         if(!running){
-            tripStatus.setText("○ JORNADA DETENIDA · último TRIP "+
+            tripStatus.setText((dayPaused?"Ⅱ JORNADA PAUSADA · TRIP ":"○ JORNADA DETENIDA · último TRIP ")+
                 (m.getInt(T1TripRecorderService.SAMPLES,0)>0?
                     f(km,2)+" km guardados":"sin historial")+
                 " · el nuevo contador está en cero.");
@@ -875,6 +888,19 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private void message(String m){feedback.setText(m);lastTotals=0;updateStats();}
     private void startDay(){
         SharedPreferences m=getSharedPreferences(T1TripRecorderService.PREFS,MODE_PRIVATE);
+        boolean paused=m.getBoolean(T1TripRecorderService.PAUSED,false);
+        if(paused&&m.getBoolean(T1TripRecorderService.RUNNING,false)){
+            message("La jornada todavía se está pausando; esperá el cierre del CSV.");
+            return;
+        }
+        if(paused){
+            try{
+                startForegroundService(new Intent(this,T1TripRecorderService.class)
+                    .setAction(T1TripRecorderService.ACTION_RESUME));
+                message("REANUDANDO JORNADA · mismo CSV y kilometraje acumulado.");
+            }catch(Exception e){message("No se reanudó: "+e.getClass().getSimpleName());}
+            return;
+        }
         long age=System.currentTimeMillis()-
             m.getLong(T1TripRecorderService.LAST_SAMPLE_TIME,0L);
         if(m.getBoolean(T1TripRecorderService.RUNNING,false)&&age>=0&&age<=15000){
@@ -885,6 +911,22 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 .setAction(T1TripRecorderService.ACTION_START));
             message("Iniciando jornada. Esperá la primera muestra (3 s).");
         }catch(Exception ex){message("No se inició: "+ex.getClass().getSimpleName());}
+    }
+    private void pauseDay(){
+        if(T1JourneyStore.active(this)&&!T1JourneyStore.paused(this)){
+            message("Pausá primero el cliente; la jornada sigue activa.");return;
+        }
+        try{
+            startService(new Intent(this,T1TripRecorderService.class)
+                .setAction(T1TripRecorderService.ACTION_PAUSE));
+            message("PAUSANDO JORNADA · conserva el mismo CSV y los kilómetros.");
+        }catch(Exception ex){message("No se pausó: "+ex.getClass().getSimpleName());}
+    }
+    private void pauseClient(){
+        if(!T1JourneyStore.active(this)){
+            message("No hay cliente activo.");return;
+        }
+        message(T1JourneyStore.pause(this));
     }
     private void endDay(){
         if(T1JourneyStore.active(this)||T1JourneyStore.pending(this)){
@@ -903,6 +945,12 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             }).show();
     }
     private void askClient(){
+        if(T1JourneyStore.paused(this)){
+            message(T1JourneyStore.resume(this));return;
+        }
+        if(T1JourneyStore.active(this)||T1JourneyStore.pending(this)){
+            message("Ya hay un cliente activo o iniciándose.");return;
+        }
         EditText name=new EditText(this);name.setSingleLine(true);
         name.setHint("Ej.: Cliente, traslado, tramo de vuelta");
         new AlertDialog.Builder(this).setTitle("Iniciar trayecto")
@@ -929,7 +977,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                         startForegroundService(new Intent(this,
                             T1TripRecorderService.class).setAction(
                                 T1TripRecorderService.ACTION_START));
-                        message(status);
+                        message(status+" · Jornada iniciada automáticamente "+
+                            "para grabar el cliente en el mismo TRIP.");
                     }
                 }catch(Exception ex){
                     T1JourneyStore.cancelPending(this);
