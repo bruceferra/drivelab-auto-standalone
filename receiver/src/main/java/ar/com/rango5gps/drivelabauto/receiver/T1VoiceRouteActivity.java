@@ -110,12 +110,31 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         root.addView(spoken,new LinearLayout.LayoutParams(-1,-2));
         button(root,"EJECUTAR LO ESCRITO / RECONOCIDO",T1JetourTheme.PANEL_HI,
             ()->dispatch(spoken.getText().toString()));
+        button(root,"WAZE · NAVEGAR A DESTINO ESCRITO",0xFF426E73,
+            ()->{
+                String line=spoken.getText().toString().trim();
+                String route=T1VoiceIntentPolicy.routeDestination(line);
+                if(route!=null)line=route;
+                if(line.length()<3){
+                    status.setText("Ingresá un destino válido.");return;
+                }
+                confirmDestination(line);
+            });
 
         label(root,"PROBAR ASISTENTES INSTALADOS",17,T1JetourTheme.CYAN);
         button(root,"GEMINI · ABRIR ASISTENTE / VOZ (PRUEBA)",
             T1JetourTheme.GREEN_BUTTON,()->openAssistant(GEMINI,true));
         button(root,"CHATGPT · ABRIR ASISTENTE / VOZ (PRUEBA)",
             T1JetourTheme.PANEL_HI,()->openAssistant(CHATGPT,true));
+        button(root,"CONSULTAR A LA IA CON EL TEXTO ESCRITO",
+            T1JetourTheme.PANEL,
+            ()->{
+                String question=spoken.getText().toString().trim();
+                if(question.isEmpty()){
+                    status.setText("Primero ingresá una consulta.");return;
+                }
+                shareWithAi(selectedAi(),question);
+            });
         label(root,"Cada app controla su propia sesión de audio. En Gemini " +
             "se intenta la entrada de asistente Android; si la ROM no la " +
             "expone, se abre la app normal. ChatGPT puede requerir tocar " +
