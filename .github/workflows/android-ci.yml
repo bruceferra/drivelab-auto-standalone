@@ -226,6 +226,33 @@ jobs:
           grep -Fq 'set(b,id,previous,null)' "$code"
           ! grep -Fq 'boolean test(' "$code"
           grep -Fq 'boolean apply(' "$code"
+      - name: EV from FORZADO disarms verified SMART first; EV MAX self-clears (pure JVM)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/ev-smart-0276
+          javac -encoding UTF-8 -d /tmp/ev-smart-0276 \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModePolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocRegenWritePolicy.java \
+            receiver/tests/T1SocRegenWritePolicyTest.java
+          java -cp /tmp/ev-smart-0276 ar.com.rango5gps.drivelabauto.receiver.T1SocRegenWritePolicyTest
+          python3 - <<'PY'
+          from pathlib import Path
+          base=Path('receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver')
+          pilot=(base/'T1ManualThreeModePilot.java').read_text()
+          policy=(base/'T1SocRegenWritePolicy.java').read_text()
+          editor=(base/'T1OptimizedModeActivity.java').read_text()
+          assert pilot.index('ensureSmartBeforeEv(b,target,visible);') < pilot.index('data.writeInt(1043);data.writeInt(target);'), 'SMART must be confirmed BEFORE EV setter'
+          assert 'if(powerTarget!=1)return;' in pilot, 'EV MAX must skip extra SMART command'
+          assert 'int before=readInt(b,1040);' in pilot
+          assert 'data.writeInt(1040);data.writeInt(2); // SMART' in pilot
+          assert 'EV_SMART_READBACK' in pilot and 'EV_POST_SMART_SEGURIDAD' in pilot
+          assert 'oemSocWriteInProgress()' in pilot, 'never race another SOC writer'
+          assert 'electricPowerRequiresSmart(rule.power)?SMART:' in policy, 'never restore FORZADO for EV/EV MAX'
+          assert 'p.strategy.setEnabled(!electric);' in editor
+          assert 'p.power.setOnItemSelectedListener' in editor
+          print('PASS: HEV FORZADO -> read1040 -> single SMART write+readback -> EV1043; EV MAX no added SMART write')
+          PY
       - name: SOC optimizer regression - new road/profile only; no prior 1041
         shell: bash
         run: |
