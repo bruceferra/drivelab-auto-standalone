@@ -61,6 +61,12 @@ public final class T1OptimizedAutoService extends Service {
         new T1SocRegenTransitionGate();
     private long auxLastWriteAt=-1;
     private long usedGpsNanos=0;
+    // Retain the LAST FULLY OEM-VERIFIED rule across the battery gap:
+    // motorway 1 >=70 -> EV for 80km -> at <=30 motorway 2 -> HEV.
+    // Do not reapply either rule while SOC is between the thresholds.
+    private T1OptimizedModePolicy.Road heldRoad=null;
+    private int heldSlot=T1OptimizedDualRulePolicy.NONE;
+    private String heldSignature="";
 
     private SharedPreferences pref(){return prefs(this);}
     private static SharedPreferences prefs(Context c){
@@ -143,6 +149,9 @@ public final class T1OptimizedAutoService extends Service {
             !T1OptimizedModeStore.isEnabled(this,road)||
             (slot==T1OptimizedDualRulePolicy.SECONDARY&&
                 !T1OptimizedModeStore.secondEnabled(this,road)))return;
+        heldRoad=road;
+        heldSlot=slot;
+        heldSignature=profileSignature(rule);
         pref().edit().putString(VERIFIED_ROAD,road.name())
             .putString(VERIFIED_PROFILE,profileSignature(rule))
             .putInt(VERIFIED_BRANCH,slot)
@@ -340,13 +349,27 @@ public final class T1OptimizedAutoService extends Service {
         double battery=Double.isFinite(snapshot.socDisplay)&&
             snapshot.socDisplay>=0&&snapshot.socDisplay<=100?
             snapshot.socDisplay:snapshot.socInternal;
-        // Rule A and B have independent battery ranges and all OEM targets.
-        // Choose one, never both; with no match, NEVER force HEV fallback.
+        // Rule 1 and Rule 2 are independent threshold-triggered modes.
+        // Only a previously FULLY confirmed rule may remain selected
+        // in the gap. A new threshold match takes priority over the latch.
+        if(heldRoad!=null&&heldRoad!=road&&confident){
+            heldRoad=null;heldSlot=T1OptimizedDualRulePolicy.NONE;
+            heldSignature="";
+        }
+        T1OptimizedModePolicy.Rule first=
+            T1OptimizedModeStore.get(this,road);
+        T1OptimizedModePolicy.Rule second=
+            T1OptimizedModeStore.getSecond(this,road);
+        boolean secondOn=T1OptimizedModeStore.secondEnabled(this,road);
+        int validHeld=heldRoad==road&&
+            (heldSlot==T1OptimizedDualRulePolicy.PRIMARY||
+             (heldSlot==T1OptimizedDualRulePolicy.SECONDARY&&secondOn))&&
+            heldSignature.equals(profileSignature(
+                T1OptimizedModeStore.getBranch(this,road,heldSlot)))?
+            heldSlot:T1OptimizedDualRulePolicy.NONE;
         T1OptimizedDualRulePolicy.Choice selected=
-            T1OptimizedDualRulePolicy.select(
-                T1OptimizedModeStore.get(this,road),
-                T1OptimizedModeStore.getSecond(this,road),
-                T1OptimizedModeStore.secondEnabled(this,road),battery);
+            T1OptimizedDualRulePolicy.selectWithHold(
+                first,second,secondOn,battery,validHeld);
         T1OptimizedModePolicy.Rule rule=selected.rule;
         if(!T1OptimizedModeStore.isEnabled(this,road)){
             // Hard block: no 1043 EV/HEV fallback, 1040 strategy,
@@ -356,13 +379,16 @@ public final class T1OptimizedAutoService extends Service {
             gate.examine(null,null,Double.NaN,Double.NaN,-1,-1,
                 SystemClock.elapsedRealtime(),false,false);
             socProfileGate.reset();
+            heldRoad=null;heldSlot=T1OptimizedDualRulePolicy.NONE;
+            heldSignature="";
             note("AUTO ON · "+T1OptimizedModePolicy.roadName(road)+
                 " · BLOQUE DESACTIVADO · cero órdenes OEM");
             return;
         }
         if(!selected.matched()){
-            // Still observe the road in the primary three-GPS gate, but
-            // no propulsion, SMART/FORZADO, SOC or regen target is allowed.
+            // No rule has fired yet and neither condition currently
+            // matches. Preserve current OEM without touching 1043/1040/
+            // 1041/1046 or pretending that a profile was applied.
             gate.examine(road,null,battery,snapshot.speed,snapshot.gear,
                 snapshot.powerMode,SystemClock.elapsedRealtime(),
                 confident,fresh);
@@ -371,6 +397,46 @@ public final class T1OptimizedAutoService extends Service {
             note("AUTO ON · "+T1OptimizedModePolicy.roadName(road)+
                 " · "+selected.reason+
                 " · sin órdenes OEM, conserva modo actual");
+            return;
+        }
+        if(selected.held){
+            // This branch was already applied with full OEM readback when
+            // its trigger SOC was reached. Battery is now between the two
+            // thresholds: do not undo it, do not write EV/HEV/1040/1041/
+            // 1046 again, and do not count another 1/3.
+            boolean eligible=confident&&fresh&&
+                T1SocRegenWritePolicy.regenDriveEligible(
+                    snapshot.gear,snapshot.speed);
+            // Do not use desired()'s fallback while holding out of range.
+            // Read the OEM state against the ACTUAL configuration saved
+            // for the selected rule rather than reevaluating its SOC range.
+            int holdPower=rule.power==T1OptimizedModePolicy.Power.EV?1:
+                rule.power==T1OptimizedModePolicy.Power.HEV?2:3;
+            int holdStrategy=T1SocRegenWritePolicy.electricPowerRequiresSmart(
+                rule.power)?T1SocRegenWritePolicy.SMART:
+                rule.strategy==T1OptimizedModePolicy.Strategy.FORCED?
+                    T1SocRegenWritePolicy.FORCED:T1SocRegenWritePolicy.SMART;
+            int holdRegen=rule.regeneration==T1OptimizedModePolicy.Regen.LOW?
+                1:rule.regeneration==T1OptimizedModePolicy.Regen.HIGH?3:2;
+            boolean holdSoc=holdStrategy!=T1SocRegenWritePolicy.FORCED||
+                T1SocTargetCodec.confirmsRequested(
+                    rule.forcedSoc,snapshot.socTargetInt,
+                    snapshot.socTargetFloat);
+            if(eligible&&snapshot.powerMode==holdPower&&
+               snapshot.socMode==holdStrategy&&
+               snapshot.regen1046==holdRegen&&holdSoc){
+                verifiedRoad(road,rule,selected.slot);
+                note("AUTO ON · "+selected.title(road)+
+                    " mantenida entre umbrales · OEM confirmado · "+
+                    "sin nuevas órdenes");
+            }else{
+                pendingRoad(eligible?
+                    "MODO PREVIO · OEM SIN CONFIRMAR":
+                    "MODO PREVIO · ESPERANDO OEM");
+                note("AUTO ON · "+selected.title(road)+
+                    " última regla; sin nuevas órdenes en el tramo "+
+                    "intermedio · esperando lectura OEM fiable");
+            }
             return;
         }
         T1OptimizedAutoGate.Decision decision=gate.examine(
@@ -519,8 +585,8 @@ public final class T1OptimizedAutoService extends Service {
             if(display==T1OptimizedAppliedRoadPolicy.Reason.APPLIED){
                 verifiedRoad(road,rule,ruleSlot);
                 note("AUTO ON · MODO "+T1OptimizedModePolicy.roadName(road)+
-                    " REGLA "+(ruleSlot==T1OptimizedDualRulePolicy.PRIMARY?
-                        "A":"B")+
+                    " "+(ruleSlot==T1OptimizedDualRulePolicy.PRIMARY?
+                        "1":"2")+
                     " APLICADO · 3/3, condición SOC y 1043/1040/1046 confirmados");
             }else{
                 pendingRoad(T1OptimizedAppliedRoadPolicy.label(display));
