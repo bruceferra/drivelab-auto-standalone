@@ -5,13 +5,11 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
-import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
-import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.Spinner;
@@ -37,7 +35,7 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
     static final class Profile {
         Spinner power,strategy,regen,comparison;
         CheckBox conditional;
-        EditText forced,targetMinimum;
+        Spinner forced,targetMinimum;
     }
     private GradientDrawable background(int color,int radius){
         return T1JetourTheme.surface(color,radius);
@@ -71,14 +69,19 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         s.setSelection(initial);
         return s;
     }
-    private EditText number(int x,String label){
-        EditText t=new EditText(this);
-        t.setText(String.valueOf(x));
-        t.setHint(label);t.setSingleLine(true);
-        t.setTextSize(16);
-        t.setInputType(InputType.TYPE_CLASS_NUMBER);
-        T1JetourTheme.number(t);
-        return t;
+    /** Every percentage in the optimizer is selected by touch, never typed.
+     * 5, 10, ... 100; saved legacy values like 48/56 are rounded for display
+     * to the nearest selectable value, only persisted on explicit SAVE.
+     */
+    private static final int PCT_MIN=5,PCT_STEP=5,PCT_COUNT=20;
+    private Spinner percentageSelector(int previouslySaved){
+        String[] options=new String[PCT_COUNT];
+        for(int i=0;i<PCT_COUNT;i++)
+            options[i]=((i+1)*PCT_STEP)+" %";
+        int selected=Math.min(PCT_COUNT-1,
+            Math.max(0,(int)Math.round((previouslySaved-PCT_MIN)/
+                (double)PCT_STEP)));
+        return selector(options,selected);
     }
     private void card(LinearLayout parent,T1OptimizedModePolicy.Road which){
         T1OptimizedModePolicy.Rule existing=T1OptimizedModeStore.get(this,which);
@@ -123,7 +126,7 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
                 "Mayor o igual (≥)","Menor o igual (≤)"},
             existing.comparison.ordinal());
         column(thresholdEditor,p.comparison,2);
-        p.targetMinimum=number(existing.minBattery,"Porcentaje");
+        p.targetMinimum=percentageSelector(existing.minBattery);
         column(thresholdEditor,p.targetMinimum,1);
         thresholdEditor.addView(text("%",15,0xFF334B5A,true));
         threshold.addView(thresholdEditor);
@@ -131,11 +134,13 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
 
         LinearLayout target=vertical();
         target.addView(text("OBJETIVO SOC FORZADO",12,0xFF334B5A,true));
-        target.addView(text("Porcentaje que se le pediría mantener al auto "+
-            "si elegís SOC FORZADO (distinto de la condición).",
+        target.addView(text("Seleccioná de 5 a 100 % (cada 5). "+
+            "Objetivos SOC verificados para escritura OEM automática: "+
+            "20, 30, 40, 50, 60 o 70 %. Los demás se guardan como "+
+            "preferencia pero NO se envían sin validación del vehículo.",
             11,0xFF40566B,false));
         LinearLayout targetEditor=horizontal();
-        p.forced=number(existing.forcedSoc,"Porcentaje objetivo");
+        p.forced=percentageSelector(existing.forcedSoc);
         column(targetEditor,p.forced,1);
         targetEditor.addView(text("%",15,0xFF334B5A,true));
         target.addView(targetEditor);
@@ -205,17 +210,12 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         setContentView(scroll);
         showCurrent();
     }
-    private int percentage(EditText e){
-        try{
-            String x=e.getText().toString().trim();
-            if(x.isEmpty())throw new IllegalArgumentException();
-            int value=Integer.parseInt(x);
-            if(value<0||value>100)throw new IllegalArgumentException();
-            return value;
-        }catch(Exception ex){
-            throw new IllegalArgumentException("Los porcentajes deben "+
-                "estar entre 0 y 100.");
-        }
+    private int percentage(Spinner spinner){
+        if(spinner==null||spinner.getSelectedItemPosition()<0||
+            spinner.getSelectedItemPosition()>=PCT_COUNT)
+            throw new IllegalArgumentException(
+                "Elegí un porcentaje del menú (5 a 100 %).");
+        return PCT_MIN+PCT_STEP*spinner.getSelectedItemPosition();
     }
     private T1OptimizedModePolicy.Rule fromControls(Profile p){
         T1OptimizedModePolicy.Power power=T1OptimizedModePolicy.Power.values()[
