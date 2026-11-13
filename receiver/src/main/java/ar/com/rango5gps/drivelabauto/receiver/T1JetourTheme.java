@@ -16,6 +16,10 @@ import android.view.Gravity;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
+import android.widget.Spinner;
+import android.widget.ArrayAdapter;
+import android.view.View;
+import android.view.ViewGroup;
 import java.util.Locale;
 
 /**
@@ -87,6 +91,37 @@ final class T1JetourTheme {
         e.setBackground(surface(PANEL_HI,10));
         e.setPadding(dp(e.getContext(),10),dp(e.getContext(),8),
             dp(e.getContext(),10),dp(e.getContext(),8));
+    }
+    static void spinner(Spinner s,String[] choices){
+        Context c=s.getContext();
+        ArrayAdapter<String> adapter=new ArrayAdapter<String>(
+            c,android.R.layout.simple_spinner_item,choices){
+            @Override public View getView(int position,View convert,ViewGroup parent){
+                TextView t=(TextView)super.getView(position,convert,parent);
+                t.setText(choices[position]+"  ▾");
+                t.setTextColor(WHITE);
+                t.setTextSize(15);
+                t.setSingleLine(true);
+                t.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                t.setPadding(dp(c,10),dp(c,10),dp(c,10),dp(c,10));
+                t.setBackground(surface(PANEL_HI,10));
+                t.setMinHeight(dp(c,45));
+                return t;
+            }
+            @Override public View getDropDownView(int position,View convert,
+                                                   ViewGroup parent){
+                TextView t=(TextView)super.getDropDownView(position,convert,parent);
+                t.setTextColor(WHITE);t.setTextSize(16);
+                t.setSingleLine(false);
+                t.setPadding(dp(c,12),dp(c,12),dp(c,12),dp(c,12));
+                t.setMinHeight(dp(c,48));
+                t.setBackgroundColor(position%2==0?PANEL_HI:PANEL);
+                return t;
+            }
+        };
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        s.setAdapter(adapter);
+        s.setPopupBackgroundDrawable(surface(PANEL,12));
     }
     static void title(TextView t){
         t.setTextColor(WHITE);
