@@ -109,8 +109,13 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private volatile ArrayList<T1MasterTripHistory.Entry> cachedMasterHistory=
         new ArrayList<>();
     private long lastHistoryAuditAt=0L;
-    private TextView historyDetailTitle,historyRepairStatus;
+    private TextView historyDetailTitle,historyRepairStatus,
+        historyDeleteStatus;
     private String selectedHistoryKey="";
+    // Prevent an in-flight history read from repainting records that
+    // the user just deleted; revision applies to every async snapshot.
+    private volatile long historyDeleteRevision=0;
+    private volatile boolean historyRefreshAfterDeletion=false;
     private final AtomicBoolean historyRepairBusy=new AtomicBoolean(false);
     private TextView liveFuelNow,liveEcoNow,historyEcoStatus;
     private final java.util.Map<String,T1EcoTripReport.Result> ecoHistoryCache=
@@ -1244,6 +1249,13 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             this::confirmDeleteSelectedHistory);
         compactButton(repairActions,"ELIMINAR TODO",RED,
             this::confirmDeleteAllHistory);
+        historyDeleteStatus=text(
+            "BORRADO LOCAL · Seleccioná un viaje o ELIMINAR TODO. "+
+            "El resultado y cualquier bloqueo aparecen aquí.",
+            13,T1JetourTheme.CYAN,true);
+        historyDeleteStatus.setPadding(12,12,12,12);
+        historyDeleteStatus.setBackground(bg(CARD,12));
+        secondary.addView(historyDeleteStatus);
         secondary.addView(text("IZQUIERDA: VIAJES 1/2 · DERECHA: "+
             "JORNADAS COMPLETAS. Elegí una tarjeta y verás los seis "+
             "indicadores a lo ancho, con original y corregido.",12,MUTED,true));
@@ -1700,8 +1712,14 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     }
     private void updateHistory(){
         if(!visible||secondary==null||
-            secondary.getVisibility()!=android.view.View.VISIBLE||
-            !historyUiBusy.compareAndSet(false,true))return;
+            secondary.getVisibility()!=android.view.View.VISIBLE)return;
+        if(!historyUiBusy.compareAndSet(false,true)){
+            // If a background read overlaps deletion, an immediately
+            // requested refresh must not get dropped forever.
+            if(historyRefreshAfterDeletion)return;
+            return;
+        }
+        final long revision=historyDeleteRevision;
         new Thread(()->{
             HistoryUiSnapshot snapshot=null;
             try{
@@ -1715,6 +1733,18 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             final HistoryUiSnapshot ready=snapshot;
             ui.post(()->{
                 historyUiBusy.set(false);
+                if(revision!=historyDeleteRevision){
+                    // A stale pre-deletion background read MUST NEVER
+                    // repopulate the two columns with deleted entries.
+                    if(visible&&!isFinishing()&&!isDestroyed())
+                        updateHistory();
+                    return;
+                }
+                if(historyRefreshAfterDeletion){
+                    // Render the fresh result once; do not suppress it
+                    // because the previous operation marked it pending.
+                    historyRefreshAfterDeletion=false;
+                }
                 if(!visible||isFinishing()||isDestroyed()||
                     secondary==null||
                     secondary.getVisibility()!=android.view.View.VISIBLE)
@@ -2015,14 +2045,38 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             });
         },"T1-Historical-Eco-OSM").start();
     }
+    /** Show results RIGHT NEXT TO the red delete controls. Previous
+     * message() targeted a distant caption above the history and users
+     * couldn't see errors, or distinguish persisted CSV from stale cards.
+     */
+    private void historyDeleteResult(boolean success,String detail){
+        String msg=(detail==null||detail.trim().isEmpty())?
+            "Borrado sin resultado verificable.":detail;
+        if(historyDeleteStatus!=null){
+            historyDeleteStatus.setText(msg);
+            historyDeleteStatus.setTextColor(success?
+                T1JetourTheme.CYAN:T1JetourTheme.AMBER);
+        }
+        if(feedback!=null)feedback.setText(msg);
+        if(!isFinishing()&&!isDestroyed()){
+            new AlertDialog.Builder(this)
+                .setTitle(success?"BORRADO LOCAL CONFIRMADO":
+                    "NO SE BORRÓ EL HISTORIAL")
+                .setMessage(msg)
+                .setPositiveButton("ENTENDIDO",null).show();
+        }
+    }
     /** Deletion is never implicit or triggered by a background repair.
      * The active trip guard is checked again on the worker thread. */
     private void confirmDeleteSelectedHistory(){
         final String key=selectedHistoryKey;
         if(key==null||!key.matches("[012]:[0-9_]+")){
-            message("Elegí primero un viaje o una jornada del historial.");
+            historyDeleteResult(false,
+                "Elegí primero una tarjeta de Viaje 1, Viaje 2 o Total.");
             return;
         }
+        String blocked=T1TripDeletion.blockReason(this);
+        if(blocked!=null){historyDeleteResult(false,blocked);return;}
         int type=Character.digit(key.charAt(0),10);
         String id=key.substring(2);
         String what=type==0?"jornada completa":("Viaje "+type);
@@ -2038,6 +2092,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             .show();
     }
     private void confirmDeleteAllHistory(){
+        String blocked=T1TripDeletion.blockReason(this);
+        if(blocked!=null){historyDeleteResult(false,blocked);return;}
         final EditText typed=new EditText(this);
         typed.setSingleLine(true);
         typed.setInputType(InputType.TYPE_CLASS_TEXT|
@@ -2058,46 +2114,91 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             .setNegativeButton("CANCELAR",null)
             .setPositiveButton("ELIMINAR TODO",(d,w)->{
                 if(!"ELIMINAR TODO".equals(typed.getText().toString().trim())){
-                    message("No se borró nada: la confirmación escrita no coincide.");
+                    historyDeleteResult(false,
+                        "No se borró nada: escribí exactamente ELIMINAR TODO "+
+                        "en el cuadro de confirmación.");
                     return;
                 }
                 performHistoryDeletion(-1,null);
             }).show();
     }
     private void performHistoryDeletion(int slot,String id){
+        String blocked=T1TripDeletion.blockReason(this);
+        if(blocked!=null){historyDeleteResult(false,blocked);return;}
         if(T1TripDeletion.busy()){
-            message("Ya hay un borrado en curso.");return;
+            historyDeleteResult(false,"Ya hay un borrado en curso.");return;
         }
-        if(feedback!=null)feedback.setText("Borrando historial local en segundo plano…");
+        if(historyRepairBusy.get()){
+            historyDeleteResult(false,
+                "Historial OEM todavía en reconstrucción. "+
+                "Esperá a que termine antes de borrar.");return;
+        }
+        if(historyDeleteStatus!=null){
+            historyDeleteStatus.setText(
+                "BORRANDO · verificando archivos reales y reconstruyendo listas…");
+            historyDeleteStatus.setTextColor(T1JetourTheme.AMBER);
+        }
         new Thread(()->{
             String result;
             boolean success;
+            ArrayList<T1MasterTripHistory.Entry> freshMaster=null;
             try{
                 result=slot<0?T1TripDeletion.deleteAll(getApplicationContext()):
                     T1TripDeletion.deleteSelected(getApplicationContext(),slot,id);
+                // Do not claim the operation finished until a fresh master
+                // read checks what remains ON DISK. Never reuse old cache.
+                SharedPreferences p=getSharedPreferences(
+                    T1TripRecorderService.PREFS,MODE_PRIVATE);
+                freshMaster=T1MasterTripHistory.closed(
+                    T1TripRecorderService.tripDir(this),
+                    p.getString(T1TripRecorderService.ID,""),
+                    p.getBoolean(T1TripRecorderService.RUNNING,false)||
+                    p.getBoolean(T1TripRecorderService.PAUSED,false));
                 success=true;
             }catch(Exception ex){
-                result="NO SE BORRÓ EL REGISTRO: "+ex.getMessage();
+                result="NO SE BORRÓ EL HISTORIAL: "+
+                    (ex.getMessage()==null?ex.getClass().getSimpleName():
+                        ex.getMessage());
                 success=false;
+                T1OemDiagnosticLog.add(getApplicationContext(),
+                    "COCKPIT_DELETE_FAILED",
+                    ex.getClass().getSimpleName()+": "+
+                        String.valueOf(ex.getMessage()));
             }
             final String msg=result;
             final boolean done=success;
+            final ArrayList<T1MasterTripHistory.Entry> master=freshMaster;
             ui.post(()->{
-                message(msg);
-                if(!done||isFinishing()||isDestroyed())return;
-                selectedHistoryKey="";
-                renderedHistorySignature="";
-                renderedHistoryDetailSignature="";
-                cachedMasterHistory=new ArrayList<>();
-                ecoHistoryCache.clear();
-                lastTotals=0;
-                updateHistory();
-                updateStats();
+                if(isFinishing()||isDestroyed())return;
+                if(done){
+                    // Invalidate ANY pending background read and the old
+                    // displayed cards before reloading both client CSVs.
+                    historyDeleteRevision++;
+                    historyRefreshAfterDeletion=true;
+                    selectedHistoryKey="";
+                    renderedHistorySignature="";
+                    renderedHistoryDetailSignature="";
+                    cachedMasterHistory=master==null?
+                        new ArrayList<>():master;
+                    ecoHistoryCache.clear();
+                    ecoHistoryPending.clear();
+                    historyPickList.removeAllViews();
+                    historyMasterList.removeAllViews();
+                    historyDetailRow.removeAllViews();
+                    if(historyDetailTitle!=null)
+                        historyDetailTitle.setText(
+                            "Actualizando viajes y jornadas desde los CSV…");
+                    lastTotals=0;
+                    updateHistory();
+                    updateStats();
+                }
+                historyDeleteResult(done,msg);
             });
         },"T1-History-Delete-User-Confirmed").start();
     }
     private void runHistoryRepair(){runHistoryRepair(true);}
     private void runHistoryRepair(boolean manual){
+        if(T1TripDeletion.busy())return; // avoid rebuilding while deleting
         if(!manual&&lastHistoryAuditAt>0&&
             System.currentTimeMillis()-lastHistoryAuditAt<120000L)return;
         if(!historyRepairBusy.compareAndSet(false,true))return;
