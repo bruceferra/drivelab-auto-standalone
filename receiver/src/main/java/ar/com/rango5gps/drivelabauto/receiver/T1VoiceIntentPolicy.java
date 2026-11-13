@@ -21,6 +21,13 @@ final class T1VoiceIntentPolicy {
         if(target.length()<3||target.length()>230)return null;
         return target;
     }
+    /** Live weather is separate from general news, sports, and destinations. */
+    static boolean isWeatherQuery(String said) {
+        if(said==null)return false;
+        String normalized=T1VoiceMath.normalize(said);
+        return normalized.matches(".*\\b(?:clima|pronostico|temperatura|lluvia|"+
+            "llover|hace frio|hace calor|tiempo hoy|tiempo manana)\\b.*");
+    }
     static String described(String said) {
         String route=routeDestination(said);
         return route==null?"CONSULTA DE IA":"NAVEGACIÓN WAZE: "+route;
