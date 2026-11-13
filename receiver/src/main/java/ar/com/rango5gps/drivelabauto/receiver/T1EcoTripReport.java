@@ -40,13 +40,15 @@ final class T1EcoTripReport {
             String line;
             while((line=r.readLine())!=null){
                 String[] row=line.split(",",-1);
-                if(row.length!=6)continue;
+                if(row.length!=6&&row.length!=7)continue;
                 double t=num(row,0);
                 if(!Double.isFinite(t)||t<from||t>until)continue;
                 double distance=num(row,1),sec=num(row,2),
                     cls=num(row,3),speed=num(row,4),accel=num(row,5);
                 if(!Double.isFinite(cls))continue;
-                result.add((long)t,distance,sec,(int)cls,speed,accel);
+                double limit=row.length==7?num(row,6):-1;
+                result.add((long)t,distance,sec,(int)cls,speed,accel,
+                    Double.isFinite(limit)?(int)limit:-1);
             }
         }catch(IOException ignored){}
         return result;
@@ -114,7 +116,7 @@ final class T1EcoTripReport {
             long prevTime=0,lastMatchAt=0,lastCoordinateAt=0;
             double prevKm=Double.NaN,prevSpeed=Double.NaN,
                 lastLat=Double.NaN,lastLon=Double.NaN;
-            int road=T1EcoTripMetrics.UNKNOWN;
+            int road=T1EcoTripMetrics.UNKNOWN,limit=-1;
             while((line=reader.readLine())!=null){
                 String[] row=line.split(",",-1);
                 if(row.length!=head.length)continue;
@@ -147,7 +149,9 @@ final class T1EcoTripReport {
                 boolean fresh=coordinates&&lastCoordinateAt>0&&
                     ms-lastCoordinateAt<=15000&&
                     (!Double.isFinite(age)||(age>=0&&age<=15000));
-                if(!fresh){road=T1EcoTripMetrics.UNKNOWN;lastMatchAt=0;}
+                if(!fresh){
+                    road=T1EcoTripMetrics.UNKNOWN;limit=-1;lastMatchAt=0;
+                }
                 else if(lastMatchAt==0||ms-lastMatchAt>=9000){
                     Location location=new Location("historical-trip-local-map");
                     location.setLatitude(lat);location.setLongitude(lon);
@@ -157,6 +161,7 @@ final class T1EcoTripReport {
                         SystemClock.elapsedRealtimeNanos());
                     T1OsmRoadAdvisor.Result matched=
                         T1OfflineRoadMap.roadAt(app,location);
+                    limit=matched.speedLimitKmh;
                     road=matched.road==T1OsmRoadAdvisor.Road.CITY?
                         T1EcoTripMetrics.CITY:
                         matched.road==T1OsmRoadAdvisor.Road.ROAD?
@@ -166,7 +171,7 @@ final class T1EcoTripReport {
                             T1EcoTripMetrics.UNKNOWN;
                     lastMatchAt=ms;
                 }
-                data.add(ms,distance,dt,road,speed,acceleration);
+                data.add(ms,distance,dt,road,speed,acceleration,limit);
             }
         }catch(IOException ignored){}
         return data;
