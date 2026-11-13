@@ -1,67 +1,75 @@
 package ar.com.rango5gps.drivelabauto.receiver;
 
 /**
- * Read-only state gate for the four-profile SOC/regen optimizer.
- * Three consecutive observations apply ONLY when the DESIRED profile
- * changes, not on every 10-second GPS read of the same road.
- * OEM writes are still handled and verified by T1SocRegenPilot.
+ * Read-only state latch for the SOC/regen half of an optimized road profile.
+ *
+ * The caller only enters this gate AFTER T1OptimizedAutoGate has already
+ * received three consecutive trusted GPS road observations and OEM 1043
+ * matches the selected propulsion mode. It is a BUG to demand a SECOND
+ * 1/3,2/3,3/3 sequence for SOC/regen; that was observed on the real T1:
+ * CITY 3/3 -> EV confirmed -> SOC/REGEN pending -> CITY 1/3,2/3,3/3.
+ *
+ * This gate checks whether the desired auxiliary profile differs from the
+ * last verified one. New valid targets become READY on the very first call
+ * after the verified road; the actual OEM 1040/1041/1046 command still uses
+ * double preflight and independent readback via T1SocRegenPilot.
  */
 final class T1SocRegenTransitionGate {
-    static final int REQUIRED_MATCHES=3;
-    enum Reason { WAIT_STABLE, READY, APPLIED, OEM_MATCHES, UNAVAILABLE }
+    enum Reason { READY, APPLIED, OEM_MATCHES, UNAVAILABLE }
+
     static final class Decision {
         final Reason reason;
-        final int matches;
         final String profile;
-        Decision(Reason reason,int matches,String profile){
-            this.reason=reason;this.matches=matches;this.profile=profile;
+        Decision(Reason reason,String profile){
+            this.reason=reason;
+            this.profile=profile;
         }
         boolean ready(){return reason==Reason.READY;}
     }
-    private String candidate, applied;
-    private int votes;
+
+    private String applied;
 
     static String key(T1SocRegenWritePolicy.Targets t){
         if(t==null||!t.valid())return null;
         return t.strategy+":"+(t.needsTarget()?t.forcedSoc:-1)+":"+t.regen;
     }
 
+    /**
+     * @param roadConfirmedAndEligible true only after 3 trusted road fixes,
+     * OEM 1043 match and fresh OEM P/0 or D/valid speed. The parent service
+     * must not call this gate for a new unconfirmed road.
+     */
     synchronized Decision examine(T1SocRegenWritePolicy.Targets desired,
-                     boolean eligible,boolean oemMatches){
+                     boolean roadConfirmedAndEligible,boolean oemMatches){
         String wanted=key(desired);
-        if(!eligible||wanted==null){
-            candidate=null;votes=0;
-            return new Decision(Reason.UNAVAILABLE,0,wanted);
-        }
-        // The same confirmed OEM target never requires another 1/3 sequence,
-        // even if other GPS fixes arrive or the integer 1041 getter is opaque.
+        if(!roadConfirmedAndEligible||wanted==null)
+            return new Decision(Reason.UNAVAILABLE,wanted);
+        // No revalidation/rewrite on an already confirmed profile even if
+        // another GPS fix arrives or a readback is momentarily stale.
         if(wanted.equals(applied))
-            return new Decision(Reason.APPLIED,REQUIRED_MATCHES,wanted);
+            return new Decision(Reason.APPLIED,wanted);
         if(oemMatches){
-            applied=wanted;candidate=wanted;votes=REQUIRED_MATCHES;
-            return new Decision(Reason.OEM_MATCHES,REQUIRED_MATCHES,wanted);
+            // Nothing to write: current OEM matches the newly selected
+            // road's strategy, target (if forced) and regeneration.
+            applied=wanted;
+            return new Decision(Reason.OEM_MATCHES,wanted);
         }
-        if(!wanted.equals(candidate)){
-            candidate=wanted;votes=1;
-        }else votes=Math.min(REQUIRED_MATCHES,votes+1);
-        return new Decision(votes==REQUIRED_MATCHES?Reason.READY:
-            Reason.WAIT_STABLE,votes,wanted);
+        // Road already passed 3/3. No second voting cycle.
+        // This is NOT itself proof of OEM application; UI stays neutral
+        // until T1SocRegenPilot's verified callback on a later cycle.
+        return new Decision(Reason.READY,wanted);
     }
 
     synchronized void recordConfirmed(T1SocRegenWritePolicy.Targets done){
-        String key=key(done);
-        if(key==null)throw new IllegalArgumentException("Invalid target");
-        applied=key;
-        candidate=key;
-        votes=REQUIRED_MATCHES;
+        String confirmed=key(done);
+        if(confirmed==null)
+            throw new IllegalArgumentException("Invalid SOC/regen target");
+        applied=confirmed;
     }
 
-    /** A block switched OFF must invalidate pending votes AND confirmed
-     * cache, otherwise re-enabling might skip checks based on old OEM state.
-     */
-    synchronized void reset(){
-        candidate=null;applied=null;votes=0;
-    }
+    /** Disabling a road block invalidates prior verification. Re-enabling
+     * still goes through the full T1OptimizedAutoGate 3-GPS process. */
+    synchronized void reset(){applied=null;}
 
     synchronized String currentConfirmed(){return applied;}
 }
