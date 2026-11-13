@@ -210,23 +210,29 @@ final class T1GlobalToolbar {
             T1JetourTheme.button(airButton,T1JetourTheme.PANEL_HI);
         }
     }
-    /** The road state is sourced from the same fresh offline OSM cache as
-     * the optimizer, never from a saved preference for a selected profile.
-     * With AUTO OFF the chip is neutral: green means the optimizer is ON,
-     * not that a mode command has necessarily been applied by the OEM.
+    /** The green chip is an APPLIED optimized profile, not the GPS
+     * classification. At SOC 13% with a CITY minimum of 15% it must show
+     * SOC NO CUMPLE (gray), even if the GPS reports a city street.
      */
     private void refreshRoadMode(boolean automatic){
         if(roadModeButton==null)return;
-        T1OptimizedModePolicy.Road active=
-            T1OptimizedModeStore.lastRoad(owner);
-        String road=T1OptimizedModePolicy.roadName(active);
-        roadModeButton.setText("MODO "+road);
-        T1JetourTheme.button(roadModeButton,automatic?
-            T1JetourTheme.GREEN_BUTTON:T1JetourTheme.PANEL_HI);
-        roadModeButton.setContentDescription(
-            "Clasificación de vía "+road+", solo lectura. "+
-            "Modo optimizado "+(automatic?"activado":"desactivado")+
-            ". No confirma un cambio OEM.");
+        T1OptimizedModePolicy.Road applied=automatic?
+            T1OptimizedAutoService.verifiedAppliedRoad(owner):null;
+        if(applied!=null){
+            String road=T1OptimizedModePolicy.roadName(applied);
+            roadModeButton.setText("MODO "+road);
+            T1JetourTheme.button(roadModeButton,T1JetourTheme.GREEN_BUTTON);
+            roadModeButton.setContentDescription(
+                "Perfil "+road+" aplicado y confirmado. "+
+                "Tres lecturas de vía, condición SOC, OEM 1043 y SOC/regeneración verificados. Solo lectura.");
+        }else{
+            String reason=T1OptimizedAutoService.roadDisplayReason(owner);
+            roadModeButton.setText(reason);
+            T1JetourTheme.button(roadModeButton,T1JetourTheme.PANEL_HI);
+            roadModeButton.setContentDescription(
+                "Modo optimizado NO confirmado: "+reason+
+                ". El GPS por sí solo no demuestra la activación del perfil.");
+        }
     }
     private void airStatus(){
         SharedPreferences air=owner.getSharedPreferences(
