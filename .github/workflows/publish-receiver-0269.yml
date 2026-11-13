@@ -258,11 +258,11 @@ jobs:
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'bruceferra/drivelab-auto-standalone'
           test "$GITHUB_REF_NAME" = main
-          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.69
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.68
           ! gh release view v0.2.69 >/dev/null 2>&1
           mkdir -p /tmp/prior output
-          gh release download v0.2.69 --pattern 'DriveLab-Auto-Receiver-v0.2.69.apk' --dir /tmp/prior
-          gh release download v0.2.69 --pattern 'sender.json' --dir /tmp/prior
+          gh release download v0.2.68 --pattern 'DriveLab-Auto-Receiver-v0.2.68.apk' --dir /tmp/prior
+          gh release download v0.2.68 --pattern 'sender.json' --dir /tmp/prior
           cp /tmp/prior/sender.json output/sender.json
           python3 - <<'PY'
           import json
@@ -277,8 +277,8 @@ jobs:
           sig="$ANDROID_HOME/build-tools/35.0.0/apksigner"
           aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
           "$sig" verify --print-certs "$apk"
-          "$sig" verify --print-certs /tmp/prior/DriveLab-Auto-Receiver-v0.2.69.apk
-          oldcert=$("$sig" verify --print-certs /tmp/prior/DriveLab-Auto-Receiver-v0.2.69.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          "$sig" verify --print-certs /tmp/prior/DriveLab-Auto-Receiver-v0.2.68.apk
+          oldcert=$("$sig" verify --print-certs /tmp/prior/DriveLab-Auto-Receiver-v0.2.68.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
           newcert=$("$sig" verify --print-certs "$apk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
           test -n "$oldcert" && test "$oldcert" = "$newcert"
           badge=$("$aapt" dump badging "$apk" | head -1)
@@ -313,7 +313,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.69
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.68
           gh release create v0.2.69 \
             output/DriveLab-Auto-Receiver-v0.2.69.apk \
             output/receiver.json output/sender.json output/receiver.sha256 \
@@ -325,5 +325,5 @@ jobs:
           gh release download v0.2.69 --pattern 'receiver.json' --dir verify
           cmp output/sender.json verify/sender.json
           cmp output/receiver.json verify/receiver.json
-          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.69
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.68
           gh release view v0.2.69 --json assets --jq '.assets[].name'
