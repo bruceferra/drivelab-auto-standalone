@@ -28,18 +28,25 @@ import java.util.Locale;
  * Drawables are lightweight local Android vector strokes; no dependencies.
  */
 final class T1JetourTheme {
-    static final int NIGHT=0xFF080F20;
-    static final int DEEP=0xFF0B192D;
-    static final int PANEL=0xFF14283E;
-    static final int PANEL_HI=0xFF1A3651;
-    static final int CYAN=0xFF65E6EC;
-    static final int TURQUOISE=0xFF28CFDC;
-    static final int GREEN=0xFF86E85D;
-    static final int MUTED=0xFFBBD3E3;
-    static final int WHITE=0xFFF6FBFF;
-    static final int RED=0xFFEF686D;
-    static final int AMBER=0xFFFFC66C;
-    static final int BORDER=0xFF39607B;
+    // Sampled from raw 1920x1080 ADB Jetour T1 screenshots, 2026-11-13.
+    // RGB pixels have no camera white-balance shift. Midtones vary by screen.
+    static final int NIGHT=0xFF01040B;       // OEM launcher background
+    static final int DEEP=0xFF111416;        // nearly black controls
+    static final int PANEL=0xFF1D2024;       // dialogs and inactive surfaces
+    static final int PANEL_HI=0xFF303B43;    // raised neutral tile
+    static final int CYAN=0xFFA0D4DA;        // selected menu label
+    static final int TURQUOISE=0xFF6C979B;   // selected setting cards
+    static final int GREEN=0xFF6ACA4E;       // launcher green tile
+    static final int GREEN_BUTTON=0xFF326B39; // readable white-on-green
+    static final int BLUE=0xFF2F9CFB;        // launcher blue tile
+    static final int MUTED=0xFFB9C6CB;
+    static final int WHITE=0xFFF4F6F8;
+    static final int RED=0xFFDF444B;         // instrument-alert approximate
+    static final int RED_BUTTON=0xFF833B42;  // readable white-on-red
+    static final int AMBER=0xFFF29A2F;       // multimedia tile / warning
+    static final int AMBER_BUTTON=0xFF795327;
+    static final int BORDER=0xFF52656B;
+    static final String BUTTON_TAG="jetour_oem_theme_button";
     private T1JetourTheme(){}
 
     static int dp(Context c,float value){
@@ -52,7 +59,7 @@ final class T1JetourTheme {
     }
     static GradientDrawable backdrop(){
         return new GradientDrawable(GradientDrawable.Orientation.TL_BR,
-            new int[]{NIGHT,DEEP,0xFF0D2640});
+            new int[]{NIGHT,0xFF0B1018,0xFF1C252B});
     }
     static GradientDrawable surface(int color,int radius){
         GradientDrawable d=new GradientDrawable(
@@ -70,6 +77,7 @@ final class T1JetourTheme {
     static void button(Button b,int color){
         b.setBackgroundTintList(null);
         b.setBackground(buttonBackground(color));
+        b.setTag(BUTTON_TAG);
         b.setAllCaps(false);
         b.setTextColor(WHITE);
         b.setGravity(Gravity.CENTER);
