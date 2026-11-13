@@ -218,6 +218,7 @@ final class T1SocRegenPilot {
                 // 1041 is a raw getter, NOT an authorized former preset.
                 // Preserve it for diagnostics but never use it as rollback.
                 if(id==1041){
+                    final int rawInt=now;
                     double rawFloat=Double.NaN;
                     try{rawFloat=readSocTargetFloat(b);}catch(Exception ignored){}
                     int whole=(int)Math.round(rawFloat);
@@ -229,7 +230,7 @@ final class T1SocRegenPilot {
                         now=whole;
                     }
                     T1OemDiagnosticLog.add(app,"SOC_REGEN_1041_RAW",
-                        "intRaw="+readInt(b,1041)+" floatRaw="+rawFloat+
+                        "intRaw="+rawInt+" floatRaw="+rawFloat+
                         " eligibleBaseline="+now);
                 }
                 original.put(id,now);
