@@ -470,7 +470,7 @@ jobs:
           mkdir -p /tmp/mirror-visible-controls
           javac -encoding UTF-8 -d /tmp/mirror-visible-controls \\
             receiver/tests/MirrorControlsVisibilitySourceContractTest.java
-          java -cp /tmp/mirror-visible-controls \\
+          java -cp /tmp/mirror-visible-controls \
             ar.com.rango5gps.drivelabauto.receiver.MirrorControlsVisibilitySourceContractTest
       - name: T1 fuel autonomy and recirculation regressions (pure JVM)
         shell: bash
