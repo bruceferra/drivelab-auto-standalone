@@ -152,7 +152,8 @@ public final class ReceiverVehicleActivity extends T1ImmersiveActivity {
     }
     private void button(LinearLayout parent,String text,Runnable run){
         Button b=new Button(this);b.setText(text);b.setAllCaps(false);
-        T1JetourTheme.button(b,text.contains("PENDIENT")?0xFF116676:0xFF1A3D59);
+        T1JetourTheme.button(b,text.contains("PENDIENT")?0xFF426E73:
+            T1JetourTheme.PANEL_HI);
         b.setOnClickListener(v->run.run());parent.addView(b);
     }
     private void section(LinearLayout parent,String name){
@@ -178,7 +179,8 @@ public final class ReceiverVehicleActivity extends T1ImmersiveActivity {
             b.setText(tabNames[i]);b.setAllCaps(false);
             b.setTextSize(11);
             b.setActivated(i==activeTab);
-            T1JetourTheme.button(b,i==activeTab?0xFF0C6874:T1JetourTheme.PANEL);
+            T1JetourTheme.button(b,i==activeTab?T1JetourTheme.TURQUOISE:
+                T1JetourTheme.PANEL);
             b.setOnClickListener(v->{activeTab=idx;render();});
             menu.addView(b,new LinearLayout.LayoutParams(0,60,1));
         }
