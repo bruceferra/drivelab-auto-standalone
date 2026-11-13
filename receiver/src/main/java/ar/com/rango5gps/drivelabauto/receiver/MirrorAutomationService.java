@@ -31,6 +31,7 @@ public final class MirrorAutomationService extends Service {
     public static final String AUTO="auto", STATUS="status",LEFT="steps_left",
         RIGHT="steps_right",POSITION="position",LAST_GEAR="last_gear",LAST_SPEED="last_speed",
         SERVICE_ACTIVE="service_active",LAST_RECONNECT="last_reconnect",
+        LAST_POLL="auto_last_poll_ms",
         LAST_ERROR="last_error",LAST_TRANSITION="last_transition";
     public static final String ACTION_AUTO="t1.mirror.AUTO";
     public static final String ACTION_MANUAL="t1.mirror.MANUAL";
@@ -47,6 +48,31 @@ public final class MirrorAutomationService extends Service {
 
     @Override public IBinder onBind(Intent ignored){return null;}
     private SharedPreferences prefs(){return getSharedPreferences(PREFS,MODE_PRIVATE);}
+    /** User-selected default for this Jetour: enable on a fresh Receiver open.
+     * Never claim to know the physical mirror angle after a process restart.
+     * An already-healthy foreground service is left untouched. */
+    static void activateOnAppOpen(Context context){
+        SharedPreferences p=context.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
+        long age=System.currentTimeMillis()-p.getLong(LAST_POLL,0L);
+        if(p.getBoolean(AUTO,false)&&p.getBoolean(SERVICE_ACTIVE,false)&&
+            age>=0&&age<=3000)return;
+        // Do not rearm a possibly interrupted mirror movement.
+        if(p.getString(POSITION,"").startsWith("INCIERTA")){
+            p.edit().putString(STATUS,
+                "ESPEJOS AUTO SOLICITADO, PAUSADO POR POSICIÓN INCIERTA; "+
+                "revisar físicamente y rearmar manualmente").apply();
+            return;
+        }
+        p.edit().putString(STATUS,"ESPEJOS AUTO · iniciando servicio de fondo")
+            .apply();
+        try{
+            context.startForegroundService(new Intent(context,
+                MirrorAutomationService.class).setAction(ACTION_AUTO));
+        }catch(RuntimeException ex){
+            p.edit().putString(STATUS,"No se pudo iniciar espejos AUTO: "+
+                ex.getClass().getSimpleName()).apply();
+        }
+    }
     private int steps(String key){
         return Math.max(1,Math.min(MirrorParkingPolicy.MAX_PULSES_PER_SIDE,prefs().getInt(key,2)));
     }
@@ -70,7 +96,7 @@ public final class MirrorAutomationService extends Service {
         }
         if(ACTION_AUTO.equals(action)){
             prefs().edit().putBoolean(AUTO,true)
-                .putString(POSITION,"D · referencia ajustada por conductor")
+                .putString(POSITION,"AUTO armado · referencia de ángulo NO medida")
                 .putString(STATUS,"AUTO armado · esperando transición nueva a R").apply();
         }else if(ACTION_RECOVER.equals(action)){
             // Pause AUTO for a stationary 10-UP recovery. It must be rearmed
@@ -124,6 +150,7 @@ public final class MirrorAutomationService extends Service {
         try{
             while(!stop){
                 boolean auto=prefs().getBoolean(AUTO,false);
+                prefs().edit().putLong(LAST_POLL,System.currentTimeMillis()).apply();
                 int manual=pendingManual;
                 if(!auto&&manual==0)break;
                 try{
