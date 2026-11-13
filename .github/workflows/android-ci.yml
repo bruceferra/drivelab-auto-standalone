@@ -56,6 +56,21 @@ jobs:
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1FuelDisplay.java \
             receiver/tests/T1FuelDisplayTest.java
           java -cp /tmp/fuel-display-test T1FuelDisplayTest
+      - name: Cockpit live consumption must NOT depend on recording a trip
+        shell: bash
+        run: |
+          set -euo pipefail
+          callbacks=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OemConsumptionCallbacks.java
+          cockpit=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
+          grep -Fq 'boolean startForCockpit()' "$callbacks"
+          grep -Fq 'logFile=cockpitMode?null:file' "$callbacks"
+          grep -Fq 'if(tripMode||cockpitMode)' "$callbacks"
+          grep -Fq '.putString("source",tripMode?"TRIP":"COCKPIT")' "$callbacks"
+          grep -Fq 'if(tripFeeding)' "$cockpit"
+          grep -Fq 'if(passive.startForCockpit())dashboardConsumption=passive;' "$cockpit"
+          grep -Fq 'dashboardConsumption.stop();' "$cockpit"
+          grep -Fq 'maintainFuelMonitor();' "$cockpit"
+          grep -Fq 'new T1TripTelemetry(' "$cockpit"
       - name: OEM 500m paired fuel, energy and distance audit (pure JVM)
         shell: bash
         run: |
@@ -387,7 +402,7 @@ jobs:
           grep -q 'VIAJE 1 GRABANDO' "$ui"
           grep -q 'ensureContinuousTrip()' "$ui"
           grep -q 'repairWithoutOldCsv' "$ui"
-          grep -q 'boolean resume=tripMode&&file.isFile()' "$callbacks"
+          grep -q 'boolean resume=tripMode&&file!=null&&file.isFile()' "$callbacks"
           grep -q 'count\[channel\]++' "$callbacks"
           grep -q 'int required=header.split' "$sync"
           # All passenger finish operations require explicit user action.
