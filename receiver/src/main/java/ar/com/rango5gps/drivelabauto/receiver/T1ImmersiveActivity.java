@@ -41,6 +41,8 @@ public abstract class T1ImmersiveActivity extends Activity {
         super.onResume();
         activeScreen=true;
         T1ImmersiveMode.apply(this);
+        RecirculationGuardService.ensureRunning(this);
+        MirrorAutomationService.ensureRunning(this);
         if(globalToolbar!=null)globalToolbar.onResume();
     }
     @Override protected void onPause(){
