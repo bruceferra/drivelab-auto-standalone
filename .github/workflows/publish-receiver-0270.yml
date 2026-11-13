@@ -226,9 +226,9 @@ jobs:
         run: |
           set -euo pipefail
           cockpit=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
-          grep -Fq 'root.removeView(top);' "$cockpit"
-          grep -Fq 'fixedBody.addView(top,' "$cockpit"
-          grep -Fq 'fixedBody.addView(scroll,' "$cockpit"
+          grep -Fq 'cockpitNavRow=null;' "$cockpit"
+          grep -Fq 'setContentView(scroll);' "$cockpit"
+          grep -Fq 'shell.addView(globalToolbar.view()' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ImmersiveActivity.java
           grep -Fq 'historyEcoStatus.setTextIsSelectable(false);' "$cockpit"
           grep -Fq 'historyUiBusy.compareAndSet(false,true)' "$cockpit"
           grep -Fq 'snapshot=loadHistorySnapshot();' "$cockpit"
@@ -246,9 +246,9 @@ jobs:
           grep -Fq 'dispatchTouchEvent(MotionEvent event)' "$cockpit"
           grep -Fq 'navTouchDowns++' "$cockpit"
           grep -Fq 'modeTouchDowns++' "$cockpit"
-          grep -Fq 'root.removeView(modes);' "$cockpit"
-          grep -Fq 'fixedBody.addView(modes,' "$cockpit"
-          grep -Fq 'fixedBody.addView(top,' "$cockpit"
+          grep -Fq 'cockpitModeRow=null;' "$cockpit"
+          grep -Fq 'commentaryRight.addView(systemMonitorLine,' "$cockpit"
+          grep -Fq 'T1WazeWheelService' receiver/src/main/AndroidManifest.xml
           grep -Fq 'roadTransitionPopup=null;' "$cockpit"
           grep -Fq 'SISTEMA RAM/CPU' "$cockpit"
           ! grep -Fq 'cockpitFrame.addView(roadTransitionPopup' "$cockpit"
