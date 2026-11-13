@@ -15,6 +15,13 @@ public final class T1StableAutonomySourceContractTest {
         String cal=Files.readString(root.resolve("T1FuelCalibration.java"));
         ok(ui.contains("T1StableAutonomy.estimate("),
            "Cockpit must use stable model for headline autonomy");
+        ok(ui.contains("T1PhevTotalRange.estimate(") &&
+           ui.contains("e.remainingKm") &&
+           !ui.contains("e.totalKm"),
+           "Mixed PHEV headline must never add EV range to pump-derived cycle");
+        ok(ui.contains("EV potencial por SOC:") &&
+           ui.contains("INFORMATIVO, NO SE SUMA"),
+           "EV potential remains independent diagnostic, not projected twice");
         ok(ui.contains("T1Fuel500mWindow.decode("),
            "Cockpit must show recorded 100x500m evidence");
         ok(ui.contains("T1FuelCalibration.latestL100(this)"),
