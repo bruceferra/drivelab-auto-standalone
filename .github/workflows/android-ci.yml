@@ -56,6 +56,15 @@ jobs:
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1FuelDisplay.java \
             receiver/tests/T1FuelDisplayTest.java
           java -cp /tmp/fuel-display-test T1FuelDisplayTest
+          testfile=receiver/tests/T1FuelDisplayTest.java
+          tank=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TankDashboardActivity.java
+          compact=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1InstrumentView.java
+          cockpit=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumInstrumentView.java
+          grep -Fq 'usableLitersText(30.10)' "$testfile"
+          grep -Fq 'NAFTA UTILIZABLE' "$tank"
+          grep -Fq 'T1FuelDisplay.usableLiters(' "$compact"
+          grep -Fq 'T1FuelDisplay.usableLiters(' "$cockpit"
+          grep -Fq 'T1FuelDisplay.usableLitersText(lastSample.fuel)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
       - name: Optimizer percentages are exclusively 5 to 100 touch dropdowns
         shell: bash
         run: |
