@@ -17,8 +17,8 @@ import android.widget.TextView;
  * activity re-render on tap. Motor actions still perform OEM safety checks.
  */
 final class ReceiverQuickControls {
-    private static final int TEAL=0xFF008577,BLUE=0xFF176B99,ORANGE=0xFFA15D23,
-        PURPLE=0xFF6956A6,RED=0xFF9A3737,GREY=0xFF5B6872,GREEN=0xFF327340;
+    private static final int TEAL=0xFF0B707A,BLUE=0xFF205A7A,ORANGE=0xFF825B2B,
+        PURPLE=0xFF225D78,RED=0xFF983E4A,GREY=0xFF274259,GREEN=0xFF126F62;
     private final Activity activity;
     private final MirrorPulsePilot fold;
     private final VehicleWindowGroup windows;
