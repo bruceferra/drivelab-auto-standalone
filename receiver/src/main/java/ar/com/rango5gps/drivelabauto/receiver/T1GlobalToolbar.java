@@ -29,7 +29,7 @@ final class T1GlobalToolbar {
     private final PedestrianAlertControl avas;
     private final LinearLayout container;
     private final Button[] modes=new Button[3];
-    private Button optimizer,mirrorButton,airButton,avsButton;
+    private Button optimizer,mirrorButton,airButton,avsButton,roadModeButton;
     private TextView info;
     private boolean foreground;
     private long lastPoll=0;
@@ -88,6 +88,15 @@ final class T1GlobalToolbar {
         modes[0]=button(header,"EV",T1JetourTheme.PANEL_HI,85,()->changeMode(1));
         modes[1]=button(header,"HEV",T1JetourTheme.PANEL_HI,85,()->changeMode(2));
         modes[2]=button(header,"EV MAX",T1JetourTheme.PANEL_HI,100,()->changeMode(3));
+        // Read-only dynamic road-mode chip: CITY/ROAD/MOTORWAY/UNKNOWN.
+        // The OEM powertrain buttons above remain active manual controls;
+        // this one never sends vehicle commands and cannot be tapped.
+        roadModeButton=button(header,"MODO DESCONOCIDO",
+            T1JetourTheme.PANEL_HI,183,()->{});
+        roadModeButton.setOnClickListener(null);
+        roadModeButton.setClickable(false);
+        roadModeButton.setLongClickable(false);
+        roadModeButton.setFocusable(false);
         info=new TextView(owner);
         info.setText("Modo OEM: verificando…");
         info.setTextColor(T1JetourTheme.CYAN);
@@ -171,6 +180,7 @@ final class T1GlobalToolbar {
         optimizer.setText(automatic?"OPTIMIZADO ON":"OPTIMIZADO OFF");
         T1JetourTheme.button(optimizer,automatic?
             T1JetourTheme.GREEN_BUTTON:T1JetourTheme.RED_BUTTON);
+        refreshRoadMode(automatic);
         SharedPreferences air=owner.getSharedPreferences(
             RecirculationGuardService.PREFS,Context.MODE_PRIVATE);
         boolean interior=RecirculationGuardService.MODE_INTERIOR.equals(
@@ -188,6 +198,24 @@ final class T1GlobalToolbar {
             airButton.setText(interior?"AIRE AUTO · REVISAR":"AIRE INTERIOR AUTO");
             T1JetourTheme.button(airButton,T1JetourTheme.PANEL_HI);
         }
+    }
+    /** The road state is sourced from the same fresh offline OSM cache as
+     * the optimizer, never from a saved preference for a selected profile.
+     * With AUTO OFF the chip is neutral: green means the optimizer is ON,
+     * not that a mode command has necessarily been applied by the OEM.
+     */
+    private void refreshRoadMode(boolean automatic){
+        if(roadModeButton==null)return;
+        T1OptimizedModePolicy.Road active=
+            T1OptimizedModeStore.lastRoad(owner);
+        String road=T1OptimizedModePolicy.roadName(active);
+        roadModeButton.setText("MODO "+road);
+        T1JetourTheme.button(roadModeButton,automatic?
+            T1JetourTheme.GREEN_BUTTON:T1JetourTheme.PANEL_HI);
+        roadModeButton.setContentDescription(
+            "Clasificación de vía "+road+", solo lectura. "+
+            "Modo optimizado "+(automatic?"activado":"desactivado")+
+            ". No confirma un cambio OEM.");
     }
     private void airStatus(){
         SharedPreferences air=owner.getSharedPreferences(
