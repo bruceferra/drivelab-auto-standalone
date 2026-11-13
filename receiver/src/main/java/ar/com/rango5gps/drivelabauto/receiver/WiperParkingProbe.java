@@ -41,6 +41,28 @@ final class WiperParkingProbe {
     private static final String CAR_TOKEN="com.autolink.adapterinterface.car.IALCar";
     private static final int FRONT_DISTANCE=557862926;
     private static final int REAR_DISTANCE=557862927;
+    // HAL candidates confirmed in the 2,117-entry T1N134 catalog.
+    // Read endpoints only: NEVER call 557843862/557843558 writers.
+    private static final int WIPER_MODE_READ=557843863;
+    private static final int REAR_WIPER_READ=557843559;
+    private static final int[] LIGHT_STATUS_IDS={
+        289410560,  // HEADLIGHTS STATE - standard candidate
+        289410561,  // HIGH BEAM LIGHTS STATE
+        289410562,  // FOG LIGHTS STATE
+        289410563,  // HAZARD LIGHTS STATE
+        289410817,  // CABIN LIGHTS STATE
+        557844233,  // VC.DRL STS - vendor candidate
+        557856517   // CLUSTER DRL STS - vendor candidate
+    };
+    private static final String[] LIGHT_STATUS_LABELS={
+        "289410560 · faros exteriores (AOSP candidato)",
+        "289410561 · luces altas (AOSP candidato)",
+        "289410562 · antinieblas (AOSP candidato)",
+        "289410563 · balizas (AOSP candidato)",
+        "289410817 · luz interior global (AOSP candidato)",
+        "557844233 · DRL estado VC (vendor candidato)",
+        "557856517 · DRL estado CLUSTER (vendor candidato)"
+    };
     // Zone numbers are HAL candidates: verify actual wiring/scale in T1.
     private static final int[] FRONT_ZONES={
         557843300,557843301,557843302,557843303
@@ -110,6 +132,8 @@ final class WiperParkingProbe {
         boolean allowed=id==REAR_DISTANCE||id==FRONT_DISTANCE;
         for(int zone:REAR_ZONES)allowed|=id==zone;
         for(int zone:FRONT_ZONES)allowed|=id==zone;
+        allowed|=id==WIPER_MODE_READ||id==REAR_WIPER_READ;
+        for(int signal:LIGHT_STATUS_IDS)allowed|=id==signal;
         if(!allowed)throw new SecurityException("HAL ID no autorizado");
         Parcel data=Parcel.obtain(),reply=Parcel.obtain();
         try{
@@ -148,6 +172,27 @@ final class WiperParkingProbe {
                 }catch(Exception e){data.put("VehicleService",error(e));}
                 try{
                     query(app,CAR_PKG,CAR_CLS,CAR_TOKEN,b->{
+                        // Two HAL read endpoints NOT used in prior 18-step wizard.
+                        try{
+                            data.put("557843863 · modo limpia delantero (HAL LEE)",
+                                value(carInt(b,WIPER_MODE_READ)));
+                        }catch(Exception e){
+                            data.put("557843863 · modo limpia delantero (HAL LEE)",error(e));
+                        }
+                        try{
+                            data.put("557843559 · limpia trasero (HAL LEE)",
+                                value(carInt(b,REAR_WIPER_READ)));
+                        }catch(Exception e){
+                            data.put("557843559 · limpia trasero (HAL LEE)",error(e));
+                        }
+                        for(int k=0;k<LIGHT_STATUS_IDS.length;k++){
+                            try{
+                                data.put(LIGHT_STATUS_LABELS[k],
+                                    value(carInt(b,LIGHT_STATUS_IDS[k])));
+                            }catch(Exception e){
+                                data.put(LIGHT_STATUS_LABELS[k],error(e));
+                            }
+                        }
                         try{
                             data.put("PDC DELANTERO 557862926 · valor crudo",
                                 value(carInt(b,FRONT_DISTANCE)));
@@ -181,7 +226,11 @@ final class WiperParkingProbe {
                 data.put("DISTANCIA EN METROS",
                     "— No calibrada. Comparar valores crudos con distancia física medida.");
                 data.put("AJUSTES",
-                    "Solo lectura. No se enviaron comandos al limpia ni al radar.");
+                    "Solo lectura, sin setters ni cambios de marcha. HAL wiper / " +
+                    "luces son candidatos: si devuelven -1, 0 constante o error " +
+                    "puede ser permiso, ECU distinta o propiedad no implementada. " +
+                    "Faros/DRL NO identifican necesariamente luces traseras. " +
+                    "No se enviaron órdenes al limpia, luces ni radar.");
             }finally{
                 running.set(false);
                 handler.post(()->cb.result(data));
