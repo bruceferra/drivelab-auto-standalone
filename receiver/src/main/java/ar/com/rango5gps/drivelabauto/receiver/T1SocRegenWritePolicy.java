@@ -2,14 +2,28 @@ package ar.com.rango5gps.drivelabauto.receiver;
 
 /**
  * Strict OEM write target allowlist for PHEV SOC strategy, target and regen.
- * Static read values are not proof of a writable contract. Individual writes
- * are unlocked only after a user-requested P/0 test and successful restoration.
+ * Static OEM preset mapping does not prove successful VehicleService writes
+ * on every firmware. The writer verifies the actual readback after commands.
  */
 final class T1SocRegenWritePolicy {
     static final int STRATEGY=1040,TARGET=1041,REGEN=1046;
     static final int SMART=2,FORCED=4;
     static final int REGEN_LOW=1,REGEN_MEDIUM=2,REGEN_HIGH=3;
     private static final int[] SOC_PRESETS={20,30,40,48,50,56,60,64,70,72};
+    /** The sole allowlist for both 1041 OEM writes and FORZADO UI menus. */
+    static int[] forcedSocPresets(){
+        return SOC_PRESETS.clone();
+    }
+    /** Show the nearest supported preset when opening legacy profiles.
+     * A legacy unsupported value remains unchanged until SAVE is tapped. */
+    static int nearestForcedSocPresetIndex(int requested){
+        int closest=0,distance=Integer.MAX_VALUE;
+        for(int i=0;i<SOC_PRESETS.length;i++){
+            int delta=Math.abs(SOC_PRESETS[i]-requested);
+            if(delta<distance){closest=i;distance=delta;}
+        }
+        return closest;
+    }
 
     static boolean accepted(int id,int value){
         if(id==STRATEGY)return value==SMART||value==FORCED;
