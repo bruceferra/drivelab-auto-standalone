@@ -87,6 +87,18 @@
         </activity>
         <activity android:name=".ReceiverVehicleActivity" android:exported="false" />
         <activity android:name=".T1SteeringKeysActivity" android:exported="false" />
+        <activity android:name=".T1WheelSettingsActivity" android:exported="false" />
+        <!-- User must explicitly enable this service in Android accessibility.
+             No root or OEM privilege; monitor ONLY when Waze is foreground. -->
+        <service android:name=".T1WazeWheelService"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data android:name="android.accessibilityservice"
+                android:resource="@xml/waze_wheel_service" />
+        </service>
         <activity android:name=".T1ValidationWizardActivity" android:exported="false" />
         <!-- Optional premium cockpit, never a default HOME nor OEM control surface. -->
         <activity android:name=".T1PremiumCockpitActivity" android:exported="false" />
