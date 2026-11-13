@@ -100,8 +100,7 @@ public final class T1OptimizedAutoService extends Service {
     static String roadDisplayReason(Context c){
         if(!enabled(c))return "OPTIMIZADO OFF";
         T1OptimizedModePolicy.Road detected=T1OptimizedModeStore.lastRoad(c);
-        if(detected!=T1OptimizedModePolicy.Road.UNKNOWN&&
-            !T1OptimizedModeStore.isEnabled(c,detected))
+        if(!T1OptimizedModeStore.isEnabled(c,detected))
             return "PERFIL DESACTIVADO";
         String reason=prefs(c).getString(DISPLAY_REASON,"MODO · VERIFICANDO");
         // Never return a green/verified label based on stale SharedPreferences.
