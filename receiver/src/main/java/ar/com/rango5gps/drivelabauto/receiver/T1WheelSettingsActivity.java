@@ -27,9 +27,11 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
                 "\n\nCONTROL WAZE: "+
                 (p.getBoolean(T1WazeWheelService.ENABLED,false)?
                     "ACTIVO":"DESACTIVADO")+
-                "\n\nEl código se aprende de una tecla REAL recibida por "+
-                "Accesibilidad. Si queda igual, la ROM o T1Launcher pueden "+
-                "interceptar ese mando antes de esta app.");
+                "\n\nFOCO PANTALLA: "+
+                (hasWindowFocus()?"DRIVELAB VISIBLE":"VENTANA OEM ENCIMA")+
+                "\nUn código sólo aparece si Android manda un KeyEvent "+
+                "a DriveLab o Accesibilidad. El aviso 'Zoom' del "+
+                "T1Launcher NO prueba que recibamos ese evento.");
             ui.postDelayed(this,750);
         }
     };
@@ -53,9 +55,11 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
     private void learning(LinearLayout col,String label,String action){
         button(col,"APRENDER TECLA · "+label,()->{
             T1WazeWheelService.learn(this,action);
-            report.setText("Captura preparada para "+label+
-                ". Abrí Waze y pulsá esa tecla física antes de 45 segundos. "+
-                "Si no se captura, no hay evento Android disponible.");
+            report.setText("LISTO: "+label+
+                " · Girá o pulsá la rueda AQUÍ MISMO. "+
+                "No abras Waze ni salgas de DriveLab. Tenés 45 segundos. "+
+                "Si aparece Zoom del vehículo y ningún código, "+
+                "verificaremos el canal OEM por ADB.");
         });
     }
     @Override protected void onCreate(Bundle state){
@@ -66,21 +70,39 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
         body.setPadding(16,12,16,30);
         scroll.addView(body);
         text(body,"VOLANTE · WAZE / RUTAS ALTERNATIVAS",19);
-        text(body,"Prueba experimental en Jetour T1. Solo funciona "+
-            "si Android entrega KeyEvents del mando y Waze expone "+
-            "botones accesibles. No modifica T1Launcher. "+
-            "Configurá y probá detenido.",13);
-        button(body,"ABRIR AJUSTES DE ACCESIBILIDAD",()->{
-            startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+        text(body,"PRUEBA DIRECTA: quedate en esta misma pantalla. "+
+            "Tocá APRENDER TECLA y girá la ruedita sin abrir Waze. "+
+            "Registramos una única tecla Android si la ROM la entrega; "+
+            "no bloqueamos la acción Zoom ni otras funciones originales. "+
+            "Si T1Launcher toma el mando antes, necesitamos investigar "+
+            "sus eventos OEM. Probá únicamente estacionado.",13);
+        report=text(body,"LEYENDO DIAGNÓSTICO DEL VOLANTE…",16);
+        button(body,"VER ESTADO DEL SERVICIO ANDROID",()->{
+            report.setText(T1WazeWheelService.describe(this)+
+                "\n\nSi figura SIN INICIO REGISTRADO o no hay KeyEvent, "+
+                "verificá Accesibilidad por WebADB.");
+        });
+        button(body,"ABRIR AJUSTES DE ACCESIBILIDAD (SI EXISTEN)",()->{
+            Intent intent=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+            if(intent.resolveActivity(getPackageManager())==null){
+                report.setText("La T1 no tiene pantalla de ajustes "+
+                    "Accesibilidad disponible. Usá WebADB como ya hicimos.");
+                return;
+            }
+            try{startActivity(intent);}
+            catch(Exception ex){report.setText("Ajustes no disponibles: "+
+                ex.getClass().getSimpleName()+". Usá WebADB.");}
         });
         button(body,"ACTIVAR / DESACTIVAR CONTROL EN WAZE",()->{
             SharedPreferences p=prefs();
             boolean active=!p.getBoolean(T1WazeWheelService.ENABLED,false);
             p.edit().putBoolean(T1WazeWheelService.ENABLED,active).apply();
         });
-        text(body,"APRENDIZAJE DE TECLAS: activar primero el servicio "+
-            "'DriveLab · Waze y volante' en Accesibilidad. El mapeo es "+
-            "local y no cambia el del vehículo.",13);
+        text(body,"APRENDIZAJE SIN SALIR DE DRIVELAB: "+
+            "puede capturar el evento la pantalla o el servicio "+
+            "'DriveLab · Waze y volante'. Ver abajo los códigos; "+
+            "los nombres guardados sólo se cambian si realmente "+
+            "llegó una tecla. T1Launcher conserva sus acciones.",13);
         learning(body,"RUEDITA / SIGUIENTE",T1WazeWheelService.NEXT);
         learning(body,"RUEDITA / ANTERIOR",T1WazeWheelService.PREV);
         learning(body,"OK / CONFIRMAR",T1WazeWheelService.OK);
@@ -112,8 +134,13 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
             "y Atrás vuelve. Si Waze no expone los controles, no envía "+
             "pulsaciones inventadas. No operar el listado de rutas "+
             "mientras conducís.",13);
-        report=text(body,"Leyendo estado…",14);
         setContentView(scroll);
+    }
+    @Override public boolean dispatchKeyEvent(KeyEvent event){
+        // Additional diagnostic channel when the user has DriveLab open:
+        // no activity switching; never steal OEM key functions.
+        T1WazeWheelService.observeActivityKey(this,event);
+        return super.dispatchKeyEvent(event);
     }
     @Override protected void onResume(){
         super.onResume();visible=true;
