@@ -217,10 +217,21 @@ final class T1SocRegenPilot {
                         "Estado OEM "+id+"="+now+" no reconocido; sin escritura");
                 // 1041 is a raw getter, NOT an authorized former preset.
                 // Preserve it for diagnostics but never use it as rollback.
-                if(id==1041&&!T1SocRegenWritePolicy.accepted(id,now))
+                if(id==1041){
+                    double rawFloat=Double.NaN;
+                    try{rawFloat=readSocTargetFloat(b);}catch(Exception ignored){}
+                    int whole=(int)Math.round(rawFloat);
+                    if(Double.isFinite(rawFloat)&&
+                        Math.abs(rawFloat-whole)<0.05&&
+                        T1SocRegenWritePolicy.accepted(1041,whole)){
+                        // Separate 1041 float getter may contain real 20 %
+                        // while integer getter carries opaque raw code 56.
+                        now=whole;
+                    }
                     T1OemDiagnosticLog.add(app,"SOC_REGEN_1041_RAW",
-                        "getterInt="+now+" no representa preset validado; "+
-                        "solo se escribirá objetivo de perfil permitido");
+                        "intRaw="+readInt(b,1041)+" floatRaw="+rawFloat+
+                        " eligibleBaseline="+now);
+                }
                 original.put(id,now);
             }
             int writes=0;
