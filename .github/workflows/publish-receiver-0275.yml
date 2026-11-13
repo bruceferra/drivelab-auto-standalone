@@ -354,6 +354,24 @@ jobs:
           grep -Fq 'T1FuelDisplay.usableLiters(' "$simple"
           grep -Fq 'T1FuelDisplay.usableLiters(' "$premium"
           grep -Fq 'T1FuelDisplay.usableLitersText(lastSample.fuel)' "$cockpit"
+      - name: Confirm observed 1041 readback encoding without extrapolating or changing setter
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/soc-1041-0275
+          javac -encoding UTF-8 -d /tmp/soc-1041-0275 \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModePolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocRegenWritePolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocTargetCodec.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocModePolicy.java \
+            receiver/tests/T1SocTargetCodecTest.java
+          java -cp /tmp/soc-1041-0275 ar.com.rango5gps.drivelabauto.receiver.T1SocTargetCodecTest
+          pilot=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocRegenPilot.java
+          service=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedAutoService.java
+          grep -Fq 'T1SocTargetCodec.confirmsRequested(' "$pilot"
+          grep -Fq 'T1SocTargetCodec.confirmsRequested(' "$service"
+          grep -Fq '1041_RAW_ANTES_OPCIONAL' "$pilot"
+          ! grep -Fq 'snapshot.socTargetInt==targets.forcedSoc' "$service"
       - name: Check direct SOC report cloud transport and CSV contract, no share chooser
         shell: bash
         run: |
@@ -443,7 +461,7 @@ jobs:
             output/receiver.json output/sender.json output/receiver.sha256 \
             --target "$GITHUB_SHA" --latest \
             --title 'DriveLab Auto Receiver 0.2.75 - Diagnostico SOC directo a nube privada' \
-            --notes 'Receiver 0.2.75 code76. El botón VER / SUBIR DIAGNOSTICO SOC 1/2/3 ya NO abre el selector de apps Android. SUBIR AL SERVIDOR crea un CSV privado code_diag con la lectura de marcha y velocidad, aceptación Binder, getters OEM 1041 int/float y motivo del fallo; envía directamente mediante el mismo HTTPS Supabase vinculado por QR y muestra SERVIDOR OK o error, conservando CSV local si no hay red. Si aún no está vinculado ofrece enlazar nube QR. Regeneración 1046 3 ALTA a 1 BAJA confirmada físicamente por usuario estacionado; SOC 1041 sigue pendiente de confirmar. Preserva cambios 0.2.74: cuatro perfiles de vía se pueden desactivar individualmente, selección verde solo tras condición SOC + OEM confirmados, combustible utilizable CI186 30.10 - 5.3 = 24.80 L y tanque 67L referencia. Conserva 1040/1041/1046 activos, presets SOC 20 30 40 50 60 70, Waze experimental, sender v0.2.16, firma y OTA.'
+            --notes 'Receiver 0.2.75 code76. NUEVO 1041 decodificacion observada fisicamente: raw30=20%, raw40=30%, raw48=40%, raw56=50%; getter floatRaw=1 NO es un porcentaje. La verificacion usa pares observados de lectura 1041 y ya no compara raw con el porcentaje solicitado (40 raw corresponderia a 30% y seria un falso OK). El Cockpit ahora muestra 50% cuando raw56. 60/70 sin equivalencia confirmada: sin extrapolar; setter actual sigue sin cambios hasta conocer el contrato OEM. Diagnostico registra lectura previa opcional sin bloquear y lectura posterior, mostrando si el valor ya coincidia.  El botón VER / SUBIR DIAGNOSTICO SOC 1/2/3 ya NO abre el selector de apps Android. SUBIR AL SERVIDOR crea un CSV privado code_diag con la lectura de marcha y velocidad, aceptación Binder, getters OEM 1041 int/float y motivo del fallo; envía directamente mediante el mismo HTTPS Supabase vinculado por QR y muestra SERVIDOR OK o error, conservando CSV local si no hay red. Si aún no está vinculado ofrece enlazar nube QR. Regeneración 1046 3 ALTA a 1 BAJA confirmada físicamente por usuario estacionado; SOC 1041 sigue pendiente de confirmar. Preserva cambios 0.2.74: cuatro perfiles de vía se pueden desactivar individualmente, selección verde solo tras condición SOC + OEM confirmados, combustible utilizable CI186 30.10 - 5.3 = 24.80 L y tanque 67L referencia. Conserva 1040/1041/1046 activos, presets SOC 20 30 40 50 60 70, Waze experimental, sender v0.2.16, firma y OTA.'
           mkdir -p verify
           gh release download v0.2.75 --pattern 'sender.json' --dir verify
           gh release download v0.2.75 --pattern 'receiver.json' --dir verify
