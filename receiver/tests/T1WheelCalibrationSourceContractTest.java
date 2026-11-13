@@ -38,6 +38,12 @@ public final class T1WheelCalibrationSourceContractTest {
         check(ui.contains("getPackageManager())==null")&&
               ui.contains("Usá WebADB."),
             "missing OEM Android accessibility settings must not crash the activity");
+        check(ui.contains("protected int overlayClearBackgroundColor()")&&
+              ui.contains("return T1JetourTheme.NIGHT;")&&
+              ui.contains("scroll.setBackgroundColor(T1JetourTheme.NIGHT);")&&
+              ui.contains("body.setBackgroundColor(T1JetourTheme.NIGHT);"),
+            "wheel settings must never inherit white shell or scroll background "+
+            "under white diagnostic labels");
         check(service.contains("LEARN_MS=45000L"),
             "wheel key collection must be explicit and time-limited");
         check(!service.contains("getevent -"),
