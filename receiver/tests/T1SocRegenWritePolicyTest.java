@@ -9,8 +9,29 @@ public final class T1SocRegenWritePolicyTest {
         check(T1SocRegenWritePolicy.accepted(1040,4),"FORCED 1040");
         check(!T1SocRegenWritePolicy.accepted(1040,3),"unverified AUTO");
         check(!T1SocRegenWritePolicy.accepted(1040,0),"invalid strategy");
-        for(int soc:new int[]{20,30,40,48,50,56,60,64,70,72})
-            check(T1SocRegenWritePolicy.accepted(1041,soc),"SOC "+soc);
+        int[] menu=T1SocRegenWritePolicy.forcedSocPresets();
+        check(menu.length==10,"ten OEM values in dropdown");
+        check(menu[0]==20&&menu[3]==48&&menu[5]==56&&
+              menu[7]==64&&menu[9]==72,"OEM non-5-step values preserved");
+        for(int soc:menu)
+            check(T1SocRegenWritePolicy.accepted(1041,soc),
+                "every forced SOC menu choice is writable policy "+soc);
+        for(int soc:new int[]{20,30,40,48,50,56,60,64,70,72}){
+            boolean visible=false;
+            for(int option:menu)if(soc==option)visible=true;
+            check(visible,"supported OEM SOC is visible "+soc);
+        }
+        check(T1SocRegenWritePolicy.nearestForcedSocPresetIndex(48)==3,
+            "existing 48% stays 48%");
+        check(T1SocRegenWritePolicy.nearestForcedSocPresetIndex(56)==5,
+            "existing 56% stays 56%");
+        check(T1SocRegenWritePolicy.nearestForcedSocPresetIndex(59)==6,
+            "legacy unsupported 59 maps to 60 on explicit save");
+        check(T1SocRegenWritePolicy.nearestForcedSocPresetIndex(100)==9,
+            "legacy unsupported 100 maps to allowed 72 on explicit save");
+        menu[0]=999;
+        check(T1SocRegenWritePolicy.accepted(1041,20),
+            "UI mutation of clone must never change writer allowlist");
         for(int soc:new int[]{-1,0,19,21,37,80,100})
             check(!T1SocRegenWritePolicy.accepted(1041,soc),"invalid SOC "+soc);
         for(int r=1;r<=3;r++)
@@ -60,6 +81,29 @@ public final class T1SocRegenWritePolicyTest {
             T1SocRegenWritePolicy.desired(conditional,20);
         check(fallback.valid()&&fallback.strategy==2&&fallback.regen==2
             &&!fallback.needsTarget(),"safe fallback");
+        T1OptimizedModePolicy.Rule bounded=new T1OptimizedModePolicy.Rule(
+            T1OptimizedModePolicy.Power.HEV,
+            T1OptimizedModePolicy.Strategy.FORCED,56,
+            true,10,true,40,T1OptimizedModePolicy.Regen.HIGH);
+        T1SocRegenWritePolicy.Targets inRange=
+            T1SocRegenWritePolicy.desired(bounded,25);
+        check(inRange.valid()&&inRange.strategy==4&&
+            inRange.forcedSoc==56&&inRange.regen==3,
+            "in-range SOC applies FORZADO and selected regeneration");
+        T1SocRegenWritePolicy.Targets aboveRange=
+            T1SocRegenWritePolicy.desired(bounded,45);
+        check(aboveRange.valid()&&aboveRange.strategy==2&&
+            aboveRange.regen==2&&aboveRange.fallback,
+            "above SOC maximum must fall back to SMART");
+        T1SocRegenWritePolicy.Targets belowRange=
+            T1SocRegenWritePolicy.desired(bounded,5);
+        check(belowRange.valid()&&belowRange.strategy==2&&
+            belowRange.fallback,
+            "below SOC minimum must fall back to SMART");
+        T1SocRegenWritePolicy.Targets unknownSoc=
+            T1SocRegenWritePolicy.desired(bounded,Double.NaN);
+        check(unknownSoc.fallback&&unknownSoc.strategy==2,
+            "unknown OEM SOC must not apply a conditioned FORZADO profile");
         System.out.println("OK: SOC / regen policy (D movement permitted, P, presets, fallback)");
     }
 }

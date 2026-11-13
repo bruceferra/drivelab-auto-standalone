@@ -5,13 +5,11 @@ import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
-import android.text.InputType;
 import android.view.Gravity;
 import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.CheckBox;
-import android.widget.EditText;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.Spinner;
@@ -35,9 +33,8 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
     private T1OptimizedModePolicy.Road road=T1OptimizedModePolicy.Road.UNKNOWN;
     @Override protected int overlayClearBackgroundColor(){return BG;}
     static final class Profile {
-        Spinner power,strategy,regen,comparison;
-        CheckBox conditional;
-        EditText forced,targetMinimum;
+        Spinner power,strategy,regen,forced,minPct,maxPct;
+        CheckBox minEnabled,maxEnabled;
     }
     private GradientDrawable background(int color,int radius){
         return T1JetourTheme.surface(color,radius);
@@ -71,14 +68,40 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         s.setSelection(initial);
         return s;
     }
-    private EditText number(int x,String label){
-        EditText t=new EditText(this);
-        t.setText(String.valueOf(x));
-        t.setHint(label);t.setSingleLine(true);
-        t.setTextSize(16);
-        t.setInputType(InputType.TYPE_CLASS_NUMBER);
-        T1JetourTheme.number(t);
-        return t;
+    /** The battery CONDITION is free 5%-100% in 5% increments.
+     * SOC FORZADO uses the separate OEM 1041 allowlist, never arbitrary
+     * percentages that would fail on the setter.
+     */
+    private static final int PCT_MIN=5,PCT_STEP=5,PCT_COUNT=20;
+    private Spinner percentageSelector(int previouslySaved){
+        String[] options=new String[PCT_COUNT];
+        for(int i=0;i<PCT_COUNT;i++)
+            options[i]=((i+1)*PCT_STEP)+" %";
+        int selected=Math.min(PCT_COUNT-1,
+            Math.max(0,(int)Math.round((previouslySaved-PCT_MIN)/
+                (double)PCT_STEP)));
+        return selector(options,selected);
+    }
+    private Spinner forcedSocSelector(int oldValue){
+        int[] allowed=T1SocRegenWritePolicy.forcedSocPresets();
+        String[] choices=new String[allowed.length];
+        for(int i=0;i<allowed.length;i++)
+            choices[i]=allowed[i]+" %";
+        return selector(choices,
+            T1SocRegenWritePolicy.nearestForcedSocPresetIndex(oldValue));
+    }
+    private int forcedSocValue(Spinner source){
+        int[] allowed=T1SocRegenWritePolicy.forcedSocPresets();
+        if(source==null||source.getSelectedItemPosition()<0||
+            source.getSelectedItemPosition()>=allowed.length)
+            throw new IllegalArgumentException(
+                "Elegí un SOC FORZADO permitido por la Jetour.");
+        int chosen=allowed[source.getSelectedItemPosition()];
+        if(!T1SocRegenWritePolicy.accepted(
+            T1SocRegenWritePolicy.TARGET,chosen))
+            throw new IllegalArgumentException(
+                "Este valor SOC no está autorizado para escribir.");
+        return chosen;
     }
     private void card(LinearLayout parent,T1OptimizedModePolicy.Road which){
         T1OptimizedModePolicy.Rule existing=T1OptimizedModeStore.get(this,which);
@@ -106,47 +129,60 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         regen.addView(p.regen);column(options,regen,1);
 
         LinearLayout second=horizontal();box.addView(second);
-        // Left: a CONDITION on actual observed battery percentage.
-        // Right: separate target percentage requested in FORCED mode.
+        // Two independent AND conditions on ACTUAL OEM battery SOC.
+        // Disable either limit to get an open-ended minimum or maximum.
+        // A missing SOC reading never satisfies enabled bounds.
         LinearLayout threshold=vertical();
-        threshold.addView(text("CONDICIÓN DE BATERÍA (SOC ACTUAL)",
+        threshold.addView(text("RANGO DE BATERÍA · SOC ACTUAL",
             12,0xFF334B5A,true));
-        p.conditional=new CheckBox(this);
-        p.conditional.setText("ACTIVAR CONDICIÓN");
-        p.conditional.setTextColor(T1JetourTheme.WHITE);
-        p.conditional.setButtonTintList(android.content.res.ColorStateList.valueOf(
+        threshold.addView(text("Activá uno o ambos límites. Con ambos activos "+
+            "se usa el rango inclusivo: SOC ≥ mínimo Y SOC ≤ máximo. "+
+            "Si apagás uno, el otro funciona por sí solo.",
+            11,0xFF40566B,false));
+        LinearLayout lower=horizontal();
+        p.minEnabled=new CheckBox(this);
+        p.minEnabled.setText("MÍNIMO ≥");
+        p.minEnabled.setTextColor(T1JetourTheme.WHITE);
+        p.minEnabled.setButtonTintList(android.content.res.ColorStateList.valueOf(
             T1JetourTheme.CYAN));
-        p.conditional.setChecked(existing.thresholdEnabled);
-        threshold.addView(p.conditional);
-        LinearLayout thresholdEditor=horizontal();
-        p.comparison=selector(new String[]{
-                "Mayor o igual (≥)","Menor o igual (≤)"},
-            existing.comparison.ordinal());
-        column(thresholdEditor,p.comparison,2);
-        p.targetMinimum=number(existing.minBattery,"Porcentaje");
-        column(thresholdEditor,p.targetMinimum,1);
-        thresholdEditor.addView(text("%",15,0xFF334B5A,true));
-        threshold.addView(thresholdEditor);
+        p.minEnabled.setChecked(existing.minEnabled);
+        column(lower,p.minEnabled,2);
+        p.minPct=percentageSelector(existing.minBattery);
+        column(lower,p.minPct,1);
+        threshold.addView(lower);
+        LinearLayout upper=horizontal();
+        p.maxEnabled=new CheckBox(this);
+        p.maxEnabled.setText("MÁXIMO ≤");
+        p.maxEnabled.setTextColor(T1JetourTheme.WHITE);
+        p.maxEnabled.setButtonTintList(android.content.res.ColorStateList.valueOf(
+            T1JetourTheme.CYAN));
+        p.maxEnabled.setChecked(existing.maxEnabled);
+        column(upper,p.maxEnabled,2);
+        p.maxPct=percentageSelector(existing.maxBattery);
+        column(upper,p.maxPct,1);
+        threshold.addView(upper);
         column(second,threshold,1);
 
         LinearLayout target=vertical();
         target.addView(text("OBJETIVO SOC FORZADO",12,0xFF334B5A,true));
-        target.addView(text("Porcentaje que se le pediría mantener al auto "+
-            "si elegís SOC FORZADO (distinto de la condición).",
+        target.addView(text("Solo objetivos admitidos por la lista OEM "+
+            "1041: 20, 30, 40, 48, 50, 56, 60, 64, 70 y 72 %. "+
+            "No se muestran porcentajes arbitrarios. "+
+            "DriveLab comprueba la lectura de vuelta del vehículo.",
             11,0xFF40566B,false));
         LinearLayout targetEditor=horizontal();
-        p.forced=number(existing.forcedSoc,"Porcentaje objetivo");
+        p.forced=forcedSocSelector(existing.forcedSoc);
         column(targetEditor,p.forced,1);
         targetEditor.addView(text("%",15,0xFF334B5A,true));
         target.addView(targetEditor);
         column(second,target,1);
         profiles.put(which,p);
-        p.conditional.setOnCheckedChangeListener((b,checked)->{
-            p.targetMinimum.setEnabled(checked);
-            p.comparison.setEnabled(checked);
-        });
-        p.targetMinimum.setEnabled(existing.thresholdEnabled);
-        p.comparison.setEnabled(existing.thresholdEnabled);
+        p.minEnabled.setOnCheckedChangeListener((b,checked)->
+            p.minPct.setEnabled(checked));
+        p.maxEnabled.setOnCheckedChangeListener((b,checked)->
+            p.maxPct.setEnabled(checked));
+        p.minPct.setEnabled(existing.minEnabled);
+        p.maxPct.setEnabled(existing.maxEnabled);
         p.forced.setEnabled(existing.strategy==
             T1OptimizedModePolicy.Strategy.FORCED);
         p.strategy.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
@@ -205,17 +241,12 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         setContentView(scroll);
         showCurrent();
     }
-    private int percentage(EditText e){
-        try{
-            String x=e.getText().toString().trim();
-            if(x.isEmpty())throw new IllegalArgumentException();
-            int value=Integer.parseInt(x);
-            if(value<0||value>100)throw new IllegalArgumentException();
-            return value;
-        }catch(Exception ex){
-            throw new IllegalArgumentException("Los porcentajes deben "+
-                "estar entre 0 y 100.");
-        }
+    private int percentage(Spinner spinner){
+        if(spinner==null||spinner.getSelectedItemPosition()<0||
+            spinner.getSelectedItemPosition()>=PCT_COUNT)
+            throw new IllegalArgumentException(
+                "Elegí un porcentaje del menú (5 a 100 %).");
+        return PCT_MIN+PCT_STEP*spinner.getSelectedItemPosition();
     }
     private T1OptimizedModePolicy.Rule fromControls(Profile p){
         T1OptimizedModePolicy.Power power=T1OptimizedModePolicy.Power.values()[
@@ -225,12 +256,17 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
                 p.strategy.getSelectedItemPosition()];
         T1OptimizedModePolicy.Regen regen=T1OptimizedModePolicy.Regen.values()[
             p.regen.getSelectedItemPosition()];
-        // Even disabled fields must be validated to prevent hidden bad prefs.
+        int lower=percentage(p.minPct),upper=percentage(p.maxPct);
+        boolean minimumEnabled=p.minEnabled.isChecked(),
+            maximumEnabled=p.maxEnabled.isChecked();
+        if(minimumEnabled&&maximumEnabled&&lower>upper)
+            throw new IllegalArgumentException(
+                "Rango de batería inválido: mínimo "+lower+
+                " % mayor al máximo "+upper+
+                " %. Ajustá uno de los desplegables.");
         return new T1OptimizedModePolicy.Rule(
-            power,strategy,percentage(p.forced),p.conditional.isChecked(),
-            percentage(p.targetMinimum),
-            T1OptimizedModePolicy.Comparison.values()[
-                p.comparison.getSelectedItemPosition()],regen);
+            power,strategy,forcedSocValue(p.forced),
+            minimumEnabled,lower,maximumEnabled,upper,regen);
     }
     private boolean saveProfiles(){
         try{

@@ -6,12 +6,15 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
+import android.graphics.Rect;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.InputType;
 import android.view.Gravity;
+import android.view.MotionEvent;
+import android.view.View;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
@@ -35,8 +38,49 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private final Handler ui=new Handler(Looper.getMainLooper());
     private final AtomicBoolean reading=new AtomicBoolean(false);
     private boolean visible=false;
-    private long lastTelem=0,lastTotals=0;
+    private long lastTelem=0,lastTotals=0,lastUiStats=0,
+        lastContinuityCheck=0;
+    private int lastPaintedScope=-1;
+    private final AtomicBoolean continuityBusy=new AtomicBoolean(false);
     private ScrollView cockpitScroll;
+    private LinearLayout cockpitNavRow,cockpitModeRow;
+    private TextView systemMonitorLine;
+    private T1SystemLoadMonitor loadMonitor;
+    private final AtomicBoolean loadReading=new AtomicBoolean(false);
+    private T1SystemLoadMonitor.Result lastSystemLoad;
+    private long monitorExpectedAt=0;
+    private long uiLagNow=0,uiLagMax=0;
+    private int navTouchDowns=0,modeTouchDowns=0,navButtonClicks=0;
+    private String lastNavButton="ninguno";
+    private final Runnable loadTick=new Runnable(){
+        @Override public void run(){
+            if(!visible)return;
+            long now=android.os.SystemClock.uptimeMillis();
+            if(monitorExpectedAt>0){
+                uiLagNow=Math.max(0,now-monitorExpectedAt);
+                uiLagMax=Math.max(uiLagMax,uiLagNow);
+            }
+            if(loadReading.compareAndSet(false,true)){
+                new Thread(()->{
+                    T1SystemLoadMonitor.Result snapshot=null;
+                    try{snapshot=loadMonitor.sample();}
+                    catch(Exception ex){
+                        T1OemDiagnosticLog.add(getApplicationContext(),
+                            "COCKPIT_HW",ex.getClass().getSimpleName());
+                    }
+                    final T1SystemLoadMonitor.Result ready=snapshot;
+                    ui.post(()->{
+                        loadReading.set(false);
+                        if(!visible||isFinishing()||isDestroyed())return;
+                        if(ready!=null)lastSystemLoad=ready;
+                        renderLoadMonitor();
+                    });
+                },"T1-Hardware-ReadOnly-Monitor").start();
+            }
+            monitorExpectedAt=android.os.SystemClock.uptimeMillis()+3000L;
+            ui.postDelayed(this,3000L);
+        }
+    };
     // Top actions belong to a FIXED sibling of the scrolling history.
     // Changes in a historical Eco result must never move or intercept them.
     private String renderedHistorySignature="";
@@ -140,7 +184,14 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         @Override public void run(){
             if(!visible)return;
             maintainFuelMonitor();
-            updateStats();
+            // The recorder now emits multiple analytics and OEM callbacks.
+            // Reflowing every metric card 1.4 times/second can starve
+            // touchscreen hit-testing on the Jetour Android 11 HMI.
+            long uptime=android.os.SystemClock.uptimeMillis();
+            if(lastUiStats==0||uptime-lastUiStats>=2400L){
+                lastUiStats=uptime;
+                updateStats();
+            }
             if(System.currentTimeMillis()-lastThermalAttempt>12000){
             lastThermalAttempt=System.currentTimeMillis();
             readThermal(false);
@@ -174,12 +225,70 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             ui.postDelayed(this,700);
         }
     };
+    private void renderLoadMonitor(){
+        if(systemMonitorLine==null)return;
+        String stats=lastSystemLoad==null?
+            "RAM/CPU sistema: leyendo…":lastSystemLoad.compact();
+        systemMonitorLine.setText(stats+
+            " · UI "+uiLagNow+" ms"+
+            " · TOQUES NAV "+navTouchDowns+"/"+navButtonClicks+
+            " MODO "+modeTouchDowns);
+        systemMonitorLine.setTextColor(uiLagNow>350||
+            (lastSystemLoad!=null&&lastSystemLoad.lowMemory)?
+            T1JetourTheme.AMBER:T1JetourTheme.CYAN);
+    }
+    private void navClicked(String name){
+        navButtonClicks++;
+        lastNavButton=name;
+        renderLoadMonitor();
+    }
+    @Override public boolean dispatchTouchEvent(MotionEvent event){
+        if(event!=null&&event.getActionMasked()==MotionEvent.ACTION_DOWN){
+            Rect rect=new Rect();
+            int x=Math.round(event.getRawX()),y=Math.round(event.getRawY());
+            if(cockpitNavRow!=null&&
+                cockpitNavRow.getGlobalVisibleRect(rect)&&rect.contains(x,y))
+                navTouchDowns++;
+            else if(cockpitModeRow!=null&&
+                cockpitModeRow.getGlobalVisibleRect(rect)&&rect.contains(x,y))
+                modeTouchDowns++;
+            // If native OEM overlay swallows NAV taps before dispatch, NAV
+            // counts remain unchanged while MODE counts still increment.
+        }
+        return super.dispatchTouchEvent(event);
+    }
+    private void showSystemDiagnostics(){
+        String stats=lastSystemLoad==null?
+            "Aún no hay muestra de hardware":lastSystemLoad.details();
+        new AlertDialog.Builder(this).setTitle("DIAGNÓSTICO HARDWARE T1")
+            .setMessage(stats+
+                "\n\nLatencia interfaz ahora "+uiLagNow+
+                " ms; máximo observado "+uiLagMax+" ms."+
+                "\nTOQUES recibidos dentro de la fila de navegación: "+
+                navTouchDowns+
+                "\nClicks de botones NAV ejecutados: "+navButtonClicks+
+                " (último: "+lastNavButton+")"+
+                "\nTOQUES recibidos en EV/HEV: "+modeTouchDowns+
+                "\n\nSi tocás NAV y no sube el contador pero EV/HEV "+
+                "sí lo hace, la zona superior puede estar tapada por "+
+                "otra ventana (OEM). Si el contador sube pero no el "+
+                "click, revisar el despacho interno del botón.")
+            .setNegativeButton("CERRAR",null)
+            .setPositiveButton("COMPARTIR",(d,w)->
+                shareDiagnostic("hardware_touch",stats+
+                    "\nUI ms "+uiLagNow+" max "+uiLagMax+
+                    "\nNAV Down "+navTouchDowns+
+                    " clicks "+navButtonClicks+" last "+lastNavButton+
+                    "\nMODE Down "+modeTouchDowns,null))
+            .show();
+    }
     private static Double valid(double v,double min,double max){
         return Double.isFinite(v)&&v>=min&&v<=max?v:null;
     }
     private static String f(double v,int digits){return T1JourneyMetrics.fmt(v,digits);}
     @Override public void onCreate(Bundle b){
         super.onCreate(b);
+        loadMonitor=new T1SystemLoadMonitor(this);
         hevPilot=new T1ManualHevExperiment(this);
         threeModePilot=new T1ManualThreeModePilot(this);
         lightProbe=new T1CabinLightReadOnlyProbe(this);
@@ -202,6 +311,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         T1ClientTripSync.trigger(this,false);
         if(T1OfflineRoadMap.checkDue(this))updateOfflineMap(false);
         ui.removeCallbacks(ticker);ui.post(ticker);
+        monitorExpectedAt=0;
+        ui.removeCallbacks(loadTick);ui.post(loadTick);
         // Do not re-stamp a road observed before leaving the cockpit.
         if(osmEnabled()){
             if(lastOsmQuery==0||System.currentTimeMillis()-lastOsmQuery>45000L){
@@ -240,6 +351,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             dashboardConsumption=null;
         }
         ui.removeCallbacks(ticker);
+        ui.removeCallbacks(loadTick);
+        monitorExpectedAt=0;
         ui.removeCallbacks(hideRoadTransitionPopup);
         if(roadTransitionPopup!=null){
             roadTransitionPopup.animate().cancel();
@@ -770,6 +883,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         updateStats();
     }
     private void refreshScopeSelection(){
+        if(lastPaintedScope==selectedScope)return;
+        lastPaintedScope=selectedScope;
         if(totalScopeCard!=null)
             totalScopeCard.setBackground(bg(selectedScope==0?0xFF17546D:CARD,13));
         if(client1ScopeCard!=null)
@@ -789,7 +904,9 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         cockpitScroll=scroll;
         LinearLayout root=col();root.setPadding(18,10,18,28);
         scroll.addView(root);
-        LinearLayout top=row();top.setGravity(Gravity.CENTER_VERTICAL);root.addView(top);
+        LinearLayout top=row();top.setGravity(Gravity.CENTER_VERTICAL);
+        root.addView(top);
+        cockpitNavRow=top;
         LinearLayout title=col();
         title.addView(text("DRIVELAB / T1",19,WHITE,true));
         title.addView(text("COCKPIT · build OEM "+getPackageVersion(),12,MUTED,false));
@@ -799,49 +916,66 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         microphone.setTextSize(12);
         microphone.setText("🎤 IA / WAZE");
         microphone.setContentDescription("Dictar destino para Waze del clúster");
-        microphone.setOnClickListener(v->startActivity(new Intent(this,
-            T1VoiceRouteActivity.class)));
+        microphone.setOnClickListener(v->{
+            navClicked("IA/WAZE");
+            startActivity(new Intent(this,T1VoiceRouteActivity.class));
+        });
         T1JetourTheme.button(microphone,0xFF14536B);
         top.addView(microphone,new LinearLayout.LayoutParams(-2,52));
         Button pendingTests=new Button(this);
         pendingTests.setAllCaps(false);
         pendingTests.setTextSize(12);
         pendingTests.setText("PENDIENTES");
-        pendingTests.setOnClickListener(v->startActivity(new Intent(this,
-            T1ValidationWizardActivity.class)));
+        pendingTests.setOnClickListener(v->{
+            navClicked("PENDIENTES");
+            startActivity(new Intent(this,T1ValidationWizardActivity.class));
+        });
         T1JetourTheme.button(pendingTests,0xFF14536B);
         top.addView(pendingTests,new LinearLayout.LayoutParams(-2,52));
         Button displaySettings=new Button(this);
         displaySettings.setAllCaps(false);
         displaySettings.setTextSize(12);
         displaySettings.setText("PANTALLA");
-        displaySettings.setOnClickListener(v->openDisplaySettings());
+        displaySettings.setOnClickListener(v->{
+            navClicked("PANTALLA");
+            openDisplaySettings();
+        });
         T1JetourTheme.button(displaySettings,BLUE);
         top.addView(displaySettings,new LinearLayout.LayoutParams(-2,52));
         Button simulator=new Button(this);
         simulator.setAllCaps(false);
         simulator.setTextSize(12);
         simulator.setText("SIMULADOR");
-        simulator.setOnClickListener(v->openWhatIf());
+        simulator.setOnClickListener(v->{
+            navClicked("SIMULADOR");
+            openWhatIf();
+        });
         T1JetourTheme.button(simulator,BLUE);
         top.addView(simulator,new LinearLayout.LayoutParams(-2,52));
         autoModeButton=new Button(this);
         autoModeButton.setAllCaps(false);
         autoModeButton.setTextSize(13);
         autoModeButton.setText("AUTO · OFF");
-        autoModeButton.setOnClickListener(v->toggleAutomaticMode());
+        autoModeButton.setOnClickListener(v->{
+            navClicked("AUTO");
+            toggleAutomaticMode();
+        });
         T1JetourTheme.button(autoModeButton,RED);
         top.addView(autoModeButton,new LinearLayout.LayoutParams(-2,52));
         Button optimized=new Button(this);
         optimized.setAllCaps(false);
         optimized.setTextSize(12);
         optimized.setText("MODO OPTIMIZADO");
-        optimized.setOnClickListener(v->openOptimizedMode());
+        optimized.setOnClickListener(v->{
+            navClicked("MODO OPTIMIZADO");
+            openOptimizedMode();
+        });
         T1JetourTheme.button(optimized,BLUE);
         top.addView(optimized,new LinearLayout.LayoutParams(-2,52));
         Button back=new Button(this);
         back.setText("INICIO");back.setTextSize(12);
         back.setAllCaps(false);back.setOnClickListener(v->{
+            navClicked("INICIO");
             Intent home=new Intent(this,ReceiverActivity.class);
             home.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|
                 Intent.FLAG_ACTIVITY_SINGLE_TOP);
@@ -852,6 +986,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         top.addView(back,new LinearLayout.LayoutParams(-2,52));
 
         LinearLayout modes=row();root.addView(modes);
+        cockpitModeRow=modes;
         modeEvButton=topModeButton(modes,"EV",1);
         modeHevButton=topModeButton(modes,"HEV",2);
         modeMaxButton=topModeButton(modes,"EV MAX",3);
@@ -920,6 +1055,27 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         secondStartButton=compactButton(secondActions,"INICIAR",BLUE,this::askSecond);
         secondPauseButton=compactButton(secondActions,"PAUSAR",GOLD,this::pauseSecond);
         secondEndButton=compactButton(secondActions,"TERMINAR",RED,this::finishSecond);
+
+        // SECONDARY NAVIGATION: same safe touch zone as the working
+        // journey controls. If the OEM overlay covers the pinned top bar,
+        // these buttons still let the owner reach settings or exit.
+        LinearLayout rescue=row();root.addView(rescue);
+        compactButton(rescue,"OPTIMIZADO",BLUE,()->
+            {navClicked("RESCATE OPT");openOptimizedMode();});
+        compactButton(rescue,"PENDIENTES",BLUE,()->
+            {navClicked("RESCATE PENDIENTES");startActivity(
+                new Intent(this,T1ValidationWizardActivity.class));});
+        compactButton(rescue,"PANTALLA",BLUE,()->
+            {navClicked("RESCATE PANTALLA");openDisplaySettings();});
+        compactButton(rescue,"SISTEMA RAM/CPU",TEAL,()->
+            {navClicked("RESCATE SISTEMA");showSystemDiagnostics();});
+        compactButton(rescue,"INICIO",GOLD,()->{
+            navClicked("RESCATE INICIO");
+            Intent home=new Intent(this,ReceiverActivity.class);
+            home.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|
+                Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            startActivity(home);finish();
+        });
 
         // Restore the user's original instrument cards. Only remove the
         // oversize speedometer; the 4 non-speed gauges retain their live OEM
@@ -1285,33 +1441,41 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         // CRITICAL: keep navigation buttons pinned ABOVE the ScrollView.
         // A fast history refresh cannot shift their hit boxes or consume taps.
         root.removeView(top);
+        root.removeView(modes);
         LinearLayout fixedBody=col();
         fixedBody.setBackgroundColor(BG);
+        // The three OEM modes worked while top navigation did not. Move
+        // navigation BELOW these working controls, outside the OEM top zone.
+        // Keep the system telemetry line non-interactive in the top strip.
+        View safeGap=new View(this);
+        fixedBody.addView(safeGap,new LinearLayout.LayoutParams(-1,
+            T1JetourTheme.dp(this,16)));
+        systemMonitorLine=text("RAM/CPU sistema: leyendo…",
+            11,T1JetourTheme.CYAN,false);
+        systemMonitorLine.setSingleLine(true);
+        systemMonitorLine.setEllipsize(
+            android.text.TextUtils.TruncateAt.END);
+        systemMonitorLine.setPadding(
+            T1JetourTheme.dp(this,10),0,
+            T1JetourTheme.dp(this,10),0);
+        systemMonitorLine.setGravity(Gravity.CENTER_VERTICAL);
+        systemMonitorLine.setBackgroundColor(0xFF11181E);
+        // Entire strip is diagnostic only; don't require tapping it.
+        systemMonitorLine.setClickable(false);
+        fixedBody.addView(systemMonitorLine,
+            new LinearLayout.LayoutParams(-1,T1JetourTheme.dp(this,29)));
+        fixedBody.addView(modes,
+            new LinearLayout.LayoutParams(-1,-2));
         fixedBody.addView(top,
             new LinearLayout.LayoutParams(-1,-2));
         fixedBody.addView(scroll,
             new LinearLayout.LayoutParams(-1,0,1f));
         cockpitFrame.addView(fixedBody,
             new FrameLayout.LayoutParams(-1,-1));
-        roadTransitionPopup=text("CIUDAD",26,WHITE,true);
-        roadTransitionPopup.setGravity(Gravity.CENTER);
-        int pad=Math.round(13*getResources().getDisplayMetrics().density);
-        roadTransitionPopup.setPadding(pad,pad,pad,pad);
-        roadTransitionPopup.setClickable(false);
-        roadTransitionPopup.setFocusable(false);
-        roadTransitionPopup.setEnabled(false);
-        roadTransitionPopup.setLongClickable(false);
-        roadTransitionPopup.setElevation(
-            12*getResources().getDisplayMetrics().density);
-        roadTransitionPopup.setVisibility(android.view.View.GONE);
-        FrameLayout.LayoutParams popupParams=new FrameLayout.LayoutParams(
-            -1,-2,Gravity.TOP|Gravity.CENTER_HORIZONTAL);
-        int side=Math.round(55*getResources().getDisplayMetrics().density);
-        // Keep non-interactive road indication below fixed navigation row.
-        popupParams.setMargins(side,
-            pad+Math.round(60*getResources().getDisplayMetrics().density),
-            side,0);
-        cockpitFrame.addView(roadTransitionPopup,popupParams);
+        // Disable the old full-width FrameLayout popup entirely: even
+        // disabled Android views in the highest Z-order can complicate
+        // hit-testing with an OEM overlay. The OSM banner remains available.
+        roadTransitionPopup=null;
         setContentView(cockpitFrame);
         // Open the existing diagnostic panel directly when launched from
         // the wizard; retain its original actions and user-triggered probes.
@@ -1321,13 +1485,36 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             scroll.post(()->scroll.smoothScrollTo(0,advanced.getTop()));
         }
     }
+    /** Recovery scans and CSV checkpoints are disk I/O, never run
+     * synchronously on the touch/UI thread while a trip is active. */
+    private void maybeReconcileContinuity(){
+        long now=android.os.SystemClock.uptimeMillis();
+        if(lastContinuityCheck!=0&&
+            now-lastContinuityCheck<15000L)return;
+        if(!continuityBusy.compareAndSet(false,true))return;
+        lastContinuityCheck=now;
+        new Thread(()->{
+            String recovered="",recovered2="";
+            try{
+                recovered=T1JourneyStore.reconcileInterrupted(this);
+                recovered2=T1JourneyStore2.reconcileInterrupted(this);
+            }catch(Exception ex){
+                T1OemDiagnosticLog.add(getApplicationContext(),
+                    "CONTINUITY_BACKGROUND",ex.getClass().getSimpleName());
+            }finally{continuityBusy.set(false);}
+            final String v1=recovered,v2=recovered2;
+            if(!v1.isEmpty()||!v2.isEmpty())
+                ui.post(()->{
+                    if(!visible||feedback==null)return;
+                    if(!v1.isEmpty())
+                        feedback.setText("VIAJE 1 · "+v1);
+                    if(!v2.isEmpty())
+                        feedback.setText("VIAJE 2 · "+v2);
+                });
+        },"T1-Cockpit-Continuity-Background").start();
+    }
     private void updateStats(){
-        String recovered=T1JourneyStore.reconcileInterrupted(this);
-        String recovered2=T1JourneyStore2.reconcileInterrupted(this);
-        if(feedback!=null){
-            if(!recovered.isEmpty())feedback.setText("VIAJE 1 · "+recovered);
-            if(!recovered2.isEmpty())feedback.setText("VIAJE 2 · "+recovered2);
-        }
+        maybeReconcileContinuity();
         SharedPreferences m=getSharedPreferences(T1TripRecorderService.PREFS,MODE_PRIVATE);
         boolean running=m.getBoolean(T1TripRecorderService.RUNNING,false);
         long ms=System.currentTimeMillis()-m.getLong(T1TripRecorderService.LAST_SAMPLE_TIME,0L);
@@ -1501,12 +1688,17 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         if(liveEcoNow!=null){
             int ecoScope=selectedScope==0?0:selectedScope==2?2:1;
             String liveText=T1EcoTripMonitor.live(this,ecoScope);
+            String nextEco;
             if(!liveText.contains(" · sin registro activo")&&
                !liveText.contains("sin muestra reciente"))
-                liveEcoNow.setText(liveText);
-            else liveEcoNow.setText(T1EcoTripMonitor.live(this,0)+
+                nextEco=liveText;
+            else nextEco=T1EcoTripMonitor.live(this,0)+
                 (ecoScope!=0?"\n(El viaje seleccionado todavía no tiene "+
-                    "muestras propias)":""));
+                    "muestras propias)":"");
+            // Large multiline ECO summaries trigger expensive Measure/Layout.
+            // Do not setText on the main thread for an unchanged snapshot.
+            if(!android.text.TextUtils.equals(
+                liveEcoNow.getText(),nextEco))liveEcoNow.setText(nextEco);
         }
         // History is EXPENSIVE and changes only after trips close. Never
         // rebuild its buttons every 5 seconds (especially while collapsed).
