@@ -50,8 +50,8 @@ final class T1SystemLoadMonitor {
                 String.format(Locale.ROOT,"%.0f%%",v):"N/D";
         }
         String compact(){
-            return "RAM SISTEMA "+gb(usedBytes())+"/"+gb(totalBytes())+
-                " GB · LIBRE "+gb(availableBytes())+" GB"+
+            return "RAM SISTEMA "+gb(usedBytes())+"/"+gb(totalBytes)+
+                " GB · LIBRE "+gb(availableBytes)+" GB"+
                 (lowMemory?" · MEMORIA BAJA":"")+
                 "    CPU TOTAL "+pct(cpuGlobalPct)+
                 "    APP "+mb(appPssKb*1024L)+" MB / "+
@@ -59,7 +59,7 @@ final class T1SystemLoadMonitor {
         }
         String details(){
             return compact()+"\n"+
-                "RAM libre: "+mb(availableBytes())+" MB · umbral Android "+
+                "RAM libre: "+mb(availableBytes)+" MB · umbral Android "+
                 mb(thresholdBytes)+" MB"+
                 "\nCPU total: "+pct(cpuGlobalPct)+
                 " (lectura /proc/stat, si está permitido)"+
