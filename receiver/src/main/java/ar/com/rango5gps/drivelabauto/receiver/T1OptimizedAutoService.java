@@ -49,8 +49,8 @@ public final class T1OptimizedAutoService extends Service {
     private final T1OptimizedAutoGate gate=new T1OptimizedAutoGate();
     private T1ManualThreeModePilot pilot;
     private T1SocRegenPilot socRegenPilot;
-    private T1OptimizedModePolicy.Road auxRoad;
-    private int auxVotes=0;
+    private final T1SocRegenTransitionGate socProfileGate=
+        new T1SocRegenTransitionGate();
     private long auxLastWriteAt=-1;
     private long usedGpsNanos=0;
 
@@ -252,7 +252,6 @@ public final class T1OptimizedAutoService extends Service {
                 maybeApplySocRegen(road,rule,battery,snapshot,
                     confident,fresh);
             }else{
-                auxVotes=0;
                 note("AUTO ON · "+decision.text);
             }
             return;
@@ -294,68 +293,83 @@ public final class T1OptimizedAutoService extends Service {
             T1OptimizedModePolicy.Rule rule,double battery,
             T1TripTelemetry.Sample snapshot,
             boolean confident,boolean fresh){
-        if(!confident||!fresh||
-            !T1SocRegenWritePolicy.regenDriveEligible(
-                snapshot.gear,snapshot.speed)){
-            auxVotes=0;
-            note("AUTO ON · SOC/regeneración: esperando lecturas "+
-                "OEM de marcha/velocidad fiables en P o D.");
-            return;
-        }
+        boolean eligible=confident&&fresh&&
+            T1SocRegenWritePolicy.regenDriveEligible(
+                snapshot.gear,snapshot.speed);
         T1SocRegenWritePolicy.Targets targets=
             T1SocRegenWritePolicy.desired(rule,battery);
+        if(!eligible){
+            socProfileGate.examine(targets,false,false);
+            note("AUTO ON · SOC/regeneración: esperando lecturas "+
+                "OEM fiables de marcha/velocidad en P o D");
+            return;
+        }
         if(!targets.valid()){
-            note("AUTO ON · SOC objetivo fuera de presets OEM conocidos "+
-                "(20,30,40,50,60,70). Sin escritura.");
+            socProfileGate.examine(targets,false,false);
+            note("AUTO ON · SOC objetivo fuera de los seis presets "+
+                "20,30,40,50,60,70. Sin escritura.");
             return;
         }
-        if(snapshot.socMode==targets.strategy&&
-           snapshot.regen1046==targets.regen&&
-           (!targets.needsTarget()||snapshot.socTargetInt==targets.forcedSoc)){
-            auxVotes=0;
-            note("AUTO ON · perfil SOC/REGENERACIÓN ya coincide: "+
-                targets.summary());
+        // The raw integer 1041 getter can be opaque (e.g. 56) although
+        // the original T1 UI shows 20. Accept only a supported float
+        // confirmation, never interpret 56 as a previous/target percent.
+        boolean socMatches=!targets.needsTarget()||
+            snapshot.socTargetInt==targets.forcedSoc||
+            (Double.isFinite(snapshot.socTargetFloat)&&
+                Math.abs(snapshot.socTargetFloat-targets.forcedSoc)<0.05);
+        boolean currentMatches=snapshot.socMode==targets.strategy&&
+            snapshot.regen1046==targets.regen&&socMatches;
+        T1SocRegenTransitionGate.Decision d=
+            socProfileGate.examine(targets,true,currentMatches);
+        if(d.reason==T1SocRegenTransitionGate.Reason.APPLIED||
+           d.reason==T1SocRegenTransitionGate.Reason.OEM_MATCHES){
+            // Stable destination: NO repeat of 1/3, 2/3, 3/3 and NO
+            // unnecessary Binder writes on each new GPS city fix.
+            note("AUTO ON · "+T1OptimizedModePolicy.roadName(road)+
+                " · perfil SOC/regen estable · sin revalidación triple");
             return;
         }
-        if(auxRoad!=road){auxRoad=road;auxVotes=1;}
-        else auxVotes=Math.min(10,auxVotes+1);
-        if(auxVotes<3){
-            note("AUTO ON · confirmando perfil SOC/regeneración "+auxVotes+
-                "/3 · marcha y velocidad OEM válidas");
+        if(d.reason==T1SocRegenTransitionGate.Reason.WAIT_STABLE){
+            note("AUTO ON · transición SOC/regen nueva "+
+                d.matches+"/3 · "+targets.summary());
             return;
         }
         long now=SystemClock.elapsedRealtime();
         if(auxLastWriteAt>=0&&now-auxLastWriteAt<120000L){
-            note("AUTO ON · SOC/regeneración en espera anti-oscilación");
+            note("AUTO ON · cambio de perfil SOC/regen en espera anti-oscilación");
             return;
         }
         if(pilot.busy()||socRegenPilot.busy()||
-           !changing.compareAndSet(false,true)){
+            !changing.compareAndSet(false,true)){
             note("AUTO ON · esperando que termine otra orden OEM");
             return;
         }
-        auxLastWriteAt=now;auxVotes=0;auxRoad=null;
-        note("AUTO ON · solicitando SOC/regeneración en "+
-            T1DriveModeGate.name(snapshot.gear)+": "+
-            targets.summary()+" · comprobar readback");
+        auxLastWriteAt=now;
+        T1OemDiagnosticLog.add(this,"OPT_SOC_TRANSICION_3_DE_3",
+            "VIA="+road+" PERFIL="+targets.summary()+
+            " - cambio nuevo; no se consulta antiguo SOC 1041");
+        note("AUTO ON · transición confirmada 3/3 · solicitando "+
+            targets.summary()+" · diagnóstico 1041 activo");
         boolean submitted=socRegenPilot.apply(targets,
             ()->!stopping&&enabled(T1OptimizedAutoService.this),
             result->{
-            changing.set(false);
-            if(stopping||!enabled(T1OptimizedAutoService.this))return;
-            if(result.startsWith("LECTURA CONFIRMADA:")){
-                note("AUTO ON · "+result);
-            }else{
-                pref().edit().putBoolean(ENABLED,false)
-                    .putString(STATUS,"AUTO DESACTIVADO · "+
-                        result).apply();
-                stopping=true;stopSelf();
-            }
-        });
+                changing.set(false);
+                if(stopping||!enabled(T1OptimizedAutoService.this))return;
+                if(result.startsWith("LECTURA CONFIRMADA:")){
+                    socProfileGate.recordConfirmed(targets);
+                    note("AUTO ON · "+result);
+                }else{
+                    // No repeated actuation after uncertain OEM readback.
+                    pref().edit().putBoolean(ENABLED,false)
+                        .putString(STATUS,"AUTO DESACTIVADO · "+
+                            result).apply();
+                    stopping=true;stopSelf();
+                }
+            });
         if(!submitted){
             changing.set(false);
-            note("AUTO ON · SOC/regeneración no enviados: "+
-                "control OEM ocupado o perfil inválido");
+            note("AUTO ON · perfil SOC/regen no enviado: "+
+                "piloto ocupado o perfil inválido");
         }
     }
 
