@@ -2479,7 +2479,14 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 "con surtidor/pantalla original. En EV puro no se divide "+
                 "por consumo cero.");
         }
-        autonomyDetail.setText("Nafta: "+(e.fuelOk?
+        autonomyDetail.setText("NAFTA UTILIZABLE · "+
+            T1FuelDisplay.usableLitersText(lastSample.fuel)+
+            " L (CI186 menos 5,30 L; referente 67 L llenado)"+
+            "\nCI186 original (diagnóstico): "+
+            T1FuelDisplay.liters(lastSample.fuel)+" L"+
+            (T1FuelDisplay.topUncalibrated(lastSample.fuel)?
+                "\nAviso: CI186 saturado en nivel alto": "")+
+            "\nNafta: "+(e.fuelOk?
                 "~ "+f(e.fuelKm,0)+" km":"NO FIABLE / SIN DATO")+
             " + eléctrico: "+(e.electricOk?
                 "~ "+f(e.electricKm,0)+" km":"SIN DATO")+
