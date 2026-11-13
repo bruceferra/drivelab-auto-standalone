@@ -30,8 +30,8 @@ public final class MirrorParkingPolicyTest {
         eq(m.observe(Gear.D,8,2700,true),Action.NONE);
         eq(m.observe(Gear.D,10,3200,true),Action.NONE);
         eq(m.observe(Gear.D,10.1,3400,true),Action.NONE);
-        eq(m.observe(Gear.D,11.0,4100,true),Action.NONE);
-        eq(m.observe(Gear.D,11.0,4300,true),Action.RESTORE_AFTER_NON_R_SPEED);
+        eq(m.observe(Gear.D,11.0,4100,true),Action.RESTORE_AFTER_NON_R_SPEED);
+        eq(m.observe(Gear.D,11.0,4300,true),Action.NONE);
         eq(m.phase(),Phase.RESTORING);
         m.completeRestore(10,10);
         eq(m.phase(),Phase.NORMAL);
@@ -51,9 +51,9 @@ public final class MirrorParkingPolicyTest {
         eq(m.observe(Gear.R,16,1300,true),Action.NONE); // reversing fast must NOT restore
         eq(m.observe(Gear.N,18,1600,true),Action.NONE);
         eq(m.observe(Gear.D,11,2000,true),Action.NONE);
-        eq(m.observe(Gear.D,8,2500,true),Action.NONE); // resets dwell
-        eq(m.observe(Gear.D,11,2800,true),Action.NONE);
-        eq(m.observe(Gear.D,12,3600,true),Action.RESTORE_AFTER_NON_R_SPEED);
+        eq(m.observe(Gear.D,8,2500,true),Action.NONE); // D stable even at 8 km/h
+        eq(m.observe(Gear.D,11,2800,true),Action.RESTORE_AFTER_NON_R_SPEED);
+        eq(m.observe(Gear.D,12,3600,true),Action.NONE);
     }
     static void testNeutralCoastAndUnknown(){
         MirrorParkingPolicy m=new MirrorParkingPolicy(3);
@@ -62,7 +62,9 @@ public final class MirrorParkingPolicyTest {
         m.completeTilt(3,3);
         eq(m.observe(Gear.N,12,500,true),Action.NONE);
         eq(m.observe(Gear.N,12,1200,true),Action.NONE);
-        eq(m.observe(Gear.N,12,1300,true),Action.RESTORE_AFTER_NON_R_SPEED);
+        eq(m.observe(Gear.N,12,1300,true),Action.NONE); // Never restore while coasting N
+        eq(m.observe(Gear.D,0,1400,true),Action.NONE);
+        eq(m.observe(Gear.D,0,2250,true),Action.RESTORE_AFTER_NON_R_SPEED);
         m.completeRestore(3,3);
         eq(m.phase(),Phase.NORMAL);
 
@@ -75,7 +77,9 @@ public final class MirrorParkingPolicyTest {
         eq(other.observe(Gear.D,11,2000,true),Action.NONE);
         eq(other.observe(Gear.R,0,2500,true),Action.NONE);
         eq(other.observe(Gear.N,10.01,2800,true),Action.NONE);
-        eq(other.observe(Gear.N,11,3700,true),Action.RESTORE_AFTER_NON_R_SPEED);
+        eq(other.observe(Gear.N,11,3700,true),Action.NONE);
+        eq(other.observe(Gear.D,0,3900,true),Action.NONE);
+        eq(other.observe(Gear.D,0,4750,true),Action.RESTORE_AFTER_NON_R_SPEED);
     }
     static void testInterruptedOperations(){
         MirrorParkingPolicy m=new MirrorParkingPolicy(5);
@@ -115,6 +119,6 @@ public final class MirrorParkingPolicyTest {
         testNeutralCoastAndUnknown();
         testInterruptedOperations();
         testManualRecoveryRearmsCleanFSM();
-        System.out.println("PASS "+checks+" assertions: R single tilt, non-R >10 km/h debounce (D or N), no parking shuttle loop");
+        System.out.println("PASS "+checks+" assertions: R single tilt, D stable 800ms restores at zero or road speed; N/P cannot restore");
     }
 }
