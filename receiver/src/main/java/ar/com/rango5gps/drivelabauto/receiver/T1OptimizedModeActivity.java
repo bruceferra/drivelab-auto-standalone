@@ -35,7 +35,7 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
     @Override protected int overlayClearBackgroundColor(){return BG;}
     static final class Profile {
         Spinner power,strategy,regen,forced,minPct,maxPct;
-        CheckBox minEnabled,maxEnabled;
+        CheckBox minEnabled,maxEnabled,blockEnabled;
     }
     private GradientDrawable background(int color,int radius){
         return T1JetourTheme.surface(color,radius);
@@ -110,13 +110,46 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         box.setPadding(15,6,15,9);box.setBackground(background(CARD,15));
         LinearLayout.LayoutParams cp=new LinearLayout.LayoutParams(-1,-2);
         cp.setMargins(5,5,5,5);parent.addView(box,cp);
-        TextView title=text(T1OptimizedModePolicy.roadName(which),17,0xFF08384C,true);
-        box.addView(title);
+        LinearLayout top=horizontal();box.addView(top);
+        TextView title=text(T1OptimizedModePolicy.roadName(which),
+            17,0xFF08384C,true);
+        column(top,title,1);
+        Profile p=new Profile();
+        p.blockEnabled=new CheckBox(this);
+        p.blockEnabled.setText("ACTIVADO");
+        p.blockEnabled.setTextColor(T1JetourTheme.WHITE);
+        p.blockEnabled.setButtonTintList(
+            android.content.res.ColorStateList.valueOf(T1JetourTheme.CYAN));
+        p.blockEnabled.setChecked(T1OptimizedModeStore.isEnabled(this,which));
+        top.addView(p.blockEnabled);
+        final TextView blockNotice=text(
+            "ACTIVADO · el optimizador puede aplicar este perfil",
+            11,0xFF40566B,false);
+        box.addView(blockNotice);
+        // This switch is effective immediately, even if another field is
+        // edited but not yet saved. It does not write an OEM command.
+        p.blockEnabled.setOnCheckedChangeListener((button,checked)->{
+            T1OptimizedModeStore.setEnabled(this,which,checked);
+            p.blockEnabled.setText(checked?"ACTIVADO":"DESACTIVADO");
+            blockNotice.setText(checked?
+                "ACTIVADO · se habilitan órdenes de este bloque":
+                "DESACTIVADO · sin órdenes OEM de este bloque");
+            blockNotice.setTextColor(checked?
+                T1JetourTheme.CYAN:T1JetourTheme.MUTED);
+            if(preview!=null)preview.setText(
+                T1OptimizedModePolicy.roadName(which)+
+                (checked?" · perfil ACTIVADO":" · perfil DESACTIVADO")+
+                "\nEl cambio ya está guardado y funciona sin tocar GUARDAR.");
+        });
+        boolean initiallyOn=p.blockEnabled.isChecked();
+        p.blockEnabled.setText(initiallyOn?"ACTIVADO":"DESACTIVADO");
+        blockNotice.setText(initiallyOn?
+            "ACTIVADO · el optimizador puede aplicar este perfil":
+            "DESACTIVADO · sin órdenes OEM de este bloque");
         if(which==T1OptimizedModePolicy.Road.UNKNOWN)
             box.addView(text("Respaldo configurable cuando el GPS o mapa no "+
                 "identifican una vía confiable.",12,0xFF40566B,false));
         LinearLayout options=horizontal();box.addView(options);
-        Profile p=new Profile();
         p.power=selector(new String[]{"EV","HEV","EV MAX"},existing.power.ordinal());
         p.strategy=selector(new String[]{"SMART","SOC FORZADO"},
             existing.strategy.ordinal());
@@ -208,7 +241,10 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         root.addView(text("MODO OPTIMIZADO automático según el camino: "+
             "EV/HEV/EV MAX (1043), SMART/FORZADO (1040), objetivo SOC (1041) "+
             "y regeneración (1046). Los perfiles cambian mientras circulás "+
-            "en D sin obligarte a detenerte. GPS y telemetría deben ser "+
+            "en D sin obligarte a detenerte. Cada bloque de vía tiene "+
+            "ACTIVADO/DESACTIVADO independiente: apagado significa cero "+
+            "órdenes del bloque, incluso el modo HEV de respaldo. "+
+            "GPS y telemetría deben ser "+
             "válidos; cada orden OEM se confirma por lectura posterior. "+
             "Si un comando falla se detiene la automatización, y vos "+
             "podés comprobar el resultado en el menú original Jetour.",
@@ -284,9 +320,13 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
                 new EnumMap<>(T1OptimizedModePolicy.Road.class);
             for(T1OptimizedModePolicy.Road r:T1OptimizedModePolicy.Road.values())
                 next.put(r,fromControls(profiles.get(r)));
-            for(T1OptimizedModePolicy.Road r:next.keySet())
+            for(T1OptimizedModePolicy.Road r:next.keySet()){
                 T1OptimizedModeStore.save(this,r,next.get(r));
+                T1OptimizedModeStore.setEnabled(this,r,
+                    profiles.get(r).blockEnabled.isChecked());
+            }
             preview.setText("GUARDADOS LOS CUATRO PERFILES · "+
+                "cada bloque desactivado ignora 1043/1040/1041/1046. "+
                 "1043/1040/1041/1046 automáticos en P o D con "+
                 "lectura OEM confirmada.\n"+
                 currentRecommendation());
@@ -367,6 +407,10 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
             System.currentTimeMillis()-at>=0?
             getIntent().getDoubleExtra("soc",Double.NaN):Double.NaN;
         String info=T1OptimizedModeStore.lastInfo(this);
+        if(!T1OptimizedModeStore.isEnabled(this,road))
+            return "VÍA: "+T1OptimizedModePolicy.roadName(road)+
+                " · PERFIL DESACTIVADO. No se ejecutan órdenes OEM "+
+                "ni respaldo automático de este bloque.";
         T1OptimizedModePolicy.Decision result=T1OptimizedModePolicy.evaluate(
             road,T1OptimizedModeStore.get(this,road),soc);
         return "VÍA: "+T1OptimizedModePolicy.roadName(road)+
