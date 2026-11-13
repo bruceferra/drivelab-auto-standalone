@@ -9,8 +9,29 @@ public final class T1SocRegenWritePolicyTest {
         check(T1SocRegenWritePolicy.accepted(1040,4),"FORCED 1040");
         check(!T1SocRegenWritePolicy.accepted(1040,3),"unverified AUTO");
         check(!T1SocRegenWritePolicy.accepted(1040,0),"invalid strategy");
-        for(int soc:new int[]{20,30,40,48,50,56,60,64,70,72})
-            check(T1SocRegenWritePolicy.accepted(1041,soc),"SOC "+soc);
+        int[] menu=T1SocRegenWritePolicy.forcedSocPresets();
+        check(menu.length==10,"ten OEM values in dropdown");
+        check(menu[0]==20&&menu[3]==48&&menu[5]==56&&
+              menu[7]==64&&menu[9]==72,"OEM non-5-step values preserved");
+        for(int soc:menu)
+            check(T1SocRegenWritePolicy.accepted(1041,soc),
+                "every forced SOC menu choice is writable policy "+soc);
+        for(int soc:new int[]{20,30,40,48,50,56,60,64,70,72}){
+            boolean visible=false;
+            for(int option:menu)if(soc==option)visible=true;
+            check(visible,"supported OEM SOC is visible "+soc);
+        }
+        check(T1SocRegenWritePolicy.nearestForcedSocPresetIndex(48)==3,
+            "existing 48% stays 48%");
+        check(T1SocRegenWritePolicy.nearestForcedSocPresetIndex(56)==5,
+            "existing 56% stays 56%");
+        check(T1SocRegenWritePolicy.nearestForcedSocPresetIndex(59)==6,
+            "legacy unsupported 59 maps to 60 on explicit save");
+        check(T1SocRegenWritePolicy.nearestForcedSocPresetIndex(100)==9,
+            "legacy unsupported 100 maps to allowed 72 on explicit save");
+        menu[0]=999;
+        check(T1SocRegenWritePolicy.accepted(1041,20),
+            "UI mutation of clone must never change writer allowlist");
         for(int soc:new int[]{-1,0,19,21,37,80,100})
             check(!T1SocRegenWritePolicy.accepted(1041,soc),"invalid SOC "+soc);
         for(int r=1;r<=3;r++)
