@@ -340,7 +340,7 @@ jobs:
           grep -Fq 'T1JetourTheme.GREEN_BUTTON' "$toolbar"
           ! grep -Fq 'T1OptimizedModeStore.lastRoad(owner)' "$toolbar"
           grep -Fq 'conditions.conditionSatisfied' "$service"
-          grep -Fq 'verifiedRoad(road,rule);' "$service"
+          grep -Fq 'verifiedRoad(road,rule,ruleSlot);' "$service"
           grep -Fq 'VERIFIED_TTL_MS=25000L' "$service"
           grep -Fq 'clearVerified(off,"OPTIMIZADO OFF")' "$service"
       - name: Verify fuel usable liters CI186 minus 5.3 in both dashboards
