@@ -27,8 +27,8 @@ import java.util.Locale;
  */
 public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
     private static final int VOICE_REQUEST = 7042;
-    private static final int BG = 0xFF091421;
-    private static final int FG = 0xFFF3F8FD;
+    private static final int BG = T1JetourTheme.NIGHT;
+    private static final int FG = T1JetourTheme.WHITE;
     private EditText destination;
     private TextView status;
 
@@ -47,7 +47,7 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
                           android.view.View.OnClickListener click) {
         Button b = new Button(this);
         b.setText(title);
-        b.setAllCaps(false);
+        T1JetourTheme.button(b,0xFF175A70);
         b.setOnClickListener(click);
         root.addView(b, new LinearLayout.LayoutParams(-1, 58));
         return b;
@@ -59,7 +59,7 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         root.setOrientation(LinearLayout.VERTICAL);
         root.setGravity(Gravity.TOP);
         root.setPadding(24, 12, 24, 24);
-        root.setBackgroundColor(BG);
+        root.setBackground(T1JetourTheme.backdrop());
         root.addView(label("MICRÓFONO · DESTINO EN CLÚSTER", 21));
         root.addView(label("Decí, por ejemplo, \"navegar a Plaza de Mayo\". " +
             "Revisá el destino antes de iniciar Waze. El reconocimiento " +
@@ -71,6 +71,7 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         destination.setHintTextColor(0xFF9BB0C1);
         destination.setHint("Destino o dirección (alternativa por teclado)");
         destination.setInputType(android.text.InputType.TYPE_CLASS_TEXT);
+        T1JetourTheme.number(destination);
         root.addView(destination, new LinearLayout.LayoutParams(-1, 58));
         button(root, "NAVEGAR EN CLÚSTER", v -> confirm(destination.getText().toString()));
         status = label("Listo · sin escucha en segundo plano", 14);
