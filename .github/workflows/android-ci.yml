@@ -256,6 +256,15 @@ jobs:
           grep -Fq 'verifiedRoad(road,rule);' "$service"
           grep -Fq 'T1OptimizedAutoService.verifiedAppliedRoad(owner)' "$toolbar"
           ! grep -Fq 'T1OptimizedModeStore.lastRoad(owner)' "$toolbar"
+          store=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeStore.java
+          ui=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeActivity.java
+          grep -Fq 'road_"+r.name()+"_enabled",true' "$store"
+          grep -Fq 'static void setEnabled(' "$store"
+          grep -Fq 'p.blockEnabled.setOnCheckedChangeListener' "$ui"
+          grep -Fq '!T1OptimizedModeStore.isEnabled(this,road)' "$service"
+          grep -Fq 'socProfileGate.reset();' "$service"
+          grep -Fq 'PERFIL DESACTIVADO' "$service"
+          grep -Fq 'T1OptimizedModeStore.isEnabled(T1OptimizedAutoService.this,road)' "$service"
       - name: T1 cockpit client reset, live autonomy, engine and SOC policy (pure JVM)
         shell: bash
         run: |
