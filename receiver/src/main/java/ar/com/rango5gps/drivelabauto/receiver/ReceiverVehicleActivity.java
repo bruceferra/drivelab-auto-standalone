@@ -28,6 +28,7 @@ import java.util.Map;
  * button press, and all data remain labeled as unverified OEM observations.
  */
 public final class ReceiverVehicleActivity extends T1ImmersiveActivity {
+    @Override protected int overlayClearBackgroundColor(){return T1JetourTheme.NIGHT;}
     private final String[] tabNames={"VEHÍCULO","ENERGÍA","CODE","DIAGNÓSTICO"};
     private int activeTab=0;
     private ScrollView currentScroll;
@@ -136,17 +137,22 @@ public final class ReceiverVehicleActivity extends T1ImmersiveActivity {
     private void label(LinearLayout parent,String text,int size){
         TextView t=new TextView(this);
         t.setText(text);t.setTextSize(size);
+        t.setTextColor(size>=19?T1JetourTheme.CYAN:T1JetourTheme.MUTED);
+        if(size>=19)T1JetourTheme.title(t);
         t.setPadding(10,9,10,9);parent.addView(t);
     }
     private TextView status(LinearLayout parent,String text){
         TextView t=new TextView(this);
         t.setText(text);t.setTextSize(13);t.setTextIsSelectable(true);
+        t.setTextColor(T1JetourTheme.WHITE);
+        t.setBackground(T1JetourTheme.surface(T1JetourTheme.PANEL,12));
         t.setPadding(12,9,12,12);
         parent.addView(t);
         return t;
     }
     private void button(LinearLayout parent,String text,Runnable run){
         Button b=new Button(this);b.setText(text);b.setAllCaps(false);
+        T1JetourTheme.button(b,text.contains("PENDIENT")?0xFF116676:0xFF1A3D59);
         b.setOnClickListener(v->run.run());parent.addView(b);
     }
     private void section(LinearLayout parent,String name){
@@ -155,6 +161,7 @@ public final class ReceiverVehicleActivity extends T1ImmersiveActivity {
     private void render(){
         final int restoreY=currentScroll==null?0:currentScroll.getScrollY();
         ScrollView scroll=new ScrollView(this);
+        scroll.setBackground(T1JetourTheme.backdrop());
         LinearLayout root=column();root.setPadding(16,10,16,26);
         scroll.addView(root);
         label(root,"DRIVELAB AUTO · T1",23);
@@ -171,6 +178,7 @@ public final class ReceiverVehicleActivity extends T1ImmersiveActivity {
             b.setText(tabNames[i]);b.setAllCaps(false);
             b.setTextSize(11);
             b.setActivated(i==activeTab);
+            T1JetourTheme.button(b,i==activeTab?0xFF0C6874:T1JetourTheme.PANEL);
             b.setOnClickListener(v->{activeTab=idx;render();});
             menu.addView(b,new LinearLayout.LayoutParams(0,60,1));
         }
