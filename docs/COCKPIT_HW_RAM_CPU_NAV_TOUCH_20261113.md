@@ -34,6 +34,13 @@ En la comparación `v0.2.64...v0.2.65` se añaden el análisis OSM histórico EC
 6. Los botones de rescate permiten INICIO / PANTALLA / PENDIENTES / OPTIMIZADO aun cuando la barra NAV vuelva a fallar. Comprobar que Android OS no tapa también esa franja.
 7. No pedir una nueva actualización sin inspeccionar los contadores si la causa sigue sin resolverse.
 
+## Optimizador: porcentajes sin teclado, SOC forzado solo allowlist OEM
+
+- `CONDICIÓN DE BATERÍA`: desplegable táctil de **5% a 100%, de 5 en 5**, sin teclado.
+- `OBJETIVO SOC FORZADO`: desplegable **independiente** con los únicos presets admitidos por la política de escritura OEM del código **1041**: **20%, 30%, 40%, 48%, 50%, 56%, 60%, 64%, 70%, 72%**. Se lee exactamente de `T1SocRegenWritePolicy.forcedSocPresets()`, fuente única de la validación `accepted(1041,value)`: la UI no puede ofrecer porcentajes que el escritor rechaza por política.
+- Una configuración antigua no compatible se muestra en el preset permitido más cercano; no se cambia ninguna preferencia hasta pulsar **GUARDAR LOS 4 PERFILES**.
+- No se convierten los presets irregulares (48%, 56%, 64%, 72%) en múltiplos de 5. No se deben confundir con el umbral libre de batería. La lista sale de la investigación del contrato OEM; la aceptación real por cada firmware sigue dependiendo de confirmación con readback físico.
+
 ## Restricciones / observaciones
 
 La ficha oficial global Jetour T1 identifica **Snapdragon 8155**, chip automotriz; no es el Snapdragon usado en Galaxy S23/S25. La central de la T1 argentina podría variar y por eso se muestra `Build.HARDWARE` y `BOARD`. Medición RAM GLOBAL no implica permiso para enumerar memoria exacta de otros procesos; se muestra solo el total del sistema y RAM de DriveLab por separado.
