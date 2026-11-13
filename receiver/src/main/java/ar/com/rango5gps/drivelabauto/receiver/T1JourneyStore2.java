@@ -113,6 +113,9 @@ final class T1JourneyStore2 {
             m.getInt(T1TripRecorderService.SEG_ELEC_COUNT,0));
     }
     static boolean active(Context c){return p(c).getBoolean(ACTIVE,false);}
+    static long startedAt(Context c){
+        return p(c).getLong(ORIGINAL_TIME,p(c).getLong(TIME,0L));
+    }
     /** The recorder calls this after each new OEM sample. Pause excludes
      * the interval and finishing prevents accidental attribution to the
      * next passenger. Unknown RPM never becomes "electric". */
