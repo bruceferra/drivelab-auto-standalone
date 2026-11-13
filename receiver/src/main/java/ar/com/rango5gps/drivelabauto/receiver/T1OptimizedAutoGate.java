@@ -73,7 +73,9 @@ final class T1OptimizedAutoGate {
     void recordCommand(long time,int target){
         lastCommandAt=time;
         lastTarget=target;
-        votes=0;
-        candidate=null;
+        // The road was ALREADY confirmed with three fresh GPS samples.
+        // Do not reset votes here: doing so repeated 1/3, 2/3, 3/3 on
+        // unchanged CIUDAD after every 1043 request, unnecessarily
+        // revalidating the same road and delaying the SOC profile.
     }
 }
