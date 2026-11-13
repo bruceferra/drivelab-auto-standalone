@@ -166,8 +166,8 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         LinearLayout target=vertical();
         target.addView(text("OBJETIVO SOC FORZADO",12,0xFF334B5A,true));
         target.addView(text("Solo objetivos admitidos por la lista OEM "+
-            "1041: 20, 30, 40, 48, 50, 56, 60, 64, 70 y 72 %. "+
-            "No se muestran porcentajes arbitrarios. "+
+            "1041: 20, 30, 40, 50, 60 y 70 % (múltiplos de diez). "+
+            "No se muestran porcentajes arbitrarios ni 56 %. "+
             "DriveLab comprueba la lectura de vuelta del vehículo.",
             11,0xFF40566B,false));
         LinearLayout targetEditor=horizontal();

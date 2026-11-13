@@ -26,8 +26,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * The owner's explicitly enabled four-profile optimizer also attempts
  * OEM 1040/1041/1046 changes while moving in D, using double live OEM
  * preflight, one write per differing value, readback, cooldown and fail-stop.
- * The original dashboard can change regen in motion; the Receiver
- * setter remains experimental until physical confirmation.
+ * If 1041's integer getter is opaque/stale, the setter is attempted only
+ * with allowed 20..70 multiples of ten. An unconfirmed readback stops the
+ * current automation; never write a guessed original value to roll back.
+ * The original dashboard can change regen in motion; this remains experimental.
  *
  * OEM refusal disables the controller: do not blindly retry/fallback-write.
  */
@@ -78,9 +80,10 @@ public final class T1OptimizedAutoService extends Service {
         try{
             c.startForegroundService(new Intent(c,
                 T1OptimizedAutoService.class).setAction(ACTION_ON));
-            return "MODO OPTIMIZADO ON · 1043, SMART/FORZADO, objetivo SOC "+
-                "y regeneración por vía; también en D si las lecturas OEM "+
-                "y el perfil son válidos. Readback obligatorio.";
+            return "MODO OPTIMIZADO ON · EV/HEV/EV MAX, SMART/FORZADO, "+
+                "SOC FORZADO 20-70 (de 10 en 10) y regeneración por vía. "+
+                "1040/1041/1046 siguen activos; lectura de vuelta "+
+                "obligatoria, sin restauraciones a valores desconocidos.";
         }catch(RuntimeException e){
             prefs(c).edit().putBoolean(ENABLED,false)
                 .putString(STATUS,"AUTO NO INICIADO: "+
@@ -296,7 +299,7 @@ public final class T1OptimizedAutoService extends Service {
             T1SocRegenWritePolicy.desired(rule,battery);
         if(!targets.valid()){
             note("AUTO ON · SOC objetivo fuera de presets OEM conocidos "+
-                "(20,30,40,48,50,56,60,64,70,72). Sin escritura.");
+                "(20,30,40,50,60,70). Sin escritura.");
             return;
         }
         if(snapshot.socMode==targets.strategy&&
