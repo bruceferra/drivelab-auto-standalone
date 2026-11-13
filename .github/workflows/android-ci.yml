@@ -217,6 +217,27 @@ jobs:
           grep -Fq 'set(b,id,previous,null)' "$code"
           ! grep -Fq 'boolean test(' "$code"
           grep -Fq 'boolean apply(' "$code"
+      - name: SOC optimizer regression - new road/profile only; no prior 1041
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-soc-transition
+          javac -encoding UTF-8 -d /tmp/t1-soc-transition \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModePolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocRegenWritePolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocRegenTransitionGate.java \
+            receiver/tests/T1SocRegenTransitionGateTest.java
+          java -cp /tmp/t1-soc-transition ar.com.rango5gps.drivelabauto.receiver.T1SocRegenTransitionGateTest
+          pilot=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocRegenPilot.java
+          auto=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedAutoService.java
+          editor=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeActivity.java
+          grep -Fq '1041_SIN_SOC_PREVIO' "$pilot"
+          grep -Fq 'ETAPA_2_WRITE_REQ' "$pilot"
+          grep -Fq 'ETAPA_3_READBACK' "$pilot"
+          grep -Fq 'ETAPA_3_INCIERTA' "$pilot"
+          grep -Fq 'socProfileGate.recordConfirmed(targets);' "$auto"
+          grep -Fq 'showSocDiagnostic()' "$editor"
+          ! grep -Fq 'auxVotes=' "$auto"
       - name: T1 cockpit client reset, live autonomy, engine and SOC policy (pure JVM)
         shell: bash
         run: |
