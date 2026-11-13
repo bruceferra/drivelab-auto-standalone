@@ -38,7 +38,10 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private final Handler ui=new Handler(Looper.getMainLooper());
     private final AtomicBoolean reading=new AtomicBoolean(false);
     private boolean visible=false;
-    private long lastTelem=0,lastTotals=0;
+    private long lastTelem=0,lastTotals=0,lastUiStats=0,
+        lastContinuityCheck=0;
+    private int lastPaintedScope=-1;
+    private final AtomicBoolean continuityBusy=new AtomicBoolean(false);
     private ScrollView cockpitScroll;
     private LinearLayout cockpitNavRow,cockpitModeRow;
     private TextView systemMonitorLine;
@@ -181,7 +184,14 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         @Override public void run(){
             if(!visible)return;
             maintainFuelMonitor();
-            updateStats();
+            // The recorder now emits multiple analytics and OEM callbacks.
+            // Reflowing every metric card 1.4 times/second can starve
+            // touchscreen hit-testing on the Jetour Android 11 HMI.
+            long uptime=android.os.SystemClock.uptimeMillis();
+            if(lastUiStats==0||uptime-lastUiStats>=2400L){
+                lastUiStats=uptime;
+                updateStats();
+            }
             if(System.currentTimeMillis()-lastThermalAttempt>12000){
             lastThermalAttempt=System.currentTimeMillis();
             readThermal(false);
@@ -873,6 +883,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         updateStats();
     }
     private void refreshScopeSelection(){
+        if(lastPaintedScope==selectedScope)return;
+        lastPaintedScope=selectedScope;
         if(totalScopeCard!=null)
             totalScopeCard.setBackground(bg(selectedScope==0?0xFF17546D:CARD,13));
         if(client1ScopeCard!=null)
@@ -1473,13 +1485,36 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             scroll.post(()->scroll.smoothScrollTo(0,advanced.getTop()));
         }
     }
+    /** Recovery scans and CSV checkpoints are disk I/O, never run
+     * synchronously on the touch/UI thread while a trip is active. */
+    private void maybeReconcileContinuity(){
+        long now=android.os.SystemClock.uptimeMillis();
+        if(lastContinuityCheck!=0&&
+            now-lastContinuityCheck<15000L)return;
+        if(!continuityBusy.compareAndSet(false,true))return;
+        lastContinuityCheck=now;
+        new Thread(()->{
+            String recovered="",recovered2="";
+            try{
+                recovered=T1JourneyStore.reconcileInterrupted(this);
+                recovered2=T1JourneyStore2.reconcileInterrupted(this);
+            }catch(Exception ex){
+                T1OemDiagnosticLog.add(getApplicationContext(),
+                    "CONTINUITY_BACKGROUND",ex.getClass().getSimpleName());
+            }finally{continuityBusy.set(false);}
+            final String v1=recovered,v2=recovered2;
+            if(!v1.isEmpty()||!v2.isEmpty())
+                ui.post(()->{
+                    if(!visible||feedback==null)return;
+                    if(!v1.isEmpty())
+                        feedback.setText("VIAJE 1 · "+v1);
+                    if(!v2.isEmpty())
+                        feedback.setText("VIAJE 2 · "+v2);
+                });
+        },"T1-Cockpit-Continuity-Background").start();
+    }
     private void updateStats(){
-        String recovered=T1JourneyStore.reconcileInterrupted(this);
-        String recovered2=T1JourneyStore2.reconcileInterrupted(this);
-        if(feedback!=null){
-            if(!recovered.isEmpty())feedback.setText("VIAJE 1 · "+recovered);
-            if(!recovered2.isEmpty())feedback.setText("VIAJE 2 · "+recovered2);
-        }
+        maybeReconcileContinuity();
         SharedPreferences m=getSharedPreferences(T1TripRecorderService.PREFS,MODE_PRIVATE);
         boolean running=m.getBoolean(T1TripRecorderService.RUNNING,false);
         long ms=System.currentTimeMillis()-m.getLong(T1TripRecorderService.LAST_SAMPLE_TIME,0L);
@@ -1653,12 +1688,17 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         if(liveEcoNow!=null){
             int ecoScope=selectedScope==0?0:selectedScope==2?2:1;
             String liveText=T1EcoTripMonitor.live(this,ecoScope);
+            String nextEco;
             if(!liveText.contains(" · sin registro activo")&&
                !liveText.contains("sin muestra reciente"))
-                liveEcoNow.setText(liveText);
-            else liveEcoNow.setText(T1EcoTripMonitor.live(this,0)+
+                nextEco=liveText;
+            else nextEco=T1EcoTripMonitor.live(this,0)+
                 (ecoScope!=0?"\n(El viaje seleccionado todavía no tiene "+
-                    "muestras propias)":""));
+                    "muestras propias)":"");
+            // Large multiline ECO summaries trigger expensive Measure/Layout.
+            // Do not setText on the main thread for an unchanged snapshot.
+            if(!android.text.TextUtils.equals(
+                liveEcoNow.getText(),nextEco))liveEcoNow.setText(nextEco);
         }
         // History is EXPENSIVE and changes only after trips close. Never
         // rebuild its buttons every 5 seconds (especially while collapsed).
