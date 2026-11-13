@@ -73,6 +73,16 @@ public final class MirrorAutomationService extends Service {
                 ex.getClass().getSimpleName()).apply();
         }
     }
+    /** Recovery watchdog; only for an already armed preference.
+     * Never re-arms after a manual fold or an uncertain actuator result. */
+    static void ensureRunning(Context context){
+        SharedPreferences p=context.getSharedPreferences(PREFS,MODE_PRIVATE);
+        if(!p.getBoolean(AUTO,false)||p.getString(POSITION,"")
+            .startsWith("INCIERTA"))return;
+        long age=System.currentTimeMillis()-p.getLong(LAST_POLL,0L);
+        if(p.getBoolean(SERVICE_ACTIVE,false)&&age>=0&&age<=3000)return;
+        activateOnAppOpen(context);
+    }
     private int steps(String key){
         return Math.max(1,Math.min(MirrorParkingPolicy.MAX_PULSES_PER_SIDE,prefs().getInt(key,2)));
     }
