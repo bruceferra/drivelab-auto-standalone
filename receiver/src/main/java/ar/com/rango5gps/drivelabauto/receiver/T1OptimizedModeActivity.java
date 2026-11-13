@@ -311,7 +311,7 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
             "Los cambios de regeneración pueden ocurrir en movimiento "+
             "cuando el perfil cambia, con verificación OEM. "+
             "La condición SOC usa batería ACTUAL, no objetivo forzado. "+
-            T1SocRegenPilot.status(this);
+            " · optimización SOC/regeneración experimental ON/OFF";
     }
     private void showCurrent(){
         preview.setText(currentRecommendation()+"\n"+
