@@ -50,6 +50,9 @@ final class T1SocRegenPilot {
         new Thread(()->{
             String result;
             try{
+                T1OemDiagnosticLog.begin(app,
+                    "MODO OPTIMIZADO · perfil 1040/1041/1046 "+
+                    desired.summary()+" · etapas 1/2/3");
                 result=tryApply(desired,stillEnabled);
             }catch(Exception ex){
                 result="NO CONFIRMADO: "+describe(ex)+
@@ -143,11 +146,15 @@ final class T1SocRegenPilot {
         return gear;
     }
     private void doublePreflight(IBinder b)throws Exception{
+        T1OemDiagnosticLog.add(app,"ETAPA_1_PRECHECK",
+            "Marcha y velocidad OEM, NO se lee SOC previo");
         int first=preflight(b,"SOC_REGEN_PREFLIGHT_1");
         SystemClock.sleep(400);
         int second=preflight(b,"SOC_REGEN_PREFLIGHT_2");
         if(first!=second)
-            throw new IllegalStateException("Marcha cambió durante preflight");
+            throw new IllegalStateException("ETAPA 1: marcha cambió");
+        T1OemDiagnosticLog.add(app,"ETAPA_1_OK",
+            "Marcha "+first+" estable en doble preflight");
     }
     private void set(IBinder b,int id,int target,
                      BooleanSupplier enabled)throws Exception{
@@ -162,35 +169,57 @@ final class T1SocRegenPilot {
             data.writeInt(id);
             data.writeInt(target);
             data.writeString(app.getPackageName());
-            T1OemDiagnosticLog.add(app,"SOC_REGEN_ESCRITURA",
-                "Binder transact(15) id="+id+" valor="+target);
+            T1OemDiagnosticLog.add(app,"ETAPA_2_WRITE_REQ",
+                "Binder transact(15) id="+id+" nuevo="+target);
             if(!b.transact(15,data,reply,0))
-                throw new IllegalStateException("Setter "+id+" rechazado");
+                throw new IllegalStateException("ETAPA 2: setter "+id+" rechazado");
             reply.readException();
+            T1OemDiagnosticLog.add(app,"ETAPA_2_BINDER_OK",
+                "id="+id+" nuevo="+target+" aceptado por Binder, no confirmado físicamente");
         }finally{data.recycle();reply.recycle();}
     }
     private void verify(IBinder b,int id,int target,
                         BooleanSupplier enabled)throws Exception{
-        long deadline=SystemClock.elapsedRealtime()+3000;
+        long deadline=SystemClock.elapsedRealtime()+4000L;
+        int lastInt=Integer.MIN_VALUE;
+        double lastFloat=Double.NaN;
+        String intFailure="",floatFailure="";
+        T1OemDiagnosticLog.add(app,"ETAPA_3_READBACK",
+            "Confirmando NUEVO id="+id+" valor="+target+
+            "; NO requiere SOC previo ni rollback");
         while(SystemClock.elapsedRealtime()<deadline){
             if(enabled!=null&&!enabled.getAsBoolean())
-                throw new IllegalStateException("AUTO apagado; lectura abortada");
-            int actual=readInt(b,id);
-            double asFloat=Double.NaN;
-            if(id==1041){
-                try{asFloat=readSocTargetFloat(b);}catch(Exception ignored){}
+                throw new IllegalStateException("ETAPA 3: AUTO apagado");
+            boolean gotInt=false,gotFloat=false;
+            try{
+                lastInt=readInt(b,id);gotInt=true;intFailure="";
+            }catch(Exception ex){intFailure=ex.getClass().getSimpleName();}
+            if(id==1041)try{
+                lastFloat=readSocTargetFloat(b);
+                gotFloat=true;floatFailure="";
+            }catch(Exception ex){floatFailure=ex.getClass().getSimpleName();}
+            T1OemDiagnosticLog.add(app,"ETAPA_3_LECTURA",
+                "id="+id+" nuevo="+target+
+                " intRaw="+(gotInt?String.valueOf(lastInt):"ERR "+intFailure)+
+                " floatRaw="+(gotFloat?String.valueOf(lastFloat):
+                    (id==1041?"ERR "+floatFailure:"n/a")));
+            if((gotInt&&lastInt==target)||
+                (id==1041&&gotFloat&&Double.isFinite(lastFloat)&&
+                    Math.abs(lastFloat-target)<0.05)){
+                T1OemDiagnosticLog.add(app,"ETAPA_3_OK",
+                    "id="+id+" nuevo="+target+" CONFIRMADO");
+                return;
             }
-            T1OemDiagnosticLog.add(app,"SOC_REGEN_READBACK",
-                "id="+id+" esperado="+target+" intRaw="+actual+
-                " floatRaw="+asFloat);
-            if(actual==target||
-                (id==1041&&Double.isFinite(asFloat)&&
-                    Math.abs(asFloat-target)<0.05))return;
-            SystemClock.sleep(300);
+            SystemClock.sleep(350);
         }
+        T1OemDiagnosticLog.add(app,"ETAPA_3_INCIERTA",
+            "id="+id+" nuevo="+target+" intRaw="+lastInt+
+            " floatRaw="+lastFloat+" errInt="+intFailure+
+            " errFloat="+floatFailure+"; no repetir");
         throw new IllegalStateException(
-            "OEM no confirmó por getters id="+id+" objetivo="+target+
-            ". La escritura puede HABERSE APLICADO; no repetir automáticamente.");
+            "ETAPA 3 NO CONFIRMADA: id="+id+" nuevo="+target+
+            " intRaw="+lastInt+" floatRaw="+lastFloat+
+            ". Puede haberse aplicado; comprobar menú Jetour.");
     }
 
     private String tryApply(T1SocRegenWritePolicy.Targets targets,
@@ -211,28 +240,23 @@ final class T1SocRegenPilot {
             wanted.put(1046,targets.regen);
             LinkedHashMap<Integer,Integer> original=new LinkedHashMap<>();
             for(Map.Entry<Integer,Integer> item:wanted.entrySet()){
-                int id=item.getKey(),now=readInt(b,id);
-                if(id!=1041&&!T1SocRegenWritePolicy.accepted(id,now))
-                    throw new IllegalStateException(
-                        "Estado OEM "+id+"="+now+" no reconocido; sin escritura");
-                // 1041 is a raw getter, NOT an authorized former preset.
-                // Preserve it for diagnostics but never use it as rollback.
+                int id=item.getKey();
                 if(id==1041){
-                    final int rawInt=now;
-                    double rawFloat=Double.NaN;
-                    try{rawFloat=readSocTargetFloat(b);}catch(Exception ignored){}
-                    int whole=(int)Math.round(rawFloat);
-                    if(Double.isFinite(rawFloat)&&
-                        Math.abs(rawFloat-whole)<0.05&&
-                        T1SocRegenWritePolicy.accepted(1041,whole)){
-                        // Separate 1041 float getter may contain real 20 %
-                        // while integer getter carries opaque raw code 56.
-                        now=whole;
-                    }
-                    T1OemDiagnosticLog.add(app,"SOC_REGEN_1041_RAW",
-                        "intRaw="+rawInt+" floatRaw="+rawFloat+
-                        " eligibleBaseline="+now);
+                    // RAW getter 1041 (e.g. 56) is not a SOC percentage.
+                    // Do NOT read a previous target; write/verify only
+                    // the NEW allowlisted 20..70 preset requested by owner.
+                    original.put(id,Integer.MIN_VALUE);
+                    T1OemDiagnosticLog.add(app,"1041_SIN_SOC_PREVIO",
+                        "Sin getter anterior; objetivo nuevo="+
+                        targets.forcedSoc+"; rollback 1041 prohibido");
+                    continue;
                 }
+                int now=readInt(b,id);
+                T1OemDiagnosticLog.add(app,"ETAPA_1_ESTADO",
+                    "id="+id+" previo="+now+" nuevo="+item.getValue());
+                if(!T1SocRegenWritePolicy.accepted(id,now))
+                    throw new IllegalStateException(
+                        "ETAPA 1: OEM "+id+"="+now+" no reconocido");
                 original.put(id,now);
             }
             int writes=0;
