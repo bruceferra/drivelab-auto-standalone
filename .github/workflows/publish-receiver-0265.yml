@@ -173,6 +173,23 @@ jobs:
           grep -Fq 'b.transact(5' "$probe"
           ! grep -Eq 'b.transact\((3|4|6|7|8|9|1[0-9]|2[0-9])' "$probe"
           ! grep -Eq 'data.writeInt\((557843862|557843558|557843861)' "$probe"
+      - name: Eco trip speed bins, OSM coverage and live 500m autonomy (pure JVM)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-eco-rating
+          javac -encoding UTF-8 -d /tmp/t1-eco-rating \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1EcoTripMetrics.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1LiveConsumption.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripMath.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ExperimentalRange.java \
+            receiver/tests/T1EcoTripMetricsTest.java \
+            receiver/tests/T1LiveConsumptionTest.java
+          java -cp /tmp/t1-eco-rating ar.com.rango5gps.drivelabauto.receiver.T1EcoTripMetricsTest
+          java -cp /tmp/t1-eco-rating ar.com.rango5gps.drivelabauto.receiver.T1LiveConsumptionTest
+          grep -Fq 'eco.sample(s.timestamp,measure.km,dt' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripRecorderService.java
+          grep -Fq 'historyEcoStatus.setText' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
+          grep -Fq 'T1EcoTripMonitor.live(this,ecoScope)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
       - name: SOC regen guarded write policy regression
         shell: bash
         run: |
