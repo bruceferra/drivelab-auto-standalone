@@ -224,8 +224,7 @@ final class T1EcoTripMetrics {
         double score=ecoScore();
         return (Double.isFinite(score)?"ECO "+fmt(score,1)+"/10":
             "ECO N/D · datos insuficientes")+
-            " · "+mix()+"
-"+trafficMix();
+            " · "+mix()+"\n"+trafficMix();
     }
     String breakdown(){
         StringBuilder b=new StringBuilder();
