@@ -315,7 +315,7 @@ jobs:
           grep -Fq 'ETAPA_3_READBACK' "$pilot"
           grep -Fq 'ETAPA_3_INCIERTA' "$pilot"
           grep -Fq 'socProfileGate.recordConfirmed(targets);' "$auto"
-          grep -Fq 'VER / COMPARTIR DIAGNÓSTICO SOC' "$editor"
+          grep -Fq 'VER / SUBIR DIAGNÓSTICO SOC' "$editor"
           ! grep -Fq 'auxVotes=' "$auto"
           ! grep -Fq 'votes=0;' <(sed -n '/void recordCommand(/,$p' "$gate")
       - name: Reject premature road label (13pct SOC < 15pct CITY) - JVM
