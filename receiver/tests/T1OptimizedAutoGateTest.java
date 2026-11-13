@@ -75,6 +75,20 @@ public final class T1OptimizedAutoGateTest {
         check(invalid.examine(city,ev,80,170,4,2,20000,true,true).reason==
             T1OptimizedAutoGate.Reason.NO_OEM,
             "unsafe speed cannot command");
-        System.out.println("OK: automatic OEM 1043 gate, SOC conditions, unknown GPS, anti-oscillation");
+        // Regression: after successful 1043 EV request the city was
+        // already confirmed 3/3. A second OEM read MUST NOT start over
+        // at 1/3, or delay a later manual/OEM correction in the same road.
+        T1OptimizedAutoGate steady=new T1OptimizedAutoGate();
+        read(steady,city,ev,80,2,0,true);
+        read(steady,city,ev,80,2,10000,true);
+        check(read(steady,city,ev,80,2,20000,true).ready(),
+            "city first transition confirmed");
+        steady.recordCommand(20000,1);
+        check(read(steady,city,ev,80,1,30000,true).reason==
+            T1OptimizedAutoGate.Reason.SAME_MODE,
+            "city stable after write");
+        check(read(steady,city,ev,80,2,130000,true).ready(),
+            "same confirmed city must not revalidate three new GPS fixes");
+        System.out.println("OK: automatic OEM 1043 gate, SOC conditions, stable city latch, anti-oscillation");
     }
 }
