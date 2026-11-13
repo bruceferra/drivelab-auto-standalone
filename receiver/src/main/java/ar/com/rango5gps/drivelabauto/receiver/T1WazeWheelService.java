@@ -8,6 +8,7 @@ import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.os.SystemClock;
+import android.util.Log;
 import android.view.Gravity;
 import android.view.KeyEvent;
 import android.view.WindowManager;
@@ -31,7 +32,9 @@ public final class T1WazeWheelService extends AccessibilityService {
     static final String PREFS="t1_waze_wheel_v1";
     static final String ENABLED="enabled",PENDING="capture_pending",
         PENDING_TIME="capture_started",LAST="last_key",
-        LAST_STATUS="status",LAST_TIME="last_time";
+        LAST_STATUS="status",LAST_TIME="last_time",
+        SERVICE_AT="service_connected_at",WINDOW="last_capture_window";
+    private static final long LEARN_MS=45000L;
     static final String NEXT="wheel_next",PREV="wheel_prev",
         OK="wheel_ok",BACK="wheel_back",ROUTES="wheel_routes";
     private static final String WAZE="com.waze";
@@ -75,11 +78,26 @@ public final class T1WazeWheelService extends AccessibilityService {
             .putString(PENDING,action)
             .putLong(PENDING_TIME,System.currentTimeMillis())
             .putString(LAST_STATUS,"Capturando "+action+
-                ": pulsá una tecla física del volante").apply();
+                ": pulsá una tecla física; no hace falta abrir Waze")
+            .putString(WINDOW,"sin datos todavía").apply();
     }
     static String describe(Context c){
         SharedPreferences p=c.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
-        return p.getString(LAST_STATUS,"Sin teclas capturadas")+
+        long now=System.currentTimeMillis();
+        long connected=p.getLong(SERVICE_AT,0);
+        String state=connected>0&&connected<=now?
+            "Accesibilidad: el servicio arrancó.":"Accesibilidad: sin inicio registrado.";
+        String pending=p.getString(PENDING,"");
+        if(!pending.isEmpty()){
+            long remaining=LEARN_MS-(now-p.getLong(PENDING_TIME,0));
+            state+="\nAPRENDIZAJE "+pending+": "+
+                (remaining>0?"restan "+((remaining+999)/1000)+" s":
+                    "TIEMPO TERMINADO; no llegó una tecla capturable");
+        }
+        return state+"\n"+
+            p.getString(LAST_STATUS,"Sin teclas capturadas")+
+            "\nÚltima ventana durante captura: "+
+            p.getString(WINDOW,"sin datos")+
             "\nSIGUIENTE="+p.getInt(NEXT,KeyEvent.KEYCODE_DPAD_RIGHT)+
             " · ANTERIOR="+p.getInt(PREV,KeyEvent.KEYCODE_DPAD_LEFT)+
             " · OK="+p.getInt(OK,KeyEvent.KEYCODE_DPAD_CENTER)+
@@ -102,7 +120,11 @@ public final class T1WazeWheelService extends AccessibilityService {
             setServiceInfo(info);
         }
         windows=(WindowManager)getSystemService(WINDOW_SERVICE);
-        status("Accesibilidad Waze activa; esperando KeyEvent real del volante");
+        prefs().edit().putLong(SERVICE_AT,System.currentTimeMillis())
+            .putString(LAST_STATUS,
+                "Servicio de accesibilidad conectado; listo para APRENDER")
+            .apply();
+        Log.i("DriveLabWheel","AccessibilityService connected; key filter requested");
     }
     @Override public boolean onKeyEvent(KeyEvent event){
         if(event==null||event.getAction()!=KeyEvent.ACTION_DOWN||
@@ -110,23 +132,43 @@ public final class T1WazeWheelService extends AccessibilityService {
         final int code=event.getKeyCode();
         final long now=System.currentTimeMillis();
         SharedPreferences p=prefs();
+        String pending=p.getString(PENDING,"");
+        // IMPORTANT: explicit 45-second LEARNING must run BEFORE the
+        // com.waze foreground check. The T1 may display an OEM window
+        // or T1Launcher Zoom overlay when the physical wheel turns.
+        // In calibration we only observe one Android KeyEvent, locally.
+        // We NEVER consume it and never click anything during learning.
+        if(!pending.isEmpty()){
+            if(now-p.getLong(PENDING_TIME,0)>=0&&
+               now-p.getLong(PENDING_TIME,0)<LEARN_MS){
+                AccessibilityNodeInfo captureRoot=getRootInActiveWindow();
+                String foreground=captureRoot==null?"sin ventana":
+                    String.valueOf(captureRoot.getPackageName());
+                String kind=WAZE.equals(foreground)?"Waze":
+                    getPackageName().equals(foreground)?"DriveLab":
+                        "T1Launcher / sistema / otra";
+                String message="Capturado "+pending+" = "+code+
+                    " ("+KeyEvent.keyCodeToString(code)+")"+
+                    " · ventana "+kind;
+                p.edit().putInt(pending,code).remove(PENDING)
+                    .putInt(LAST,code).putString(LAST_STATUS,message)
+                    .putString(WINDOW,foreground)
+                    .putLong(LAST_TIME,now).apply();
+                Log.i("DriveLabWheel",message);
+                return false; // OEM gets same key, no double action
+            }
+            p.edit().remove(PENDING)
+                .putString(LAST_STATUS,
+                    "APRENDER venció sin recibir una tecla Android")
+                .apply();
+        }
+        // Normal Waze controls remain strictly restricted to com.waze.
+        // Absolutely no key logging or interception in unrelated apps.
         AccessibilityNodeInfo root=getRootInActiveWindow();
         String pkg=root==null?"":String.valueOf(root.getPackageName());
         if(!WAZE.equals(pkg)){
             hideHint();
-            return false; // no key logging or interception outside Waze
-        }
-        String pending=p.getString(PENDING,"");
-        if(!pending.isEmpty()){
-            if(now-p.getLong(PENDING_TIME,0)<45000){
-                p.edit().putInt(pending,code).remove(PENDING)
-                    .putInt(LAST,code)
-                    .putString(LAST_STATUS,"Capturado "+pending+" = "+code+
-                        " ("+KeyEvent.keyCodeToString(code)+")")
-                    .putLong(LAST_TIME,now).apply();
-                return false; // do not hijack OEM behavior during calibration
-            }
-            p.edit().remove(PENDING).apply();
+            return false;
         }
         p.edit().putInt(LAST,code).putLong(LAST_TIME,now).apply();
         if(!p.getBoolean(ENABLED,false))return false;
