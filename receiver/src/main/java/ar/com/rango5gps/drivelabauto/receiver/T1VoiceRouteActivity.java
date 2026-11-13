@@ -15,6 +15,7 @@ import android.os.Bundle;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
+import android.speech.tts.TextToSpeech;
 import android.view.Gravity;
 import android.widget.Button;
 import android.widget.EditText;
@@ -22,6 +23,7 @@ import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
 import java.util.ArrayList;
+import java.util.Locale;
 
 /**
  * Single-tap Jetour voice entry. Navigational requests -> Waze with confirmation.
@@ -42,6 +44,9 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
     private Button geminiChoice,chatgptChoice,selectedAction;
     private SpeechRecognizer recognizer;
     private boolean listening,openingAssistant;
+    private TextToSpeech speaker;
+    private boolean ttsReady;
+    private String answerToSpeak;
 
     @Override protected int overlayClearBackgroundColor(){return BG;}
 
@@ -102,6 +107,7 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
     }
     @Override protected void onCreate(Bundle state){
         super.onCreate(state);
+        initSpeechOutput();
         ScrollView sc=new ScrollView(this);
         sc.setFillViewport(true);
         sc.setBackground(T1JetourTheme.backdrop());
@@ -114,9 +120,11 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         chosen=label(root,"",14,T1JetourTheme.GREEN);
         showSelected();
         label(root,"Hablá normalmente. «Navegá a la estación» → Waze. " +
-            "«Cuánto es 37 por 12», «explicame...» o «noticias de hoy» → " +
-            "la IA elegida. Las órdenes de navegación se confirman " +
-            "antes de abrir Waze.",14,T1JetourTheme.MUTED);
+            "«Cuánto es 37 por 12» → cálculo local hablado. " +
+            "«Cómo está el clima hoy» → pronóstico online hablado. " +
+            "Noticias, política y resultados deportivos necesitan el " +
+            "proveedor externo, que todavía puede pedir otro toque. " +
+            "Las rutas siguen pidiendo confirmación.",14,T1JetourTheme.MUTED);
 
         button(root,"🎤 HABLAR · DETECCIÓN AUTOMÁTICA",0xFF426E73,this::listen);
         spoken=new EditText(this);
@@ -304,11 +312,61 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         if(target!=null){
             status.setText("NAVEGACIÓN DETECTADA → Waze · "+target);
             confirmDestination(target);
-        }else{
-            status.setText("CONSULTA DETECTADA → "+name(selectedAi())+
-                " · intentando entregar el texto reconocido.");
-            shareWithAi(selectedAi(),phrase.trim());
+            return;
         }
+        String math=T1VoiceMath.calculate(phrase);
+        if(math!=null){
+            say("CÁLCULO LOCAL · "+math,math);
+            return;
+        }
+        if(T1VoiceIntentPolicy.isWeatherQuery(phrase)){
+            status.setText("CLIMA · consultando pronóstico actualizado…");
+            new Thread(()->{
+                String result;
+                try{result=T1VoiceWeather.now(getApplicationContext());}
+                catch(Exception e){
+                    result="No pude consultar el pronóstico actualizado. "+
+                        "Revisá conexión a internet y ubicación.";
+                }
+                final String answer=result;
+                runOnUiThread(()->{
+                    if(!isFinishing()&&!isDestroyed())say(
+                        "CLIMA ACTUAL · "+answer,answer);
+                });
+            },"T1-Voice-Weather-HTTPS").start();
+            return;
+        }
+        // Live politics, news and football need a current online search
+        // service. ACTION_SEND to Gemini is not an automatic Q&A API.
+        status.setText("PREGUNTA GENERAL · "+name(selectedAi())+
+            ". El asistente externo puede exigir otro toque; "+
+            "DriveLab todavía no dispone de respuesta online hablada propia.");
+        shareWithAi(selectedAi(),phrase.trim());
+    }
+    /** Respond within DriveLab without forcing another microphone touch.
+     * Output depends on Android TTS engine and its audio route.
+     */
+    private void initSpeechOutput(){
+        try{
+            speaker=new TextToSpeech(this, result->{
+                if(result!=TextToSpeech.SUCCESS)return;
+                if(speaker==null)return;
+                speaker.setLanguage(new Locale("es","AR"));
+                ttsReady=true;
+                if(answerToSpeak!=null)readQueuedSpeech();
+            });
+        }catch(Exception ignored){ttsReady=false;}
+    }
+    private void readQueuedSpeech(){
+        if(!ttsReady||speaker==null||answerToSpeak==null)return;
+        String answer=answerToSpeak;
+        answerToSpeak=null;
+        speaker.speak(answer,TextToSpeech.QUEUE_FLUSH,null,"drivelab_voice_response");
+    }
+    private void say(String line,String audible){
+        status.setText(line);
+        answerToSpeak=audible;
+        readQueuedSpeech();
     }
     private void confirmDestination(String place){
         new AlertDialog.Builder(this)
@@ -432,5 +490,14 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
             recognizer=null;
         }
         super.onPause();
+    }
+    @Override protected void onDestroy(){
+        if(speaker!=null){
+            speaker.stop();
+            speaker.shutdown();
+            speaker=null;
+        }
+        ttsReady=false;
+        super.onDestroy();
     }
 }
