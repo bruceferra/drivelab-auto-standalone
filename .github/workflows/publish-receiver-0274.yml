@@ -415,7 +415,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.74
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.73
           gh release create v0.2.74 \
             output/DriveLab-Auto-Receiver-v0.2.74.apk \
             output/receiver.json output/sender.json output/receiver.sha256 \
