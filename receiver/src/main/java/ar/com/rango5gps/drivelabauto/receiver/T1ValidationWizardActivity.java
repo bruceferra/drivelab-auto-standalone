@@ -63,6 +63,14 @@ public final class T1ValidationWizardActivity extends T1ImmersiveActivity {
             "El candidato de lectura es 2125. Si no cambia, puede ser otro " +
             "estado del BCM; no inventar un código de escritura.",
             "VEHÍCULO · LIMPIAPARABRISAS / RADAR","vehicle","wiper"),
+        new Task("wiper_manual","CARROCERÍA","Limpia delantero · velocidad manual",
+            "Estacioná en P y abrí CODE · DETECTOR 45 S. Accioná " +
+            "una sola posición de barrido manual desde el mando OEM y " +
+            "compará si cambia alguna lectura. No hay un ID confirmado " +
+            "para velocidad manual y el 2126 NO es ese control.",
+            "Si el detector no descubre señal, registrá SIN SEÑAL. " +
+            "No enviar escrituras a códigos desconocidos.",
+            "VEHÍCULO · CODE · DETECTOR DE CAMBIOS","code",""),
         new Task("lights_cabin","ILUMINACIÓN","Plafón trasero, puertas y baúl",
             "Con el auto inmóvil, apagá luces interiores y cerrá puertas: " +
             "CAPTURA A. Encendé el plafón OEM o abrí una puerta/baúl: CAPTURA B. " +
@@ -79,6 +87,15 @@ public final class T1ValidationWizardActivity extends T1ImmersiveActivity {
             "Un valor cero constante no demuestra control disponible.",
             "COCKPIT · ZONAS / DIAGNÓSTICOS · LUCES POR ASIENTO",
             "cockpit","seat"),
+        new Task("rear_tail_lights","ILUMINACIÓN","Luces traseras exteriores · mantener encendidas",
+            "Este pendiente es DISTINTO del plafón interior y del LED " +
+            "frontal. En P, observá las luces traseras con el mando " +
+            "original y anotá su estado visible y la opción OEM. " +
+            "Todavía no hay una señal de control trasera validada.",
+            "Falta identificar lectura y permiso BCM específicos. " +
+            "No forzar salidas, deshabilitar luces obligatorias ni " +
+            "confundir bienvenida delantera con luces de posición.",
+            "COCKPIT · DIAGNÓSTICOS LED / VEHÍCULO · CODE","code",""),
         new Task("led_exterior","ILUMINACIÓN","Luces exteriores / tira LED",
             "Con el vehículo inmóvil y sin desactivar luces de circulación " +
             "obligatorias, abrí el diagnóstico del Cockpit. Usá REGISTRAR LED " +
@@ -115,6 +132,15 @@ public final class T1ValidationWizardActivity extends T1ImmersiveActivity {
             "El mapa candidato es 1/2/3. Aún falta confirmar que cada " +
             "nivel del menú corresponde a la lectura real de tu T1.",
             "VEHÍCULO · DIAGNÓSTICO PHEV","diagn",""),
+        new Task("auto_road","ENERGÍA","AUTO EV / HEV / EV MAX · autopista",
+            "Con el modo optimizado activado antes del recorrido, " +
+            "dejá que el sistema registre las transiciones normalmente. " +
+            "No manipules el Cockpit ni hagas comandos durante la marcha. " +
+            "Una vez estacionado, revisá estado y CSV del modo OEM.",
+            "Ya observaste un cambio en ciudad. Falta verificar " +
+            "clasificación de autopista, confirmación 1043 y ausencia " +
+            "de oscilaciones. Se mantienen controles originales.",
+            "COCKPIT · MODO OPTIMIZADO / DIAGNÓSTICO","cockpit",""),
         new Task("pdc","SENSORES","Radar de estacionamiento / PDC",
             "En P, con el vehículo inmóvil y ningún objeto moviéndose " +
             "cerca, hacé CAPTURA A. Activá/desactivá únicamente el menú " +
@@ -257,7 +283,7 @@ public final class T1ValidationWizardActivity extends T1ImmersiveActivity {
         small(navigator,"SIG. PENDIENTE ›",GREEN,this::nextUnconfirmed);
         button(body,showIndex?"OCULTAR LISTA DE PRUEBAS":
             "VER TODOS LOS PENDIENTES · ELEGIR PRUEBA",BLUE,()->{
-            showIndex=!showIndex;render();
+            saveNote();showIndex=!showIndex;render();
         });
         if(showIndex){
             for(int i=0;i<TASKS.length;i++){
@@ -283,8 +309,8 @@ public final class T1ValidationWizardActivity extends T1ImmersiveActivity {
             LinearLayout pair=row();card.addView(pair);
             Button a=small(pair,"1 · CAPTURA A",BLUE,()->capture(task,false));
             Button b=small(pair,"2 · CAPTURA B",GREEN,()->capture(task,true));
-            a.setEnabled(!busy);
-            b.setEnabled(!busy);
+            // Callbacks guard concurrency; buttons never remain disabled
+            // after returning from another Activity while a read completes.
             card.addView(text("Entre A y B accioná una sola opción " +
                 "desde el menú/mando ORIGINAL de Jetour. No se " +
                 "envían escrituras desde DriveLab.",12,MUTED));
@@ -302,7 +328,7 @@ public final class T1ValidationWizardActivity extends T1ImmersiveActivity {
         noteView.setMinLines(2);
         noteView.setTextColor(FG);
         noteView.setHintTextColor(MUTED);
-        noteView.setHint("Qué hiciste, qué valor cambió, qué no respondió…");
+        noteView.setHint("Qué hiciste, qué valor cambió, qué no respondió… (sin VIN ni domicilios)");
         noteView.setText(prefs.getString(task.id+"_note",""));
         card.addView(noteView);
         button(card,"GUARDAR OBSERVACIÓN",BLUE,()->{
@@ -345,6 +371,9 @@ public final class T1ValidationWizardActivity extends T1ImmersiveActivity {
             case "vehicle":
                 intent=new Intent(this,ReceiverVehicleActivity.class)
                     .putExtra("open_tab",0);break;
+            case "code":
+                intent=new Intent(this,ReceiverVehicleActivity.class)
+                    .putExtra("open_tab",2);break;
             case "diagn":
                 intent=new Intent(this,ReceiverVehicleActivity.class)
                     .putExtra("open_tab",3);break;
@@ -401,7 +430,9 @@ public final class T1ValidationWizardActivity extends T1ImmersiveActivity {
         if(TASKS[selected].id.equals(key))status(value);
     }
     private void capture(Task task,boolean after){
-        if(busy)return;
+        if(busy){
+            status("Otra lectura OEM sigue activa; esperá su resultado.");return;
+        }
         if(after&&!hasBase(task)){
             status("FALTA CAPTURA A: volvé a tomar la lectura inicial " +
                 "con el mando OEM en su primer estado.");return;
