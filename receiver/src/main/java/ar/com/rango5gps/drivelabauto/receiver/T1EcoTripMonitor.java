@@ -21,6 +21,9 @@ final class T1EcoTripMonitor implements AutoCloseable {
     private final Context app;
     private final String tripId;
     private final T1EcoTripMetrics rolling;
+    private T1EcoTripMetrics client1=new T1EcoTripMetrics(),
+        client2=new T1EcoTripMetrics();
+    private long client1Start=0,client2Start=0;
     private FileOutputStream writer;
     private long lastMatchedAt=0,lastMatchedFixNanos=0,lastSample=0;
     private int cachedRoad=T1EcoTripMetrics.UNKNOWN,samples=0;
@@ -31,11 +34,13 @@ final class T1EcoTripMonitor implements AutoCloseable {
         return new File(T1TripRecorderService.tripDir(c),
             "eco_"+id+".csv");
     }
-    static String live(Context c){
+    static String live(Context c){return live(c,0);}
+    static String live(Context c,int scope){
         SharedPreferences p=c.getApplicationContext().getSharedPreferences(
             PREFS,Context.MODE_PRIVATE);
         long age=System.currentTimeMillis()-p.getLong("sampleAt",0L);
-        String status=p.getString("summary","");
+        String status=p.getString(scope==1?"summary1":scope==2?
+            "summary2":"summary","");
         if(status.isEmpty()||age<0||age>45000L)
             return "ECO EN VIVO · sin muestra reciente; no se inventa porcentaje";
         return status;
@@ -87,6 +92,24 @@ final class T1EcoTripMonitor implements AutoCloseable {
         double seconds=elapsedMs/1000.0;
         int road=matched(location,ms);
         rolling.add(ms,km,seconds,road,speed,acceleration);
+        if(T1JourneyStore.active(app)&&!T1JourneyStore.paused(app)){
+            long start=T1JourneyStore.startedAt(app);
+            if(start>0&&start!=client1Start){
+                client1Start=start;
+                client1=T1EcoTripReport.readSidecar(file(app,tripId),
+                    start,ms-1);
+            }
+            if(start>0)client1.add(ms,km,seconds,road,speed,acceleration);
+        }
+        if(T1JourneyStore2.active(app)&&!T1JourneyStore2.paused(app)){
+            long start=T1JourneyStore2.startedAt(app);
+            if(start>0&&start!=client2Start){
+                client2Start=start;
+                client2=T1EcoTripReport.readSidecar(file(app,tripId),
+                    start,ms-1);
+            }
+            if(start>0)client2.add(ms,km,seconds,road,speed,acceleration);
+        }
         if(writer!=null)try{
             String line=ms+","+
                 String.format(Locale.ROOT,"%.7f",km)+","+
@@ -108,11 +131,16 @@ final class T1EcoTripMonitor implements AutoCloseable {
             .putLong("sampleAt",ms)
             .putString("id",tripId)
             .putString("summary",
-                "ECO EN VIVO · "+rolling.headline()+
-                "\n"+T1EcoTripMetrics.fmt(rolling.km(),2)+" km medidos"+
+                "VIAJE TOTAL · "+rolling.headline()+
+                "
+"+T1EcoTripMetrics.fmt(rolling.km(),2)+" km medidos"+
                 " · "+rolling.abruptAccelerationEvents()+
                 " aceleraciones y "+rolling.abruptBrakeEvents()+
                 " frenadas fuertes estimadas")
+            .putString("summary1",client1Start==0?
+                "VIAJE 1 · sin registro activo":"VIAJE 1 · "+client1.headline())
+            .putString("summary2",client2Start==0?
+                "VIAJE 2 · sin registro activo":"VIAJE 2 · "+client2.headline())
             .apply();
     }
     @Override public void close(){
