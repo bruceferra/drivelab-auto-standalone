@@ -84,6 +84,23 @@ jobs:
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ModeZoneStore.java
           grep -q 'T1PremiumCockpitActivity' receiver/src/main/AndroidManifest.xml
+      - name: Eco trip speed bins, OSM coverage and live 500m autonomy (pure JVM)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-eco-rating
+          javac -encoding UTF-8 -d /tmp/t1-eco-rating \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1EcoTripMetrics.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1LiveConsumption.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripMath.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ExperimentalRange.java \
+            receiver/tests/T1EcoTripMetricsTest.java \
+            receiver/tests/T1LiveConsumptionTest.java
+          java -cp /tmp/t1-eco-rating ar.com.rango5gps.drivelabauto.receiver.T1EcoTripMetricsTest
+          java -cp /tmp/t1-eco-rating ar.com.rango5gps.drivelabauto.receiver.T1LiveConsumptionTest
+          grep -Fq 'eco.sample(s.timestamp,measure.km,dt' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripRecorderService.java
+          grep -Fq 'historyEcoStatus.setText' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
+          grep -Fq 'T1EcoTripMonitor.live(this,ecoScope)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
       - name: OEM SOC/regen verified-only auto-write policy (pure JVM)
         shell: bash
         run: |
