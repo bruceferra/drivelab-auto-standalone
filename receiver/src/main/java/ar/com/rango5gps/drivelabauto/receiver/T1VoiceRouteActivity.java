@@ -336,11 +336,28 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
             },"T1-Voice-Weather-HTTPS").start();
             return;
         }
-        // Live politics, news and football need a current online search
-        // service. ACTION_SEND to Gemini is not an automatic Q&A API.
+        if(T1VoiceNewsTopic.topic(phrase)!=null){
+            status.setText("ACTUALIDAD · consultando titulares recientes…");
+            new Thread(()->{
+                String result;
+                try{result=T1VoiceNews.headlines(phrase);}
+                catch(Exception ex){
+                    result="No pude consultar titulares actualizados. "+
+                        "Revisá la conexión o usá la consulta externa.";
+                }
+                final String answer=result;
+                runOnUiThread(()->{
+                    if(!isFinishing()&&!isDestroyed())
+                        say("TITULARES ACTUALES · "+answer,answer);
+                });
+            },"T1-Voice-News-RSS").start();
+            return;
+        }
+        // Free-form AI answers still need a documented online API provider.
+        // A shared-text Android Intent does not guarantee automatic replies.
         status.setText("PREGUNTA GENERAL · "+name(selectedAi())+
             ". El asistente externo puede exigir otro toque; "+
-            "DriveLab todavía no dispone de respuesta online hablada propia.");
+            "DriveLab todavía no tiene un servicio de IA conversacional completo.");
         shareWithAi(selectedAi(),phrase.trim());
     }
     /** Respond within DriveLab without forcing another microphone touch.
