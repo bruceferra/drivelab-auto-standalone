@@ -468,7 +468,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/mirror-visible-controls
-          javac -encoding UTF-8 -d /tmp/mirror-visible-controls \\
+          javac -encoding UTF-8 -d /tmp/mirror-visible-controls \
             receiver/tests/MirrorControlsVisibilitySourceContractTest.java
           java -cp /tmp/mirror-visible-controls \
             ar.com.rango5gps.drivelabauto.receiver.MirrorControlsVisibilitySourceContractTest
