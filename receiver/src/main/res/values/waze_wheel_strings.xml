@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="waze_wheel_accessibility_description">Volante para Waze: seleccionar rutas alternativas y confirmar opciones visibles solo a pedido; no se opera fuera de Waze.</string>
+</resources>
