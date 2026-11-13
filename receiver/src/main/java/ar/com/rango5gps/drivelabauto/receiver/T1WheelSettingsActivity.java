@@ -62,13 +62,22 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
                 "verificaremos el canal OEM por ADB.");
         });
     }
+    // The base shell defaults to white for historical screens, while this
+    // diagnostics page uses WHITE text. Keep the entire screen (including
+    // the fixed header shell and empty scroll areas) on the Jetour dark palette.
+    @Override protected int overlayClearBackgroundColor(){
+        return T1JetourTheme.NIGHT;
+    }
     @Override protected void onCreate(Bundle state){
         super.onCreate(state);
         ScrollView scroll=new ScrollView(this);
+        scroll.setBackgroundColor(T1JetourTheme.NIGHT);
+        scroll.setFillViewport(true);
         LinearLayout body=new LinearLayout(this);
         body.setOrientation(LinearLayout.VERTICAL);
+        body.setBackgroundColor(T1JetourTheme.NIGHT);
         body.setPadding(16,12,16,30);
-        scroll.addView(body);
+        scroll.addView(body,new ScrollView.LayoutParams(-1,-2));
         text(body,"VOLANTE · WAZE / RUTAS ALTERNATIVAS",19);
         text(body,"PRUEBA DIRECTA: quedate en esta misma pantalla. "+
             "Tocá APRENDER TECLA y girá la ruedita sin abrir Waze. "+
