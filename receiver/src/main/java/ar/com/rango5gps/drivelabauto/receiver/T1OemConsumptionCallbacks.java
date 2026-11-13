@@ -223,7 +223,7 @@ final class T1OemConsumptionCallbacks {
             try{
                 File dir=T1TripRecorderService.tripDir(app);
                 File[] files=dir.listFiles(f->f.isFile()&&
-                    f.getName().matches("trip_oem_[0-9]{8}_[0-9]{6}\\\\.csv"));
+                    f.getName().matches("trip_oem_[0-9]{8}_[0-9]{6}\\.csv"));
                 if(files!=null){
                     java.util.Arrays.sort(files,(a,b)->a.getName().compareTo(b.getName()));
                     // Read only the ends of recent trip files: avoids a full
