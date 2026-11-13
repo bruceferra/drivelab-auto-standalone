@@ -15,7 +15,15 @@ final class T1EcoTripMetrics {
     static final int UNKNOWN=0,CITY=1,ROAD=2,MOTORWAY=3;
     static final int BIN_COUNT=41,MAX_BIN=40;
     private final double[] roadKm=new double[4],roadSec=new double[4],
+        trafficSlowKm=new double[4],trafficSlowSec=new double[4],
         speedKm=new double[BIN_COUNT],speedSec=new double[BIN_COUNT];
+    // Slow intervals are provisionally "normal" until the same OSM road
+    // category stays slow for >=20-35s; transfer the entire sustained
+    // interval to congestion after confirmation. A brief red light stays
+    // normal, not evidence of a traffic jam.
+    private int pendingRoad=UNKNOWN;
+    private double pendingKm=0,pendingSeconds=0;
+    private boolean congestedRun=false;
     private double validKm,validSeconds,accelSeconds,strongAccelSeconds,
         strongBrakeSeconds,moderateSeconds;
     private int validIntervals,abruptAccelerationEvents,abruptBrakeEvents;
@@ -46,6 +54,10 @@ final class T1EcoTripMetrics {
     }
     void add(long ms,double distanceKm,double seconds,int roadId,
              double speedKmh,double acceleration){
+        add(ms,distanceKm,seconds,roadId,speedKmh,acceleration,-1);
+    }
+    void add(long ms,double distanceKm,double seconds,int roadId,
+             double speedKmh,double acceleration,int postedSpeedKmh){
         if(ms<=0||!Double.isFinite(distanceKm)||distanceKm<0||
            distanceKm>0.5||!Double.isFinite(seconds)||
            seconds<.3||seconds>10||speedBin(speedKmh)<0){
@@ -61,6 +73,33 @@ final class T1EcoTripMetrics {
         validKm+=distanceKm;
         validSeconds+=seconds;
         validIntervals++;
+        // Road classification comes ONLY from OSM. Slow/normal relates
+        // to sustained speed relative to OSM speed or road-class fallback.
+        // If an interval crosses road categories, reset low-speed streak.
+        if(road!=pendingRoad){
+            pendingRoad=road;pendingKm=0;
+            pendingSeconds=0;congestedRun=false;
+        }
+        if(road!=UNKNOWN){
+            if(T1TrafficFlowPolicy.slow(road,postedSpeedKmh,speedKmh)){
+                if(congestedRun){
+                    trafficSlowKm[road]+=distanceKm;
+                    trafficSlowSec[road]+=seconds;
+                }else{
+                    pendingKm+=distanceKm;
+                    pendingSeconds+=seconds;
+                    if(pendingSeconds>=
+                       T1TrafficFlowPolicy.minSlowSeconds(road)){
+                        trafficSlowKm[road]+=pendingKm;
+                        trafficSlowSec[road]+=pendingSeconds;
+                        pendingKm=0;pendingSeconds=0;
+                        congestedRun=true;
+                    }
+                }
+            }else{
+                pendingKm=0;pendingSeconds=0;congestedRun=false;
+            }
+        }
         if(Double.isFinite(acceleration)&&
            acceleration>=-9&&acceleration<=9){
             accelSeconds+=seconds;
@@ -82,6 +121,8 @@ final class T1EcoTripMetrics {
         if(other==null)return;
         for(int i=0;i<4;i++){
             roadKm[i]+=other.roadKm[i];roadSec[i]+=other.roadSec[i];
+            trafficSlowKm[i]+=other.trafficSlowKm[i];
+            trafficSlowSec[i]+=other.trafficSlowSec[i];
         }
         for(int i=0;i<BIN_COUNT;i++){
             speedKm[i]+=other.speedKm[i];speedSec[i]+=other.speedSec[i];
@@ -95,9 +136,28 @@ final class T1EcoTripMetrics {
         abruptAccelerationEvents+=other.abruptAccelerationEvents;
         abruptBrakeEvents+=other.abruptBrakeEvents;
         priorEpisode=0;
+        pendingRoad=UNKNOWN;pendingKm=0;pendingSeconds=0;
+        congestedRun=false;
     }
     double km(){return validKm;}
     double roadKm(int road){return roadKm[road];}
+    double congestedKm(int road){return trafficSlowKm[road];}
+    double normalKm(int road){
+        return Math.max(0,roadKm[road]-trafficSlowKm[road]);
+    }
+    double congestedSeconds(int road){return trafficSlowSec[road];}
+    double normalSeconds(int road){
+        return Math.max(0,roadSec[road]-trafficSlowSec[road]);
+    }
+    double congestionPercent(int road){
+        return validKm>0?100*trafficSlowKm[road]/validKm:0;
+    }
+    double normalPercent(int road){
+        return validKm>0?100*normalKm(road)/validKm:0;
+    }
+    double congestionTimePercent(int road){
+        return roadSec[road]>0?100*trafficSlowSec[road]/roadSec[road]:0;
+    }
     double speedKm(int bin){return speedKm[bin];}
     double speedSeconds(int bin){return speedSec[bin];}
     int intervals(){return validIntervals;}
@@ -147,11 +207,25 @@ final class T1EcoTripMetrics {
                 "% sin clasificar":"")+
             " · cobertura OSM "+fmt(roadCoverage()*100,0)+"%";
     }
+    String trafficMix(){
+        if(validKm<=0)return "Tráfico: sin muestra";
+        StringBuilder s=new StringBuilder();
+        for(int cls=1;cls<=3;cls++){
+            if(roadKm[cls]<.001)continue;
+            if(s.length()>0)s.append(" · ");
+            s.append(roadName(cls)).append(" ")
+                .append(fmt(normalPercent(cls),0)).append("% normal / ")
+                .append(fmt(congestionPercent(cls),0))
+                .append("% congestión probable");
+        }
+        return s.length()>0?s.toString():"Tráfico no clasificable por OSM";
+    }
     String headline(){
         double score=ecoScore();
         return (Double.isFinite(score)?"ECO "+fmt(score,1)+"/10":
             "ECO N/D · datos insuficientes")+
-            " · "+mix();
+            " · "+mix()+"
+"+trafficMix();
     }
     String breakdown(){
         StringBuilder b=new StringBuilder();
@@ -161,11 +235,26 @@ final class T1EcoTripMetrics {
         b.append("Recorrido: ").append(fmt(validKm,2))
             .append(" km analizados · ")
             .append(validIntervals).append(" intervalos.\n");
-        for(int cls=1;cls<=3;cls++)
+        for(int cls=1;cls<=3;cls++){
             b.append(roadName(cls)).append(": ")
                 .append(fmt(percent(cls),1)).append("% · ")
                 .append(fmt(roadKm[cls],2)).append(" km · ")
                 .append(duration(roadSec[cls])).append("\n");
+            b.append("    NORMAL: ")
+                .append(fmt(normalPercent(cls),1)).append("% del viaje · ")
+                .append(fmt(normalKm(cls),2)).append(" km · ")
+                .append(duration(normalSeconds(cls))).append("\n");
+            b.append("    CONGESTIONADA (probable): ")
+                .append(fmt(congestionPercent(cls),1))
+                .append("% del viaje · ")
+                .append(fmt(congestedKm(cls),2)).append(" km · ")
+                .append(duration(congestedSeconds(cls)))
+                .append(" · ").append(fmt(congestionTimePercent(cls),0))
+                .append("% del tiempo en esta vía\n");
+        }
+        b.append("Congestión inferida por velocidad sostenida y clase ")
+            .append("OSM; NO es un servicio de tráfico en tiempo real. ")
+            .append("Semáforos/paradas breves se consideran normales.\n");
         if(roadKm[UNKNOWN]>0)
             b.append("SIN CLASIFICAR: ").append(fmt(percent(UNKNOWN),1))
                 .append("% · ").append(fmt(roadKm[UNKNOWN],2))
