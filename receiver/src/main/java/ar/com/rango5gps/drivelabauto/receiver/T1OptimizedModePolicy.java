@@ -21,22 +21,50 @@ final class T1OptimizedModePolicy {
         final Power power;
         final Strategy strategy;
         final int forcedSoc;
+        // Legacy single-threshold fields are retained for earlier callers.
         final boolean thresholdEnabled;
         final int minBattery;
         final Comparison comparison;
         final Regen regeneration;
+        final boolean minEnabled,maxEnabled;
+        final int maxBattery;
         Rule(Power p, Strategy s, int target, boolean condition, int minimum, Regen r){
             this(p,s,target,condition,minimum,Comparison.GREATER_OR_EQUAL,r);
         }
-        Rule(Power p, Strategy s, int target, boolean condition, int minimum,
+        Rule(Power p, Strategy s, int target, boolean condition, int threshold,
              Comparison comparator, Regen r){
+            this(p,s,target,
+                condition&&comparator!=Comparison.LESS_OR_EQUAL,threshold,
+                condition&&comparator==Comparison.LESS_OR_EQUAL,threshold,r);
+        }
+        /** Both battery limits can be enabled independently.
+         * This is a filter on ACTUAL OEM SOC, not forced target 1041.
+         * Invalid min>max is rejected by evaluate and the editor.
+         */
+        Rule(Power p,Strategy s,int target,
+             boolean lowerEnabled,int lowerLimit,
+             boolean upperEnabled,int upperLimit,Regen r){
             power=p==null?Power.HEV:p;
             strategy=s==null?Strategy.SMART:s;
             forcedSoc=clamp(target,0,100);
-            thresholdEnabled=condition;
-            minBattery=clamp(minimum,0,100);
-            comparison=comparator==null?Comparison.GREATER_OR_EQUAL:comparator;
+            minEnabled=lowerEnabled;
+            maxEnabled=upperEnabled;
+            minBattery=clamp(lowerLimit,0,100);
+            maxBattery=clamp(upperLimit,0,100);
+            thresholdEnabled=minEnabled||maxEnabled;
+            comparison=minEnabled?
+                Comparison.GREATER_OR_EQUAL:Comparison.LESS_OR_EQUAL;
             regeneration=r==null?Regen.MEDIUM:r;
+        }
+        boolean rangeValid(){
+            return !minEnabled||!maxEnabled||minBattery<=maxBattery;
+        }
+        String rangeSummary(){
+            if(!thresholdEnabled)return "sin condición SOC";
+            StringBuilder result=new StringBuilder("batería");
+            if(minEnabled)result.append(" ≥ ").append(minBattery).append(" %");
+            if(maxEnabled)result.append(" ≤ ").append(maxBattery).append(" %");
+            return result.toString();
         }
     }
     static final class Decision {
@@ -57,8 +85,7 @@ final class T1OptimizedModePolicy {
                     "SOC FORZADO "+requested.forcedSoc+" %")+
                 " · regeneración "+regenerationName(requested.regeneration)+
                 (requested.thresholdEnabled?
-                    " · batería "+requested.comparison.symbol()+" "+
-                        requested.minBattery+" %":"")+
+                    " · "+requested.rangeSummary():"")+
                 " · SOLO SUGERENCIA";
         }
     }
@@ -66,14 +93,19 @@ final class T1OptimizedModePolicy {
         if(rule==null)return new Decision(road,null,false,false,
             "No hay perfil configurado");
         if(rule.thresholdEnabled){
+            if(!rule.rangeValid())
+                return new Decision(road,rule,false,false,
+                    "Condición SOC inválida: mínimo "+rule.minBattery+
+                    " % superior al máximo "+rule.maxBattery+" %");
             if(!Double.isFinite(batteryPercent)||batteryPercent<0||
                 batteryPercent>100)
                 return new Decision(road,rule,false,false,
                     "SOC OEM desconocido; no se cumple condición");
-            if(!rule.comparison.matches(batteryPercent,rule.minBattery))
+            if((rule.minEnabled&&batteryPercent<rule.minBattery)||
+               (rule.maxEnabled&&batteryPercent>rule.maxBattery))
                 return new Decision(road,rule,false,true,
-                    "SOC batería "+String.format(java.util.Locale.ROOT,"%.1f",batteryPercent)+
-                    " % no cumple "+rule.comparison.symbol()+" "+rule.minBattery+" %");
+                    "SOC batería "+String.format(java.util.Locale.ROOT,"%.1f",
+                        batteryPercent)+" % no cumple "+rule.rangeSummary());
         }
         return new Decision(road,rule,true,true,
             road==Road.UNKNOWN?"Vía desconocida: perfil de respaldo": "Vía identificada");
