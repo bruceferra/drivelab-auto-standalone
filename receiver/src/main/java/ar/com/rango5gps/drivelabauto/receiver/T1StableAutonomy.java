@@ -34,7 +34,7 @@ final class T1StableAutonomy {
         boolean oem=valid(oem50L100,3.0,20.0);
         // A 50 km PHEV value can include long EV stretches, changing SOC and
         // charge strategy. Clamp its leverage relative to pump history.
-        boolean usable=oem&&oem50L100>=anchor*0.60&&oem50L100<=anchor*1.50;
+        boolean usable=oem&&oem50L100>=anchor*0.60&&oem50L100<=anchor*1.80;
         boolean corroborated=usable&&rawCount==100&&
             valid(raw100Mean,0,35)&&Math.abs(raw100Mean-oem50L100)<=
             Math.max(0.7,oem50L100*0.15);
