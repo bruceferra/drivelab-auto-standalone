@@ -81,6 +81,29 @@ public final class T1SocRegenWritePolicyTest {
             T1SocRegenWritePolicy.desired(conditional,20);
         check(fallback.valid()&&fallback.strategy==2&&fallback.regen==2
             &&!fallback.needsTarget(),"safe fallback");
+        T1OptimizedModePolicy.Rule bounded=new T1OptimizedModePolicy.Rule(
+            T1OptimizedModePolicy.Power.HEV,
+            T1OptimizedModePolicy.Strategy.FORCED,56,
+            true,10,true,40,T1OptimizedModePolicy.Regen.HIGH);
+        T1SocRegenWritePolicy.Targets inRange=
+            T1SocRegenWritePolicy.desired(bounded,25);
+        check(inRange.valid()&&inRange.strategy==4&&
+            inRange.forcedSoc==56&&inRange.regen==3,
+            "in-range SOC applies FORZADO and selected regeneration");
+        T1SocRegenWritePolicy.Targets aboveRange=
+            T1SocRegenWritePolicy.desired(bounded,45);
+        check(aboveRange.valid()&&aboveRange.strategy==2&&
+            aboveRange.regen==2&&aboveRange.fallback,
+            "above SOC maximum must fall back to SMART");
+        T1SocRegenWritePolicy.Targets belowRange=
+            T1SocRegenWritePolicy.desired(bounded,5);
+        check(belowRange.valid()&&belowRange.strategy==2&&
+            belowRange.fallback,
+            "below SOC minimum must fall back to SMART");
+        T1SocRegenWritePolicy.Targets unknownSoc=
+            T1SocRegenWritePolicy.desired(bounded,Double.NaN);
+        check(unknownSoc.fallback&&unknownSoc.strategy==2,
+            "unknown OEM SOC must not apply a conditioned FORZADO profile");
         System.out.println("OK: SOC / regen policy (D movement permitted, P, presets, fallback)");
     }
 }
