@@ -130,6 +130,8 @@ final class T1GlobalToolbar {
             ()->navigate(T1ValidationWizardActivity.class));
         button(actions,"IA / WAZE",T1JetourTheme.PANEL_HI,115,
             ()->navigate(T1VoiceRouteActivity.class));
+        button(actions,"RUTAS · VOLANTE",T1JetourTheme.PANEL_HI,150,
+            ()->navigate(T1WheelSettingsActivity.class));
         button(actions,"INICIO",T1JetourTheme.PANEL_HI,95,
             ()->navigate(ReceiverActivity.class));
     }
