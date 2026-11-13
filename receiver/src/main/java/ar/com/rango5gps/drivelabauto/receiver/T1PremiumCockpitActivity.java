@@ -909,8 +909,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         commentaryLeft.setPadding(3,2,9,2);
         commentaryRight.setPadding(9,2,3,2);
         LinearLayout top=row();top.setGravity(Gravity.CENTER_VERTICAL);
-        root.addView(top);
-        cockpitNavRow=top;
+        // Top row now lives in the shared T1GlobalToolbar, not this scroll.
+        cockpitNavRow=null;
         LinearLayout title=col();
         title.addView(text("DRIVELAB / T1",19,WHITE,true));
         commentaryRight.addView(text("COCKPIT · build OEM "+getPackageVersion(),11,MUTED,false));
@@ -998,8 +998,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         T1JetourTheme.button(back,T1JetourTheme.PANEL);
         top.addView(back,new LinearLayout.LayoutParams(-2,52));
 
-        LinearLayout modes=row();root.addView(modes);
-        cockpitModeRow=modes;
+        LinearLayout modes=row(); // legacy mode telemetry buttons detached
+        cockpitModeRow=null;
         modeEvButton=topModeButton(modes,"EV",1);
         modeHevButton=topModeButton(modes,"HEV",2);
         modeMaxButton=topModeButton(modes,"EV MAX",3);
