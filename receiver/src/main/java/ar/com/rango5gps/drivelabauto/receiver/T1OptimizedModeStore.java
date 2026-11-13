@@ -45,6 +45,20 @@ final class T1OptimizedModeStore {
             enumOr(T1OptimizedModePolicy.Regen.class,
                 p.getString(k+"regen",d.regeneration.name()),d.regeneration));
     }
+    /** Entire-road kill switch. All four blocks default to enabled to
+     * preserve existing user profiles across OTA upgrades. Toggling this
+     * is persisted immediately; editing other settings still needs GUARDAR.
+     */
+    static boolean isEnabled(Context c,T1OptimizedModePolicy.Road r){
+        if(r==null)return false;
+        return preferences(c).getBoolean("road_"+r.name()+"_enabled",true);
+    }
+    static void setEnabled(Context c,T1OptimizedModePolicy.Road r,boolean enabled){
+        if(r==null)throw new IllegalArgumentException("Road required");
+        preferences(c).edit()
+            .putBoolean("road_"+r.name()+"_enabled",enabled)
+            .commit();
+    }
     static void save(Context c,T1OptimizedModePolicy.Road r,
                      T1OptimizedModePolicy.Rule v){
         String k="road_"+r.name()+"_";
