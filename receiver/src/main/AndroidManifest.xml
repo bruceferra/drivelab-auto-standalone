@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Foreground, one-shot speech only after user enters voice screen. -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Only user-triggered, verified signed updates; system confirmation required. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
@@ -17,6 +19,13 @@
         <package android:name="com.autolink.carservice" />
         <package android:name="com.autolink.clusterinteraction" />
         <package android:name="com.waze" />
+        <package android:name="com.google.android.apps.bard" />
+        <package android:name="com.openai.chatgpt" />
+        <!-- Android 11 app-visibility for platform speech recognition. -->
+        <intent><action android:name="android.speech.RecognitionService" /></intent>
+        <intent><action android:name="android.intent.action.ASSIST" /></intent>
+        <intent><action android:name="android.intent.action.SEND" />
+            <data android:mimeType="text/plain" /></intent>
         <intent><action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" /></intent>
     </queries>

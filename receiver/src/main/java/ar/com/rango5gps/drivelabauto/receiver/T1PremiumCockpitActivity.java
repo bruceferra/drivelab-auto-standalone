@@ -738,7 +738,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         Button microphone=new Button(this);
         microphone.setAllCaps(false);
         microphone.setTextSize(12);
-        microphone.setText("🎤 DESTINO");
+        microphone.setText("🎤 IA / WAZE");
         microphone.setContentDescription("Dictar destino para Waze del clúster");
         microphone.setOnClickListener(v->startActivity(new Intent(this,
             T1VoiceRouteActivity.class)));
@@ -781,8 +781,14 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         T1JetourTheme.button(optimized,BLUE);
         top.addView(optimized,new LinearLayout.LayoutParams(-2,52));
         Button back=new Button(this);
-        back.setText("VOLVER");back.setTextSize(12);
-        back.setAllCaps(false);back.setOnClickListener(v->finish());
+        back.setText("INICIO");back.setTextSize(12);
+        back.setAllCaps(false);back.setOnClickListener(v->{
+            Intent home=new Intent(this,ReceiverActivity.class);
+            home.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|
+                Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            startActivity(home);
+            finish();
+        });
         T1JetourTheme.button(back,T1JetourTheme.PANEL);
         top.addView(back,new LinearLayout.LayoutParams(-2,52));
 

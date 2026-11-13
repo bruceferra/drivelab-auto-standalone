@@ -204,7 +204,9 @@ final class ReceiverQuickControls {
         button(c,"ALARMA PEATÓN ON/OFF",RED,()->avas());
         interiorMode=button(c,"AIRE INTERIOR · AUTO",GREEN,()->setAir(false));
         airAuto=button(c,"AIRE EXTERIOR · OEM",GREY,()->setAir(true));
-        button(c,"TABLERO / TRIP",BLUE,()->activity.startActivity(
+        button(c,"COCKPIT",BLUE,()->activity.startActivity(
+            new Intent(activity,T1PremiumCockpitActivity.class)));
+        button(c,"TABLERO",GREY,()->activity.startActivity(
             new Intent(activity,T1TankDashboardActivity.class)));
 
         LinearLayout d=row(extra);

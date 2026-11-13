@@ -148,7 +148,13 @@ public final class T1TankDashboardActivity extends T1ImmersiveActivity {
             13,0xFFB4DADD,false));
         action(root,"ABRIR NUEVO COCKPIT · JORNADA Y CLIENTES",TEAL,()->
             startActivity(new Intent(this,T1PremiumCockpitActivity.class)));
-        action(root,"← VOLVER",BLUE,this::finish);
+        action(root,"INICIO · RECEIVER",BLUE,()->{
+            Intent home=new Intent(this,ReceiverActivity.class);
+            home.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|
+                Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            startActivity(home);
+            finish();
+        });
 
         instruments=new T1InstrumentView(this);
         root.addView(instruments,new LinearLayout.LayoutParams(-1,-2));

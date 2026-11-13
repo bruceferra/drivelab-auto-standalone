@@ -107,11 +107,11 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
             startActivity(new Intent(this,ReceiverVehicleActivity.class)));
         button(body,"PENDIENTES · ASISTENTE DE VALIDACIÓN T1",()->
             startActivity(new Intent(this,T1ValidationWizardActivity.class)));
-        button(body,"🎤 DESTINO POR VOZ · WAZE CLÚSTER",()->
+        button(body,"🎤 ASISTENTE · WAZE / GEMINI / CHATGPT",()->
             startActivity(new Intent(this,T1VoiceRouteActivity.class)));
-        button(body,"COCKPIT T1 · JORNADA / CLIENTES / COSTOS",()->
+        button(body,"COCKPIT · JORNADA / VIAJES / ENERGÍA",()->
             startActivity(new Intent(this,T1PremiumCockpitActivity.class)));
-        button(body,"TABLERO T1 · TANQUES / CONSUMO / TELEMETRÍA",()->
+        button(body,"TABLERO · TANQUES / CONSUMO / TELEMETRÍA",()->
             startActivity(new Intent(this,T1TankDashboardActivity.class)));
         label(body,"Conexión Receiver: "+p.getString("status","Sin iniciar")+
             " · IP "+ReceiverService.localIp()+
