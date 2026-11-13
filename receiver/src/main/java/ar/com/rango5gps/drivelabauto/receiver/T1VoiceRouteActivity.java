@@ -47,7 +47,8 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
                           android.view.View.OnClickListener click) {
         Button b = new Button(this);
         b.setText(title);
-        T1JetourTheme.button(b,0xFF175A70);
+        T1JetourTheme.button(b,title.contains("NAVEGAR")?
+            T1JetourTheme.GREEN_BUTTON:0xFF426E73);
         b.setOnClickListener(click);
         root.addView(b, new LinearLayout.LayoutParams(-1, 58));
         return b;
