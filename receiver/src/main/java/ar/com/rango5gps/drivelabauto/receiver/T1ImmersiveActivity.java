@@ -36,9 +36,11 @@ public abstract class T1ImmersiveActivity extends Activity {
         getSharedPreferences(CLEAR_PREFS,Context.MODE_PRIVATE)
             .edit().putInt(CLEAR_HEIGHT,0).apply();
         T1ImmersiveMode.setEnabled(this,true);
-        // Automatically select both user preferences ONCE on a fresh
-        // Receiver process launch. Navigating to another screen must NEVER
-        // rearm mirrors after the driver manually folded them or chose MANUAL.
+        // Owner request: both cabin INTERIOR and reverse-mirror AUTO are the
+        // defaults ONCE per fresh Receiver app process. A manual OFF tap is
+        // respected within this process and while navigating Receiver screens;
+        // reopening after process exit restores the requested AUTO default.
+        // Neither initializer bypasses an OEM safety pause/unknown mirror pose.
         if(AUTO_INITIALIZED.compareAndSet(false,true)){
             RecirculationGuardService.activateOnAppOpen(this);
             MirrorAutomationService.activateOnAppOpen(this);
