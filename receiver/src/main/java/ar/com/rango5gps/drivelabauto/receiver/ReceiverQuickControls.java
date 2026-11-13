@@ -146,7 +146,7 @@ final class ReceiverQuickControls {
     void attach(LinearLayout root){
         TextView head=new TextView(activity);
         head.setText("CONTROLES RÁPIDOS · JETOUR T1");
-        head.setTextSize(21);head.setTextColor(0xFF132A3D);
+        head.setTextSize(21);head.setTextColor(T1JetourTheme.CYAN);
         head.setPadding(7,4,7,4);
         root.addView(head);
 
@@ -171,6 +171,7 @@ final class ReceiverQuickControls {
             extraToggle.setText(reveal?"OCULTAR CONTROLES AVANZADOS":
                 "MOSTRAR CONTROLES AVANZADOS");
         });
+        T1JetourTheme.button(extraToggle,T1JetourTheme.PANEL_HI);
         root.addView(extraToggle);
         root.addView(extra);
         LinearLayout b=row(extra);
@@ -196,8 +197,10 @@ final class ReceiverQuickControls {
         button(e,"RECUPERAR ESPEJOS · 10 PASOS ARRIBA",ORANGE,this::restoreMirrors);
 
         config=new TextView(activity);config.setTextSize(14);
+        config.setTextColor(T1JetourTheme.MUTED);
         config.setPadding(8,8,8,4);root.addView(config);
         status=new TextView(activity);status.setTextSize(13);
+        status.setTextColor(T1JetourTheme.WHITE);
         status.setPadding(8,6,8,12);root.addView(status);
         refresh();
     }
