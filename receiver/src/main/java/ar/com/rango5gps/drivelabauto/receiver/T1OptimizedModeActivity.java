@@ -66,7 +66,7 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         p.setMargins(4,0,4,0);into.addView(widget,p);
     }
     private Spinner selector(String[] names,int initial){
-        Spinner s=new Spinner(this);
+        Spinner s=new Spinner(this,Spinner.MODE_DROPDOWN);
         T1JetourTheme.spinner(s,names);
         s.setSelection(initial);
         return s;
