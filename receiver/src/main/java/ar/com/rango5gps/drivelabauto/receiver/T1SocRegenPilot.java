@@ -4,7 +4,6 @@ import android.content.ComponentName;
 import android.content.Context;
 import android.content.Intent;
 import android.content.ServiceConnection;
-import android.content.SharedPreferences;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.Looper;
@@ -16,22 +15,21 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.BooleanSupplier;
 
 /**
- * Experimental SOC/regen OEM writer with physical owner verification gate.
+ * One-shot, guarded automatic OEM write for strategy 1040, target 1041 and
+ * regeneration 1046. SAME VehicleService transact(15) contract as confirmed
+ * 1043, but 1040/1041/1046 write acceptance must be confirmed on the T1.
  *
- * Prior logs validate that 1040/1041/1046 change FROM ORIGINAL OEM UI,
- * not a Receiver setter. All writes use the known VehicleService binder
- * contract (setter transaction 15); P and 0 km/h are mandatory for every
- * stage. An explicit manual test changes ONE key, verifies getter readback,
- * restores the original value, and verifies that restoration; only then is
- * that individual key unlocked for an automatic parked-only apply.
- *
- * Never writes SOC or regen while D/driving. Never retries a refused write.
+ * No separate unlock wizard: the owner explicitly enables MODO OPTIMIZADO
+ * once. The first automatic write is an experiment with direct OEM readback.
+ * Every apply uses two fresh gear/speed reads, individually checked values,
+ * one attempt per id, readback, and best-effort rollback of partial changes.
+ * D with valid 2148 speed is eligible, as is P/0; R/N/unknown are denied.
  */
 final class T1SocRegenPilot {
     interface Callback { void complete(String message); }
-    private static final String PREFERENCES="t1_soc_regen_verified_writer_v1";
     private static final String PKG="com.autolink.app.vehicleservice";
     private static final String CLS="com.autolink.app.vehicleservice.VehicleService";
     private static final String TOKEN="com.autolink.app.vehicleservice.IVehicleControl";
@@ -39,98 +37,68 @@ final class T1SocRegenPilot {
     private final Context app;
     private final Handler main=new Handler(Looper.getMainLooper());
 
-    T1SocRegenPilot(Context c){app=c.getApplicationContext();}
+    T1SocRegenPilot(Context context){app=context.getApplicationContext();}
     boolean busy(){return BUSY.get();}
-    private SharedPreferences flags(){
-        return app.getSharedPreferences(PREFERENCES,Context.MODE_PRIVATE);
-    }
-    static boolean confirmed(Context c,int id){
-        if(id!=1040&&id!=1041&&id!=1046)return false;
-        return c.getApplicationContext().getSharedPreferences(
-            PREFERENCES,Context.MODE_PRIVATE).getBoolean("ok_"+id,false);
-    }
-    static String status(Context c){
-        return "Escrituras verificadas desde DriveLab · 1040 "+
-            (confirmed(c,1040)?"OK":"PENDIENTE")+" · 1041 "+
-            (confirmed(c,1041)?"OK":"PENDIENTE")+" · 1046 "+
-            (confirmed(c,1046)?"OK":"PENDIENTE")+
-            ". AUTO SOC/regeneración se limita a P/0; no actúa en D.";
-    }
-    boolean test(int id,Callback callback){
-        if(!T1SocRegenWritePolicy.accepted(id,
-            id==1040?2:id==1041?56:1))return false;
-        if(!BUSY.compareAndSet(false,true))return false;
-        new Thread(()->{
-            String result;
-            try{result=tryTest(id);}
-            catch(Exception ex){
-                flags().edit().putBoolean("ok_"+id,false).apply();
-                result="PRUEBA "+id+" NO VALIDADA: "+describe(ex)+
-                    ". Revisá los estados en el menú OEM.";
-                T1OemDiagnosticLog.add(app,"SOC_REGEN_TEST_ERROR",result);
-            }finally{BUSY.set(false);}
-            final String answer=result;
-            main.post(()->callback.complete(answer));
-        },"T1-OEM-SOC-REGEN-Manual-Test").start();
-        return true;
-    }
 
-    boolean apply(T1SocRegenWritePolicy.Targets desired,Callback callback){
+    boolean apply(T1SocRegenWritePolicy.Targets desired,
+                  BooleanSupplier stillEnabled,Callback callback){
         if(desired==null||!desired.valid()||
-           !confirmed(app,1040)||!confirmed(app,1046)||
-           (desired.needsTarget()&&!confirmed(app,1041)))return false;
+            stillEnabled==null||!stillEnabled.getAsBoolean())return false;
         if(!BUSY.compareAndSet(false,true))return false;
         new Thread(()->{
             String result;
-            try{result=tryApply(desired);}
-            catch(Exception ex){
-                result="NO APLICADO / FALLÓ: "+describe(ex)+
-                    ". Detener automatización; comprobar pantalla OEM.";
+            try{
+                result=tryApply(desired,stillEnabled);
+            }catch(Exception ex){
+                result="NO CONFIRMADO: "+describe(ex)+
+                    " · AUTO se desactiva, comprobar ajustes Jetour.";
                 T1OemDiagnosticLog.add(app,"SOC_REGEN_AUTO_ERROR",result);
             }finally{BUSY.set(false);}
             final String answer=result;
             main.post(()->callback.complete(answer));
-        },"T1-OEM-SOC-REGEN-Auto-Parked").start();
+        },"T1-OEM-SOC-REGEN-Auto-Readback").start();
         return true;
     }
 
-    private interface OnBinder { String work(IBinder binder)throws Exception; }
-    private String withBinder(OnBinder action)throws Exception{
-        CountDownLatch latch=new CountDownLatch(1);
-        AtomicReference<IBinder> ref=new AtomicReference<>();
+    private interface Work { String run(IBinder b)throws Exception; }
+    private String withBinder(Work work)throws Exception{
+        CountDownLatch ready=new CountDownLatch(1);
+        AtomicReference<IBinder> remote=new AtomicReference<>();
         ServiceConnection connection=new ServiceConnection(){
-            @Override public void onServiceConnected(ComponentName n,IBinder b){
-                ref.set(b);latch.countDown();
+            @Override public void onServiceConnected(ComponentName n,IBinder binder){
+                remote.set(binder);ready.countDown();
             }
             @Override public void onServiceDisconnected(ComponentName n){
-                ref.set(null);latch.countDown();
+                remote.set(null);
             }
-            @Override public void onNullBinding(ComponentName n){latch.countDown();}
-            @Override public void onBindingDied(ComponentName n){latch.countDown();}
+            @Override public void onNullBinding(ComponentName n){ready.countDown();}
+            @Override public void onBindingDied(ComponentName n){remote.set(null);}
         };
-        boolean bound=app.bindService(
-            new Intent().setComponent(new ComponentName(PKG,CLS)),connection,0);
-        if(!bound)throw new IllegalStateException("Sin vínculo VehicleService");
+        boolean bound=app.bindService(new Intent().setComponent(
+            new ComponentName(PKG,CLS)),connection,0);
+        if(!bound)throw new IllegalStateException("Sin enlace VehicleService");
         try{
-            if(!latch.await(2500,TimeUnit.MILLISECONDS))
-                throw new IllegalStateException("Timeout Binder");
-            IBinder b=ref.get();
+            if(!ready.await(2800,TimeUnit.MILLISECONDS))
+                throw new IllegalStateException("Sin respuesta Binder OEM");
+            IBinder b=remote.get();
             if(b==null||!b.isBinderAlive()||
                 !TOKEN.equals(b.getInterfaceDescriptor()))
-                throw new SecurityException("Binder no corresponde a IVehicleControl");
-            return action.work(b);
+                throw new SecurityException("Interfaz IVehicleControl no válida");
+            return work.run(b);
         }finally{
             try{app.unbindService(connection);}catch(Exception ignored){}
         }
     }
+
     private static int readInt(IBinder b,int id)throws Exception{
         if(id!=1040&&id!=1041&&id!=1046&&id!=1033)
-            throw new SecurityException("Getter no autorizado: "+id);
+            throw new SecurityException("Getter OEM no autorizado: "+id);
         Parcel data=Parcel.obtain(),reply=Parcel.obtain();
         try{
-            data.writeInterfaceToken(TOKEN);data.writeInt(id);
+            data.writeInterfaceToken(TOKEN);
+            data.writeInt(id);
             if(!b.transact(5,data,reply,0))
-                throw new IllegalStateException("Getter "+id+" sin transacción");
+                throw new IllegalStateException("Getter OEM "+id+" rechazado");
             reply.readException();
             return reply.readInt();
         }finally{data.recycle();reply.recycle();}
@@ -140,167 +108,139 @@ final class T1SocRegenPilot {
         try{
             data.writeInterfaceToken(TOKEN);data.writeInt(2148);
             if(!b.transact(6,data,reply,0))
-                throw new IllegalStateException("Getter velocidad 2148 no responde");
+                throw new IllegalStateException("Velocidad OEM 2148 no legible");
             reply.readException();
             return reply.readFloat();
         }finally{data.recycle();reply.recycle();}
     }
-    // Kept in instance context, not global state: each test uses one owner.
-    private void preflight(IBinder b,String stage)throws Exception{
+
+    private int preflight(IBinder b,String stage)throws Exception{
         int gear=readInt(b,1033);
         float speed=readSpeed(b);
         T1OemDiagnosticLog.add(app,stage,
-            "1033="+gear+", velocidad 2148="+speed);
-        if(!T1SocRegenWritePolicy.parked(gear,speed))
-            throw new IllegalStateException("Requiere P/0 km/h: 1033="+
-                gear+", 2148="+speed);
+            "1033="+gear+" 2148="+speed);
+        if(!T1SocRegenWritePolicy.regenDriveEligible(gear,speed))
+            throw new IllegalStateException(
+                "Marcha/velocidad no seguras (solo P/0 o D/0..160): "+
+                gear+" / "+speed);
+        return gear;
     }
     private void doublePreflight(IBinder b)throws Exception{
-        preflight(b,"SOC_REGEN_PREFLIGHT_1");
-        SystemClock.sleep(450);
-        preflight(b,"SOC_REGEN_PREFLIGHT_2");
+        int first=preflight(b,"SOC_REGEN_PREFLIGHT_1");
+        SystemClock.sleep(400);
+        int second=preflight(b,"SOC_REGEN_PREFLIGHT_2");
+        if(first!=second)
+            throw new IllegalStateException("Marcha cambió durante preflight");
     }
-    private void set(IBinder b,int id,int value)throws Exception{
-        if(!T1SocRegenWritePolicy.accepted(id,value))
-            throw new SecurityException("Valor fuera de whitelist "+
-                id+"="+value);
-        preflight(b,"ANTES_ESCRITURA_"+id);
+    private void set(IBinder b,int id,int target,
+                     BooleanSupplier enabled)throws Exception{
+        if(!T1SocRegenWritePolicy.accepted(id,target))
+            throw new SecurityException("Valor no permitido "+id+"="+target);
+        if(enabled!=null&&!enabled.getAsBoolean())
+            throw new IllegalStateException("AUTO apagado antes de escribir");
+        preflight(b,"SOC_REGEN_ANTES_"+id);
         Parcel data=Parcel.obtain(),reply=Parcel.obtain();
         try{
             data.writeInterfaceToken(TOKEN);
-            data.writeInt(id);data.writeInt(value);
+            data.writeInt(id);
+            data.writeInt(target);
             data.writeString(app.getPackageName());
-            T1OemDiagnosticLog.add(app,"SOC_REGEN_SET",
-                "transact(15) · "+id+"="+value+"; único intento");
+            T1OemDiagnosticLog.add(app,"SOC_REGEN_ESCRITURA",
+                "Binder transact(15) id="+id+" valor="+target);
             if(!b.transact(15,data,reply,0))
-                throw new IllegalStateException("Setter rechazado en "+id);
+                throw new IllegalStateException("Setter "+id+" rechazado");
             reply.readException();
         }finally{data.recycle();reply.recycle();}
     }
-    private void verify(IBinder b,int id,int target)throws Exception{
-        long deadline=SystemClock.elapsedRealtime()+2800;
-        do{
-            if(readInt(b,id)==target){
-                T1OemDiagnosticLog.add(app,"SOC_REGEN_CONFIRMED",
-                    id+"="+target);
-                return;
-            }
-            SystemClock.sleep(270);
-        }while(SystemClock.elapsedRealtime()<deadline);
+    private void verify(IBinder b,int id,int target,
+                        BooleanSupplier enabled)throws Exception{
+        long deadline=SystemClock.elapsedRealtime()+3000;
+        while(SystemClock.elapsedRealtime()<deadline){
+            if(enabled!=null&&!enabled.getAsBoolean())
+                throw new IllegalStateException("AUTO apagado; lectura abortada");
+            int actual=readInt(b,id);
+            T1OemDiagnosticLog.add(app,"SOC_REGEN_READBACK",
+                "id="+id+" esperado="+target+" recibido="+actual);
+            if(actual==target)return;
+            SystemClock.sleep(300);
+        }
         throw new IllegalStateException(
-            "No confirmado por readback "+id+"="+target+
-            "; consultar configuración OEM");
+            "OEM NO confirmó id="+id+" valor="+target);
     }
-    private String tryTest(int id)throws Exception{
-        flags().edit().putBoolean("ok_"+id,false).apply();
-        T1OemDiagnosticLog.begin(app,
-            "PRUEBA MANUAL P/0 SOC/REGEN "+id+
-            " · escribir valor alternativo, leer, RESTAURAR y confirmar");
+
+    private String tryApply(T1SocRegenWritePolicy.Targets targets,
+                            BooleanSupplier active)throws Exception{
+        if(!active.getAsBoolean())
+            throw new IllegalStateException("AUTO ya está apagado");
+        T1OemDiagnosticLog.add(app,"SOC_REGEN_PERFIL",
+            "SOLICITADO "+targets.summary()+"; comprobando OEM");
         return withBinder(b->{
             doublePreflight(b);
-            int initial=readInt(b,id);
-            int alternative=T1SocRegenWritePolicy.testAlternative(id,initial);
-            if(alternative<0)
-                throw new IllegalStateException(
-                    "Valor inicial no reconocido "+id+"="+initial);
-            T1OemDiagnosticLog.add(app,"SOC_REGEN_INITIAL",
-                id+"="+initial+" · ensayo="+alternative);
-            boolean attempted=false;
-            try{
-                preflight(b,"SOC_REGEN_PREPARE_TEST_SET");
-                // Even if transact(15) later throws, OEM might have applied
-                // the request: make one best-effort restore to original.
-                attempted=true;
-                set(b,id,alternative);
-                verify(b,id,alternative);
-            }finally{
-                // The OEM may apply a write despite Binder/readback failure.
-                // Always attempt a single return to initial if attempted.
-                if(attempted){
-                    try{
-                        set(b,id,initial);
-                        verify(b,id,initial);
-                    }catch(Exception restore){
-                        flags().edit().putBoolean("ok_"+id,false).apply();
-                        throw new IllegalStateException(
-                            "RESTAURACIÓN NO CONFIRMADA de "+id+
-                            ". Usá control OEM ORIGINAL para restituir "+
-                            initial+": "+describe(restore),restore);
-                    }
-                }
+            if(!active.getAsBoolean())
+                throw new IllegalStateException("AUTO ya está apagado");
+            LinkedHashMap<Integer,Integer> wanted=new LinkedHashMap<>();
+            // Set target BEFORE entering FORZADO so the correct SOC target
+            // already exists when the ECU receives strategy=4.
+            if(targets.needsTarget())wanted.put(1041,targets.forcedSoc);
+            wanted.put(1040,targets.strategy);
+            wanted.put(1046,targets.regen);
+            LinkedHashMap<Integer,Integer> original=new LinkedHashMap<>();
+            for(Map.Entry<Integer,Integer> item:wanted.entrySet()){
+                int id=item.getKey(),now=readInt(b,id);
+                if(!T1SocRegenWritePolicy.accepted(id,now))
+                    throw new IllegalStateException(
+                        "Estado OEM "+id+"="+now+" no reconocido; sin escritura");
+                original.put(id,now);
             }
-            flags().edit().putBoolean("ok_"+id,true).apply();
-            String msg="VALIDADO POR ESCRITURA Y RESTITUCIÓN: "+
-                id+" "+initial+" → "+alternative+" → "+initial+
-                ". Desbloqueado para AUTO solo en P/0.";
-            T1OemDiagnosticLog.add(app,"SOC_REGEN_TEST_OK",msg);
-            return msg;
-        });
-    }
-    private String tryApply(T1SocRegenWritePolicy.Targets targets)
-        throws Exception{
-        T1OemDiagnosticLog.add(app,"SOC_REGEN_AUTO_BEGIN",
-            targets.summary());
-        return withBinder(b->{
-            doublePreflight(b);
-            LinkedHashMap<Integer,Integer> before=new LinkedHashMap<>();
-            LinkedHashMap<Integer,Integer> requested=new LinkedHashMap<>();
-            requested.put(1040,targets.strategy);
-            if(targets.needsTarget())requested.put(1041,targets.forcedSoc);
-            requested.put(1046,targets.regen);
-            for(Map.Entry<Integer,Integer> entry:requested.entrySet()){
-                int original=readInt(b,entry.getKey());
-                if(!T1SocRegenWritePolicy.accepted(
-                    entry.getKey(),original))
-                    throw new IllegalStateException("Lectura no confiable "+
-                        entry.getKey()+"="+original);
-                before.put(entry.getKey(),original);
-            }
-            // No blind rollback inside auto when the ECU refuses a write;
-            // owner can use stock UI. Stop further writes immediately.
-            int done=0;
+            int writes=0;
             LinkedHashMap<Integer,Integer> changed=new LinkedHashMap<>();
             try{
-                for(Map.Entry<Integer,Integer> entry:requested.entrySet()){
-                    int id=entry.getKey(),value=entry.getValue();
-                    if(before.get(id)==value)continue;
-                    // Record the old value BEFORE transact because OEM can
-                    // apply a change even when the Binder result is absent.
-                    changed.put(id,before.get(id));
-                    set(b,id,value);
-                    verify(b,id,value);
-                    done++;
+                for(Map.Entry<Integer,Integer> item:wanted.entrySet()){
+                    int id=item.getKey(),target=item.getValue();
+                    if(original.get(id)==target)continue;
+                    if(!active.getAsBoolean())
+                        throw new IllegalStateException("AUTO apagado");
+                    // Mark prior state BEFORE sending. OEM may apply a
+                    // command even if Binder declines to report success.
+                    changed.put(id,original.get(id));
+                    set(b,id,target,active);
+                    verify(b,id,target,active);
+                    writes++;
                 }
-            }catch(Exception applyFailure){
-                boolean restored=true;
-                StringBuilder recovery=new StringBuilder();
+            }catch(Exception failure){
+                StringBuilder restored=new StringBuilder();
+                boolean allRestored=true;
                 Integer[] changedIds=changed.keySet().toArray(new Integer[0]);
                 for(int n=changedIds.length-1;n>=0;n--){
-                    int id=changedIds[n],initial=changed.get(id);
+                    int id=changedIds[n],previous=changed.get(id);
                     try{
-                        set(b,id,initial);
-                        verify(b,id,initial);
-                        recovery.append(id).append(" RESTAURADO; ");
-                    }catch(Exception re){
-                        restored=false;
-                        recovery.append(id).append(" SIN RESTAURAR: ")
-                            .append(describe(re)).append("; ");
+                        // Best-effort restoration is allowed even after AUTO
+                        // is disabled, but ONLY if OEM position remains P/D
+                        // with valid 2148 speed at the time of restoration.
+                        set(b,id,previous,null);
+                        verify(b,id,previous,null);
+                        restored.append(id).append(" restaurado; ");
+                    }catch(Exception restoreError){
+                        allRestored=false;
+                        restored.append(id).append(" NO restaurado: ")
+                            .append(describe(restoreError)).append("; ");
                     }
                 }
-                throw new IllegalStateException(
-                    "Perfil incompleto; "+describe(applyFailure)+
-                    ". Restitución "+(restored?"CONFIRMADA":"NO CONFIRMADA")+
-                    " · "+recovery+
-                    (restored?"":" · usar de inmediato ajustes OEM originales."),
-                    applyFailure);
+                throw new IllegalStateException("Fallo parcial: "+
+                    describe(failure)+" · recuperación "+
+                    (allRestored?"CONFIRMADA":"NO CONFIRMADA")+" · "+
+                    restored+" · revisar OEM inmediatamente");
             }
-            return "LECTURA CONFIRMADA: "+targets.summary()+
-                " · "+done+" órdenes OEM. Aplicación SOLO en P/0.";
+            String result="LECTURA CONFIRMADA: "+targets.summary()+
+                " · "+writes+" escrituras, OEM readback. "+
+                "Ajuste realizado sin detenerse si la T1 estaba en D.";
+            T1OemDiagnosticLog.add(app,"SOC_REGEN_PERFIL_OK",result);
+            return result;
         });
     }
-    private static String describe(Exception ex){
-        String s=ex.getClass().getSimpleName();
-        if(ex.getMessage()!=null)s+=" · "+ex.getMessage();
-        return s.length()>260?s.substring(0,260):s;
+    private static String describe(Exception e){
+        String s=e.getClass().getSimpleName();
+        if(e.getMessage()!=null)s+=" · "+e.getMessage();
+        return s.length()>330?s.substring(0,330):s;
     }
 }
