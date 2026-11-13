@@ -256,9 +256,8 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
             automaticButton.setText(enabled?
                 "MODO OPTIMIZADO · ON · TOCAR PARA APAGAR":
                 "MODO OPTIMIZADO · OFF · TOCAR PARA ACTIVAR");
-            automaticButton.setBackgroundTintList(
-                android.content.res.ColorStateList.valueOf(
-                    enabled?0xFF087B71:0xFF7B4541));
+            T1JetourTheme.button(automaticButton,
+                enabled?T1JetourTheme.GREEN_BUTTON:T1JetourTheme.RED_BUTTON);
         }
         if(automaticState!=null)
             automaticState.setText(T1OptimizedAutoService.status(this));
