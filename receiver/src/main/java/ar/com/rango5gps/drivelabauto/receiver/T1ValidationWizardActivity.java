@@ -609,7 +609,10 @@ public final class T1ValidationWizardActivity extends T1ImmersiveActivity {
         return s;
     }
     private static boolean useful(String x){
-        return x!=null&&!x.isEmpty()&&!x.startsWith("SIN ")&&
+        // -1 is the unavailable/uninitialized sentinel observed on this T1
+        // for wiper AUTO 2126. Never count it as a valid comparable value.
+        return x!=null&&!x.isEmpty()&&!x.trim().equals("-1")&&
+            !x.trim().equals("-1.0")&&!x.startsWith("SIN ")&&
             !x.startsWith("no disponible")&&!x.startsWith("—");
     }
     private static boolean scope(String id,String key){
