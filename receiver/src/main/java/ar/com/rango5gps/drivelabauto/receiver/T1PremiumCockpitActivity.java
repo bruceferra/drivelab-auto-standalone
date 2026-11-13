@@ -746,6 +746,13 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         microphone.setOnClickListener(v->startActivity(new Intent(this,
             T1VoiceRouteActivity.class)));
         top.addView(microphone,new LinearLayout.LayoutParams(-2,52));
+        Button pendingTests=new Button(this);
+        pendingTests.setAllCaps(false);
+        pendingTests.setTextSize(12);
+        pendingTests.setText("PENDIENTES");
+        pendingTests.setOnClickListener(v->startActivity(new Intent(this,
+            T1ValidationWizardActivity.class)));
+        top.addView(pendingTests,new LinearLayout.LayoutParams(-2,52));
         Button displaySettings=new Button(this);
         displaySettings.setAllCaps(false);
         displaySettings.setTextSize(12);
