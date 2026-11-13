@@ -100,9 +100,10 @@ jobs:
           grep -Fq 'navTouchDowns++' "$cockpit"
           grep -Fq 'modeTouchDowns++' "$cockpit"
           grep -Fq 'navButtonClicks++' "$cockpit"
-          grep -Fq 'root.removeView(modes);' "$cockpit"
-          grep -Fq 'fixedBody.addView(modes,' "$cockpit"
-          grep -Fq 'fixedBody.addView(top,' "$cockpit"
+          grep -Fq 'cockpitModeRow=null;' "$cockpit"
+          grep -Fq 'cockpitNavRow=null;' "$cockpit"
+          grep -Fq 'globalToolbar=new T1GlobalToolbar(this);' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ImmersiveActivity.java
+          grep -Fq 'shell.addView(globalToolbar.view()' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ImmersiveActivity.java
           grep -Fq 'roadTransitionPopup=null;' "$cockpit"
           grep -Fq 'SISTEMA RAM/CPU' "$cockpit"
           grep -Fq 'commentaryColumns=row();' "$cockpit"
@@ -119,9 +120,11 @@ jobs:
         run: |
           set -euo pipefail
           cockpit=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
-          grep -Fq 'root.removeView(top);' "$cockpit"
-          grep -Fq 'fixedBody.addView(top,' "$cockpit"
-          grep -Fq 'fixedBody.addView(scroll,' "$cockpit"
+          grep -Fq 'globalToolbar.view()' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ImmersiveActivity.java
+          grep -Fq 'setContentView(scroll);' "$cockpit"
+          grep -Fq 'T1WazeWheelService' receiver/src/main/AndroidManifest.xml
+          grep -Fq 'collectAlternativeRoutes(root)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1WazeWheelService.java
+          grep -Fq 'if(gear==Gear.D)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/MirrorParkingPolicy.java
           grep -Fq 'historyEcoStatus.setTextIsSelectable(false);' "$cockpit"
           grep -Fq 'historyEcoStatus.setFocusable(false);' "$cockpit"
           grep -Fq 'scroll.setDescendantFocusability(' "$cockpit"
