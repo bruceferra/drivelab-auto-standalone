@@ -23,10 +23,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * Explicitly enabled, foreground-backed road mode controller.
  *
  * Changes OEM 1043 (EV/HEV/EV MAX) using proven double-preflight/readback.
- * For SOC 1040/1041 and regen 1046, auto can run ONLY after separate
- * user-started P/0 tests that wrote/confirmed/restored each OEM property.
- * The new controls remain strictly P/0 (not while D or in motion), even
- * after verification, to avoid surprise changes in braking deceleration.
+ * The owner's explicitly enabled four-profile optimizer also attempts
+ * OEM 1040/1041/1046 changes while moving in D, using double live OEM
+ * preflight, one write per differing value, readback, cooldown and fail-stop.
+ * The original dashboard can change regen in motion; the Receiver
+ * setter remains experimental until physical confirmation.
  *
  * OEM refusal disables the controller: do not blindly retry/fallback-write.
  */
@@ -77,9 +78,9 @@ public final class T1OptimizedAutoService extends Service {
         try{
             c.startForegroundService(new Intent(c,
                 T1OptimizedAutoService.class).setAction(ACTION_ON));
-            return "MODO OPTIMIZADO ON · 1043 automático por vía. "+
-                "SOC FORZADO y REGENERACIÓN automáticos SOLO en P/0 "+
-                "tras validar cada escritura/restauración manual.";
+            return "MODO OPTIMIZADO ON · 1043, SMART/FORZADO, objetivo SOC "+
+                "y regeneración por vía; también en D si las lecturas OEM "+
+                "y el perfil son válidos. Readback obligatorio.";
         }catch(RuntimeException e){
             prefs(c).edit().putBoolean(ENABLED,false)
                 .putString(STATUS,"AUTO NO INICIADO: "+
@@ -261,8 +262,8 @@ public final class T1OptimizedAutoService extends Service {
                 if(stopping||!enabled(T1OptimizedAutoService.this))return;
                 if(result.startsWith("LECTURA CONFIRMADA:")){
                     note("AUTO ON · "+mode+" CONFIRMADO por OEM 1043. "+
-                        "SOC/regeneración se verifican aparte, "+
-                        "solo en P/0 y tras las pruebas manuales.");
+                        "SOC/regeneración se sincronizan en el "+
+                        "siguiente ciclo estable con readback OEM.");
                 }else{
                     // No blind retries and no second fallback write if the
                     // OEM declined the first request.
@@ -284,10 +285,11 @@ public final class T1OptimizedAutoService extends Service {
             T1TripTelemetry.Sample snapshot,
             boolean confident,boolean fresh){
         if(!confident||!fresh||
-            !T1SocRegenWritePolicy.parked(snapshot.gear,snapshot.speed)){
+            !T1SocRegenWritePolicy.regenDriveEligible(
+                snapshot.gear,snapshot.speed)){
             auxVotes=0;
-            note("AUTO ON · 1043 coincide. SOC/regeneración: "+
-                "sin cambios (requiere P/0 para no variar frenada en marcha).");
+            note("AUTO ON · SOC/regeneración: esperando lecturas "+
+                "OEM de marcha/velocidad fiables en P o D.");
             return;
         }
         T1SocRegenWritePolicy.Targets targets=
@@ -295,14 +297,6 @@ public final class T1OptimizedAutoService extends Service {
         if(!targets.valid()){
             note("AUTO ON · SOC objetivo fuera de presets OEM conocidos "+
                 "(20,30,40,48,50,56,60,64,70,72). Sin escritura.");
-            return;
-        }
-        if(!T1SocRegenPilot.confirmed(this,1040)||
-           !T1SocRegenPilot.confirmed(this,1046)||
-           (targets.needsTarget()&&!T1SocRegenPilot.confirmed(this,1041))){
-            note("AUTO ON · 1043 coincide. SOC/regeneración BLOQUEADOS "+
-                "hasta comprobar escritura y restauración de 1040/1041/1046 "+
-                "en Optimizado → pruebas P/0.");
             return;
         }
         if(snapshot.socMode==targets.strategy&&
@@ -316,8 +310,8 @@ public final class T1OptimizedAutoService extends Service {
         if(auxRoad!=road){auxRoad=road;auxVotes=1;}
         else auxVotes=Math.min(10,auxVotes+1);
         if(auxVotes<3){
-            note("AUTO ON · verificando perfil SOC/regeneración "+auxVotes+
-                "/3 · únicamente P/0");
+            note("AUTO ON · confirmando perfil SOC/regeneración "+auxVotes+
+                "/3 · marcha y velocidad OEM válidas");
             return;
         }
         long now=SystemClock.elapsedRealtime();
@@ -331,9 +325,12 @@ public final class T1OptimizedAutoService extends Service {
             return;
         }
         auxLastWriteAt=now;auxVotes=0;auxRoad=null;
-        note("AUTO ON · SOC/REGENERACIÓN (en P/0): "+
-            targets.summary()+" · pidiendo readback");
-        boolean submitted=socRegenPilot.apply(targets,result->{
+        note("AUTO ON · solicitando SOC/regeneración en "+
+            T1DriveModeGate.name(snapshot.gear)+": "+
+            targets.summary()+" · comprobar readback");
+        boolean submitted=socRegenPilot.apply(targets,
+            ()->!stopping&&enabled(T1OptimizedAutoService.this),
+            result->{
             changing.set(false);
             if(stopping||!enabled(T1OptimizedAutoService.this))return;
             if(result.startsWith("LECTURA CONFIRMADA:")){
@@ -348,7 +345,7 @@ public final class T1OptimizedAutoService extends Service {
         if(!submitted){
             changing.set(false);
             note("AUTO ON · SOC/regeneración no enviados: "+
-                "piloto no disponible o prueba de escritura pendiente");
+                "control OEM ocupado o perfil inválido");
         }
     }
 
