@@ -229,7 +229,9 @@ public final class MirrorPulsePilot {
     /**
      * First-party OEM property 2003 observed by the driver: 0 when folded,
      * 1 when unfolded. Diagnostic readback does not establish write permission.
-     * P+stationary and foreground are required even for a read here.
+     * READS are allowed at any speed to keep the global button in sync
+     * with the original Jetour fold control. WRITES remain restricted
+     * to guarded low-speed maneuvers by requireSlowManeuver().
      */
     public boolean readFold2003(Callback callback){
         if(!foreground||!busy.compareAndSet(false,true))return false;
@@ -239,7 +241,9 @@ public final class MirrorPulsePilot {
             try{
                 requireReady();
                 c=connect();
-                requireSlowManeuver(c.binder);
+                // Read-only: no gear/speed interlock is necessary here.
+                // A road-speed limit made the top-bar label stale as soon
+                // as the car left the low-speed maneuver window.
                 int value=readInt(c.binder,2003);
                 status="LECTURA 2003="+value+" · "+
                     (value==0?"candidato PLEGADO":value==1?
@@ -327,8 +331,14 @@ public final class MirrorPulsePilot {
                     int target=before==0?1:0;
                     requireReady();
                     writeFold2003(c.binder,target);
-                    SystemClock.sleep(250);
-                    int after=readInt(c.binder,2003);
+                    // Observe eventual OEM update; do NOT repeat the write.
+                    long deadline=SystemClock.elapsedRealtime()+1400L;
+                    int after;
+                    do{
+                        SystemClock.sleep(175);
+                        after=readInt(c.binder,2003);
+                        if(after==target)break;
+                    }while(foreground&&SystemClock.elapsedRealtime()<deadline);
                     status=(target==0?"PLEGAR":"DESPLEGAR")+
                         " 2003 "+before+"→"+after+
                         (after==target?" · lectura coherente":
