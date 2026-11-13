@@ -31,6 +31,8 @@ final class T1GlobalToolbar {
     private final LinearLayout container;
     private final Button[] modes=new Button[3];
     private Button optimizer,mirrorButton,mirrorAutoButton,airButton,avsButton,roadModeButton;
+    // Permanent first-row read-only OEM 1046 / 1040 / 1041 indicators.
+    private Button regenIndicator,batteryIndicator,socTargetIndicator;
     private TextView info;
     private boolean foreground;
     private long lastPoll=0, lastDevicesPoll=0;
@@ -82,6 +84,22 @@ final class T1GlobalToolbar {
         b.setOnClickListener(v->task.run());
         return b;
     }
+    private Button readOnlyIndicator(LinearLayout row,String title,int width){
+        Button b=button(row,title,T1JetourTheme.PANEL_HI,width,()->{});
+        b.setOnClickListener(null);
+        b.setClickable(false);
+        b.setLongClickable(false);
+        b.setFocusable(false);
+        b.setContentDescription(title+" · lectura OEM pendiente");
+        return b;
+    }
+    private void paintReadOnly(Button b,String title,boolean confirmed,String detail){
+        if(b==null)return;
+        b.setText(title);
+        T1JetourTheme.button(b,confirmed?
+            T1JetourTheme.GREEN_BUTTON:T1JetourTheme.PANEL_HI);
+        b.setContentDescription(detail);
+    }
     private void build(){
         LinearLayout header=new LinearLayout(owner);
         header.setOrientation(LinearLayout.HORIZONTAL);
@@ -106,6 +124,10 @@ final class T1GlobalToolbar {
         roadModeButton.setClickable(false);
         roadModeButton.setLongClickable(false);
         roadModeButton.setFocusable(false);
+        // Same permanent top row as EV/HEV/EV MAX and the applied road profile.
+        regenIndicator=readOnlyIndicator(header,"REGEN · SIN LECTURA",138);
+        batteryIndicator=readOnlyIndicator(header,"BATERÍA · SIN LECTURA",158);
+        socTargetIndicator=readOnlyIndicator(header,"SOC OBJ. · S/L",130);
         info=new TextView(owner);
         info.setText("Modo OEM: verificando…");
         info.setTextColor(T1JetourTheme.CYAN);
@@ -280,6 +302,25 @@ final class T1GlobalToolbar {
                 for(int i=0;i<3;i++)
                     T1JetourTheme.button(modes[i],mode==i+1?
                         T1JetourTheme.GREEN_BUTTON:T1JetourTheme.PANEL_HI);
+                paintReadOnly(regenIndicator,
+                    T1TopRowEnergyStatus.regeneration(snapshot.regen1046),
+                    snapshot.regen1046>=1&&snapshot.regen1046<=3,
+                    "Regeneración OEM 1046="+snapshot.regen1046+
+                    " (1 baja, 2 media, 3 alta)");
+                paintReadOnly(batteryIndicator,
+                    T1TopRowEnergyStatus.battery(snapshot.socMode),
+                    snapshot.socMode==T1TopRowEnergyStatus.SMART||
+                        snapshot.socMode==T1TopRowEnergyStatus.FORCED,
+                    "Gestión batería OEM 1040="+snapshot.socMode);
+                paintReadOnly(socTargetIndicator,
+                    T1TopRowEnergyStatus.targetSoc(
+                        snapshot.socMode,snapshot.socTargetInt),
+                    snapshot.socMode==T1TopRowEnergyStatus.SMART||
+                        (snapshot.socMode==T1TopRowEnergyStatus.FORCED&&
+                         T1SocTargetCodec.observedPercentForRaw(
+                             snapshot.socTargetInt)>=0),
+                    T1TopRowEnergyStatus.description(
+                        snapshot.socMode,snapshot.socTargetInt));
                 if(mode>=1&&mode<=3)
                     note("MODO OEM: "+T1ManualHevPolicy.currentMode(mode));
                 else note("MODO OEM: SIN LECTURA");
