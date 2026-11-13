@@ -37,6 +37,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private boolean visible=false;
     private long lastTelem=0,lastTotals=0;
     private T1TripTelemetry.Sample lastSample;
+    private T1OemConsumptionCallbacks dashboardConsumption;
+    private long lastConsumptionAttempt=0;
     // Compact OEM gauges: keep fuel, SOC, engine and HV battery, no speedometer.
     private T1PremiumInstrumentView gauge;
 
@@ -129,6 +131,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private final Runnable ticker=new Runnable(){
         @Override public void run(){
             if(!visible)return;
+            maintainFuelMonitor();
             updateStats();
             if(System.currentTimeMillis()-lastThermalAttempt>12000){
             lastThermalAttempt=System.currentTimeMillis();
@@ -185,6 +188,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         super.onResume();visible=true;lastTelem=0;lastTotals=0;
         T1OptimizedAutoService.ensureRunning(this);
         ensureContinuousTrip();
+        maintainFuelMonitor();
         // Recheck every closed client and JOURNADA on startup. Keep raw CSVs.
         runHistoryRepair(false);
         T1ClientTripSync.trigger(this,false);
@@ -223,6 +227,10 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     }
     @Override protected void onPause(){
         visible=false;
+        if(dashboardConsumption!=null){
+            dashboardConsumption.stop();
+            dashboardConsumption=null;
+        }
         ui.removeCallbacks(ticker);
         ui.removeCallbacks(hideRoadTransitionPopup);
         if(roadTransitionPopup!=null){
@@ -230,6 +238,37 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             roadTransitionPopup.setVisibility(android.view.View.GONE);
         }
         super.onPause();
+    }
+    /**
+     * No TRIP recording is required for fuel-consumption instruments.
+     * The recorder owns the OEM callback while a TRIP is actively feeding
+     * fresh samples. Otherwise the visible Cockpit starts its own read-only
+     * continuous observer, which writes no extra CSV and ends on onPause.
+     */
+    private void maintainFuelMonitor(){
+        if(!visible)return;
+        SharedPreferences trip=getSharedPreferences(
+            T1TripRecorderService.PREFS,MODE_PRIVATE);
+        long age=System.currentTimeMillis()-
+            trip.getLong(T1TripRecorderService.LAST_SAMPLE_TIME,0);
+        boolean tripFeeding=trip.getBoolean(
+            T1TripRecorderService.RUNNING,false)&&
+            age>=0&&age<=12000;
+        if(tripFeeding){
+            if(dashboardConsumption!=null){
+                dashboardConsumption.stop();
+                dashboardConsumption=null;
+            }
+            return;
+        }
+        if(dashboardConsumption!=null&&dashboardConsumption.busy())return;
+        dashboardConsumption=null;
+        long now=android.os.SystemClock.elapsedRealtime();
+        if(lastConsumptionAttempt!=0&&now-lastConsumptionAttempt<15000L)
+            return; // OEM may refuse binding: no tight retry loop.
+        lastConsumptionAttempt=now;
+        T1OemConsumptionCallbacks passive=new T1OemConsumptionCallbacks(this);
+        if(passive.startForCockpit())dashboardConsumption=passive;
     }
     private boolean osmEnabled(){
         return getSharedPreferences(OSM_PREFS,MODE_PRIVATE)
