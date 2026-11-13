@@ -463,6 +463,15 @@ jobs:
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/MirrorParkingPolicy.java \
             receiver/tests/MirrorParkingPolicyTest.java
           java -cp /tmp/mirror-parking-policy-test MirrorParkingPolicyTest
+      - name: Mirror AUTO reverse controls visible and persistent (pure JVM source contract)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/mirror-visible-controls
+          javac -encoding UTF-8 -d /tmp/mirror-visible-controls \\
+            receiver/tests/MirrorControlsVisibilitySourceContractTest.java
+          java -cp /tmp/mirror-visible-controls \\
+            ar.com.rango5gps.drivelabauto.receiver.MirrorControlsVisibilitySourceContractTest
       - name: T1 fuel autonomy and recirculation regressions (pure JVM)
         shell: bash
         run: |
