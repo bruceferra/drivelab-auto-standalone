@@ -283,10 +283,21 @@ final class T1OfflineRoadMap {
                 byte[] bytes=rows.getBlob(2);if(bytes==null)continue;
                 double meters=distanceToRoad(lat,lon,bytes);
                 if(!Double.isFinite(meters))continue;
-                T1OsmRoadAdvisor.Road kind=T1OsmRoadAdvisor.Road.valueOf(
+                T1OptimizedModePolicy.Road classification=
                     T1RoadSpeedClassifier.category(type,rows.getString(1),
                         rows.getString(3),rows.getString(4),
-                        rows.getString(5)).name());
+                        rows.getString(5));
+                // IGN official provincial network proves road presence but
+                // typically has NO posted maxspeed. Show generic ROAD for its
+                // shadow-only provincial segments, not a guessed urban street.
+                // OSM production classification is intentionally untouched.
+                if("IGN".equals(source)&&
+                   ("primary".equalsIgnoreCase(type)||
+                    "secondary".equalsIgnoreCase(type))&&
+                   T1RoadSpeedClassifier.maxKmh(rows.getString(3))<0)
+                    classification=T1OptimizedModePolicy.Road.ROAD;
+                T1OsmRoadAdvisor.Road kind=T1OsmRoadAdvisor.Road.valueOf(
+                    classification.name());
                 // The original nearest-road selector also chose pedestrian
                 // paths, cycleways and non-driveable UNKNOWN classes. That
                 // could hide a perfectly valid city street 2 m further away.
