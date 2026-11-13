@@ -365,7 +365,7 @@ jobs:
           grep -Fq 'private static final String VERIFIED_ROAD=' "$service"
           grep -Fq 'conditions.conditionSatisfied' "$service"
           grep -Fq 'socProfileGate.recordConfirmed(targets);' "$service"
-          grep -Fq 'verifiedRoad(road,rule);' "$service"
+          grep -Fq 'verifiedRoad(road,rule,ruleSlot);' "$service"
           grep -Fq 'T1OptimizedAutoService.verifiedAppliedRoad(owner)' "$toolbar"
           ! grep -Fq 'T1OptimizedModeStore.lastRoad(owner)' "$toolbar"
           store=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeStore.java
