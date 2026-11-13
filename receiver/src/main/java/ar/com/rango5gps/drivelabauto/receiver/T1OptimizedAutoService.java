@@ -457,6 +457,10 @@ public final class T1OptimizedAutoService extends Service {
                 snapshot.socTargetFloat);
         boolean currentMatches=snapshot.socMode==targets.strategy&&
             snapshot.regen1046==targets.regen&&socMatches;
+        // This method is reached ONLY after the road gate returned
+        // SAME_MODE (three trusted road fixes AND OEM 1043 confirmed).
+        // Reuse those three votes; the SOC pilot still performs its own
+        // mandatory *OEM* safety/readback checks, not GPS voting.
         T1SocRegenTransitionGate.Decision d=
             socProfileGate.examine(targets,true,currentMatches);
         if(d.reason==T1SocRegenTransitionGate.Reason.APPLIED||
@@ -484,10 +488,13 @@ public final class T1OptimizedAutoService extends Service {
             }
             return;
         }
-        if(d.reason==T1SocRegenTransitionGate.Reason.WAIT_STABLE){
-            pendingRoad("MODO · VERIFICANDO");
-            note("AUTO ON · transición SOC/regen nueva "+
-                d.matches+"/3 · "+targets.summary());
+        // 3/3 was already validated by the road gate before 1043 became
+        // SAME_MODE. No second 1/3,2/3,3/3 counter for regen/SOC.
+        // Only proceed here if the new auxiliary target is actually
+        // different or OEM readback has not already matched.
+        if(!d.ready()){
+            pendingRoad("SOC/REGEN PENDIENTE");
+            note("AUTO ON · perfil SOC/regeneración no elegible; sin comandos");
             return;
         }
         pendingRoad("SOC/REGEN PENDIENTE");
@@ -502,11 +509,13 @@ public final class T1OptimizedAutoService extends Service {
             return;
         }
         auxLastWriteAt=now;
-        T1OemDiagnosticLog.add(this,"OPT_SOC_TRANSICION_3_DE_3",
+        T1OemDiagnosticLog.add(this,"OPT_SOC_TRAS_VIA_3_DE_3",
             "VIA="+road+" PERFIL="+targets.summary()+
-            " - cambio nuevo; no se consulta antiguo SOC 1041");
-        note("AUTO ON · transición confirmada 3/3 · solicitando "+
-            targets.summary()+" · diagnóstico 1041 activo");
+            " · vía confirmada por GPS una sola vez; "+
+            "nuevo perfil auxiliar sin segundo conteo, "+
+            "lectura OEM y seguridad en piloto");
+        note("AUTO ON · vía 3/3; sincronizando SOC/regeneración "+
+            targets.summary()+" · sin revalidación GPS adicional");
         boolean submitted=socRegenPilot.apply(targets,
             ()->!stopping&&enabled(T1OptimizedAutoService.this)&&
                 T1OptimizedModeStore.isEnabled(T1OptimizedAutoService.this,road),
