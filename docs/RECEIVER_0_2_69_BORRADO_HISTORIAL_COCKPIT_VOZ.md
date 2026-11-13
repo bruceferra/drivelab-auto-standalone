@@ -19,9 +19,9 @@
 
 ## Voz Gemini / ChatGPT y Waze
 - La preferencia de IA de consultas generales ahora muestra claramente cuál está elegida (✓ GEMINI o ✓ CHATGPT). No cambia el asistente por defecto de Android/Jetour.
-- Se suma **PROBAR VOZ DEL SISTEMA** mediante el estándar `ACTION_VOICE_ASSIST`, sin forzar la apertura a pantalla completa de Gemini si el headunit no lo admite.
+- Se suma **PROBAR VOZ DEL SISTEMA** mediante el estándar `ACTION_VOICE_COMMAND`, sin forzar la apertura a pantalla completa de Gemini si el headunit no lo admite.
 - Los botones de **PROBAR APPS INSTALADAS** siguen para abrir Gemini o ChatGPT manualmente, diferenciados del router de consultas y del asistente OEM.
-- No se afirma que `ACTION_VOICE_ASSIST` inicie Gemini Live ni que exista una API pública para forzar la integración vocal de Android Auto. Requiere prueba física de la ROM.
+- No se afirma que `ACTION_VOICE_COMMAND` inicie Gemini Live ni que exista una API pública para forzar la integración vocal de Android Auto. Requiere prueba física de la ROM.
 - El reconocimiento de destinos y lanzamiento de Waze en el clúster se conservan intactos.
 
 ## Pruebas
