@@ -205,15 +205,18 @@ final class T1SocRegenPilot {
                     "Valor inicial no reconocido "+id+"="+initial);
             T1OemDiagnosticLog.add(app,"SOC_REGEN_INITIAL",
                 id+"="+initial+" · ensayo="+alternative);
-            boolean moved=false;
+            boolean attempted=false;
             try{
+                preflight(b,"SOC_REGEN_PREPARE_TEST_SET");
+                // Even if transact(15) later throws, OEM might have applied
+                // the request: make one best-effort restore to original.
+                attempted=true;
                 set(b,id,alternative);
-                moved=true;
                 verify(b,id,alternative);
             }finally{
                 // The OEM may apply a write despite Binder/readback failure.
-                // Always attempt a single return to initial if a SET occurred.
-                if(moved){
+                // Always attempt a single return to initial if attempted.
+                if(attempted){
                     try{
                         set(b,id,initial);
                         verify(b,id,initial);
@@ -256,12 +259,40 @@ final class T1SocRegenPilot {
             // No blind rollback inside auto when the ECU refuses a write;
             // owner can use stock UI. Stop further writes immediately.
             int done=0;
-            for(Map.Entry<Integer,Integer> entry:requested.entrySet()){
-                int id=entry.getKey(),value=entry.getValue();
-                if(before.get(id)==value)continue;
-                set(b,id,value);
-                verify(b,id,value);
-                done++;
+            LinkedHashMap<Integer,Integer> changed=new LinkedHashMap<>();
+            try{
+                for(Map.Entry<Integer,Integer> entry:requested.entrySet()){
+                    int id=entry.getKey(),value=entry.getValue();
+                    if(before.get(id)==value)continue;
+                    // Record the old value BEFORE transact because OEM can
+                    // apply a change even when the Binder result is absent.
+                    changed.put(id,before.get(id));
+                    set(b,id,value);
+                    verify(b,id,value);
+                    done++;
+                }
+            }catch(Exception applyFailure){
+                boolean restored=true;
+                StringBuilder recovery=new StringBuilder();
+                Integer[] changedIds=changed.keySet().toArray(new Integer[0]);
+                for(int n=changedIds.length-1;n>=0;n--){
+                    int id=changedIds[n],initial=changed.get(id);
+                    try{
+                        set(b,id,initial);
+                        verify(b,id,initial);
+                        recovery.append(id).append(" RESTAURADO; ");
+                    }catch(Exception re){
+                        restored=false;
+                        recovery.append(id).append(" SIN RESTAURAR: ")
+                            .append(describe(re)).append("; ");
+                    }
+                }
+                throw new IllegalStateException(
+                    "Perfil incompleto; "+describe(applyFailure)+
+                    ". Restitución "+(restored?"CONFIRMADA":"NO CONFIRMADA")+
+                    " · "+recovery+
+                    (restored?"":" · usar de inmediato ajustes OEM originales."),
+                    applyFailure);
             }
             return "LECTURA CONFIRMADA: "+targets.summary()+
                 " · "+done+" órdenes OEM. Aplicación SOLO en P/0.";
