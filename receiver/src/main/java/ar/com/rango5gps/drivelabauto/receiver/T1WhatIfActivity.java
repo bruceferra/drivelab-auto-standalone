@@ -3,6 +3,7 @@ package ar.com.rango5gps.drivelabauto.receiver;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
+import android.content.res.ColorStateList;
 import android.os.Bundle;
 import android.text.InputType;
 import android.view.Gravity;
@@ -25,7 +26,9 @@ import java.util.Locale;
  */
 public final class T1WhatIfActivity extends T1ImmersiveActivity {
     private static final int BG=0xFF081622,PANEL=0xFFF1F7FB,
-        WHITE=0xFFFFFFFF,MUTED=0xFFB6C8D6;
+        WHITE=0xFFFFFFFF,MUTED=0xFFB6C8D6,
+        INPUT=0xFF163954,DARK_TEXT=0xFF152E3C,
+        EDGE=0xFF75B3D3,POPUP=0xFFF8FCFF;
     private Spinner trip,propulsion,strategy,regeneration,drive;
     private EditText startSoc,targetSoc,packCapacity,mass,baselineFuel;
     private TextView result,caption;
@@ -51,12 +54,55 @@ public final class T1WhatIfActivity extends T1ImmersiveActivity {
         LinearLayout.LayoutParams p=new LinearLayout.LayoutParams(0,-2,1);
         p.setMargins(3,0,3,0);parent.addView(item,p);
     }
+    private int dp(int x){
+        return Math.round(x*getResources().getDisplayMetrics().density);
+    }
+    private GradientDrawable inputBackground(int color){
+        GradientDrawable bg=new GradientDrawable();
+        bg.setColor(color);bg.setCornerRadius(dp(9));
+        bg.setStroke(dp(1),EDGE);
+        return bg;
+    }
     private Spinner pick(String... choices){
-        Spinner s=new Spinner(this);
-        ArrayAdapter<String> a=new ArrayAdapter<>(this,
-            android.R.layout.simple_spinner_item,choices);
+        // Jetour's Android theme inherits dark popup text on a dark blue
+        // spinner. The dropdown and the selected field must be styled
+        // independently; relying on android.R.layout leaves text invisible.
+        Spinner s=new Spinner(this,Spinner.MODE_DROPDOWN);
+        ArrayAdapter<String> a=new ArrayAdapter<String>(this,
+            android.R.layout.simple_spinner_item,choices){
+            @Override public View getView(int position,View convertView,
+                                          android.view.ViewGroup parent){
+                TextView label=(TextView)super.getView(position,convertView,parent);
+                label.setText(choices[position]+"  ▾");
+                label.setTextColor(WHITE);
+                label.setTextSize(16);
+                label.setSingleLine(true);
+                label.setEllipsize(android.text.TextUtils.TruncateAt.END);
+                label.setMinHeight(dp(48));
+                label.setGravity(Gravity.CENTER_VERTICAL);
+                label.setPadding(dp(12),dp(9),dp(12),dp(9));
+                label.setBackground(inputBackground(INPUT));
+                return label;
+            }
+            @Override public View getDropDownView(int position,View convertView,
+                                                  android.view.ViewGroup parent){
+                TextView label=(TextView)super.getDropDownView(
+                    position,convertView,parent);
+                label.setText(choices[position]);
+                label.setTextColor(DARK_TEXT);
+                label.setTextSize(17);
+                label.setSingleLine(false);
+                label.setMinHeight(dp(50));
+                label.setGravity(Gravity.CENTER_VERTICAL);
+                label.setPadding(dp(15),dp(12),dp(15),dp(12));
+                label.setBackgroundColor(position%2==0?POPUP:PANEL);
+                return label;
+            }
+        };
         a.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        s.setAdapter(a);return s;
+        s.setAdapter(a);
+        s.setPopupBackgroundDrawable(inputBackground(POPUP));
+        return s;
     }
     private EditText numeric(String initial,String hint){
         EditText e=new EditText(this);
@@ -65,11 +111,17 @@ public final class T1WhatIfActivity extends T1ImmersiveActivity {
         e.setInputType(InputType.TYPE_CLASS_NUMBER|
             InputType.TYPE_NUMBER_FLAG_DECIMAL|
             InputType.TYPE_NUMBER_FLAG_SIGNED);
+        e.setTextColor(WHITE);
+        e.setHintTextColor(MUTED);
+        e.setSelectAllOnFocus(true);
+        e.setPadding(dp(11),dp(9),dp(11),dp(9));
+        e.setBackground(inputBackground(INPUT));
+        e.setMinHeight(dp(48));
         return e;
     }
     private void field(LinearLayout parent,String label,View control){
         LinearLayout wrap=col();
-        wrap.addView(text(label,12,0xFF284254,true));
+        wrap.addView(text(label,12,WHITE,true));
         wrap.addView(control);column(parent,wrap);
     }
     private GradientDrawable panel(){
@@ -92,6 +144,8 @@ public final class T1WhatIfActivity extends T1ImmersiveActivity {
         column(top,heading);
         Button back=new Button(this);
         back.setText("VOLVER");back.setAllCaps(false);
+        back.setTextColor(WHITE);
+        back.setBackgroundTintList(ColorStateList.valueOf(INPUT));
         back.setOnClickListener(v->finish());top.addView(back);
         root.addView(text("Mismo recorrido real, otras condiciones de batería. "+
             "Comparamos límites energéticos; todavía NO predecimos las "+
@@ -112,6 +166,10 @@ public final class T1WhatIfActivity extends T1ImmersiveActivity {
         root.addView(trip);
 
         section(root,"2 · HIPÓTESIS DEL RECORRIDO");
+        root.addView(text("Los desplegables muestran el valor seleccionado " +
+            "en BLANCO sobre AZUL; las opciones aparecen OSCURAS sobre " +
+            "BLANCO. Elegí parámetros y tocá ANALIZAR ESCENARIO.",
+            12,MUTED,false));
         LinearLayout modes=row();root.addView(modes);
         propulsion=pick("EV","HEV","EV MAX");
         propulsion.setSelection(1);
@@ -141,10 +199,14 @@ public final class T1WhatIfActivity extends T1ImmersiveActivity {
         LinearLayout actions=row();root.addView(actions);
         Button check=new Button(this);
         check.setAllCaps(false);check.setText("ANALIZAR ESCENARIO");
+        check.setTextColor(WHITE);
+        check.setBackgroundTintList(ColorStateList.valueOf(0xFF086F75));
         check.setOnClickListener(v->calculate());
         column(actions,check);
         Button actual=new Button(this);
         actual.setAllCaps(false);actual.setText("USAR SOC ORIGINAL");
+        actual.setTextColor(WHITE);
+        actual.setBackgroundTintList(ColorStateList.valueOf(INPUT));
         actual.setOnClickListener(v->useHistoricalStart());
         column(actions,actual);
 
