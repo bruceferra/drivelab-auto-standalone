@@ -12,6 +12,7 @@ import ar.com.rango5gps.drivelabauto.common.Updater;
 
 /** Receiver hub with separate quick-control pilots; navigation service unchanged. */
 public final class ReceiverActivity extends T1ImmersiveActivity {
+    @Override protected int overlayClearBackgroundColor(){return T1JetourTheme.NIGHT;}
     private static volatile boolean visible;
     private String message="";
     private ReceiverQuickControls quickControls;
@@ -61,16 +62,22 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
     }
     private void label(LinearLayout root,String text,int size){
         TextView view=new TextView(this);view.setText(text);view.setTextSize(size);
+        view.setTextColor(size>=20?T1JetourTheme.CYAN:T1JetourTheme.MUTED);
         view.setPadding(7,10,7,10);root.addView(view);
     }
     private void button(LinearLayout root,String text,Runnable task){
         Button button=new Button(this);button.setText(text);button.setAllCaps(false);
+        T1JetourTheme.button(button,
+            text.contains("PENDIENT")?0xFF426E73:
+            text.contains("ACTUALIZAR RECEIVER")?T1JetourTheme.GREEN_BUTTON:
+            T1JetourTheme.PANEL_HI);
         button.setOnClickListener(v->task.run());root.addView(button);
     }
     private void report(String text){message=text;render();}
     private void render(){
         final int restoreY=currentScroll==null?0:currentScroll.getScrollY();
         ScrollView scroll=new ScrollView(this);
+        scroll.setBackground(T1JetourTheme.backdrop());
         LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);
         body.setPadding(22,20,22,35);scroll.addView(body);
         SharedPreferences p=prefs();

@@ -13,7 +13,7 @@ import android.widget.Button;
 final class Receiver3DButtons {
     private Receiver3DButtons(){}
     static final String QUICK_TAG="receiver_quick_3d";
-    private static final int DEFAULT=0xFF176B99;
+    private static final int DEFAULT=T1JetourTheme.PANEL_HI;
     private static int mix(int a,int b,float f){
         return Color.rgb((int)(Color.red(a)*(1-f)+Color.red(b)*f),
             (int)(Color.green(a)*(1-f)+Color.green(b)*f),
@@ -27,13 +27,14 @@ final class Receiver3DButtons {
         GradientDrawable d=new GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,new int[]{hi,lo});
         d.setCornerRadius(16);
-        d.setStroke(selected?5:2,selected?0xFFFFD46A:0xFFD9E8F2);
+        d.setStroke(selected?3:1,selected?T1JetourTheme.CYAN:T1JetourTheme.BORDER);
         return d;
     }
     static void apply(View root){
         if(root instanceof Button) {
             Button b=(Button)root;
-            if(QUICK_TAG.equals(b.getTag()))return;
+            if(QUICK_TAG.equals(b.getTag())||
+                T1JetourTheme.BUTTON_TAG.equals(b.getTag()))return;
             int base=DEFAULT;
             ColorStateList tint=b.getBackgroundTintList();
             if(tint!=null)base=tint.getDefaultColor();

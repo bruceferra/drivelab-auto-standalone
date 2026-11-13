@@ -39,9 +39,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * NOT a metered charger or proof of grid-billed kWh.
  */
 public final class T1TankDashboardActivity extends T1ImmersiveActivity {
-    private static final int NAVY=0xFF102638,TEAL=0xFF087F7A,
-        GRAY=0xFF647585,PALE=0xFFEFF4F7,RED=0xFFA44833,BLUE=0xFF24689A,
-        WHITE=Color.WHITE,ASK_GPS=6021,SAVE_CSV=6022;
+    private static final int NAVY=T1JetourTheme.DEEP,TEAL=0xFF426E73,
+        GRAY=T1JetourTheme.MUTED,PALE=T1JetourTheme.PANEL,
+        RED=T1JetourTheme.RED_BUTTON,BLUE=T1JetourTheme.PANEL_HI,
+        WHITE=T1JetourTheme.WHITE,ASK_GPS=6021,SAVE_CSV=6022;
+    @Override protected int overlayClearBackgroundColor(){return T1JetourTheme.NIGHT;}
     private final Handler ui=new Handler(Looper.getMainLooper());
     private final AtomicBoolean sampling=new AtomicBoolean(false);
     private volatile boolean visible;
@@ -84,12 +86,13 @@ public final class T1TankDashboardActivity extends T1ImmersiveActivity {
         super.onDestroy();
     }
     private GradientDrawable panelBg(int color){
-        GradientDrawable bg=new GradientDrawable();
-        bg.setColor(color);bg.setCornerRadius(20);return bg;
+        return T1JetourTheme.surface(color,20);
     }
     private TextView text(String message,int size,int color,boolean strong){
         TextView t=new TextView(this);
-        t.setText(message);t.setTextSize(size);t.setTextColor(color);
+        t.setText(message);t.setTextSize(size);
+        t.setTextColor(color==NAVY?T1JetourTheme.WHITE:
+            color==TEAL?T1JetourTheme.CYAN:color);
         if(strong)t.setTypeface(null,android.graphics.Typeface.BOLD);
         t.setPadding(5,6,5,7);return t;
     }
@@ -98,7 +101,8 @@ public final class T1TankDashboardActivity extends T1ImmersiveActivity {
     private LinearLayout row(){LinearLayout l=new LinearLayout(this);
         l.setOrientation(LinearLayout.HORIZONTAL);return l;}
     private void section(LinearLayout root,String title){
-        TextView label=text(title,19,NAVY,true);label.setPadding(5,18,5,8);
+        TextView label=text(title,19,T1JetourTheme.CYAN,true);
+        label.setPadding(5,18,5,8);
         root.addView(label);
     }
     private LinearLayout card(LinearLayout root,int color){
@@ -110,7 +114,7 @@ public final class T1TankDashboardActivity extends T1ImmersiveActivity {
     private Button action(LinearLayout root,String label,int tint,Runnable run){
         Button b=new Button(this);b.setText(label);b.setAllCaps(false);
         b.setTextColor(WHITE);b.setTextSize(14);
-        b.setBackgroundTintList(ColorStateList.valueOf(tint));
+        T1JetourTheme.button(b,tint);
         b.setOnClickListener(v->run.run());root.addView(b);
         return b;
     }
@@ -119,6 +123,7 @@ public final class T1TankDashboardActivity extends T1ImmersiveActivity {
         e.setInputType(InputType.TYPE_CLASS_NUMBER|
             InputType.TYPE_NUMBER_FLAG_DECIMAL);
         e.setTextSize(16);e.setHint(hint);
+        T1JetourTheme.number(e);
         if(Double.isFinite(previous))e.setText(String.format(Locale.US,"%.2f",previous));
         root.addView(e);return e;
     }
@@ -134,6 +139,7 @@ public final class T1TankDashboardActivity extends T1ImmersiveActivity {
     }
     private void render(){
         ScrollView scroll=new ScrollView(this);
+        scroll.setBackground(T1JetourTheme.backdrop());
         LinearLayout root=col();root.setPadding(18,14,18,30);
         scroll.addView(root);
         LinearLayout head=card(root,NAVY);
@@ -196,12 +202,12 @@ public final class T1TankDashboardActivity extends T1ImmersiveActivity {
         LinearLayout controls=row();
         Button start=new Button(this);start.setText("▶ INICIAR TRIP");
         start.setAllCaps(false);start.setTextColor(WHITE);
-        start.setBackgroundTintList(ColorStateList.valueOf(TEAL));
+        T1JetourTheme.button(start,TEAL);
         start.setOnClickListener(v->startTrip());
         controls.addView(start,new LinearLayout.LayoutParams(0,60,1));
         Button stop=new Button(this);stop.setText("■ DETENER TRIP");
         stop.setAllCaps(false);stop.setTextColor(WHITE);
-        stop.setBackgroundTintList(ColorStateList.valueOf(RED));
+        T1JetourTheme.button(stop,RED);
         stop.setOnClickListener(v->stopTrip());
         controls.addView(stop,new LinearLayout.LayoutParams(0,60,1));
         root.addView(controls);

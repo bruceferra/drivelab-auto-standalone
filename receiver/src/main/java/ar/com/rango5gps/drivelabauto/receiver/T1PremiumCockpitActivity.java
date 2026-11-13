@@ -28,9 +28,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * EXPLICIT user-opted automated OEM1043 mode selection, delegated to an
  * independent foreground service with strict OEM preflight and readback. */
 public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
-    private static final int BG=0xFF091421,CARD=0xFF142639,WHITE=0xFFF3F8FD,
-        MUTED=0xFF9BB0C1,TEAL=0xFF14AFA7,BLUE=0xFF2B789B,
-        GOLD=0xFFFFC367,RED=0xFFB65754;
+    private static final int BG=T1JetourTheme.NIGHT,CARD=T1JetourTheme.PANEL,
+        WHITE=T1JetourTheme.WHITE,MUTED=T1JetourTheme.MUTED,
+        TEAL=0xFF416F77,BLUE=T1JetourTheme.PANEL_HI,
+        GOLD=T1JetourTheme.AMBER,RED=T1JetourTheme.RED_BUTTON;
     private final Handler ui=new Handler(Looper.getMainLooper());
     private final AtomicBoolean reading=new AtomicBoolean(false);
     private boolean visible=false;
@@ -252,7 +253,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         b.setAllCaps(false);b.setText(name);b.setTextSize(18);
         b.setTypeface(null,android.graphics.Typeface.BOLD);
         b.setTextColor(WHITE);
-        b.setBackgroundTintList(ColorStateList.valueOf(BLUE));
+        T1JetourTheme.button(b,BLUE);
         b.setOnClickListener(v->askTripleMode(target));
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,57,1f);
         lp.setMargins(3,2,3,2);parent.addView(b,lp);
@@ -272,8 +273,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         Button[] buttons={modeEvButton,modeHevButton,modeMaxButton};
         for(int i=0;i<buttons.length;i++){
             int expected=i+1;
-            buttons[i].setBackgroundTintList(ColorStateList.valueOf(
-                fresh&&actual==expected?TEAL:BLUE));
+            T1JetourTheme.button(buttons[i],
+                fresh&&actual==expected?TEAL:BLUE);
         }
         modeAtTop.setText(fresh?
             "ACTUAL: "+T1ManualHevPolicy.currentMode(actual)+
@@ -321,8 +322,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         boolean enabled=T1OptimizedAutoService.enabled(this);
         if(autoModeButton!=null){
             autoModeButton.setText(enabled?"AUTO · ON":"AUTO · OFF");
-            autoModeButton.setBackgroundTintList(
-                ColorStateList.valueOf(enabled?TEAL:RED));
+            T1JetourTheme.button(autoModeButton,
+                enabled?T1JetourTheme.GREEN_BUTTON:T1JetourTheme.RED_BUTTON);
         }
         if(autoModeLive!=null)
             autoModeLive.setText(T1OptimizedAutoService.status(this));
@@ -637,8 +638,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         },"T1-PBA-CABA-Map-Install").start();
     }
     private GradientDrawable bg(int color,int radius){
-        GradientDrawable g=new GradientDrawable();g.setColor(color);
-        g.setCornerRadius(radius);return g;
+        return T1JetourTheme.surface(color,radius);
     }
     private LinearLayout col(){
         LinearLayout l=new LinearLayout(this);l.setOrientation(LinearLayout.VERTICAL);return l;
@@ -665,7 +665,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private Button button(LinearLayout parent,String caption,int color,Runnable run){
         Button b=new Button(this);b.setText(caption);b.setAllCaps(false);
         b.setTextSize(15);b.setTextColor(Color.WHITE);
-        b.setBackgroundTintList(ColorStateList.valueOf(color));
+        T1JetourTheme.button(b,color);
         b.setOnClickListener(v->run.run());
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,58,1f);
         lp.setMargins(3,3,3,3);parent.addView(b,lp);return b;
@@ -685,11 +685,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         Button b=new Button(this);
         b.setAllCaps(false);b.setText(caption);b.setTextSize(13);
         b.setTextColor(WHITE);
-        // Disabled journey actions visibly stay GRAY; never look tappable.
-        b.setBackgroundTintList(new ColorStateList(
-            new int[][]{new int[]{android.R.attr.state_enabled},
-                        new int[]{-android.R.attr.state_enabled}},
-            new int[]{color,0xFF45525E}));
+        T1JetourTheme.button(b,color);
+        b.setAlpha(1f); // Android visibly dims disabled buttons.
         b.setOnClickListener(v->run.run());
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,46,1f);
         lp.setMargins(2,1,2,1);parent.addView(b,lp);
@@ -730,7 +727,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private void heading(LinearLayout c,String s){c.addView(text(s,19,WHITE,true));}
     private void draw(){
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);
-        scroll.setBackgroundColor(BG);
+        scroll.setBackground(T1JetourTheme.backdrop());
         LinearLayout root=col();root.setPadding(18,10,18,28);
         scroll.addView(root);
         LinearLayout top=row();top.setGravity(Gravity.CENTER_VERTICAL);root.addView(top);
@@ -745,6 +742,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         microphone.setContentDescription("Dictar destino para Waze del clúster");
         microphone.setOnClickListener(v->startActivity(new Intent(this,
             T1VoiceRouteActivity.class)));
+        T1JetourTheme.button(microphone,0xFF14536B);
         top.addView(microphone,new LinearLayout.LayoutParams(-2,52));
         Button pendingTests=new Button(this);
         pendingTests.setAllCaps(false);
@@ -752,34 +750,40 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         pendingTests.setText("PENDIENTES");
         pendingTests.setOnClickListener(v->startActivity(new Intent(this,
             T1ValidationWizardActivity.class)));
+        T1JetourTheme.button(pendingTests,0xFF14536B);
         top.addView(pendingTests,new LinearLayout.LayoutParams(-2,52));
         Button displaySettings=new Button(this);
         displaySettings.setAllCaps(false);
         displaySettings.setTextSize(12);
         displaySettings.setText("PANTALLA");
         displaySettings.setOnClickListener(v->openDisplaySettings());
+        T1JetourTheme.button(displaySettings,BLUE);
         top.addView(displaySettings,new LinearLayout.LayoutParams(-2,52));
         Button simulator=new Button(this);
         simulator.setAllCaps(false);
         simulator.setTextSize(12);
         simulator.setText("SIMULADOR");
         simulator.setOnClickListener(v->openWhatIf());
+        T1JetourTheme.button(simulator,BLUE);
         top.addView(simulator,new LinearLayout.LayoutParams(-2,52));
         autoModeButton=new Button(this);
         autoModeButton.setAllCaps(false);
         autoModeButton.setTextSize(13);
         autoModeButton.setText("AUTO · OFF");
         autoModeButton.setOnClickListener(v->toggleAutomaticMode());
+        T1JetourTheme.button(autoModeButton,RED);
         top.addView(autoModeButton,new LinearLayout.LayoutParams(-2,52));
         Button optimized=new Button(this);
         optimized.setAllCaps(false);
         optimized.setTextSize(12);
         optimized.setText("MODO OPTIMIZADO");
         optimized.setOnClickListener(v->openOptimizedMode());
+        T1JetourTheme.button(optimized,BLUE);
         top.addView(optimized,new LinearLayout.LayoutParams(-2,52));
         Button back=new Button(this);
         back.setText("VOLVER");back.setTextSize(12);
         back.setAllCaps(false);back.setOnClickListener(v->finish());
+        T1JetourTheme.button(back,T1JetourTheme.PANEL);
         top.addView(back,new LinearLayout.LayoutParams(-2,52));
 
         LinearLayout modes=row();root.addView(modes);

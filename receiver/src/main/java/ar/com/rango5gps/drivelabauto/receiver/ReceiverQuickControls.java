@@ -17,8 +17,11 @@ import android.widget.TextView;
  * activity re-render on tap. Motor actions still perform OEM safety checks.
  */
 final class ReceiverQuickControls {
-    private static final int TEAL=0xFF008577,BLUE=0xFF176B99,ORANGE=0xFFA15D23,
-        PURPLE=0xFF6956A6,RED=0xFF9A3737,GREY=0xFF5B6872,GREEN=0xFF327340;
+    // Neutral OEM charcoal surfaces, aqua selection, green and red intent.
+    private static final int TEAL=0xFF426E74,BLUE=0xFF304A57,
+        ORANGE=T1JetourTheme.AMBER_BUTTON,
+        PURPLE=0xFF394C55,RED=T1JetourTheme.RED_BUTTON,
+        GREY=T1JetourTheme.PANEL_HI,GREEN=T1JetourTheme.GREEN_BUTTON;
     private final Activity activity;
     private final MirrorPulsePilot fold;
     private final VehicleWindowGroup windows;
@@ -88,7 +91,11 @@ final class ReceiverQuickControls {
         GradientDrawable bg=new GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,new int[]{upper,lower});
         bg.setCornerRadius(17);
-        bg.setStroke(selected?5:2,selected?0xFFFFD86B:0xFFD1E3EC);
+        int accent=base==GREEN?T1JetourTheme.GREEN:
+            base==RED?T1JetourTheme.RED:
+            base==ORANGE?T1JetourTheme.AMBER:T1JetourTheme.CYAN;
+        bg.setStroke(selected?3:1,
+            selected?accent:T1JetourTheme.BORDER);
         return bg;
     }
     private void styleSurface(Button b,int base){
@@ -103,7 +110,7 @@ final class ReceiverQuickControls {
         b.setBackground(backgrounds);
         b.setElevation(b.isSelected()?2f:7f);
         b.setTranslationY(b.isSelected()?2f:0f);
-        b.setTextColor(Color.WHITE);
+        b.setTextColor(T1JetourTheme.WHITE);
         b.setTypeface(null,b.isSelected()?
             android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
     }
@@ -125,6 +132,19 @@ final class ReceiverQuickControls {
             }
             return false;
         });
+        // Keep existing 3D/long-press interaction; visual icon is original.
+        String upper=text.toUpperCase(java.util.Locale.ROOT);
+        String icon=upper.contains("ESPEJO")?"mirror":
+            upper.contains("VENTIL")||upper.contains("AIRE")?"fan":
+            upper.contains("PEATÓN")?"pedestrian":
+            upper.contains("VENTANILLA")?"window":null;
+        if(icon!=null){
+            T1JetourTheme.Icon glyph=new T1JetourTheme.Icon(icon,T1JetourTheme.CYAN);
+            int px=T1JetourTheme.dp(activity,17);
+            glyph.setBounds(0,0,px,px);
+            b.setCompoundDrawablePadding(T1JetourTheme.dp(activity,4));
+            b.setCompoundDrawables(glyph,null,null,null);
+        }
         b.setOnClickListener(v->cb.run());
         parent.addView(b,new LinearLayout.LayoutParams(0,68,1));
         return b;
@@ -146,7 +166,7 @@ final class ReceiverQuickControls {
     void attach(LinearLayout root){
         TextView head=new TextView(activity);
         head.setText("CONTROLES RÁPIDOS · JETOUR T1");
-        head.setTextSize(21);head.setTextColor(0xFF132A3D);
+        head.setTextSize(21);head.setTextColor(T1JetourTheme.CYAN);
         head.setPadding(7,4,7,4);
         root.addView(head);
 
@@ -171,6 +191,7 @@ final class ReceiverQuickControls {
             extraToggle.setText(reveal?"OCULTAR CONTROLES AVANZADOS":
                 "MOSTRAR CONTROLES AVANZADOS");
         });
+        T1JetourTheme.button(extraToggle,T1JetourTheme.PANEL_HI);
         root.addView(extraToggle);
         root.addView(extra);
         LinearLayout b=row(extra);
@@ -196,8 +217,10 @@ final class ReceiverQuickControls {
         button(e,"RECUPERAR ESPEJOS · 10 PASOS ARRIBA",ORANGE,this::restoreMirrors);
 
         config=new TextView(activity);config.setTextSize(14);
+        config.setTextColor(T1JetourTheme.MUTED);
         config.setPadding(8,8,8,4);root.addView(config);
         status=new TextView(activity);status.setTextSize(13);
+        status.setTextColor(T1JetourTheme.WHITE);
         status.setPadding(8,6,8,12);root.addView(status);
         refresh();
     }

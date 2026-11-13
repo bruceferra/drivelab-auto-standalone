@@ -27,9 +27,10 @@ import org.json.JSONObject;
  * All read actions are user-initiated and all Binder queries run off UI thread.
  */
 public final class T1ValidationWizardActivity extends T1ImmersiveActivity {
-    private static final int BG=0xFF091421, CARD=0xFF142639,
-        FG=0xFFF3F8FD, MUTED=0xFFB4CAD9, BLUE=0xFF2B789B,
-        GREEN=0xFF087B71, GOLD=0xFFB68943, RED=0xFFB65754;
+    private static final int BG=T1JetourTheme.NIGHT,CARD=T1JetourTheme.PANEL,
+        FG=T1JetourTheme.WHITE,MUTED=T1JetourTheme.MUTED,
+        BLUE=T1JetourTheme.PANEL_HI,GREEN=T1JetourTheme.GREEN_BUTTON,
+        GOLD=T1JetourTheme.AMBER_BUTTON,RED=T1JetourTheme.RED_BUTTON;
     private static final String PREFS="t1_validation_wizard_v1";
     private static final String NOT_TESTED="PENDIENTE", TESTED="PROBADO",
         NO_SIGNAL="SIN SEÑAL", CONFIRMED="VALIDADO POR USUARIO";
@@ -242,7 +243,7 @@ public final class T1ValidationWizardActivity extends T1ImmersiveActivity {
         Button b=new Button(this);
         b.setText(caption);b.setAllCaps(false);b.setTextSize(14);
         b.setTextColor(Color.WHITE);
-        b.setBackgroundTintList(ColorStateList.valueOf(color));
+        T1JetourTheme.button(b,color);
         b.setOnClickListener(v->action.run());
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(-1,-2);
         lp.setMargins(3,3,3,3);c.addView(b,lp);
@@ -257,7 +258,7 @@ public final class T1ValidationWizardActivity extends T1ImmersiveActivity {
     private void render(){
         Task task=TASKS[selected];
         ScrollView scroll=new ScrollView(this);
-        scroll.setFillViewport(true);scroll.setBackgroundColor(BG);
+        scroll.setFillViewport(true);scroll.setBackground(T1JetourTheme.backdrop());
         LinearLayout body=column();body.setPadding(16,8,16,24);
         scroll.addView(body);
         body.addView(text("DRIVELAB T1 · VALIDACIONES PENDIENTES",
@@ -298,7 +299,7 @@ public final class T1ValidationWizardActivity extends T1ImmersiveActivity {
             }
         }
         LinearLayout card=column();card.setPadding(13,13,13,15);
-        card.setBackgroundColor(CARD);body.addView(card);
+        card.setBackground(T1JetourTheme.surface(CARD,17));body.addView(card);
         card.addView(text((selected+1)+"/"+TASKS.length+" · "+
             task.group+" · "+state(task),14,MUTED));
         card.addView(text(task.title,22,FG));
@@ -330,8 +331,7 @@ public final class T1ValidationWizardActivity extends T1ImmersiveActivity {
         noteView=new EditText(this);
         noteView.setSingleLine(false);
         noteView.setMinLines(2);
-        noteView.setTextColor(FG);
-        noteView.setHintTextColor(MUTED);
+        T1JetourTheme.number(noteView);
         noteView.setHint("Qué hiciste, qué valor cambió, qué no respondió… (sin VIN ni domicilios)");
         noteView.setText(prefs.getString(task.id+"_note",""));
         card.addView(noteView);
@@ -609,7 +609,10 @@ public final class T1ValidationWizardActivity extends T1ImmersiveActivity {
         return s;
     }
     private static boolean useful(String x){
-        return x!=null&&!x.isEmpty()&&!x.startsWith("SIN ")&&
+        // -1 is the unavailable/uninitialized sentinel observed on this T1
+        // for wiper AUTO 2126. Never count it as a valid comparable value.
+        return x!=null&&!x.isEmpty()&&!x.trim().equals("-1")&&
+            !x.trim().equals("-1.0")&&!x.startsWith("SIN ")&&
             !x.startsWith("no disponible")&&!x.startsWith("—");
     }
     private static boolean scope(String id,String key){
