@@ -25,8 +25,9 @@ import java.util.Locale;
  * regenerative braking remain preferences/suggestions.
  */
 public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
-    private static final int BG=0xFF0A1623, CARD=0xFFF4F8FA,
-        MUTED=0xFF9DB7CA, AQUA=0xFF22BDB7;
+    private static final int BG=T1JetourTheme.NIGHT,
+        CARD=T1JetourTheme.PANEL,
+        MUTED=T1JetourTheme.MUTED, AQUA=T1JetourTheme.CYAN;
     private final EnumMap<T1OptimizedModePolicy.Road,Profile> profiles=
         new EnumMap<>(T1OptimizedModePolicy.Road.class);
     private TextView preview,automaticState;
@@ -39,9 +40,7 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         EditText forced,targetMinimum;
     }
     private GradientDrawable background(int color,int radius){
-        GradientDrawable b=new GradientDrawable();
-        b.setColor(color);b.setCornerRadius(radius);
-        return b;
+        return T1JetourTheme.surface(color,radius);
     }
     private LinearLayout vertical(){
         LinearLayout l=new LinearLayout(this);
@@ -56,7 +55,8 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
     }
     private TextView text(String s,int size,int color,boolean bold){
         TextView t=new TextView(this);t.setText(s);t.setTextSize(size);
-        t.setTextColor(color);
+        t.setTextColor(color==0xFF08384C||color==0xFF334B5A?
+            T1JetourTheme.WHITE:color==0xFF40566B?T1JetourTheme.MUTED:color);
         t.setPadding(5,7,5,7);
         if(bold)t.setTypeface(null,Typeface.BOLD);
         return t;
@@ -67,10 +67,7 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
     }
     private Spinner selector(String[] names,int initial){
         Spinner s=new Spinner(this);
-        ArrayAdapter<String> adapter=new ArrayAdapter<>(this,
-            android.R.layout.simple_spinner_item,names);
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        s.setAdapter(adapter);
+        T1JetourTheme.spinner(s,names);
         s.setSelection(initial);
         return s;
     }
@@ -80,6 +77,7 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         t.setHint(label);t.setSingleLine(true);
         t.setTextSize(16);
         t.setInputType(InputType.TYPE_CLASS_NUMBER);
+        T1JetourTheme.number(t);
         return t;
     }
     private void card(LinearLayout parent,T1OptimizedModePolicy.Road which){
@@ -115,6 +113,9 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
             12,0xFF334B5A,true));
         p.conditional=new CheckBox(this);
         p.conditional.setText("ACTIVAR CONDICIÓN");
+        p.conditional.setTextColor(T1JetourTheme.WHITE);
+        p.conditional.setButtonTintList(android.content.res.ColorStateList.valueOf(
+            T1JetourTheme.CYAN));
         p.conditional.setChecked(existing.thresholdEnabled);
         threshold.addView(p.conditional);
         LinearLayout thresholdEditor=horizontal();
@@ -159,12 +160,13 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
     @Override protected void onCreate(Bundle state){
         super.onCreate(state);
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);
-        scroll.setBackgroundColor(BG);
+        scroll.setBackground(T1JetourTheme.backdrop());
         LinearLayout root=vertical();root.setPadding(12,6,12,26);
         scroll.addView(root);
         LinearLayout title=horizontal();root.addView(title);
         column(title,text("MODO OPTIMIZADO · 4 PERFILES",20,Color.WHITE,true),1);
         Button close=new Button(this);close.setAllCaps(false);close.setText("VOLVER");
+        T1JetourTheme.button(close,T1JetourTheme.PANEL_HI);
         close.setOnClickListener(v->finish());title.addView(close);
         root.addView(text("MODO OPTIMIZADO ON aplica EV / HEV / EV MAX "+
             "(señal 1043) automáticamente según el mapa OFFLINE y la "+
@@ -179,6 +181,7 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         automaticButton=new Button(this);
         automaticButton.setAllCaps(false);
         automaticButton.setTextSize(18);
+        T1JetourTheme.button(automaticButton,0xFF24576B);
         automaticButton.setOnClickListener(v->toggleAutomatic());
         column(switchRow,automaticButton,1);
         automaticState=text("AUTO: verificando estado…",14,Color.WHITE,true);
@@ -189,11 +192,12 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         LinearLayout actions=horizontal();root.addView(actions);
         Button save=new Button(this);
         save.setAllCaps(false);save.setText("GUARDAR LOS 4 PERFILES");
-        save.setBackgroundTintList(android.content.res.ColorStateList.valueOf(AQUA));
+        T1JetourTheme.button(save,0xFF0D7078);
         save.setOnClickListener(v->saveProfiles());
         column(actions,save,1);
         Button simulate=new Button(this);
         simulate.setAllCaps(false);simulate.setText("VER RECOMENDACIÓN");
+        T1JetourTheme.button(simulate,T1JetourTheme.PANEL_HI);
         simulate.setOnClickListener(v->showCurrent());
         column(actions,simulate,1);
         preview=text("Se mostrará el último tipo de vía detectado por el "+
