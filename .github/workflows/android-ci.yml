@@ -262,6 +262,8 @@ jobs:
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModePolicy.java \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocRegenWritePolicy.java \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocRegenTransitionGate.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1DriveModeGate.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedAutoGate.java \
             receiver/tests/T1SocRegenTransitionGateTest.java
           java -cp /tmp/t1-soc-transition ar.com.rango5gps.drivelabauto.receiver.T1SocRegenTransitionGateTest
           pilot=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocRegenPilot.java
@@ -272,6 +274,9 @@ jobs:
           grep -Fq 'ETAPA_3_READBACK' "$pilot"
           grep -Fq 'ETAPA_3_INCIERTA' "$pilot"
           grep -Fq 'socProfileGate.recordConfirmed(targets);' "$auto"
+          grep -Fq 'OPT_SOC_TRAS_VIA_3_DE_3' "$auto"
+          ! grep -Fq 'T1SocRegenTransitionGate.Reason.WAIT_STABLE' "$auto"
+          ! grep -Fq 'OPT_SOC_TRANSICION_3_DE_3' "$auto"
           grep -Fq 'showSocDiagnostic()' "$editor"
           ! grep -Fq 'auxVotes=' "$auto"
       - name: Decode Jetour 1041 photographed raw values before confirming forced SOC (pure JVM)
