@@ -10,8 +10,9 @@ final class T1SocRegenWritePolicy {
     static final int SMART=2,FORCED=4;
     static final int REGEN_LOW=1,REGEN_MEDIUM=2,REGEN_HIGH=3;
     private static final int[] SOC_PRESETS={20,30,40,50,60,70};
-    /** Requested 20..70 multiples-of-ten UI reference presets only.
-     * Automatic 1040/1041/1046 OEM writes are DISABLED pending calibration. */
+    /** Requested 20..70 multiples-of-ten ONLY for 1041 target writes.
+     * Writes remain enabled with strict OEM readback, fail-stop and no
+     * guessed rollback to opaque getter values (such as integer 56). */
     static int[] forcedSocPresets(){
         return SOC_PRESETS.clone();
     }
@@ -38,7 +39,7 @@ final class T1SocRegenWritePolicy {
         if(!accepted(id,current))return -1;
         if(id==STRATEGY)return current==SMART?FORCED:SMART;
         if(id==REGEN)return current==REGEN_LOW?REGEN_MEDIUM:REGEN_LOW;
-        // Real OEM presets from the APK; never guess a percentage code.
+        // No synthetic forced-SOC test values; only profile-selected targets.
         if(id==TARGET)return -1; // Never invent an alternate/rollback 1041 target.
         return -1;
     }
