@@ -153,8 +153,8 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         if(which==T1OptimizedModePolicy.Road.UNKNOWN)
             box.addView(text("Respaldo configurable cuando el GPS o mapa no "+
                 "identifican una vía confiable.",12,0xFF40566B,false));
-        box.addView(text("REGLA A · CONDICIÓN PRINCIPAL",15,
-            T1JetourTheme.CYAN,true));
+        box.addView(text(T1OptimizedModePolicy.roadName(which)+
+            " 1 · CONDICIÓN PRINCIPAL",15,T1JetourTheme.CYAN,true));
         LinearLayout options=horizontal();box.addView(options);
         p.power=selector(new String[]{"EV","HEV","EV MAX"},existing.power.ordinal());
         p.strategy=selector(new String[]{"SMART","SOC FORZADO"},
@@ -264,10 +264,11 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
                                      T1OptimizedModePolicy.Road road,
                                      T1OptimizedModePolicy.Rule existing){
         LinearLayout heading=horizontal();parent.addView(heading);
-        column(heading,text("REGLA B · SEGUNDA CONDICIÓN",15,
-            T1JetourTheme.CYAN,true),1);
+        column(heading,text(T1OptimizedModePolicy.roadName(road)+
+            " 2 · SEGUNDA CONDICIÓN",15,T1JetourTheme.CYAN,true),1);
         parentProfile.secondEnabled=new CheckBox(this);
-        parentProfile.secondEnabled.setText("ACTIVAR REGLA B");
+        parentProfile.secondEnabled.setText("ACTIVAR "+
+            T1OptimizedModePolicy.roadName(road)+" 2");
         parentProfile.secondEnabled.setTextColor(Color.WHITE);
         parentProfile.secondEnabled.setButtonTintList(
             android.content.res.ColorStateList.valueOf(T1JetourTheme.CYAN));
@@ -275,10 +276,11 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
             T1OptimizedModeStore.secondEnabled(this,road));
         heading.addView(parentProfile.secondEnabled);
         LinearLayout section=vertical();parent.addView(section);
-        section.addView(text("Si el SOC real cumple el rango de B, se "+
-            "aplican sus propias propulsión, gestión SOC y regeneración. "+
-            "Si ninguna de las dos reglas coincide, NO se cambia nada. "+
-            "Al habilitar B, los rangos A y B no pueden superponerse.",
+        section.addView(text("Cuando SOC cumple la regla 2, aplica "+
+            "sus propios ajustes. Entre los dos umbrales se MANTIENE "+
+            "la última regla 1 o 2 confirmada por la ECU, sin nuevas "+
+            "escrituras OEM. Si todavía no hubo coincidencias, no cambia "+
+            "nada. Los rangos de 1 y 2 no pueden superponerse.",
             11,MUTED,false));
         RuleEditor q=new RuleEditor();parentProfile.second=q;
         LinearLayout options=horizontal();section.addView(options);
@@ -361,8 +363,8 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
             (button,checked)->{
                 section.setVisibility(checked?View.VISIBLE:View.GONE);
                 if(preview!=null)preview.setText(
-                    "Regla B "+(checked?"habilitada":"deshabilitada")+
-                    " en "+T1OptimizedModePolicy.roadName(road)+
+                    T1OptimizedModePolicy.roadName(road)+" 2 "+
+                    (checked?"habilitada":"deshabilitada")+
                     " · tocá GUARDAR LOS 4 PERFILES para aplicar");
             });
         section.setVisibility(parentProfile.secondEnabled.isChecked()?
@@ -377,14 +379,18 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         LinearLayout root=vertical();root.setPadding(12,6,12,26);
         scroll.addView(root);
         LinearLayout title=horizontal();root.addView(title);
-        column(title,text("MODO OPTIMIZADO · 4 VÍAS · 2 REGLAS CADA UNA",
-            20,Color.WHITE,true),1);
+        column(title,text("MODO OPTIMIZADO · CIUDAD 1/2 · CARRETERA 1/2 · "+
+            "AUTOPISTA 1/2 · DESCONOCIDO 1/2",
+            18,Color.WHITE,true),1);
         Button close=new Button(this);close.setAllCaps(false);close.setText("VOLVER");
         T1JetourTheme.button(close,T1JetourTheme.PANEL_HI);
         close.setOnClickListener(v->finish());title.addView(close);
-        root.addView(text("Cada vía tiene dos reglas condicionales A y B, "+
-            "con rangos de batería independientes. Nunca se activan ambas "+
-            "a la vez; si ninguna coincide no se cambia el vehículo. "+
+        root.addView(text("Cada vía tiene reglas independientes 1 y 2. "+
+            "Pueden ejecutarse sucesivamente: por ejemplo AUTOPISTA 1 "+
+            "con SOC ≥70%, mantener EV mientras cae a 60, 50 y 40%, "+
+            "y recién pasar a AUTOPISTA 2 con SOC ≤30%. Una vez en "+
+            "regla 2 se conserva hasta una nueva condición. "+
+            "Sin coincidencia previa no se cambia el vehículo. "+
             "MODO OPTIMIZADO automático según el camino: "+
             "EV/HEV/EV MAX (1043), SMART/FORZADO (1040), objetivo SOC (1041) "+
             "y regeneración (1046). Los perfiles cambian mientras circulás "+
@@ -478,7 +484,7 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
                    T1OptimizedDualRulePolicy.overlaps(a,c))
                     throw new IllegalArgumentException(
                         T1OptimizedModePolicy.roadName(r)+
-                        ": las reglas A y B tienen rangos SOC superpuestos. "+
+                        ": los rangos de REGLA 1 y REGLA 2 se superponen. "+
                         "Separá los umbrales para evitar órdenes contradictorias.");
                 first.put(r,a);
                 second.put(r,c);
@@ -491,8 +497,9 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
                 T1OptimizedModeStore.setEnabled(this,r,
                     editor.blockEnabled.isChecked());
             }
-            preview.setText("GUARDADAS LAS OCHO REGLAS (A/B POR VÍA) · "+
-                "si ninguna coincide no se envía ninguna orden OEM. "+
+            preview.setText("GUARDADAS LAS 8 REGLAS (1 Y 2 POR VÍA) · "+
+                "cada activación se recuerda hasta el siguiente umbral; "+
+                "sin coincidencia inicial no se envía ninguna orden OEM. "+
                 "1043/1040/1041/1046 automáticos en P o D con "+
                 "lectura OEM confirmada.\n"+
                 currentRecommendation());
