@@ -134,8 +134,10 @@ final class ReceiverQuickControls {
         });
         // Keep existing 3D/long-press interaction; visual icon is original.
         String upper=text.toUpperCase(java.util.Locale.ROOT);
-        String icon=upper.contains("ESPEJO")?"steer":
-            upper.contains("VENTIL")?"pulse":null;
+        String icon=upper.contains("ESPEJO")?"mirror":
+            upper.contains("VENTIL")||upper.contains("AIRE")?"fan":
+            upper.contains("PEATÓN")?"pedestrian":
+            upper.contains("VENTANILLA")?"window":null;
         if(icon!=null){
             T1JetourTheme.Icon glyph=new T1JetourTheme.Icon(icon,T1JetourTheme.CYAN);
             int px=T1JetourTheme.dp(activity,17);
