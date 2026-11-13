@@ -7,7 +7,7 @@ import java.util.regex.Pattern;
 final class T1VoiceIntentPolicy {
     private static final Pattern NAV=Pattern.compile(
         "(?iu)^\\s*(?:por\\s+favor\\s+)?(?:"+
-        "(?:naveg[aá](?:r|me)?|ir|vamos|ll[eé]vame|gu[ií]ame|dirigime)"+
+        "(?:naveg[aá](?:r|me)?|ir|ll[eé]vame|gu[ií]ame|dirigime)"+
         "\\s+(?:hacia\\s+|hasta\\s+|al\\s+|a\\s+la\\s+|a\\s+los\\s+|a\\s+)|"+
         "c[oó]mo\\s+(?:llego|llegar)\\s+(?:a|al)\\s+|"+
         "(?:quiero|necesito)\\s+ir\\s+(?:a|al|hasta)\\s+|"+
