@@ -90,6 +90,7 @@ public final class T1OptimizedAutoService extends Service {
         try{road=T1OptimizedModePolicy.Road.valueOf(roadName);}
         catch(Exception ignored){return null;}
         if(road==T1OptimizedModePolicy.Road.UNKNOWN||
+            !T1OptimizedModeStore.isEnabled(c,road)||
             road!=T1OptimizedModeStore.lastRoad(c))return null;
         String stored=p.getString(VERIFIED_PROFILE,"");
         if(!stored.equals(profileSignature(T1OptimizedModeStore.get(c,road))))
@@ -98,6 +99,10 @@ public final class T1OptimizedAutoService extends Service {
     }
     static String roadDisplayReason(Context c){
         if(!enabled(c))return "OPTIMIZADO OFF";
+        T1OptimizedModePolicy.Road detected=T1OptimizedModeStore.lastRoad(c);
+        if(detected!=T1OptimizedModePolicy.Road.UNKNOWN&&
+            !T1OptimizedModeStore.isEnabled(c,detected))
+            return "PERFIL DESACTIVADO";
         String reason=prefs(c).getString(DISPLAY_REASON,"MODO · VERIFICANDO");
         // Never return a green/verified label based on stale SharedPreferences.
         if("CONFIRMADO".equals(reason)&&verifiedAppliedRoad(c)==null)
@@ -120,7 +125,8 @@ public final class T1OptimizedAutoService extends Service {
     }
     private void verifiedRoad(T1OptimizedModePolicy.Road road,
                               T1OptimizedModePolicy.Rule rule){
-        if(stopping||!enabled(this))return;
+        if(stopping||!enabled(this)||
+            !T1OptimizedModeStore.isEnabled(this,road))return;
         pref().edit().putString(VERIFIED_ROAD,road.name())
             .putString(VERIFIED_PROFILE,profileSignature(rule))
             .putLong(VERIFIED_TIME,System.currentTimeMillis())
@@ -318,6 +324,18 @@ public final class T1OptimizedAutoService extends Service {
             snapshot.socDisplay>=0&&snapshot.socDisplay<=100?
             snapshot.socDisplay:snapshot.socInternal;
         T1OptimizedModePolicy.Rule rule=T1OptimizedModeStore.get(this,road);
+        if(!T1OptimizedModeStore.isEnabled(this,road)){
+            // Hard block: no 1043 EV/HEV fallback, 1040 strategy,
+            // 1041 forced SOC, nor 1046 regen writes for this road.
+            // It is still classified by GPS for read-only feedback.
+            pendingRoad("PERFIL DESACTIVADO");
+            gate.examine(null,null,Double.NaN,Double.NaN,-1,-1,
+                SystemClock.elapsedRealtime(),false,false);
+            socProfileGate.reset();
+            note("AUTO ON · "+T1OptimizedModePolicy.roadName(road)+
+                " · BLOQUE DESACTIVADO · cero órdenes OEM");
+            return;
+        }
         T1OptimizedAutoGate.Decision decision=gate.examine(
             road,rule,battery,snapshot.speed,snapshot.gear,
             snapshot.powerMode,SystemClock.elapsedRealtime(),confident,fresh);
@@ -354,7 +372,8 @@ public final class T1OptimizedAutoService extends Service {
             " · solicitando "+mode+" (1043="+target+")");
         gate.recordCommand(SystemClock.elapsedRealtime(),target);
         boolean submitted=pilot.request(target,
-            ()->!stopping&&enabled(T1OptimizedAutoService.this),
+            ()->!stopping&&enabled(T1OptimizedAutoService.this)&&
+                T1OptimizedModeStore.isEnabled(T1OptimizedAutoService.this,road),
             result->{
                 changing.set(false);
                 if(stopping||!enabled(T1OptimizedAutoService.this))return;
@@ -467,7 +486,8 @@ public final class T1OptimizedAutoService extends Service {
         note("AUTO ON · transición confirmada 3/3 · solicitando "+
             targets.summary()+" · diagnóstico 1041 activo");
         boolean submitted=socRegenPilot.apply(targets,
-            ()->!stopping&&enabled(T1OptimizedAutoService.this),
+            ()->!stopping&&enabled(T1OptimizedAutoService.this)&&
+                T1OptimizedModeStore.isEnabled(T1OptimizedAutoService.this,road),
             result->{
                 changing.set(false);
                 if(stopping||!enabled(T1OptimizedAutoService.this))return;
