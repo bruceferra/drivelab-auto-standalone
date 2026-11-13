@@ -78,6 +78,24 @@ final class T1EcoTripMetrics {
             if(Math.abs(acceleration)>=1.25)moderateSeconds+=seconds;
         }else priorEpisode=0;
     }
+    void combine(T1EcoTripMetrics other){
+        if(other==null)return;
+        for(int i=0;i<4;i++){
+            roadKm[i]+=other.roadKm[i];roadSec[i]+=other.roadSec[i];
+        }
+        for(int i=0;i<BIN_COUNT;i++){
+            speedKm[i]+=other.speedKm[i];speedSec[i]+=other.speedSec[i];
+        }
+        validKm+=other.validKm;validSeconds+=other.validSeconds;
+        accelSeconds+=other.accelSeconds;
+        strongAccelSeconds+=other.strongAccelSeconds;
+        strongBrakeSeconds+=other.strongBrakeSeconds;
+        moderateSeconds+=other.moderateSeconds;
+        validIntervals+=other.validIntervals;
+        abruptAccelerationEvents+=other.abruptAccelerationEvents;
+        abruptBrakeEvents+=other.abruptBrakeEvents;
+        priorEpisode=0;
+    }
     double km(){return validKm;}
     double roadKm(int road){return roadKm[road];}
     double speedKm(int bin){return speedKm[bin];}
