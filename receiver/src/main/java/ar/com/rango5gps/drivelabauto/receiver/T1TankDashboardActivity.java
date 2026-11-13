@@ -183,11 +183,15 @@ public final class T1TankDashboardActivity extends T1ImmersiveActivity {
         oemEventsStatus=text(oemCallbacks.snapshot(),14,NAVY,false);
         callbackPanel.addView(oemEventsStatus);
 
-        section(root,"AUTONOMÍA PROPIA · NO OEM 1022 KM");
+        section(root,"COMBUSTIBLE UTILIZABLE · AUTONOMÍA");
         LinearLayout range=card(root,PALE);
-        rangeStatus=text("Calculando con el tanque de surtidor…",22,NAVY,true);
+        rangeStatus=text("NAFTA UTILIZABLE · esperando CI186…",22,NAVY,true);
         range.addView(rangeStatus);
-        range.addView(text("Primer corte: 66,865 L. Segundo: 66,230 L / 887 km "+
+        range.addView(text("Lectura principal = max(0, CI186 − 5,30 L), "+
+            "sin alterar el OEM ni descontar otra vez para autonomía. "+
+            "67 L es la referencia utilizable aproximada desde surtidor; "+
+            "la zona superior del flotante se satura. "+
+            "Primer corte: 66,865 L. Segundo: 66,230 L / 887 km "+
             "⇒ 7,47 L/100 km mixtos. El tope superior de 56 Ω se satura; "+
             "por debajo de 5,3 L OEM el térmico dejó de funcionar dos veces.",
             12,GRAY,false));
@@ -389,8 +393,12 @@ public final class T1TankDashboardActivity extends T1ImmersiveActivity {
                     s.speed:null;
                 instruments.setTelemetry(speed,fuel,soc);
                 lastFuel=fuel==null?Double.NaN:fuel;
-                liveStatus.setText("CI186="+(fuel==null?"SIN LECTURA":T1FuelDisplay.liters(fuel))+
-                    " L indicador · SOC="+(soc==null?"--":fmt(soc,1))+
+                liveStatus.setText("NAFTA UTILIZABLE · "+
+                    T1FuelDisplay.usableLitersText(fuel==null?Double.NaN:fuel)+
+                    " L (CI186 menos 5,30 L)"+
+                    "\nDIAGNÓSTICO OEM · CI186 bruto="+
+                    (fuel==null?"SIN LECTURA":T1FuelDisplay.liters(fuel))+
+                    " L · SOC="+(soc==null?"--":fmt(soc,1))+
                     "% · velocidad OEM="+(speed==null?"--":fmt(speed,1))+
                     " · 1048="+fmt(s.counter1048,2)+
                     " /1049="+fmt(s.counter1049,2)+
@@ -422,10 +430,16 @@ public final class T1TankDashboardActivity extends T1ImmersiveActivity {
         double l100=T1FuelCalibration.latestL100(this);
         double est=T1FuelCalibration.remainingKm(this,
             Double.isFinite(lastFuel)?lastFuel:null);
+        String useful="NAFTA UTILIZABLE · "+
+            T1FuelDisplay.usableLitersText(lastFuel)+
+            " L (CI186 − 5,30 L; referencia tanque lleno 67 L)\n";
+        if(T1FuelDisplay.topUncalibrated(lastFuel))
+            useful+="NIVEL ALTO: CI186 saturado, volumen físico no calibrado\n";
         if(anchored){
             float usedKm=T1FuelCalibration.p(this).getFloat(
                 T1FuelCalibration.SINCE_KM,0f);
-            rangeStatus.setText("~"+fmt(est,0)+" km hasta corte térmico (estimado)\n"+
+            rangeStatus.setText(useful+"~"+fmt(est,0)+
+                " km hasta corte térmico (estimado)\n"+
                 "Desde carga: "+fmt(usedKm,1)+" km · referencia "+
                 fmt(l100,2)+" L/100 km"+
                 (T1TripMath.floatUpperSaturated(Double.isFinite(lastFuel)?
@@ -437,7 +451,7 @@ public final class T1TankDashboardActivity extends T1ImmersiveActivity {
                 (Double.isFinite(lastFuel)&&lastFuel<=5.3?
                     "\nCORTE OEM 5,3 L: 0 km nafta hasta corte":""));
         }else{
-            rangeStatus.setText("~"+fmt(T1TripMath.PUMP_LITERS*100/l100,0)+
+            rangeStatus.setText(useful+"~"+fmt(T1TripMath.PUMP_LITERS*100/l100,0)+
                 " km CON TANQUE LLENO (referencia)\n"+
                 "Autonomía actual sin ancla de llenado: indeterminada. "+
                 "Usá MARCAR TANQUE LLENO o ingresá distancia recorrida.");
