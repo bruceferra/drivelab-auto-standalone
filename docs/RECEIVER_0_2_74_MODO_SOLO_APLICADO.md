@@ -17,3 +17,12 @@ T1GlobalToolbar.refreshRoadMode mostraba T1OptimizedModeStore.lastRoad (clasific
 
 ## Prueba
 Caso de regresión JVM: CIUDAD a 13/15, 1/3, 2/3, OEM pendiente, SOC/regeneración pendiente, TODO confirmado, GPS UNKNOWN, rango SOC máximo. Compilación Android CI, build firmado code75 con certificado 0.2.73, manifiesto OTA y Sender conservado. **Validar visualmente en la T1.**
+
+## Selector independiente ACTIVADO/DESACTIVADO por bloque (13/11/2026)
+- Los cuatro bloques CIUDAD, CARRETERA, AUTOPISTA y DESCONOCIDO tienen un selector individual junto al título.
+- Se guarda inmediatamente en SharedPreferences por clave `road_<ROAD>_enabled`, sin necesidad de tocar GUARDAR LOS 4 PERFILES. Se respetan selecciones existentes: todos empiezan ACTIVADO por defecto tras la actualización hasta que el usuario cambie uno.
+- Cuando el bloque detectado está DESACTIVADO, el servicio conserva lecturas GPS de solo observación pero omite de inmediato la decisión y **ninguna orden OEM sale de ese bloque**, ni 1043, ni HEV fallback 1043=2 por condición SOC, ni 1040/1041/1046. Otras vías activas siguen funcionando.
+- Se borran los votos pendientes y el latch de SOC/regeneración al detectar un bloque apagado. El encabezado no muestra modo verde: indica PERFIL DESACTIVADO en gris. Rehabilitar un bloque exige una nueva comprobación de 3 lecturas y confirmación OEM, sin asumir valores antiguos.
+- Los predicados de escritura en segundo plano también vuelven a comprobar que el bloque continúe activo antes de mandar una orden. Si se apaga durante una operación, se detienen las órdenes pendientes en cuanto el controlador lo observa, aunque no se puede deshacer una orden ya enviada.
+- No se detiene OPTIMIZADO ON global ni se modifican las preferencias de los otros bloques.
+- El bloqueo de UNKNOWN es explícito aunque el controlador existente ya evitaba escrituras para vías sin mapa fiable.
