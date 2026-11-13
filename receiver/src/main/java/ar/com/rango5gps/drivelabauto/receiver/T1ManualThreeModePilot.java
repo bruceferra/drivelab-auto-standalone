@@ -39,6 +39,9 @@ final class T1ManualThreeModePilot {
     boolean busy(){return GLOBAL_BUSY.get();}
     boolean request(int target,BooleanSupplier screenVisible,Callback cb){
         if(target!=1&&target!=2&&target!=3)return false;
+        // Another 1040/1041/1046 profile transaction could undo SMART
+        // between disarming FORZADO and applying EV. Do not race it.
+        if(target==1&&T1SocRegenPilot.oemSocWriteInProgress())return false;
         if(!GLOBAL_BUSY.compareAndSet(false,true))return false;
         T1OemDiagnosticLog.begin(app,
             "Control manual triple · objetivo 1043="+target+
