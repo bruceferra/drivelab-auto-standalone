@@ -480,11 +480,14 @@ jobs:
           javac -encoding UTF-8 -d /tmp/t1-stable-autonomy \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripMath.java \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1StableAutonomy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PhevTotalRange.java \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1Fuel500mWindow.java \
             receiver/tests/T1StableAutonomyTest.java \
+            receiver/tests/T1PhevTotalRangeTest.java \
             receiver/tests/T1Fuel500mWindowTest.java \
             receiver/tests/T1StableAutonomySourceContractTest.java
           java -cp /tmp/t1-stable-autonomy ar.com.rango5gps.drivelabauto.receiver.T1StableAutonomyTest
+          java -cp /tmp/t1-stable-autonomy ar.com.rango5gps.drivelabauto.receiver.T1PhevTotalRangeTest
           java -cp /tmp/t1-stable-autonomy ar.com.rango5gps.drivelabauto.receiver.T1Fuel500mWindowTest
           java -cp /tmp/t1-stable-autonomy ar.com.rango5gps.drivelabauto.receiver.T1StableAutonomySourceContractTest
       - name: T1 fuel autonomy and recirculation regressions (pure JVM)
