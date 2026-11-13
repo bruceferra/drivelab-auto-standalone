@@ -263,8 +263,23 @@ final class T1SocRegenPilot {
                     // the NEW allowlisted 20..70 preset requested by owner.
                     original.put(id,Integer.MIN_VALUE);
                     T1OemDiagnosticLog.add(app,"1041_SIN_SOC_PREVIO",
-                        "Sin getter anterior; objetivo nuevo="+
-                        targets.forcedSoc+"; rollback 1041 prohibido");
+                        "Getter anterior NO ES precondición; objetivo nuevo="+
+                        targets.forcedSoc+"%; rollback 1041 prohibido");
+                    // Optional read-only diagnostic only, never a
+                    // prerequisite, previous setpoint or rollback value.
+                    // Allows a later trace to distinguish state already
+                    // selected from an actual change after transact(15).
+                    try{
+                        int rawBefore=readInt(b,1041);
+                        T1OemDiagnosticLog.add(app,"1041_RAW_ANTES_OPCIONAL",
+                            T1SocTargetCodec.explain(rawBefore,Double.NaN)+
+                            " (solo información, no bloquea la escritura)");
+                    }catch(Exception readError){
+                        T1OemDiagnosticLog.add(app,"1041_RAW_ANTES_OPCIONAL",
+                            "no disponible: "+
+                            readError.getClass().getSimpleName()+
+                            "; se continúa sin lectura previa");
+                    }
                     continue;
                 }
                 int now=readInt(b,id);
