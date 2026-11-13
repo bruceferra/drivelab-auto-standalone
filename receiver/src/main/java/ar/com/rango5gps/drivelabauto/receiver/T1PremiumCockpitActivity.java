@@ -746,6 +746,13 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         microphone.setOnClickListener(v->startActivity(new Intent(this,
             T1VoiceRouteActivity.class)));
         top.addView(microphone,new LinearLayout.LayoutParams(-2,52));
+        Button pendingTests=new Button(this);
+        pendingTests.setAllCaps(false);
+        pendingTests.setTextSize(12);
+        pendingTests.setText("PENDIENTES");
+        pendingTests.setOnClickListener(v->startActivity(new Intent(this,
+            T1ValidationWizardActivity.class)));
+        top.addView(pendingTests,new LinearLayout.LayoutParams(-2,52));
         Button displaySettings=new Button(this);
         displaySettings.setAllCaps(false);
         displaySettings.setTextSize(12);
@@ -1193,6 +1200,13 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         popupParams.setMargins(side,pad,side,0);
         cockpitFrame.addView(roadTransitionPopup,popupParams);
         setContentView(cockpitFrame);
+        // Open the existing diagnostic panel directly when launched from
+        // the wizard; retain its original actions and user-triggered probes.
+        if(getIntent()!=null&&
+            getIntent().getBooleanExtra("open_validation_advanced",false)){
+            advanced.setVisibility(android.view.View.VISIBLE);
+            scroll.post(()->scroll.smoothScrollTo(0,advanced.getTop()));
+        }
     }
     private void updateStats(){
         String recovered=T1JourneyStore.reconcileInterrupted(this);
