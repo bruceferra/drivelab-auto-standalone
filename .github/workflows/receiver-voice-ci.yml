@@ -1,0 +1,40 @@
+name: Receiver voice destination · Android build
+on:
+  pull_request:
+    paths:
+      - 'receiver/**'
+      - '.github/workflows/receiver-voice-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Install Android SDK 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool=$(command -v sdkmanager || find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)
+          "$tool" 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Compile Receiver with integrated microphone
+        run: gradle --no-daemon :receiver:assembleDebug
+      - name: Verify voice integration is packaged and safe
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s receiver/build/outputs/apk/debug/receiver-debug.apk
+          test -f receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1VoiceRouteActivity.java
+          grep -Fq 'android:name=".T1VoiceRouteActivity"' receiver/src/main/AndroidManifest.xml
+          grep -Fq 'RecognizerIntent.ACTION_RECOGNIZE_SPEECH' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1VoiceRouteActivity.java
+          grep -Fq 'setPackage("com.waze")' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1VoiceRouteActivity.java
+          ! grep -E 'transact\(15|setIntData|setCarProperty|1040,|1041,' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1VoiceRouteActivity.java
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging receiver/build/outputs/apk/debug/receiver-debug.apk | grep "ar.com.rango5gps.drivelabauto.receiver"
