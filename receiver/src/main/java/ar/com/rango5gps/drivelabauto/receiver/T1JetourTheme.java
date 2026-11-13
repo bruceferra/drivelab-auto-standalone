@@ -72,7 +72,12 @@ final class T1JetourTheme {
     }
     static Drawable buttonBackground(int color){
         GradientDrawable fill=surface(color,12);
-        return new RippleDrawable(ColorStateList.valueOf(0x4488F6FF),fill,null);
+        // Accent strokes match genuine OEM active/inactive color families.
+        if(color==GREEN_BUTTON)fill.setStroke(2,GREEN);
+        else if(color==RED_BUTTON)fill.setStroke(2,RED);
+        else if(color==AMBER_BUTTON)fill.setStroke(2,AMBER);
+        else if(color==TURQUOISE)fill.setStroke(2,CYAN);
+        return new RippleDrawable(ColorStateList.valueOf(0x335EA6B7),fill,null);
     }
     static void button(Button b,int color){
         b.setBackgroundTintList(null);
