@@ -34,7 +34,7 @@ public final class MirrorControlsVisibilitySourceContractTest {
         int visible=hub.indexOf("CONTROLES OEM AVANZADOS · ESPEJOS R");
         int settings=hub.indexOf("button(body,connectionExpanded?");
         check(visible>=0 && settings>visible &&
-              !hub.contains("button(settings,\\\"CONTROLES OEM AVANZADOS\\\""),
+              !hub.contains("button(settings,\"CONTROLES OEM AVANZADOS\""),
               "OEM advanced controls must be reachable without opening connection settings");
         check(service.contains("if(p.contains(AUTO)&&!p.getBoolean(AUTO,false))return;"),
               "manual mode must not auto-rearm after Receiver process restart");
