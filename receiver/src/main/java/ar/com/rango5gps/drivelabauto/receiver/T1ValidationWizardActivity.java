@@ -56,24 +56,25 @@ public final class T1ValidationWizardActivity extends T1ImmersiveActivity {
             "En P, con los limpias detenidos, tomá CAPTURA A. Cambiá SOLO " +
             "la sensibilidad AUTO con el control original Jetour (baja/alta), " +
             "sin mover el vehículo. Tomá CAPTURA B.",
-            "Compará el dato 2126. Cambiar el mando original no demuestra " +
-            "que DriveLab pueda escribirlo. No confundas sensibilidad con velocidad.",
+            "Compará 2126 (sensibilidad) y la nueva lectura HAL 557843863 " +
+            "(modo del limpia). El getter no autoriza a escribir ni confirma " +
+            "que el mismo número sea un comando.",
             "VEHÍCULO · LIMPIAPARABRISAS / RADAR", "vehicle","wiper"),
         new Task("wiper_rear","CARROCERÍA","Limpia trasero · estado",
             "En P, tomá CAPTURA A con el limpia trasero apagado. " +
             "Activá el limpia desde el mando original y tomá CAPTURA B. " +
             "Luego devolvé el mando a apagado.",
-            "El candidato de lectura es 2125. Si no cambia, puede ser otro " +
-            "estado del BCM; no inventar un código de escritura.",
+            "Compará 2125 (coordinación OEM) y HAL 557843559 (estado trasero). " +
+            "Si alguno cambia, documentar valor sin activar un setter.",
             "VEHÍCULO · LIMPIAPARABRISAS / RADAR","vehicle","wiper"),
-        new Task("wiper_manual","CARROCERÍA","Limpia delantero · velocidad manual",
-            "Estacioná en P y abrí CODE · DETECTOR 45 S. Accioná " +
-            "una sola posición de barrido manual desde el mando OEM y " +
-            "compará si cambia alguna lectura. No hay un ID confirmado " +
-            "para velocidad manual y el 2126 NO es ese control.",
-            "Si el detector no descubre señal, registrá SIN SEÑAL. " +
-            "No enviar escrituras a códigos desconocidos.",
-            "VEHÍCULO · CODE · DETECTOR DE CAMBIOS","code",""),
+        new Task("wiper_manual","CARROCERÍA","Limpia delantero · modo HAL nuevo",
+            "En P con el control original apagado tomá CAPTURA A. " +
+            "Seleccioná UNA velocidad de barrido manual desde el mando " +
+            "original y tomá CAPTURA B; después volvé a OFF.",
+            "HAL 557843863 es el candidato nuevo de modo de limpia. " +
+            "Si no cambia o da SIN LECTURA, podría estar detrás de QNX/BCM. " +
+            "No enviar 557843862, que es un candidato de escritura.",
+            "VEHÍCULO · LECTURAS HAL DE CARROCERÍA","vehicle","wiper"),
         new Task("lights_cabin","ILUMINACIÓN","Plafón trasero, puertas y baúl",
             "Con el auto inmóvil, apagá luces interiores y cerrá puertas: " +
             "CAPTURA A. Encendé el plafón OEM o abrí una puerta/baúl: CAPTURA B. " +
@@ -176,7 +177,17 @@ public final class T1ValidationWizardActivity extends T1ImmersiveActivity {
             "y confirmá el texto. Si no hay reconocedor Android, probá teclado.",
             "Validar que el pin real de Waze aparezca en clúster; " +
             "que Android acepte el Intent no garantiza que Waze navegue.",
-            "RECEIVER / COCKPIT · DESTINO POR VOZ","voice","")
+            "RECEIVER / COCKPIT · DESTINO POR VOZ","voice",""),
+        new Task("lights_exterior_hal","ILUMINACIÓN","NUEVO · Estado de faros y DRL HAL",
+            "Con el vehículo inmóvil en P y buena visibilidad, tomá " +
+            "CAPTURA A. Cambiá SOLO el estado de las luces originales " +
+            "desde el mando Jetour (p. ej. posición/faros) y tomá " +
+            "CAPTURA B. Restituí la configuración OEM al terminar.",
+            "Lecturas candidatas 289410560-563 (faros, altas, niebla, " +
+            "balizas), 557844233/557856517 (DRL) y 289410817 " +
+            "(cabina). NO identifican individualmente luces de freno " +
+            "ni luces traseras. No se escriben propiedades.",
+            "VEHÍCULO · LECTURAS HAL DE CARROCERÍA","vehicle","wiper")
     };
 
     private SharedPreferences prefs;
@@ -617,8 +628,19 @@ public final class T1ValidationWizardActivity extends T1ImmersiveActivity {
     }
     private static boolean scope(String id,String key){
         switch(id){
-            case "wiper_auto":return key.startsWith("2126");
-            case "wiper_rear":return key.startsWith("2125");
+            case "wiper_auto":return key.startsWith("2126")||
+                key.startsWith("557843863");
+            case "wiper_rear":return key.startsWith("2125")||
+                key.startsWith("557843559");
+            case "wiper_manual":return key.startsWith("557843863");
+            case "lights_exterior_hal":
+                return key.startsWith("289410560")||
+                    key.startsWith("289410561")||
+                    key.startsWith("289410562")||
+                    key.startsWith("289410563")||
+                    key.startsWith("289410817")||
+                    key.startsWith("557844233")||
+                    key.startsWith("557856517");
             case "pdc":return key.startsWith("2049")||
                 key.startsWith("2107")||key.startsWith("PDC ")||
                 key.contains("TRASERO")||key.contains("DELANTERO");
