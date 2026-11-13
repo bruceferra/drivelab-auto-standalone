@@ -91,8 +91,11 @@ final class ReceiverQuickControls {
         GradientDrawable bg=new GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,new int[]{upper,lower});
         bg.setCornerRadius(17);
+        int accent=base==GREEN?T1JetourTheme.GREEN:
+            base==RED?T1JetourTheme.RED:
+            base==ORANGE?T1JetourTheme.AMBER:T1JetourTheme.CYAN;
         bg.setStroke(selected?3:1,
-            selected?T1JetourTheme.CYAN:T1JetourTheme.BORDER);
+            selected?accent:T1JetourTheme.BORDER);
         return bg;
     }
     private void styleSurface(Button b,int base){
