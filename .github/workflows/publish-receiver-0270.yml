@@ -325,5 +325,5 @@ jobs:
           gh release download v0.2.70 --pattern 'receiver.json' --dir verify
           cmp output/sender.json verify/sender.json
           cmp output/receiver.json verify/receiver.json
-          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.69
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.70
           gh release view v0.2.70 --json assets --jq '.assets[].name'
