@@ -36,6 +36,14 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private final AtomicBoolean reading=new AtomicBoolean(false);
     private boolean visible=false;
     private long lastTelem=0,lastTotals=0;
+    private ScrollView cockpitScroll;
+    // Top actions belong to a FIXED sibling of the scrolling history.
+    // Changes in a historical Eco result must never move or intercept them.
+    private String renderedHistorySignature="";
+    private String renderedHistoryDetailSignature="";
+    private final java.util.Map<String,TextView> renderedHistoryButtons=
+        new java.util.HashMap<>();
+    private final AtomicBoolean historyUiBusy=new AtomicBoolean(false);
     private T1TripTelemetry.Sample lastSample;
     private T1OemConsumptionCallbacks dashboardConsumption;
     private long lastConsumptionAttempt=0;
@@ -773,6 +781,12 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private void draw(){
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);
         scroll.setBackground(T1JetourTheme.backdrop());
+        // Static header is outside this scroll; disable descendant focus
+        // scrolling when the Eco results are updated asynchronously.
+        scroll.setDescendantFocusability(
+            android.view.ViewGroup.FOCUS_BEFORE_DESCENDANTS);
+        scroll.setFocusableInTouchMode(true);
+        cockpitScroll=scroll;
         LinearLayout root=col();root.setPadding(18,10,18,28);
         scroll.addView(root);
         LinearLayout top=row();top.setGravity(Gravity.CENTER_VERTICAL);root.addView(top);
@@ -974,9 +988,15 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             12,0xFFB2DDD9,false);
         feedback.setMaxLines(3);root.addView(feedback);
         LinearLayout expandRow=row();root.addView(expandRow);
-        compactButton(expandRow,"DETALLES / HISTORIAL",BLUE,()->
-            secondary.setVisibility(secondary.getVisibility()==android.view.View.GONE?
-                android.view.View.VISIBLE:android.view.View.GONE));
+        compactButton(expandRow,"DETALLES / HISTORIAL",BLUE,()->{
+            boolean expand=secondary.getVisibility()==android.view.View.GONE;
+            secondary.setVisibility(expand?
+                android.view.View.VISIBLE:android.view.View.GONE);
+            if(expand){
+                lastTotals=System.currentTimeMillis();
+                updateHistory(); // ONE lazy background refresh on opening.
+            }
+        });
         compactButton(expandRow,"ZONAS / DIAGNÓSTICOS",BLUE,()->{
             advanced.setVisibility(advanced.getVisibility()==android.view.View.GONE?
                 android.view.View.VISIBLE:android.view.View.GONE);
@@ -1072,7 +1092,12 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         historyDetailRow=row();secondary.addView(historyDetailRow);
         historyEcoStatus=text("ECO DEL VIAJE · seleccioná un registro",
             12,T1JetourTheme.CYAN,false);
-        historyEcoStatus.setTextIsSelectable(true);
+        // Selectable TextViews become focusable on Android 11. Each long
+        // analysis result was stealing focus, then ScrollView automatically
+        // jumped to the history section and swallowed header touches.
+        historyEcoStatus.setTextIsSelectable(false);
+        historyEcoStatus.setFocusable(false);
+        historyEcoStatus.setFocusableInTouchMode(false);
         historyEcoStatus.setPadding(12,9,12,10);
         historyEcoStatus.setBackground(bg(CARD,12));
         secondary.addView(historyEcoStatus);
@@ -1257,20 +1282,35 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         // The popup is pinned above scrolling content, but BELOW the fixed
         // voice-assistant clearance strip owned by T1ImmersiveActivity.
         FrameLayout cockpitFrame=new FrameLayout(this);
-        cockpitFrame.addView(scroll,new FrameLayout.LayoutParams(-1,-1));
+        // CRITICAL: keep navigation buttons pinned ABOVE the ScrollView.
+        // A fast history refresh cannot shift their hit boxes or consume taps.
+        root.removeView(top);
+        LinearLayout fixedBody=col();
+        fixedBody.setBackgroundColor(BG);
+        fixedBody.addView(top,
+            new LinearLayout.LayoutParams(-1,-2));
+        fixedBody.addView(scroll,
+            new LinearLayout.LayoutParams(-1,0,1f));
+        cockpitFrame.addView(fixedBody,
+            new FrameLayout.LayoutParams(-1,-1));
         roadTransitionPopup=text("CIUDAD",26,WHITE,true);
         roadTransitionPopup.setGravity(Gravity.CENTER);
         int pad=Math.round(13*getResources().getDisplayMetrics().density);
         roadTransitionPopup.setPadding(pad,pad,pad,pad);
         roadTransitionPopup.setClickable(false);
         roadTransitionPopup.setFocusable(false);
+        roadTransitionPopup.setEnabled(false);
+        roadTransitionPopup.setLongClickable(false);
         roadTransitionPopup.setElevation(
             12*getResources().getDisplayMetrics().density);
         roadTransitionPopup.setVisibility(android.view.View.GONE);
         FrameLayout.LayoutParams popupParams=new FrameLayout.LayoutParams(
             -1,-2,Gravity.TOP|Gravity.CENTER_HORIZONTAL);
         int side=Math.round(55*getResources().getDisplayMetrics().density);
-        popupParams.setMargins(side,pad,side,0);
+        // Keep non-interactive road indication below fixed navigation row.
+        popupParams.setMargins(side,
+            pad+Math.round(60*getResources().getDisplayMetrics().density),
+            side,0);
         cockpitFrame.addView(roadTransitionPopup,popupParams);
         setContentView(cockpitFrame);
         // Open the existing diagnostic panel directly when launched from
@@ -1468,9 +1508,13 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 (ecoScope!=0?"\n(El viaje seleccionado todavía no tiene "+
                     "muestras propias)":""));
         }
-        if(System.currentTimeMillis()-lastTotals>5000){
+        // History is EXPENSIVE and changes only after trips close. Never
+        // rebuild its buttons every 5 seconds (especially while collapsed).
+        if(secondary!=null&&
+           secondary.getVisibility()==android.view.View.VISIBLE&&
+           System.currentTimeMillis()-lastTotals>30000){
             lastTotals=System.currentTimeMillis();
-            updateHistory();
+            updateHistory(); // background I/O; stable view hierarchy.
         }
     }
     private void updateHistory(){
