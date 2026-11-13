@@ -268,7 +268,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                     "\nUI ms "+uiLagNow+" max "+uiLagMax+
                     "\nNAV Down "+navTouchDowns+
                     " clicks "+navButtonClicks+" last "+lastNavButton+
-                    "\nMODE Down "+modeTouchDowns,""))
+                    "\nMODE Down "+modeTouchDowns,null))
             .show();
     }
     private static Double valid(double v,double min,double max){
@@ -903,49 +903,66 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         microphone.setTextSize(12);
         microphone.setText("🎤 IA / WAZE");
         microphone.setContentDescription("Dictar destino para Waze del clúster");
-        microphone.setOnClickListener(v->startActivity(new Intent(this,
-            T1VoiceRouteActivity.class)));
+        microphone.setOnClickListener(v->{
+            navClicked("IA/WAZE");
+            startActivity(new Intent(this,T1VoiceRouteActivity.class));
+        });
         T1JetourTheme.button(microphone,0xFF14536B);
         top.addView(microphone,new LinearLayout.LayoutParams(-2,52));
         Button pendingTests=new Button(this);
         pendingTests.setAllCaps(false);
         pendingTests.setTextSize(12);
         pendingTests.setText("PENDIENTES");
-        pendingTests.setOnClickListener(v->startActivity(new Intent(this,
-            T1ValidationWizardActivity.class)));
+        pendingTests.setOnClickListener(v->{
+            navClicked("PENDIENTES");
+            startActivity(new Intent(this,T1ValidationWizardActivity.class));
+        });
         T1JetourTheme.button(pendingTests,0xFF14536B);
         top.addView(pendingTests,new LinearLayout.LayoutParams(-2,52));
         Button displaySettings=new Button(this);
         displaySettings.setAllCaps(false);
         displaySettings.setTextSize(12);
         displaySettings.setText("PANTALLA");
-        displaySettings.setOnClickListener(v->openDisplaySettings());
+        displaySettings.setOnClickListener(v->{
+            navClicked("PANTALLA");
+            openDisplaySettings();
+        });
         T1JetourTheme.button(displaySettings,BLUE);
         top.addView(displaySettings,new LinearLayout.LayoutParams(-2,52));
         Button simulator=new Button(this);
         simulator.setAllCaps(false);
         simulator.setTextSize(12);
         simulator.setText("SIMULADOR");
-        simulator.setOnClickListener(v->openWhatIf());
+        simulator.setOnClickListener(v->{
+            navClicked("SIMULADOR");
+            openWhatIf();
+        });
         T1JetourTheme.button(simulator,BLUE);
         top.addView(simulator,new LinearLayout.LayoutParams(-2,52));
         autoModeButton=new Button(this);
         autoModeButton.setAllCaps(false);
         autoModeButton.setTextSize(13);
         autoModeButton.setText("AUTO · OFF");
-        autoModeButton.setOnClickListener(v->toggleAutomaticMode());
+        autoModeButton.setOnClickListener(v->{
+            navClicked("AUTO");
+            toggleAutomaticMode();
+        });
         T1JetourTheme.button(autoModeButton,RED);
         top.addView(autoModeButton,new LinearLayout.LayoutParams(-2,52));
         Button optimized=new Button(this);
         optimized.setAllCaps(false);
         optimized.setTextSize(12);
         optimized.setText("MODO OPTIMIZADO");
-        optimized.setOnClickListener(v->openOptimizedMode());
+        optimized.setOnClickListener(v->{
+            navClicked("MODO OPTIMIZADO");
+            openOptimizedMode();
+        });
         T1JetourTheme.button(optimized,BLUE);
         top.addView(optimized,new LinearLayout.LayoutParams(-2,52));
         Button back=new Button(this);
         back.setText("INICIO");back.setTextSize(12);
         back.setAllCaps(false);back.setOnClickListener(v->{
+            navClicked("INICIO");
             Intent home=new Intent(this,ReceiverActivity.class);
             home.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|
                 Intent.FLAG_ACTIVITY_SINGLE_TOP);
@@ -1025,6 +1042,27 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         secondStartButton=compactButton(secondActions,"INICIAR",BLUE,this::askSecond);
         secondPauseButton=compactButton(secondActions,"PAUSAR",GOLD,this::pauseSecond);
         secondEndButton=compactButton(secondActions,"TERMINAR",RED,this::finishSecond);
+
+        // SECONDARY NAVIGATION: same safe touch zone as the working
+        // journey controls. If the OEM overlay covers the pinned top bar,
+        // these buttons still let the owner reach settings or exit.
+        LinearLayout rescue=row();root.addView(rescue);
+        compactButton(rescue,"OPTIMIZADO",BLUE,()->
+            {navClicked("RESCATE OPT");openOptimizedMode();});
+        compactButton(rescue,"PENDIENTES",BLUE,()->
+            {navClicked("RESCATE PENDIENTES");startActivity(
+                new Intent(this,T1ValidationWizardActivity.class));});
+        compactButton(rescue,"PANTALLA",BLUE,()->
+            {navClicked("RESCATE PANTALLA");openDisplaySettings();});
+        compactButton(rescue,"SISTEMA RAM/CPU",TEAL,()->
+            {navClicked("RESCATE SISTEMA");showSystemDiagnostics();});
+        compactButton(rescue,"INICIO",GOLD,()->{
+            navClicked("RESCATE INICIO");
+            Intent home=new Intent(this,ReceiverActivity.class);
+            home.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|
+                Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            startActivity(home);finish();
+        });
 
         // Restore the user's original instrument cards. Only remove the
         // oversize speedometer; the 4 non-speed gauges retain their live OEM
@@ -1421,25 +1459,10 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             new LinearLayout.LayoutParams(-1,0,1f));
         cockpitFrame.addView(fixedBody,
             new FrameLayout.LayoutParams(-1,-1));
-        roadTransitionPopup=text("CIUDAD",26,WHITE,true);
-        roadTransitionPopup.setGravity(Gravity.CENTER);
-        int pad=Math.round(13*getResources().getDisplayMetrics().density);
-        roadTransitionPopup.setPadding(pad,pad,pad,pad);
-        roadTransitionPopup.setClickable(false);
-        roadTransitionPopup.setFocusable(false);
-        roadTransitionPopup.setEnabled(false);
-        roadTransitionPopup.setLongClickable(false);
-        roadTransitionPopup.setElevation(
-            12*getResources().getDisplayMetrics().density);
-        roadTransitionPopup.setVisibility(android.view.View.GONE);
-        FrameLayout.LayoutParams popupParams=new FrameLayout.LayoutParams(
-            -1,-2,Gravity.TOP|Gravity.CENTER_HORIZONTAL);
-        int side=Math.round(55*getResources().getDisplayMetrics().density);
-        // Keep non-interactive road indication below fixed navigation row.
-        popupParams.setMargins(side,
-            pad+Math.round(60*getResources().getDisplayMetrics().density),
-            side,0);
-        cockpitFrame.addView(roadTransitionPopup,popupParams);
+        // Disable the old full-width FrameLayout popup entirely: even
+        // disabled Android views in the highest Z-order can complicate
+        // hit-testing with an OEM overlay. The OSM banner remains available.
+        roadTransitionPopup=null;
         setContentView(cockpitFrame);
         // Open the existing diagnostic panel directly when launched from
         // the wizard; retain its original actions and user-triggered probes.
