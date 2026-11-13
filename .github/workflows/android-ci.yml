@@ -91,12 +91,15 @@ jobs:
           mkdir -p /tmp/t1-eco-rating
           javac -encoding UTF-8 -d /tmp/t1-eco-rating \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1EcoTripMetrics.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TrafficFlowPolicy.java \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1LiveConsumption.java \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripMath.java \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ExperimentalRange.java \
             receiver/tests/T1EcoTripMetricsTest.java \
+            receiver/tests/T1TrafficFlowPolicyTest.java \
             receiver/tests/T1LiveConsumptionTest.java
           java -cp /tmp/t1-eco-rating ar.com.rango5gps.drivelabauto.receiver.T1EcoTripMetricsTest
+          java -cp /tmp/t1-eco-rating ar.com.rango5gps.drivelabauto.receiver.T1TrafficFlowPolicyTest
           java -cp /tmp/t1-eco-rating ar.com.rango5gps.drivelabauto.receiver.T1LiveConsumptionTest
           grep -Fq 'eco.sample(s.timestamp,measure.km,dt' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripRecorderService.java
           grep -Fq 'historyEcoStatus.setText' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
