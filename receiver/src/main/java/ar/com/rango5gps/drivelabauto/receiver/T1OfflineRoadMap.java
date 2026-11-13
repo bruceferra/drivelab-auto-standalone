@@ -239,6 +239,16 @@ final class T1OfflineRoadMap {
     static T1OsmRoadAdvisor.Result roadAt(Context context,android.location.Location here){
         if(!installed(context))return unknown("Mapa offline no instalado. "+
             "Tocá DESCARGAR MAPA PBA+CABA una sola vez.");
+        return roadAtDataset(dataset(context),here,"OSM");
+    }
+    /** Shared read-only map matcher for SHADOW datasets. Must never write OEM
+     * modes or modify the existing production OSM database.
+     * Shadow SQLite has the SAME roads/roads_bounds v3 geometry schema.
+     */
+    static T1OsmRoadAdvisor.Result roadAtDataset(
+            File roadDb,android.location.Location here,String source){
+        if(roadDb==null||!roadDb.isFile())
+            return unknown(source+" · mapa NO INSTALADO");
         if(here==null||!here.hasAccuracy()||here.getAccuracy()>65||
                 android.os.SystemClock.elapsedRealtimeNanos()-
                 here.getElapsedRealtimeNanos()>60000000000L)
@@ -260,7 +270,7 @@ final class T1OfflineRoadMap {
             next=T1OsmRoadAdvisor.Road.UNKNOWN;
         int checked=0,ignoredUnknown=0;
         try(SQLiteDatabase db=SQLiteDatabase.openDatabase(
-                dataset(context).getAbsolutePath(),null,
+                roadDb.getAbsolutePath(),null,
                 SQLiteDatabase.OPEN_READONLY|SQLiteDatabase.NO_LOCALIZED_COLLATORS);
             Cursor rows=db.rawQuery(
                 "SELECT r.highway,r.ref,r.vertices,r.maxspeed,r.motorroad,r.expressway "+
@@ -318,7 +328,7 @@ final class T1OfflineRoadMap {
         String name=ref==null||ref.trim().isEmpty()?"Vía sin referencia":"Ruta "+ref;
         int limit=T1RoadSpeedClassifier.maxKmh(maxspeed);
         return new T1OsmRoadAdvisor.Result(best,highway,name,nearest,
-            "OSM highway="+highway+" · máxima publicada="+
+            source+" highway="+highway+" · máxima publicada="+
             (limit<0?"SIN DATO":limit+" km/h")+
             " · SQLite PBA+CABA v3. Solo sugerencias, sin comandos.",
             limit);
