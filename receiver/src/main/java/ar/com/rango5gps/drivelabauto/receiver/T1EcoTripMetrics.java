@@ -192,9 +192,16 @@ final class T1EcoTripMetrics {
             7.0*moderateSeconds/Math.max(1.0,accelSeconds);
         double eventsPer10Km=(abruptAccelerationEvents+
             abruptBrakeEvents)*10.0/Math.max(2.0,validKm);
-        // City driving naturally includes more acceleration/braking.
-        double expectedCityWeight=1.0+1.8*cityShare;
-        double eventPenalty=Math.max(0,(eventsPer10Km/expectedCityWeight)-1)*.23;
+        // Both urban driving and stop-and-go traffic naturally produce
+        // speed transitions. Contextualize rather than punish the motorist
+        // merely for encountering congestion.
+        double congestionSeconds=trafficSlowSec[CITY]+
+            trafficSlowSec[ROAD]+trafficSlowSec[MOTORWAY];
+        double trafficShare=congestionSeconds/Math.max(1,validSeconds);
+        double expectedContextWeight=1.0+1.8*cityShare+
+            1.2*Math.min(1,trafficShare);
+        double eventPenalty=Math.max(0,
+            (eventsPer10Km/expectedContextWeight)-1)*.23;
         double raw=10-penaltyForLongEvents-moderatePenalty-eventPenalty;
         return Math.round(Math.max(0,Math.min(10,raw))*10)/10.0;
     }
