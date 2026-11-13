@@ -220,10 +220,12 @@ final class T1GlobalToolbar {
             T1OptimizedAutoService.verifiedAppliedRoad(owner):null;
         if(applied!=null){
             String road=T1OptimizedModePolicy.roadName(applied);
-            roadModeButton.setText("MODO "+road);
+            String subprofile=T1OptimizedAutoService.verifiedAppliedBranchLabel(owner);
+            roadModeButton.setText("MODO "+road+
+                (subprofile.isEmpty()?"":" "+subprofile));
             T1JetourTheme.button(roadModeButton,T1JetourTheme.GREEN_BUTTON);
             roadModeButton.setContentDescription(
-                "Perfil "+road+" aplicado y confirmado. "+
+                "Perfil "+road+" "+subprofile+" aplicado y confirmado. "+
                 "Tres lecturas de vía, condición SOC, OEM 1043 y SOC/regeneración verificados. Solo lectura.");
         }else{
             String reason=T1OptimizedAutoService.roadDisplayReason(owner);
