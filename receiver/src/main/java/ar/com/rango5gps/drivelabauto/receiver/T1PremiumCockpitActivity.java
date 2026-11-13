@@ -1234,6 +1234,10 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         LinearLayout repairActions=row();secondary.addView(repairActions);
         compactButton(repairActions,"RECONSTRUIR KM DEL HISTORIAL",TEAL,
             this::runHistoryRepair);
+        compactButton(repairActions,"BORRAR SELECCIONADO",RED,
+            this::confirmDeleteSelectedHistory);
+        compactButton(repairActions,"ELIMINAR TODO",RED,
+            this::confirmDeleteAllHistory);
         secondary.addView(text("IZQUIERDA: VIAJES 1/2 · DERECHA: "+
             "JORNADAS COMPLETAS. Elegí una tarjeta y verás los seis "+
             "indicadores a lo ancho, con original y corregido.",12,MUTED,true));
@@ -2039,6 +2043,87 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                         shown.summary());
             });
         },"T1-Historical-Eco-OSM").start();
+    }
+    /** Deletion is never implicit or triggered by a background repair.
+     * The active trip guard is checked again on the worker thread. */
+    private void confirmDeleteSelectedHistory(){
+        final String key=selectedHistoryKey;
+        if(key==null||!key.matches("[012]:[0-9_]+")){
+            message("Elegí primero un viaje o una jornada del historial.");
+            return;
+        }
+        int type=Character.digit(key.charAt(0),10);
+        String id=key.substring(2);
+        String what=type==0?"jornada completa":("Viaje "+type);
+        new AlertDialog.Builder(this)
+            .setTitle("BORRAR "+what.toUpperCase(Locale.ROOT))
+            .setMessage("Se eliminará únicamente este registro LOCAL y sus "+
+                "archivos derivados propios. Una jornada vinculada a Viajes "+
+                "1/2 no se puede borrar hasta eliminar esos viajes. "+
+                "Los datos ya enviados a la nube NO se eliminan.\n\n"+
+                "Registro: "+id)
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("BORRAR REGISTRO",(d,w)->performHistoryDeletion(type,id))
+            .show();
+    }
+    private void confirmDeleteAllHistory(){
+        final EditText typed=new EditText(this);
+        typed.setSingleLine(true);
+        typed.setInputType(InputType.TYPE_CLASS_TEXT|
+            InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
+        typed.setHint("Escribí ELIMINAR TODO");
+        LinearLayout holder=col();
+        holder.setPadding(24,9,24,5);
+        holder.addView(typed);
+        new AlertDialog.Builder(this)
+            .setTitle("ELIMINAR TODOS LOS VIAJES Y JORNADAS")
+            .setMessage("BORRADO LOCAL irreversible: Viaje 1, Viaje 2, "+
+                "todas las jornadas, CSV de recorrido, consumo y "+
+                "correcciones. No borra cargas eléctricas, perfiles, mapas "+
+                "ni copias que ya estén en Supabase. No permite borrar "+
+                "si existe un viaje o jornada activo, pausado o pendiente.\n"+
+                "Escribí exactamente ELIMINAR TODO para confirmar.")
+            .setView(holder)
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("ELIMINAR TODO",(d,w)->{
+                if(!"ELIMINAR TODO".equals(typed.getText().toString().trim())){
+                    message("No se borró nada: la confirmación escrita no coincide.");
+                    return;
+                }
+                performHistoryDeletion(-1,null);
+            }).show();
+    }
+    private void performHistoryDeletion(int slot,String id){
+        if(T1TripDeletion.busy()){
+            message("Ya hay un borrado en curso.");return;
+        }
+        if(feedback!=null)feedback.setText("Borrando historial local en segundo plano…");
+        new Thread(()->{
+            String result;
+            boolean success;
+            try{
+                result=slot<0?T1TripDeletion.deleteAll(getApplicationContext()):
+                    T1TripDeletion.deleteSelected(getApplicationContext(),slot,id);
+                success=true;
+            }catch(Exception ex){
+                result="NO SE BORRÓ EL REGISTRO: "+ex.getMessage();
+                success=false;
+            }
+            final String msg=result;
+            final boolean done=success;
+            ui.post(()->{
+                message(msg);
+                if(!done||isFinishing()||isDestroyed())return;
+                selectedHistoryKey="";
+                renderedHistorySignature="";
+                renderedHistoryDetailSignature="";
+                cachedMasterHistory=new ArrayList<>();
+                ecoHistoryCache.clear();
+                lastTotals=0;
+                updateHistory();
+                updateStats();
+            });
+        },"T1-History-Delete-User-Confirmed").start();
     }
     private void runHistoryRepair(){runHistoryRepair(true);}
     private void runHistoryRepair(boolean manual){
