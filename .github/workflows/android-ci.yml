@@ -105,8 +105,14 @@ jobs:
           grep -Fq 'fixedBody.addView(top,' "$cockpit"
           grep -Fq 'roadTransitionPopup=null;' "$cockpit"
           grep -Fq 'SISTEMA RAM/CPU' "$cockpit"
-          grep -Fq 'RESCATE OPT' "$cockpit"
-          grep -Fq 'RESCATE INICIO' "$cockpit"
+          grep -Fq 'commentaryColumns=row();' "$cockpit"
+          grep -Fq 'commentaryRight.addView(systemMonitorLine,' "$cockpit"
+          ! grep -Fq 'RESCATE OPT' "$cockpit"
+          grep -Fq 'this::confirmDeleteAllHistory' "$cockpit"
+          grep -Fq 'this::confirmDeleteSelectedHistory' "$cockpit"
+          grep -Fq '"ELIMINAR TODO".equals(typed.getText().toString().trim())' "$cockpit"
+          grep -Fq 'inactive(c);' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripDeletion.java
+          grep -Fq 'ACTION_VOICE_ASSIST' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1VoiceRouteActivity.java
           ! grep -Fq 'cockpitFrame.addView(roadTransitionPopup' "$cockpit"
       - name: Cockpit touch guard - fixed header, stable history, background I/O
         shell: bash
