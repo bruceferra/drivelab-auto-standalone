@@ -10,29 +10,30 @@ public final class T1SocRegenWritePolicyTest {
         check(!T1SocRegenWritePolicy.accepted(1040,3),"unverified AUTO");
         check(!T1SocRegenWritePolicy.accepted(1040,0),"invalid strategy");
         int[] menu=T1SocRegenWritePolicy.forcedSocPresets();
-        check(menu.length==10,"ten OEM values in dropdown");
-        check(menu[0]==20&&menu[3]==48&&menu[5]==56&&
-              menu[7]==64&&menu[9]==72,"OEM non-5-step values preserved");
+        check(menu.length==6,"six multiples of ten in dropdown");
+        check(menu[0]==20&&menu[1]==30&&menu[2]==40&&
+              menu[3]==50&&menu[4]==60&&menu[5]==70,
+              "SOC forced dropdown contains only 20 30 40 50 60 70");
         for(int soc:menu)
             check(T1SocRegenWritePolicy.accepted(1041,soc),
                 "every forced SOC menu choice is writable policy "+soc);
-        for(int soc:new int[]{20,30,40,48,50,56,60,64,70,72}){
+        for(int soc:new int[]{20,30,40,50,60,70}){
             boolean visible=false;
             for(int option:menu)if(soc==option)visible=true;
             check(visible,"supported OEM SOC is visible "+soc);
         }
         check(T1SocRegenWritePolicy.nearestForcedSocPresetIndex(48)==3,
-            "existing 48% stays 48%");
-        check(T1SocRegenWritePolicy.nearestForcedSocPresetIndex(56)==5,
-            "existing 56% stays 56%");
-        check(T1SocRegenWritePolicy.nearestForcedSocPresetIndex(59)==6,
+            "legacy 48% maps to 50 only after explicit save");
+        check(T1SocRegenWritePolicy.nearestForcedSocPresetIndex(56)==4,
+            "legacy 56% maps to 60 only after explicit save");
+        check(T1SocRegenWritePolicy.nearestForcedSocPresetIndex(59)==4,
             "legacy unsupported 59 maps to 60 on explicit save");
-        check(T1SocRegenWritePolicy.nearestForcedSocPresetIndex(100)==9,
-            "legacy unsupported 100 maps to allowed 72 on explicit save");
+        check(T1SocRegenWritePolicy.nearestForcedSocPresetIndex(100)==5,
+            "legacy unsupported 100 maps to max 70 on explicit save");
         menu[0]=999;
         check(T1SocRegenWritePolicy.accepted(1041,20),
             "UI mutation of clone must never change writer allowlist");
-        for(int soc:new int[]{-1,0,19,21,37,80,100})
+        for(int soc:new int[]{-1,0,19,21,37,48,56,64,72,80,100})
             check(!T1SocRegenWritePolicy.accepted(1041,soc),"invalid SOC "+soc);
         for(int r=1;r<=3;r++)
             check(T1SocRegenWritePolicy.accepted(1046,r),"regen "+r);
@@ -41,8 +42,10 @@ public final class T1SocRegenWritePolicyTest {
         check(!T1SocRegenWritePolicy.accepted(1043,2),"wrong channel");
         check(T1SocRegenWritePolicy.testAlternative(1040,2)==4,"mode test");
         check(T1SocRegenWritePolicy.testAlternative(1040,4)==2,"mode restore");
-        check(T1SocRegenWritePolicy.testAlternative(1041,56)==64,"SOC test");
-        check(T1SocRegenWritePolicy.testAlternative(1041,64)==56,"SOC restore");
+        check(T1SocRegenWritePolicy.testAlternative(1041,20)==-1,
+            "no alternate target is allowed for experimental SOC");
+        check(T1SocRegenWritePolicy.testAlternative(1041,56)==-1,
+            "invalid 56 must never become a rollback target");
         check(T1SocRegenWritePolicy.testAlternative(1046,1)==2,"regen test");
         check(T1SocRegenWritePolicy.testAlternative(1046,3)==1,"regen test2");
         check(T1SocRegenWritePolicy.testAlternative(1040,-1)==-1,"sentinel deny");
@@ -61,12 +64,12 @@ public final class T1SocRegenWritePolicyTest {
         check(!T1SocRegenWritePolicy.regenDriveEligible(-1,0),"missing gear");
         T1OptimizedModePolicy.Rule forced=new T1OptimizedModePolicy.Rule(
             T1OptimizedModePolicy.Power.HEV,
-            T1OptimizedModePolicy.Strategy.FORCED,64,false,30,
+            T1OptimizedModePolicy.Strategy.FORCED,60,false,30,
             T1OptimizedModePolicy.Regen.HIGH);
         T1SocRegenWritePolicy.Targets desired=
             T1SocRegenWritePolicy.desired(forced,55);
         check(desired.valid(),"valid preset");
-        check(desired.strategy==4&&desired.forcedSoc==64&&desired.regen==3,
+        check(desired.strategy==4&&desired.forcedSoc==60&&desired.regen==3,
             "full forced");
         check(T1SocRegenWritePolicy.desired(
             new T1OptimizedModePolicy.Rule(T1OptimizedModePolicy.Power.HEV,
@@ -75,7 +78,7 @@ public final class T1SocRegenWritePolicyTest {
             "unverified SOC preset denied");
         T1OptimizedModePolicy.Rule conditional=new T1OptimizedModePolicy.Rule(
             T1OptimizedModePolicy.Power.HEV,
-            T1OptimizedModePolicy.Strategy.FORCED,56,true,50,
+            T1OptimizedModePolicy.Strategy.FORCED,60,true,50,
             T1OptimizedModePolicy.Regen.HIGH);
         T1SocRegenWritePolicy.Targets fallback=
             T1SocRegenWritePolicy.desired(conditional,20);
@@ -83,12 +86,12 @@ public final class T1SocRegenWritePolicyTest {
             &&!fallback.needsTarget(),"safe fallback");
         T1OptimizedModePolicy.Rule bounded=new T1OptimizedModePolicy.Rule(
             T1OptimizedModePolicy.Power.HEV,
-            T1OptimizedModePolicy.Strategy.FORCED,56,
+            T1OptimizedModePolicy.Strategy.FORCED,60,
             true,10,true,40,T1OptimizedModePolicy.Regen.HIGH);
         T1SocRegenWritePolicy.Targets inRange=
             T1SocRegenWritePolicy.desired(bounded,25);
         check(inRange.valid()&&inRange.strategy==4&&
-            inRange.forcedSoc==56&&inRange.regen==3,
+            inRange.forcedSoc==60&&inRange.regen==3,
             "in-range SOC applies FORZADO and selected regeneration");
         T1SocRegenWritePolicy.Targets aboveRange=
             T1SocRegenWritePolicy.desired(bounded,45);
@@ -104,6 +107,6 @@ public final class T1SocRegenWritePolicyTest {
             T1SocRegenWritePolicy.desired(bounded,Double.NaN);
         check(unknownSoc.fallback&&unknownSoc.strategy==2,
             "unknown OEM SOC must not apply a conditioned FORZADO profile");
-        System.out.println("OK: SOC / regen policy (D movement permitted, P, presets, fallback)");
+        System.out.println("OK: SOC / regen reference policy; forced SOC 20..70 step 10, 1041 rollback disallowed");
     }
 }
