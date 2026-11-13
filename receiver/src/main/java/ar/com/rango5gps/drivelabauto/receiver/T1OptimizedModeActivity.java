@@ -33,9 +33,13 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
     private Button automaticButton;
     private T1OptimizedModePolicy.Road road=T1OptimizedModePolicy.Road.UNKNOWN;
     @Override protected int overlayClearBackgroundColor(){return BG;}
-    static final class Profile {
+    static class RuleEditor {
         Spinner power,strategy,regen,forced,minPct,maxPct;
-        CheckBox minEnabled,maxEnabled,blockEnabled;
+        CheckBox minEnabled,maxEnabled;
+    }
+    static final class Profile extends RuleEditor {
+        CheckBox blockEnabled,secondEnabled;
+        RuleEditor second;
     }
     private GradientDrawable background(int color,int radius){
         return T1JetourTheme.surface(color,radius);
@@ -149,6 +153,8 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         if(which==T1OptimizedModePolicy.Road.UNKNOWN)
             box.addView(text("Respaldo configurable cuando el GPS o mapa no "+
                 "identifican una vía confiable.",12,0xFF40566B,false));
+        box.addView(text(T1OptimizedModePolicy.roadName(which)+
+            " 1 · CONDICIÓN PRINCIPAL",15,T1JetourTheme.CYAN,true));
         LinearLayout options=horizontal();box.addView(options);
         p.power=selector(new String[]{"EV","HEV","EV MAX"},existing.power.ordinal());
         p.strategy=selector(new String[]{"SMART","SOC FORZADO"},
@@ -247,7 +253,125 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
             @Override public void onNothingSelected(android.widget.AdapterView<?> parent){}
         });
         syncSocAvailability.run();
+        addSecondRuleEditor(box,p,which,
+            T1OptimizedModeStore.getSecond(this,which));
     }
+
+    /** Each road contains two independent editable conditions. Rule B is
+     * optional and stays OFF until the user saves it explicitly.
+     */
+    private void addSecondRuleEditor(LinearLayout parent,Profile parentProfile,
+                                     T1OptimizedModePolicy.Road road,
+                                     T1OptimizedModePolicy.Rule existing){
+        LinearLayout heading=horizontal();parent.addView(heading);
+        column(heading,text(T1OptimizedModePolicy.roadName(road)+
+            " 2 · SEGUNDA CONDICIÓN",15,T1JetourTheme.CYAN,true),1);
+        parentProfile.secondEnabled=new CheckBox(this);
+        parentProfile.secondEnabled.setText("ACTIVAR "+
+            T1OptimizedModePolicy.roadName(road)+" 2");
+        parentProfile.secondEnabled.setTextColor(Color.WHITE);
+        parentProfile.secondEnabled.setButtonTintList(
+            android.content.res.ColorStateList.valueOf(T1JetourTheme.CYAN));
+        parentProfile.secondEnabled.setChecked(
+            T1OptimizedModeStore.secondEnabled(this,road));
+        heading.addView(parentProfile.secondEnabled);
+        LinearLayout section=vertical();parent.addView(section);
+        section.addView(text("Cuando SOC cumple la regla 2, aplica "+
+            "sus propios ajustes. Entre los dos umbrales se MANTIENE "+
+            "la última regla 1 o 2 confirmada por la ECU, sin nuevas "+
+            "escrituras OEM. Si todavía no hubo coincidencias, no cambia "+
+            "nada. Los rangos de 1 y 2 no pueden superponerse.",
+            11,MUTED,false));
+        RuleEditor q=new RuleEditor();parentProfile.second=q;
+        LinearLayout options=horizontal();section.addView(options);
+        q.power=selector(new String[]{"EV","HEV","EV MAX"},
+            existing.power.ordinal());
+        q.strategy=selector(new String[]{"SMART","SOC FORZADO"},
+            existing.strategy.ordinal());
+        q.regen=selector(new String[]{"BAJA","MEDIA","ALTA"},
+            existing.regeneration.ordinal());
+        LinearLayout power=vertical();
+        power.addView(text("PROPULSIÓN B",12,Color.WHITE,true));
+        power.addView(q.power);column(options,power,1);
+        LinearLayout management=vertical();
+        management.addView(text("GESTIÓN SOC B",12,Color.WHITE,true));
+        management.addView(q.strategy);column(options,management,1);
+        LinearLayout regen=vertical();
+        regen.addView(text("REGENERACIÓN B",12,Color.WHITE,true));
+        regen.addView(q.regen);column(options,regen,1);
+
+        LinearLayout battery=horizontal();section.addView(battery);
+        LinearLayout condition=vertical();
+        condition.addView(text("BATERÍA REAL · RANGO B",
+            12,Color.WHITE,true));
+        LinearLayout low=horizontal();condition.addView(low);
+        q.minEnabled=new CheckBox(this);
+        q.minEnabled.setText("MÍNIMO ≥");
+        q.minEnabled.setTextColor(Color.WHITE);
+        q.minEnabled.setButtonTintList(
+            android.content.res.ColorStateList.valueOf(T1JetourTheme.CYAN));
+        q.minEnabled.setChecked(existing.minEnabled);
+        column(low,q.minEnabled,2);
+        q.minPct=percentageSelector(existing.minBattery);
+        column(low,q.minPct,1);
+        LinearLayout high=horizontal();condition.addView(high);
+        q.maxEnabled=new CheckBox(this);
+        q.maxEnabled.setText("MÁXIMO ≤");
+        q.maxEnabled.setTextColor(Color.WHITE);
+        q.maxEnabled.setButtonTintList(
+            android.content.res.ColorStateList.valueOf(T1JetourTheme.CYAN));
+        q.maxEnabled.setChecked(existing.maxEnabled);
+        column(high,q.maxEnabled,2);
+        q.maxPct=percentageSelector(existing.maxBattery);
+        column(high,q.maxPct,1);
+        column(battery,condition,2);
+        LinearLayout forced=vertical();
+        forced.addView(text("SOC FORZADO B · SOLO 20 A 70",
+            12,Color.WHITE,true));
+        q.forced=forcedSocSelector(existing.forcedSoc);
+        forced.addView(q.forced);
+        column(battery,forced,1);
+        q.minPct.setEnabled(existing.minEnabled);
+        q.maxPct.setEnabled(existing.maxEnabled);
+        q.minEnabled.setOnCheckedChangeListener(
+            (button,checked)->q.minPct.setEnabled(checked));
+        q.maxEnabled.setOnCheckedChangeListener(
+            (button,checked)->q.maxPct.setEnabled(checked));
+        final Runnable syncStrategy=()->{
+            boolean electric=q.power.getSelectedItemPosition()!=
+                T1OptimizedModePolicy.Power.HEV.ordinal();
+            if(electric&&q.strategy.getSelectedItemPosition()!=
+                    T1OptimizedModePolicy.Strategy.SMART.ordinal())
+                q.strategy.setSelection(
+                    T1OptimizedModePolicy.Strategy.SMART.ordinal());
+            q.strategy.setEnabled(!electric);
+            q.forced.setEnabled(!electric&&
+                q.strategy.getSelectedItemPosition()==
+                    T1OptimizedModePolicy.Strategy.FORCED.ordinal());
+        };
+        q.power.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+            @Override public void onItemSelected(android.widget.AdapterView<?> a,
+                    View v,int position,long id){syncStrategy.run();}
+            @Override public void onNothingSelected(android.widget.AdapterView<?> a){}
+        });
+        q.strategy.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+            @Override public void onItemSelected(android.widget.AdapterView<?> a,
+                    View v,int position,long id){syncStrategy.run();}
+            @Override public void onNothingSelected(android.widget.AdapterView<?> a){}
+        });
+        parentProfile.secondEnabled.setOnCheckedChangeListener(
+            (button,checked)->{
+                section.setVisibility(checked?View.VISIBLE:View.GONE);
+                if(preview!=null)preview.setText(
+                    T1OptimizedModePolicy.roadName(road)+" 2 "+
+                    (checked?"habilitada":"deshabilitada")+
+                    " · tocá GUARDAR LOS 4 PERFILES para aplicar");
+            });
+        section.setVisibility(parentProfile.secondEnabled.isChecked()?
+            View.VISIBLE:View.GONE);
+        syncStrategy.run();
+    }
+
     @Override protected void onCreate(Bundle state){
         super.onCreate(state);
         ScrollView scroll=new ScrollView(this);scroll.setFillViewport(true);
@@ -255,11 +379,19 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         LinearLayout root=vertical();root.setPadding(12,6,12,26);
         scroll.addView(root);
         LinearLayout title=horizontal();root.addView(title);
-        column(title,text("MODO OPTIMIZADO · 4 PERFILES",20,Color.WHITE,true),1);
+        column(title,text("MODO OPTIMIZADO · CIUDAD 1/2 · CARRETERA 1/2 · "+
+            "AUTOPISTA 1/2 · DESCONOCIDO 1/2",
+            18,Color.WHITE,true),1);
         Button close=new Button(this);close.setAllCaps(false);close.setText("VOLVER");
         T1JetourTheme.button(close,T1JetourTheme.PANEL_HI);
         close.setOnClickListener(v->finish());title.addView(close);
-        root.addView(text("MODO OPTIMIZADO automático según el camino: "+
+        root.addView(text("Cada vía tiene reglas independientes 1 y 2. "+
+            "Pueden ejecutarse sucesivamente: por ejemplo AUTOPISTA 1 "+
+            "con SOC ≥70%, mantener EV mientras cae a 60, 50 y 40%, "+
+            "y recién pasar a AUTOPISTA 2 con SOC ≤30%. Una vez en "+
+            "regla 2 se conserva hasta una nueva condición. "+
+            "Sin coincidencia previa no se cambia el vehículo. "+
+            "MODO OPTIMIZADO automático según el camino: "+
             "EV/HEV/EV MAX (1043), SMART/FORZADO (1040), objetivo SOC (1041) "+
             "y regeneración (1046). Los perfiles cambian mientras circulás "+
             "en D sin obligarte a detenerte. Cada bloque de vía tiene "+
@@ -317,7 +449,7 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
                 "Elegí un porcentaje del menú (5 a 100 %).");
         return PCT_MIN+PCT_STEP*spinner.getSelectedItemPosition();
     }
-    private T1OptimizedModePolicy.Rule fromControls(Profile p){
+    private T1OptimizedModePolicy.Rule fromControls(RuleEditor p){
         T1OptimizedModePolicy.Power power=T1OptimizedModePolicy.Power.values()[
             p.power.getSelectedItemPosition()];
         T1OptimizedModePolicy.Strategy strategy=
@@ -339,17 +471,35 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
     }
     private boolean saveProfiles(){
         try{
-            EnumMap<T1OptimizedModePolicy.Road,T1OptimizedModePolicy.Rule> next=
+            EnumMap<T1OptimizedModePolicy.Road,T1OptimizedModePolicy.Rule> first=
                 new EnumMap<>(T1OptimizedModePolicy.Road.class);
-            for(T1OptimizedModePolicy.Road r:T1OptimizedModePolicy.Road.values())
-                next.put(r,fromControls(profiles.get(r)));
-            for(T1OptimizedModePolicy.Road r:next.keySet()){
-                T1OptimizedModeStore.save(this,r,next.get(r));
-                T1OptimizedModeStore.setEnabled(this,r,
-                    profiles.get(r).blockEnabled.isChecked());
+            EnumMap<T1OptimizedModePolicy.Road,T1OptimizedModePolicy.Rule> second=
+                new EnumMap<>(T1OptimizedModePolicy.Road.class);
+            // Validate ALL eight rules before changing stored preferences.
+            for(T1OptimizedModePolicy.Road r:T1OptimizedModePolicy.Road.values()){
+                Profile editor=profiles.get(r);
+                T1OptimizedModePolicy.Rule a=fromControls(editor);
+                T1OptimizedModePolicy.Rule c=fromControls(editor.second);
+                if(editor.secondEnabled.isChecked()&&
+                   T1OptimizedDualRulePolicy.overlaps(a,c))
+                    throw new IllegalArgumentException(
+                        T1OptimizedModePolicy.roadName(r)+
+                        ": los rangos de REGLA 1 y REGLA 2 se superponen. "+
+                        "Separá los umbrales para evitar órdenes contradictorias.");
+                first.put(r,a);
+                second.put(r,c);
             }
-            preview.setText("GUARDADOS LOS CUATRO PERFILES · "+
-                "cada bloque desactivado ignora 1043/1040/1041/1046. "+
+            for(T1OptimizedModePolicy.Road r:first.keySet()){
+                Profile editor=profiles.get(r);
+                T1OptimizedModeStore.save(this,r,first.get(r));
+                T1OptimizedModeStore.saveSecond(this,r,second.get(r),
+                    editor.secondEnabled.isChecked());
+                T1OptimizedModeStore.setEnabled(this,r,
+                    editor.blockEnabled.isChecked());
+            }
+            preview.setText("GUARDADAS LAS 8 REGLAS (1 Y 2 POR VÍA) · "+
+                "cada activación se recuerda hasta el siguiente umbral; "+
+                "sin coincidencia inicial no se envía ninguna orden OEM. "+
                 "1043/1040/1041/1046 automáticos en P o D con "+
                 "lectura OEM confirmada.\n"+
                 currentRecommendation());
@@ -479,10 +629,26 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
             return "VÍA: "+T1OptimizedModePolicy.roadName(road)+
                 " · PERFIL DESACTIVADO. No se ejecutan órdenes OEM "+
                 "ni respaldo automático de este bloque.";
-        T1OptimizedModePolicy.Decision result=T1OptimizedModePolicy.evaluate(
-            road,T1OptimizedModeStore.get(this,road),soc);
+        T1OptimizedModePolicy.Road actuallyApplied=
+            T1OptimizedAutoService.verifiedAppliedRoad(this);
+        String appliedLabel=T1OptimizedAutoService.verifiedAppliedBranchLabel(this);
+        int previous=actuallyApplied==road&&"1".equals(appliedLabel)?
+            T1OptimizedDualRulePolicy.PRIMARY:
+            actuallyApplied==road&&"2".equals(appliedLabel)?
+                T1OptimizedDualRulePolicy.SECONDARY:
+                T1OptimizedDualRulePolicy.NONE;
+        T1OptimizedDualRulePolicy.Choice choice=
+            T1OptimizedDualRulePolicy.selectWithHold(
+                T1OptimizedModeStore.get(this,road),
+                T1OptimizedModeStore.getSecond(this,road),
+                T1OptimizedModeStore.secondEnabled(this,road),soc,previous);
+        String outcome=choice.held?
+            "MANTENER "+choice.title(road)+" · sin cambios OEM en el rango intermedio":
+            choice.matched()?choice.title(road)+" · "+
+                T1OptimizedModePolicy.evaluate(road,choice.rule,soc).summary():
+                choice.reason+" · mantener modo actual sin cambios";
         return "VÍA: "+T1OptimizedModePolicy.roadName(road)+
-            " · "+info+"\n"+result.summary()+
+            " · "+info+"\n"+outcome+
             "\nAUTO: 1043/1040/1041/1046 por tipo de vía. "+
             "Los cambios de regeneración pueden ocurrir en movimiento "+
             "cuando el perfil cambia, con verificación OEM. "+

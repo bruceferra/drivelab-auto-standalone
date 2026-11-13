@@ -318,6 +318,38 @@ jobs:
           grep -Fq 'T1TripRecorderService.tripDir(app)' "$store"
           grep -Fq 'code_diag' "$server"
           grep -Fq 'code_diag' "$client"
+      - name: Four road blocks with two independent sequential SOC rules (pure JVM)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-dual-soc-rules
+          javac -encoding UTF-8 -d /tmp/t1-dual-soc-rules \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModePolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedDualRulePolicy.java \
+            receiver/tests/T1OptimizedDualRulePolicyTest.java
+          java -cp /tmp/t1-dual-soc-rules ar.com.rango5gps.drivelabauto.receiver.T1OptimizedDualRulePolicyTest
+          python3 - <<'PY'
+          from pathlib import Path
+          d=Path('receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver')
+          auto=(d/'T1OptimizedAutoService.java').read_text()
+          store=(d/'T1OptimizedModeStore.java').read_text()
+          ui=(d/'T1OptimizedModeActivity.java').read_text()
+          header=(d/'T1GlobalToolbar.java').read_text()
+          assert 'selectWithHold(' in auto, 'last confirmed rule must be held in SOC gap'
+          assert 'if(selected.held)' in auto and 'return;' in auto, 'no writes in threshold gap'
+          assert 'heldRoad=road;' in auto and 'heldSlot=slot;' in auto, 'only confirmed OEM applied rule is held'
+          assert 'if(!selected.matched())' in auto and 'SOC SIN REGLA' in auto, 'no implicit fallback'
+          assert 'getSecond(Context c' not in store or 'getSecond(' in store, 'secondary rule storage'
+          assert 'road_"+r.name()+"_b_enabled' in store
+          assert 'saveSecond(this,r,second.get(r)' in ui
+          assert 'overlaps(a,c)' in ui
+          for n in ('CIUDAD','CARRETERA','AUTOPISTA','DESCONOCIDO'):
+              assert n in ui
+          assert 'verifiedAppliedBranchLabel(owner)' in header, 'green chip must name 1 or 2'
+          assert 'snapshot.powerMode==holdPower' in auto and 'snapshot.regen1046==holdRegen' in auto, 'read OEM when holding'
+          assert 'T1SocRegenWritePolicy.desired(rule,battery)' in auto, 'normal mode uses actual SOC'
+          print('PASS: rule 1 and 2 per road, threshold hold 69..31, no concurrent writes, specific green chip')
+          PY
       - name: Optimized road chip only after SOC, 3 GPS votes and OEM confirmation (pure JVM)
         shell: bash
         run: |
@@ -333,7 +365,7 @@ jobs:
           grep -Fq 'private static final String VERIFIED_ROAD=' "$service"
           grep -Fq 'conditions.conditionSatisfied' "$service"
           grep -Fq 'socProfileGate.recordConfirmed(targets);' "$service"
-          grep -Fq 'verifiedRoad(road,rule);' "$service"
+          grep -Fq 'verifiedRoad(road,rule,ruleSlot);' "$service"
           grep -Fq 'T1OptimizedAutoService.verifiedAppliedRoad(owner)' "$toolbar"
           ! grep -Fq 'T1OptimizedModeStore.lastRoad(owner)' "$toolbar"
           store=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeStore.java
