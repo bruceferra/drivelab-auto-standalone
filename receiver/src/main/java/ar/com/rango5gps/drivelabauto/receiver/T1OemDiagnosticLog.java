@@ -3,6 +3,9 @@ package ar.com.rango5gps.drivelabauto.receiver;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.util.Log;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.nio.charset.StandardCharsets;
 import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.Locale;
@@ -41,6 +44,38 @@ final class T1OemDiagnosticLog {
         return "DriveLab · informe EV/HEV (códigos OEM, sin GPS/VIN)\n\n"+
             "ÚLTIMO INTENTO:\n"+(r.isEmpty()?"Sin datos":r)+
             (previous.isEmpty()?"":"\nINTENTO ANTERIOR:\n"+previous);
+    }
+    /**
+     * Build a private app-owned file already accepted by the existing
+     * QR-enrolled HTTPS cloud channel. No ACTION_SEND or file chooser.
+     * Snapshot is generated only on the explicit UPLOAD button press.
+     */
+    static synchronized File exportCloudCsv(Context context)throws Exception{
+        Context app=context.getApplicationContext();
+        long capturedAt=System.currentTimeMillis();
+        String data=T1OemReportCsv.encode(report(app),capturedAt);
+        File folder=T1TripRecorderService.tripDir(app).getCanonicalFile();
+        if(!folder.isDirectory())
+            throw new java.io.IOException("Carpeta privada de diagnóstico ausente");
+        String timestamp=new SimpleDateFormat(
+            "yyyyMMdd_HHmmss",Locale.ROOT).format(new Date(capturedAt));
+        String fileName="code_diag_"+timestamp+".csv";
+        if(!T1OemReportCsv.cloudFilename(fileName))
+            throw new IllegalStateException("Nombre CSV inválido");
+        File output=new File(folder,fileName);
+        // Do not overwrite another previously captured diagnosis.
+        if(!output.createNewFile())
+            throw new IllegalStateException(
+                "Ya existe un informe de este segundo; volvé a tocar SUBIR");
+        boolean saved=false;
+        try(FileOutputStream stream=new FileOutputStream(output,false)){
+            stream.write(data.getBytes(StandardCharsets.UTF_8));
+            stream.flush();
+            saved=true;
+        }finally{
+            if(!saved)output.delete();
+        }
+        return output;
     }
     private T1OemDiagnosticLog(){}
 }
