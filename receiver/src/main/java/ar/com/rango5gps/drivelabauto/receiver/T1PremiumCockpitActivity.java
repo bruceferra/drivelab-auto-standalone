@@ -58,6 +58,12 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private TextView historyDetailTitle,historyRepairStatus;
     private String selectedHistoryKey="";
     private final AtomicBoolean historyRepairBusy=new AtomicBoolean(false);
+    private TextView liveFuelNow,liveEcoNow,historyEcoStatus;
+    private final java.util.Map<String,T1EcoTripReport.Result> ecoHistoryCache=
+        new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.Set<String> ecoHistoryPending=
+        java.util.Collections.newSetFromMap(
+            new java.util.concurrent.ConcurrentHashMap<String,Boolean>());
     private TextView tripStatus,kmNow,evKmNow,consumptionNow,clientSyncStatus,
         fuelNow,electricNow,costNow,clientNow,
         dayNow,monthNow,historyNow,zoneStatus,feedback,energyNote,
@@ -908,6 +914,18 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         electricNow=compactMetric(metrics,"ELECTRICIDAD CONSUMIDA · EXP.","—");
         costNow=compactMetric(metrics,"COSTO COMBUSTIBLE · EXP.","—");
         autonomyNow=compactMetric(metrics,"AUTONOMÍA TOTAL · EXP.","SIN DATOS");
+        liveFuelNow=text(
+            "CONSUMO RECIENTE · esperando OEM 500 m / 1085…",
+            14,T1JetourTheme.CYAN,true);
+        liveFuelNow.setPadding(12,10,12,10);
+        liveFuelNow.setBackground(bg(CARD,12));
+        root.addView(liveFuelNow);
+        liveEcoNow=text(
+            "ECO EN VIVO · esperando recorrido OSM",
+            13,WHITE,true);
+        liveEcoNow.setPadding(10,9,10,9);
+        liveEcoNow.setBackground(bg(CARD,12));
+        root.addView(liveEcoNow);
         clientSyncStatus=text("CLIENTE QR · verificando pendientes",12,MUTED,false);
         clientSyncStatus.setSingleLine(true);
         clientSyncStatus.setEllipsize(android.text.TextUtils.TruncateAt.END);
@@ -1013,6 +1031,12 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         historyDetailTitle=text("Elegí un viaje o una jornada.",14,WHITE,true);
         secondary.addView(historyDetailTitle);
         historyDetailRow=row();secondary.addView(historyDetailRow);
+        historyEcoStatus=text("ECO DEL VIAJE · seleccioná un registro",
+            12,T1JetourTheme.CYAN,false);
+        historyEcoStatus.setTextIsSelectable(true);
+        historyEcoStatus.setPadding(12,9,12,10);
+        historyEcoStatus.setBackground(bg(CARD,12));
+        secondary.addView(historyEcoStatus);
         advanced=col();advanced.setPadding(14,12,14,14);
         advanced.setBackground(bg(CARD,20));
         advanced.setVisibility(android.view.View.GONE);
@@ -1395,6 +1419,17 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             clientNow.setText("◉ "+T1JourneyStore.pendingLabel(this)+
                 " · 0,00 km · preparando grabación");
         }else clientNow.setText("○ Sin cliente activo · listo para iniciar");
+        if(liveEcoNow!=null){
+            int ecoScope=selectedScope==0?0:selectedScope==2?2:1;
+            String liveText=T1EcoTripMonitor.live(this,ecoScope);
+            if(!liveText.contains(" · sin registro activo")&&
+               !liveText.contains("sin muestra reciente"))
+                liveEcoNow.setText(liveText);
+            else liveEcoNow.setText(T1EcoTripMonitor.live(this,0)+
+                (ecoScope!=0?"
+(El viaje seleccionado todavía no tiene "+
+                    "muestras propias)":""));
+        }
         if(System.currentTimeMillis()-lastTotals>5000){
             lastTotals=System.currentTimeMillis();
             updateHistory();
@@ -1449,16 +1484,17 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             all.add(new HistoryRecord(0,e.id,
                 "JORNADA "+e.id+" · "+e.status,
                 e.started,e.ended,e.km,e.originalKm,e.evKm,e.liters,
-                e.electricityKwh,experimentalCost,e.corrected,false,e.fuelEvents));
+                e.electricityKwh,experimentalCost,e.corrected,false,
+                e.fuelEvents,e.id));
         }
         for(T1JourneyStore.Entry e:T1JourneyStore.history(this))
             all.add(new HistoryRecord(1,e.id,e.label,e.started,e.ended,
                 e.km,e.originalKm,e.evKm,e.liters,e.electricNet,e.fuelCost,
-                e.correctedKm,e.estimatedDistance,e.fuelEvents));
+                e.correctedKm,e.estimatedDistance,e.fuelEvents,e.tripId));
         for(T1JourneyStore2.Entry e:T1JourneyStore2.history(this))
             all.add(new HistoryRecord(2,e.id,e.label,e.started,e.ended,
                 e.km,e.originalKm,e.evKm,e.liters,e.electricNet,e.fuelCost,
-                e.correctedKm,e.estimatedDistance,e.fuelEvents));
+                e.correctedKm,e.estimatedDistance,e.fuelEvents,e.tripId));
         all.sort((a,b)->Long.compare(b.ended,a.ended));
         SimpleDateFormat dt=new SimpleDateFormat("dd/MM HH:mm",Locale.getDefault());
         StringBuilder summary=new StringBuilder();
@@ -1508,6 +1544,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             else{
                 historyDetailTitle.setText("Sin viajes ni jornadas cerradas");
                 historyDetailRow.removeAllViews();
+                if(historyEcoStatus!=null)
+                    historyEcoStatus.setText("ECO DEL VIAJE · sin registro");
             }
         }
         if(historyRepairStatus!=null&&!historyRepairBusy.get()){
@@ -1553,15 +1591,16 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     }
     private static final class HistoryRecord {
         final int slot,fuelEvents;
-        final String id,label;
+        final String id,label,tripChain;
         final long started,ended;
         final double km,oldKm,evKm,liters,kwh,cost;
         final boolean corrected,estimated;
         HistoryRecord(int slot,String id,String label,long started,long ended,
                       double km,double oldKm,double evKm,double liters,
                       double kwh,double cost,boolean corrected,
-                      boolean estimated,int events){
+                      boolean estimated,int events,String chain){
             this.slot=slot;this.id=id;this.label=label;
+            this.tripChain=chain;
             this.started=started;this.ended=ended;
             this.km=km;this.oldKm=oldKm;this.evKm=evKm;
             this.liters=liters;this.kwh=kwh;this.cost=cost;
@@ -1599,6 +1638,38 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         // Historical end-of-trip range was not persisted. Never substitute
         // the current vehicle's autonomy into a completed trip.
         compactMetric(historyDetailRow,"AUTONOMÍA TOTAL","NO GUARDADA");
+        if(historyEcoStatus==null)return;
+        final String key=x.key();
+        T1EcoTripReport.Result cached=ecoHistoryCache.get(key);
+        if(cached!=null){
+            historyEcoStatus.setText("ECO DEL VIAJE · "+
+                cached.summary());
+            return;
+        }
+        historyEcoStatus.setText("Analizando OSM, velocidades por 5 km/h "+
+            "y conducción del viaje seleccionado…");
+        if(!ecoHistoryPending.add(key))return;
+        new Thread(()->{
+            T1EcoTripReport.Result result;
+            try{
+                result=T1EcoTripReport.analyze(
+                    getApplicationContext(),x.tripChain,x.started,x.ended);
+            }catch(Exception ex){
+                result=new T1EcoTripReport.Result(
+                    new T1EcoTripMetrics(),
+                    "No se pudo analizar: "+
+                        ex.getClass().getSimpleName(),true);
+            }
+            ecoHistoryCache.put(key,result);
+            ecoHistoryPending.remove(key);
+            final T1EcoTripReport.Result shown=result;
+            ui.post(()->{
+                if(visible&&key.equals(selectedHistoryKey)&&
+                   historyEcoStatus!=null)
+                    historyEcoStatus.setText("ECO DEL VIAJE · "+
+                        shown.summary());
+            });
+        },"T1-Historical-Eco-OSM").start();
     }
     private void runHistoryRepair(){runHistoryRepair(true);}
     private void runHistoryRepair(boolean manual){
