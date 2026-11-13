@@ -1,7 +1,8 @@
 package ar.com.rango5gps.drivelabauto.receiver;
 
-import android.app.Activity;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.SystemClock;
 import android.view.KeyEvent;
 import android.view.View;
@@ -19,8 +20,26 @@ import java.util.Locale;
  * Captures only when this activity has focus and vehicle is safely in P.
  * NEVER turns a wheel press into a powertrain/vehicle command.
  */
-public final class T1SteeringKeysActivity extends Activity {
-    private TextView output;
+public final class T1SteeringKeysActivity extends T1ImmersiveActivity {
+    @Override protected int overlayClearBackgroundColor(){return 0xFF091421;}
+    private TextView output,countdown;
+    private final Handler ui=new Handler(Looper.getMainLooper());
+    private final Runnable timer=new Runnable(){
+        @Override public void run(){
+            if(!enabled)return;
+            long left=Math.max(0,endsAt-SystemClock.elapsedRealtime());
+            if(countdown!=null)countdown.setText("CAPTURA ACTIVA · "+
+                ((left+999)/1000)+" s restantes · "+count+
+                " eventos capturados. Un cero significa sin teclas recibidas, "+
+                "no que el botón de iniciar falló.");
+            if(left==0){
+                enabled=false;
+                report.append("FIN_90_SEGUNDOS;eventos=").append(count).append('\n');
+                if(output!=null)output.append("\nFIN DEL REGISTRO · "+count+
+                    " eventos. Compartí el informe, incluso con cero.");
+            }else ui.postDelayed(this,1000L);
+        }
+    };
     private final StringBuilder report=new StringBuilder(
         "DriveLab · botones volante Android · SOLO LECTURA\n");
     private boolean enabled;
@@ -47,6 +66,21 @@ public final class T1SteeringKeysActivity extends Activity {
         start.setAllCaps(false);
         start.setOnClickListener(v->startCapture());
         root.addView(start);
+        countdown=new TextView(this);
+        countdown.setTextColor(0xFFB9CDDB);countdown.setTextSize(16);
+        countdown.setText("Detenido · ningún registro iniciado");
+        root.addView(countdown);
+        Button selfTest=new Button(this);
+        selfTest.setText("COMPROBAR BOTÓN TÁCTIL (SIN VOLANTE)");
+        selfTest.setAllCaps(false);
+        selfTest.setOnClickListener(v->{
+            output.setText("OK: este botón de la pantalla funciona. " +
+                "Si los botones físicos no llegan al contador, la ROM OEM " +
+                "puede interceptar los KeyEvent de la app.");
+            countdown.setText(enabled?"CAPTURA SIGUE ACTIVA · "+count+
+                " eventos recibidos":"TOQUE EN PANTALLA RECIBIDO · listo para iniciar");
+        });
+        root.addView(selfTest);
         Button share=new Button(this);share.setText("COMPARTIR INFORME VOLANTE");
         share.setAllCaps(false);
         share.setOnClickListener(v->share());
@@ -61,25 +95,31 @@ public final class T1SteeringKeysActivity extends Activity {
         setContentView(root);root.requestFocus();
     }
     private void startCapture(){
-        T1TripTelemetry.Sample s=new T1TripTelemetry(this).snapshot();
-        // Read-only KeyEvent monitoring is safe without an OEM Binder result.
-        // Earlier this refused to start when 1033/2148 were temporarily
-        // missing even though the T1 was actually parked in P.
-        // Show evidence, never issue gear or propulsion commands.
-        String verified=(s.gear==1&&Double.isFinite(s.speed)&&
-            s.speed>=0&&s.speed<1)?"P y 0 km/h por OEM":
-            "Estado OEM no confirmado (1033="+s.gear+
-            ", 2148="+s.speed+"). Usar solo estacionado en P.";
-
+        // Never block the touch handler with an OEM Binder call.
+        // The old synchronous snapshot could make INICIAR look dead.
+        ui.removeCallbacks(timer);
         report.setLength(0);
         report.append("DriveLab · volante T1 · Android KeyEvent\n");
         report.append("inicio_epoch_ms=").append(System.currentTimeMillis()).append('\n');
-        report.append("Verificación: ").append(verified)
-            .append("; sin comandos vehículo\n");
         enabled=true;count=0;
         endsAt=SystemClock.elapsedRealtime()+90000L;
-        output.setText("GRABANDO · 90 s. "+verified+
-            "\nProbá OK, Atrás, ruedita + y −.\n");
+        output.setText("● GRABANDO · 90 segundos iniciados desde la pantalla. " +
+            "Pulsa cada tecla del volante de a una.\n");
+        countdown.setText("CAPTURA ACTIVA · 90 s · 0 eventos");
+        ui.post(timer);
+        new Thread(()->{
+            T1TripTelemetry.Sample s=new T1TripTelemetry(this).snapshot();
+            String verified=(s.gear==1&&Double.isFinite(s.speed)&&
+                s.speed>=0&&s.speed<1)?"P y 0 km/h por OEM":
+                "Estado OEM no confirmado (1033="+s.gear+
+                ", 2148="+s.speed+"). Usar solo en P, detenido.";
+            runOnUiThread(()->{
+                if(isFinishing()||isDestroyed())return;
+                report.append("Verificación diferida: ").append(verified)
+                    .append("; sin comandos vehículo\n");
+                if(output!=null)output.append("\nEstado OEM: "+verified+"\n");
+            });
+        },"T1-Steering-Async-ReadOnly").start();
     }
     @Override public boolean dispatchKeyEvent(KeyEvent event){
         if(enabled){
@@ -107,15 +147,22 @@ public final class T1SteeringKeysActivity extends Activity {
     }
     private void share(){
         enabled=false;
-        if(count==0){
-            output.setText("Sin teclas capturadas. No se subió informe vacío. "+
-                "Si T1Launcher recibe el botón pero DriveLab no, "+
-                "el sistema reserva ese evento o no lo entrega a nuestra Activity.");
-            return;
-        }
+        ui.removeCallbacks(timer);
         report.append("total_eventos=").append(count).append('\n');
-        output.append("\nSUBIENDO "+count+" eventos a Supabase…");
+        if(count==0)report.append("NINGUN_KEYEVENT_RECIBIDO; " +
+            "verificar si botones son exclusivos del servicio OEM\n");
+        countdown.setText("CAPTURA DETENIDA · "+count+" eventos");
+        output.append("\nGUARDANDO "+count+" eventos; si el total es " +
+            "cero, el informe igualmente es útil para diagnosticar.\n");
         T1ReportShare.share(this,"teclas_volante",report.toString(),
             status->{if(!isFinishing()&&!isDestroyed())output.append("\n"+status);});
+    }
+    @Override protected void onPause(){
+        if(enabled){
+            enabled=false;
+            report.append("PAUSA_PANTALLA;eventos=").append(count).append('\n');
+        }
+        ui.removeCallbacks(timer);
+        super.onPause();
     }
 }
