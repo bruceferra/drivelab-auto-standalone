@@ -9,8 +9,9 @@ final class T1SocRegenWritePolicy {
     static final int STRATEGY=1040,TARGET=1041,REGEN=1046;
     static final int SMART=2,FORCED=4;
     static final int REGEN_LOW=1,REGEN_MEDIUM=2,REGEN_HIGH=3;
-    private static final int[] SOC_PRESETS={20,30,40,48,50,56,60,64,70,72};
-    /** The sole allowlist for both 1041 OEM writes and FORZADO UI menus. */
+    private static final int[] SOC_PRESETS={20,30,40,50,60,70};
+    /** Requested 20..70 multiples-of-ten UI reference presets only.
+     * Automatic 1040/1041/1046 OEM writes are DISABLED pending calibration. */
     static int[] forcedSocPresets(){
         return SOC_PRESETS.clone();
     }
@@ -38,7 +39,7 @@ final class T1SocRegenWritePolicy {
         if(id==STRATEGY)return current==SMART?FORCED:SMART;
         if(id==REGEN)return current==REGEN_LOW?REGEN_MEDIUM:REGEN_LOW;
         // Real OEM presets from the APK; never guess a percentage code.
-        if(id==TARGET)return current==56?64:56;
+        if(id==TARGET)return -1; // Never invent an alternate/rollback 1041 target.
         return -1;
     }
     static final class Targets{
