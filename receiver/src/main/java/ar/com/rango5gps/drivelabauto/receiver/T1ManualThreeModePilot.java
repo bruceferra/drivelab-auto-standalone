@@ -20,6 +20,9 @@ import java.util.function.BooleanSupplier;
  * modes while in D. D write from DriveLab remains an EXPERIMENT and the OEM
  * VehicleService may reject it; never claim D acceptance until observed.
  *
+ * EV from HEV FORZADO first sends and confirms 1040=2 SMART, then requests
+ * 1043=1 EV only if gear/speed remain eligible. EV MAX (1043=3) already
+ * clears FORZADO in the OEM and skips that pre-SMART step entirely.
  * Two fresh direct OEM preflight readings are mandatory: stable 1033=1 and
  * exactly 0 km/h, OR stable 1033=4 with finite plausible speed 0..160 km/h.
  * No pedal requirement: 3011 brake status is diagnostic only (0/1).
@@ -142,6 +145,9 @@ final class T1ManualThreeModePilot {
     private void ensureSmartBeforeEv(IBinder b,int powerTarget,
                                      BooleanSupplier enabled)throws Exception{
         if(powerTarget!=1)return;
+        if(T1SocRegenPilot.oemSocWriteInProgress())
+            throw new IllegalStateException(
+                "Otro cambio de SOC está en curso; no liberar FORZADO ni pedir EV");
         int before=readInt(b,1040);
         T1OemDiagnosticLog.add(app,"EV_PRE_SMART_LECTURA",
             "1043 objetivo EV; 1040 estrategia actual="+before+
