@@ -80,6 +80,7 @@
         <!-- Optional premium cockpit, never a default HOME nor OEM control surface. -->
         <activity android:name=".T1PremiumCockpitActivity" android:exported="false" />
         <activity android:name=".T1OptimizedModeActivity" android:exported="false" />
+        <activity android:name=".T1VoiceRouteActivity" android:exported="false" />
         <activity android:name=".T1WhatIfActivity" android:exported="false" />
         <!-- Isolated historical/read-only T1 fuel dashboard; no OEM writes. -->
         <activity android:name=".T1TankDashboardActivity" android:exported="false" />

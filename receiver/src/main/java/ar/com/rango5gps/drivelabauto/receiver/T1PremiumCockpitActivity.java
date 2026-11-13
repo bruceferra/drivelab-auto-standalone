@@ -738,6 +738,14 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         title.addView(text("DRIVELAB / T1",19,WHITE,true));
         title.addView(text("COCKPIT · build OEM "+getPackageVersion(),12,MUTED,false));
         top.addView(title,new LinearLayout.LayoutParams(0,-2,1));
+        Button microphone=new Button(this);
+        microphone.setAllCaps(false);
+        microphone.setTextSize(12);
+        microphone.setText("🎤 DESTINO");
+        microphone.setContentDescription("Dictar destino para Waze del clúster");
+        microphone.setOnClickListener(v->startActivity(new Intent(this,
+            T1VoiceRouteActivity.class)));
+        top.addView(microphone,new LinearLayout.LayoutParams(-2,52));
         Button displaySettings=new Button(this);
         displaySettings.setAllCaps(false);
         displaySettings.setTextSize(12);

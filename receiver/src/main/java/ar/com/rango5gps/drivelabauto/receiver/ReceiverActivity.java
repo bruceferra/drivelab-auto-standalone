@@ -98,6 +98,8 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
             });
         button(body,"VEHÍCULO · VENTANILLAS / ENERGÍA / CODE",()->
             startActivity(new Intent(this,ReceiverVehicleActivity.class)));
+        button(body,"🎤 DESTINO POR VOZ · WAZE CLÚSTER",()->
+            startActivity(new Intent(this,T1VoiceRouteActivity.class)));
         button(body,"COCKPIT T1 · JORNADA / CLIENTES / COSTOS",()->
             startActivity(new Intent(this,T1PremiumCockpitActivity.class)));
         button(body,"TABLERO T1 · TANQUES / CONSUMO / TELEMETRÍA",()->

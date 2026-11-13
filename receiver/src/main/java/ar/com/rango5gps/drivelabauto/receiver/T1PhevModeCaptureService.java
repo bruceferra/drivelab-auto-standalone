@@ -146,6 +146,7 @@ public final class T1PhevModeCaptureService extends Service {
     private static String nameSoc(String raw){
         if("2".equals(raw))return "SMART (confirmado T1)";
         if("4".equals(raw))return "FORZADO / CHARGE (confirmado T1)";
+        if("3".equals(raw))return "AUTO (enum OEM; no confirmado físicamente)";
         return "sin mapa confirmado";
     }
     private static String nameRegen(String raw){
