@@ -23,6 +23,22 @@ Se crean estas clases nuevas:
 - El Cockpit muestra los porcentajes y Eco Score en vivo; en el historial se muestran % y km de cada vía, bandas de 5 km/h con km y duración, y el detalle del puntaje por cada viaje. La lectura pesada ocurre en background y no en la interfaz.
 - **Calidad**: si falta el mapa, el GPS es ambiguo o hay demasiadas muestras inválidas, la vía es `SIN CLASIFICAR` y el rating puede ser `ECO N/D`. No inferir automáticamente categoría por ir a 130 km/h. Historial reconstruido indica cobertura parcial.
 
+### Desglose vial en SEIS estados: normal / congestión probable
+
+Se amplía la clasificación en vivo, Viaje Total, Viaje 1, Viaje 2 y los detalles de históricos a:
+
+1. CIUDAD NORMAL vs CIUDAD CONGESTIONADA.
+2. CARRETERA NORMAL vs CARRETERA CONGESTIONADA.
+3. AUTOPISTA NORMAL vs AUTOPISTA CONGESTIONADA.
+
+La **base del tipo de vía** sigue siendo 100% geometría OSM (no se deduce por velocidad), y usa `maxspeed` publicado por OSM cuando existe, o una velocidad de referencia heurística por clase de vía cuando no existe. Cada intervalo de velocidad OEM queda clasificado en flujo normal o *congestión probable*, solo después de una secuencia de circulación lenta en la misma categoría: **35 s ciudad, 25 s carretera, 20 s autopista**. Las detenciones más cortas en semáforos o rampas se mantienen en NORMAL provisional. Se conserva el porcentaje SIN CLASIFICAR cuando el GPS o la vía no son concluyentes; nunca se convierte en ciudad por defecto.
+
+Los porcentajes normal/congestionada se calculan sobre **todos los km válidos del viaje** (sumar las seis categorías más sin clasificar da 100% aproximadamente, salvo redondeo); cada fila contiene también km y minutos. Se incluye la fracción de **tiempo** lento dentro de cada vía: un atasco parado puede consumir mucho tiempo aunque sume pocos kilómetros.
+
+Los límites OSM y el tráfico real no son lo mismo: la app **infiere congestión probable**, no recibe reportes Waze ni un feed de tráfico. No confundir baja velocidad sostenida por obras, rampas, clima o conducción prudente con congestión verificada. Es una clasificación experimental/comparable de los recorridos, no información vial oficial.
+
+Se agregó `T1TrafficFlowPolicy.java` y `T1TrafficFlowPolicyTest.java`. El sidecar ahora guarda `osm_limit_kmh`, con lector compatible con el formato anterior de 6 columnas; nunca almacena lat/lon.
+
 ### Eco Score v1 (0–10)
 
 Se calcula únicamente cuando existen al menos 2 km, 120 s y 12 intervalos de calidad, cobertura OSM mínima 50% y aceleraciones válidas en 55% del tiempo. Penaliza la duración y frecuencia de aceleraciones/deceleraciones bruscas (de velocidad OEM), ajustadas por fracción urbana. Conducción en autopista **no recibe penalización fija**: es una métrica de suavidad de conducción contextualizada. El coste real nafta+red o eficiencia de combustible NO se incorpora hasta disponer de medición de combustible calibrada; así se evita asignar un supuesto rating energético a partir de datos experimentales.
