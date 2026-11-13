@@ -277,7 +277,8 @@ jobs:
           pedestrian=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/PedestrianAlertControl.java
           grep -Fq 'roadModeButton.setOnClickListener(null);' "$global"
           grep -Fq 'T1OptimizedAutoService.verifiedAppliedRoad(owner)' "$global"
-          grep -Fq 'roadModeButton.setText("MODO "+road);' "$global"
+          grep -Fq 'roadModeButton.setText("MODO "+road+' "$global"
+          grep -Fq 'verifiedAppliedBranchLabel(owner)' "$global"
           grep -Fq 'T1OptimizedModeStore.markReading(this,' "$map"
           grep -Fq '!T1OptimizedModeStore.isEnabled(this,road)' "$map"
           grep -Fq 'socProfileGate.reset();' "$map"
