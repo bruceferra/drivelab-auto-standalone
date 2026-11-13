@@ -13,6 +13,7 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
+import android.widget.NumberPicker;
 import android.widget.TextView;
 
 /**
@@ -29,7 +30,7 @@ final class T1GlobalToolbar {
     private final PedestrianAlertControl avas;
     private final LinearLayout container;
     private final Button[] modes=new Button[3];
-    private Button optimizer,mirrorButton,airButton,avsButton,roadModeButton;
+    private Button optimizer,mirrorButton,mirrorAutoButton,airButton,avsButton,roadModeButton;
     private TextView info;
     private boolean foreground;
     private long lastPoll=0, lastDevicesPoll=0;
@@ -129,6 +130,12 @@ final class T1GlobalToolbar {
             this::toggleAuto);
         button(actions,"CONFIGURAR OPT.",T1JetourTheme.PANEL_HI,140,
             ()->navigate(T1OptimizedModeActivity.class));
+        // Reverse parking automation is NOT the fold/unfold control.
+        // Keep AUTO/MANUAL and configuration always visible on every Receiver screen.
+        mirrorAutoButton=button(actions,"REVERSA · ESTADO",T1JetourTheme.PANEL_HI,166,
+            this::toggleMirrorAuto);
+        button(actions,"CONFIG. ESPEJOS R",T1JetourTheme.PANEL_HI,168,
+            this::configureReverseMirrors);
         mirrorButton=button(actions,"ESPEJOS · LEER",T1JetourTheme.PANEL_HI,150,
             this::toggleMirror);
         avsButton=button(actions,"PEATÓN · LEYENDO",T1JetourTheme.PANEL_HI,135,
@@ -192,6 +199,7 @@ final class T1GlobalToolbar {
         T1JetourTheme.button(optimizer,automatic?
             T1JetourTheme.GREEN_BUTTON:T1JetourTheme.RED_BUTTON);
         refreshRoadMode(automatic);
+        refreshMirrorAuto();
         SharedPreferences air=owner.getSharedPreferences(
             RecirculationGuardService.PREFS,Context.MODE_PRIVATE);
         boolean interior=RecirculationGuardService.MODE_INTERIOR.equals(
@@ -310,6 +318,130 @@ final class T1GlobalToolbar {
                 note(result);
             }).show();
     }
+    /** Auto tilt is a distinct feature from OEM folding. Preferences are
+     * read every refresh; green is reserved for an actual live heartbeat. */
+    private void refreshMirrorAuto(){
+        if(mirrorAutoButton==null)return;
+        SharedPreferences p=owner.getSharedPreferences(
+            MirrorAutomationService.PREFS,Context.MODE_PRIVATE);
+        boolean auto=p.getBoolean(MirrorAutomationService.AUTO,false);
+        boolean service=p.getBoolean(MirrorAutomationService.SERVICE_ACTIVE,false);
+        long age=System.currentTimeMillis()-p.getLong(
+            MirrorAutomationService.LAST_POLL,0L);
+        boolean healthy=auto&&service&&age>=0&&age<=8000;
+        mirrorAutoButton.setText(healthy?"REVERSA AUTO ✓":
+            auto?"REVERSA AUTO · REVISAR":"REVERSA MANUAL");
+        T1JetourTheme.button(mirrorAutoButton,healthy?
+            T1JetourTheme.GREEN_BUTTON:auto?
+            T1JetourTheme.AMBER_BUTTON:T1JetourTheme.PANEL_HI);
+        mirrorAutoButton.setContentDescription(auto?
+            (healthy?"Espejos reversa AUTO activo. Tocar para desactivar":
+                "Espejos reversa AUTO solicitado, servicio sin confirmar. Tocar para desactivar"):
+            "Espejos reversa MANUAL. Tocar para activar AUTO R");
+    }
+    private void toggleMirrorAuto(){
+        SharedPreferences p=owner.getSharedPreferences(
+            MirrorAutomationService.PREFS,Context.MODE_PRIVATE);
+        if(p.getBoolean(MirrorAutomationService.AUTO,false)){
+            try{
+                owner.startService(new Intent(owner,MirrorAutomationService.class)
+                    .setAction(MirrorAutomationService.ACTION_MANUAL));
+                note("ESPEJOS REVERSA · desactivación solicitada");
+                main.postDelayed(this::refreshMirrorAuto,500);
+            }catch(Exception ex){
+                note("Espejos: no se pudo desactivar AUTO · "+
+                    ex.getClass().getSimpleName());
+            }
+            return;
+        }
+        new AlertDialog.Builder(owner).setTitle("ACTIVAR ESPEJOS AUTOMÁTICOS EN R")
+            .setMessage("Ajustá antes ambos espejos para conducir en D. "+
+                "La app NO mide su ángulo: al detectar una NUEVA entrada a "+
+                "R detenido enviará los pasos configurados, y al volver a D "+
+                "estable durante 800 ms intentará subir los mismos pasos. "+
+                "Comprobá físicamente la primera maniobra, con el vehículo detenido "+
+                "y sin obstáculos.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("ACTIVAR AUTO R",(dialog,which)->{
+                try{
+                    owner.startForegroundService(new Intent(owner,
+                        MirrorAutomationService.class)
+                        .setAction(MirrorAutomationService.ACTION_AUTO));
+                    note("ESPEJOS REVERSA · activación solicitada; verificando servicio");
+                    main.postDelayed(this::refreshMirrorAuto,650);
+                }catch(Exception ex){
+                    note("Espejos: AUTO no iniciado · "+
+                        ex.getClass().getSimpleName());
+                }
+            }).show();
+    }
+    private void configureReverseMirrors(){
+        SharedPreferences p=owner.getSharedPreferences(
+            MirrorAutomationService.PREFS,Context.MODE_PRIVATE);
+        LinearLayout body=new LinearLayout(owner);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(dp(18),dp(9),dp(18),dp(9));
+        TextView diagnostic=new TextView(owner);
+        boolean on=p.getBoolean(MirrorAutomationService.AUTO,false);
+        long age=System.currentTimeMillis()-p.getLong(
+            MirrorAutomationService.LAST_POLL,0L);
+        boolean live=p.getBoolean(MirrorAutomationService.SERVICE_ACTIVE,false)
+            &&age>=0&&age<=8000;
+        diagnostic.setText("MODO: "+(on?"AUTO":"MANUAL")+
+            " · SERVICIO: "+(live?"ACTIVO":"SIN LATIDO RECIENTE")+
+            "\nÚLTIMA MARCHA: "+p.getInt(MirrorAutomationService.LAST_GEAR,-1)+
+            " · VELOCIDAD: "+p.getString(MirrorAutomationService.LAST_SPEED,"SIN DATO")+
+            "\nESTADO: "+p.getString(MirrorAutomationService.STATUS,"SIN ESTADO")+
+            "\nPOSICIÓN: "+p.getString(MirrorAutomationService.POSITION,"NO MEDIDA")+
+            "\nÚLTIMO ERROR: "+p.getString(MirrorAutomationService.LAST_ERROR,"NINGUNO")+
+            "\nÚLTIMA TRANSICIÓN: "+
+                p.getString(MirrorAutomationService.LAST_TRANSITION,"NINGUNA")+
+            "\n\nPasos relativos (1 a 20) por espejo, sin sensor de ángulo. "+
+            "Para modificar, primero desactivá AUTO R desde la barra.");
+        diagnostic.setTextSize(14);
+        diagnostic.setTextColor(android.graphics.Color.DKGRAY);
+        body.addView(diagnostic);
+        LinearLayout pickers=new LinearLayout(owner);
+        pickers.setGravity(Gravity.CENTER);
+        body.addView(pickers);
+        NumberPicker left=new NumberPicker(owner);
+        left.setMinValue(1);left.setMaxValue(MirrorParkingPolicy.MAX_PULSES_PER_SIDE);
+        left.setValue(Math.max(1,Math.min(MirrorParkingPolicy.MAX_PULSES_PER_SIDE,
+            p.getInt(MirrorAutomationService.LEFT,2))));
+        left.setContentDescription("Pasos espejo izquierdo");
+        NumberPicker right=new NumberPicker(owner);
+        right.setMinValue(1);right.setMaxValue(MirrorParkingPolicy.MAX_PULSES_PER_SIDE);
+        right.setValue(Math.max(1,Math.min(MirrorParkingPolicy.MAX_PULSES_PER_SIDE,
+            p.getInt(MirrorAutomationService.RIGHT,2))));
+        right.setContentDescription("Pasos espejo derecho");
+        TextView labelLeft=new TextView(owner);
+        labelLeft.setText("IZQ");
+        labelLeft.setTextColor(android.graphics.Color.DKGRAY);
+        TextView labelRight=new TextView(owner);
+        labelRight.setText("DER");
+        labelRight.setTextColor(android.graphics.Color.DKGRAY);
+        pickers.addView(labelLeft);
+        pickers.addView(left,new LinearLayout.LayoutParams(dp(90),dp(115)));
+        pickers.addView(labelRight);
+        pickers.addView(right,new LinearLayout.LayoutParams(dp(90),dp(115)));
+        android.widget.ScrollView scroll=new android.widget.ScrollView(owner);
+        scroll.addView(body);
+        new AlertDialog.Builder(owner).setTitle("CONFIGURAR ESPEJOS · REVERSA R")
+            .setView(scroll).setNegativeButton("CERRAR",null)
+            .setPositiveButton("GUARDAR PASOS",(d,w)->{
+                if(p.getBoolean(MirrorAutomationService.AUTO,false)){
+                    note("Primero desactivá REVERSA AUTO para cambiar los pasos");
+                    return;
+                }
+                p.edit()
+                    .putInt(MirrorAutomationService.LEFT,left.getValue())
+                    .putInt(MirrorAutomationService.RIGHT,right.getValue())
+                    .apply();
+                note("ESPEJOS R · guardados IZQ "+left.getValue()+
+                    " / DER "+right.getValue()+" pasos");
+            }).show();
+    }
+
     private void showMirrorState(){
         // The label states the NEXT action, never the current position.
         mirrorButton.setText(mirrorState==0?"DESPLEGAR ESPEJOS":
