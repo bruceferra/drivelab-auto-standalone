@@ -6,6 +6,7 @@ final class T1SocModePolicy {
     static String name(int mode){
         if(mode==2)return "SMART";
         if(mode==4)return "FORZADO";
+        if(mode==3)return "AUTO OEM (definido en APK, NO probado en esta T1)";
         return mode<0?"SIN LECTURA":"SIN MAPEO ("+mode+")";
     }
     static double socTarget(int rawInt,double rawFloat){
