@@ -1,5 +1,10 @@
 name: Receiver voice assistant · Gemini ChatGPT Waze routing
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'receiver/**'
+      - '.github/workflows/receiver-voice-ci.yml'
   pull_request:
     paths:
       - 'receiver/**'
@@ -31,8 +36,13 @@ jobs:
           set -euo pipefail
           mkdir -p /tmp/t1-voice-route
           javac -encoding UTF-8 -d /tmp/t1-voice-route \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1VoiceMath.java \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1VoiceIntentPolicy.java \
+            receiver/tests/T1VoiceMathTest.java \
+            receiver/tests/T1VoiceIntentWeatherTest.java \
             receiver/tests/T1VoiceIntentPolicyTest.java
+          java -cp /tmp/t1-voice-route ar.com.rango5gps.drivelabauto.receiver.T1VoiceMathTest
+          java -cp /tmp/t1-voice-route ar.com.rango5gps.drivelabauto.receiver.T1VoiceIntentWeatherTest
           java -cp /tmp/t1-voice-route ar.com.rango5gps.drivelabauto.receiver.T1VoiceIntentPolicyTest
       - name: Compile Receiver with integrated microphone
         run: gradle --no-daemon :receiver:assembleDebug
@@ -44,6 +54,10 @@ jobs:
           test -f receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1VoiceRouteActivity.java
           grep -Fq 'android:name=".T1VoiceRouteActivity"' receiver/src/main/AndroidManifest.xml
           grep -Fq 'RecognizerIntent.ACTION_RECOGNIZE_SPEECH' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1VoiceRouteActivity.java
+          grep -Fq 'T1VoiceMath.calculate(phrase)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1VoiceRouteActivity.java
+          grep -Fq 'T1VoiceWeather.now(' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1VoiceRouteActivity.java
+          grep -Fq 'speaker.speak(' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1VoiceRouteActivity.java
+          grep -Fq 'T1VoiceIntentPolicy.routeDestination(phrase)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1VoiceRouteActivity.java
           grep -Fq 'setPackage("com.waze")' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1VoiceRouteActivity.java
           grep -Fq 'android.permission.RECORD_AUDIO' receiver/src/main/AndroidManifest.xml
           grep -Fq 'com.google.android.apps.bard' receiver/src/main/AndroidManifest.xml
