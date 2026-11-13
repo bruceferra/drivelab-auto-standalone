@@ -2579,11 +2579,16 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         fuel.edit().putFloat("stableFuelL100",(float)selected)
             .putFloat("stableAnchorL100",(float)baseL100)
             .putLong("stableFuelAt",now).apply();
-        T1ExperimentalRange.Estimate e=T1ExperimentalRange.estimate(
-            lastSample.fuel,lastSample.socDisplay,selected,fullEv);
-        autonomyNow.setText(Double.isFinite(e.totalKm)?
-            "~ "+f(e.totalKm,0)+" km · ESTABLE":
-            "SIN ESTIMACIÓN TOTAL");
+        SharedPreferences refill=T1FuelCalibration.p(this);
+        boolean fullAnchor=refill.getBoolean(T1FuelCalibration.ANCHORED,false);
+        double kmSinceFull=fullAnchor?
+            refill.getFloat(T1FuelCalibration.SINCE_KM,Float.NaN):Double.NaN;
+        T1PhevTotalRange.Estimate e=T1PhevTotalRange.estimate(
+            lastSample.fuel,lastSample.socDisplay,selected,fullEv,
+            fullAnchor,kmSinceFull);
+        autonomyNow.setText(Double.isFinite(e.remainingKm)?
+            "~ "+f(e.remainingKm,0)+" km · MIXTA ESTABLE":
+            "SIN ESTIMACIÓN MIXTA");
         String source=stable.source;
         String rawWindow=history.size()+"/100 muestras OEM 500 m"+
             (history.size()>0?
@@ -2614,10 +2619,18 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             T1FuelDisplay.liters(lastSample.fuel)+" L"+
             (T1FuelDisplay.topUncalibrated(lastSample.fuel)?
                 "\nAviso: CI186 saturado en nivel alto": "")+
-            "\nNafta: "+(e.fuelOk?
-                "~ "+f(e.fuelKm,0)+" km":"NO FIABLE / SIN DATO")+
-            " + eléctrico: "+(e.electricOk?
-                "~ "+f(e.electricKm,0)+" km":"SIN DATO")+
+            "\nMIXTA RESTANTE · "+(Double.isFinite(e.remainingKm)?
+                "~ "+f(e.remainingKm,0)+" km":"SIN DATO")+
+            " · "+e.source+
+            "\nReferencia histórica tanque completo: "+
+            f(e.referenceFullKm,0)+" km (67 L surtidor ref. / L100 mixtos)"+
+            "\nPor nivel CI186: "+(e.gaugeExactEnough?
+                "~ "+f(e.byGaugeKm,0)+" km":"CI186 nivel alto saturado / SIN DATO")+
+            "\nPor km desde tanque lleno: "+(e.anchored?
+                "~ "+f(e.byTripKm,0)+" km":"SIN ANCLA DE LLENADO")+
+            "\nEV potencial por SOC: "+(Double.isFinite(e.evPotentialKm)?
+                "~ "+f(e.evPotentialKm,0)+" km":"SIN DATO")+
+            " · INFORMATIVO, NO SE SUMA para evitar doble conteo PHEV"+
             "\nConsumo ESTABLE: "+f(selected,2)+
             " L/100 km · "+source+
             "\nBase surtidor/manual: "+f(stable.anchorL100,2)+
@@ -2627,16 +2640,21 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             "\nVentana propia: "+rawWindow+
             "\nLos 5 segmentos recientes son SOLO diagnóstico; no cambian "+
             "directamente la autonomía principal. "+
-            "PROYECCIÓN PHEV: la referencia histórica puede incluir km EV; "+
-            "sumar el alcance eléctrico es orientativo y puede sobreestimar. "+
+            "PROYECCIÓN PHEV: este cálculo usa kilómetros MIXTOS del "+
+            "surtidor y NO agrega nuevamente los km eléctricos. "+
+            "Si hubo nuevas cargas desde enchufe, el rendimiento puede variar. "+
+            "CI186 y su saturación superior siguen siendo provisionales. "+
             "Sin autonomía certificada ni equivalencia exacta con Jetour.");
     }
     private void adjustAutonomy(){
         LinearLayout form=col();form.setPadding(25,12,25,5);
-        form.addView(text("Fórmula experimental: "+
-            "km nafta=(litros CI186 − 5,3 L) × 100 / consumo L/100. "+
-            "Km EV=(SOC actual / 100) × alcance EV al 100 %. "+
-            "Total estimado=suma de ambos, supone utilización secuencial.",
+        form.addView(text("Autonomía MIXTA: referencia de surtidor "+
+            "67 L / consumo mixto estable y proporción de CI186 entre "+
+            "5,3 L (corte térmico) y 67 L (referencia alto). "+
+            "Si hay km confirmados desde tanque lleno, se contrasta también "+
+            "con esa distancia. NO se suma otra vez la autonomía eléctrica: "+
+            "el consumo histórico mixto ya puede incluir tramos EV. "+
+            "El ajuste EV se muestra solo como diagnóstico separado.",
             14,Color.DKGRAY,false));
         SharedPreferences p=getSharedPreferences(RANGE_PREFS,MODE_PRIVATE);
         EditText fuel=new EditText(this);
