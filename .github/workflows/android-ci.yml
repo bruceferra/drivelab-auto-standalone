@@ -112,7 +112,7 @@ jobs:
             receiver/tests/T1SocRegenWritePolicyTest.java
           java -cp /tmp/soc-regen-policy ar.com.rango5gps.drivelabauto.receiver.T1SocRegenWritePolicyTest
           code=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocRegenPilot.java
-          grep -Fq 'data.writeInt(id);data.writeInt(value)' "$code"
+          grep -Fq 'data.writeInt(target);' "$code"
           grep -Fq 'preflight(b,"SOC_REGEN_ANTES_"' "$code"
           grep -Fq 'regenDriveEligible(gear,speed)' "$code"
           grep -Fq 'verify(b,id,target,active)' "$code"
