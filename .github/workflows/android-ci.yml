@@ -56,6 +56,21 @@ jobs:
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1FuelDisplay.java \
             receiver/tests/T1FuelDisplayTest.java
           java -cp /tmp/fuel-display-test T1FuelDisplayTest
+      - name: Optimizer percentages are exclusively 5 to 100 touch dropdowns
+        shell: bash
+        run: |
+          set -euo pipefail
+          editor=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeActivity.java
+          cockpit=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
+          grep -Fq 'private static final int PCT_MIN=5,PCT_STEP=5,PCT_COUNT=20' "$editor"
+          grep -Fq 'p.targetMinimum=percentageSelector(existing.minBattery);' "$editor"
+          grep -Fq 'p.forced=percentageSelector(existing.forcedSoc);' "$editor"
+          grep -Fq 'private int percentage(Spinner spinner)' "$editor"
+          ! grep -Eq '(EditText|InputType|TYPE_CLASS_NUMBER)' "$editor"
+          grep -Fq 'lastUiStats>=2400L' "$cockpit"
+          grep -Fq 'if(!android.text.TextUtils.equals(' "$cockpit"
+          grep -Fq 'T1-Cockpit-Continuity-Background' "$cockpit"
+          ! grep -Fq 'String recovered=T1JourneyStore.reconcileInterrupted(this);' "$cockpit"
       - name: Cockpit full-system RAM/CPU and recovering NAV touch telemetry
         shell: bash
         run: |
