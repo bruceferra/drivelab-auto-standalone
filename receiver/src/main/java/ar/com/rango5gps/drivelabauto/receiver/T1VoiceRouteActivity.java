@@ -334,15 +334,15 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         }
     }
     /** This is the ONLY platform-supported system assistant probe here.
-     * ACTION_VOICE_ASSIST goes to the OS default Digital Assistant, not
+     * ACTION_VOICE_COMMAND goes to the OS default Digital Assistant, not
      * necessarily Gemini, and never uses a private Gemini deep link.
      * No silent fullscreen fallback: the user wants eyes-free behavior.
      */
     private void openSystemVoice(){
-        Intent voice=new Intent(Intent.ACTION_VOICE_ASSIST);
+        Intent voice=new Intent(Intent.ACTION_VOICE_COMMAND);
         try{
             if(voice.resolveActivity(getPackageManager())==null)
-                throw new ActivityNotFoundException("La ROM no ofrece ACTION_VOICE_ASSIST");
+                throw new ActivityNotFoundException("La ROM no ofrece ACTION_VOICE_COMMAND");
             openingAssistant=true;
             startActivity(voice);
             status.setText("Android recibió la solicitud de asistente de voz "+
