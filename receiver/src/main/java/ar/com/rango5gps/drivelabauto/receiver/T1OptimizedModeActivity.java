@@ -158,7 +158,12 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         LinearLayout power=vertical();power.addView(text("PROPULSIÓN",12,0xFF334B5A,true));
         power.addView(p.power);column(options,power,1);
         LinearLayout soc=vertical();soc.addView(text("GESTIÓN SOC",12,0xFF334B5A,true));
-        soc.addView(p.strategy);column(options,soc,1);
+        soc.addView(p.strategy);
+        soc.addView(text("EV: SMART primero si estaba FORZADO; "+
+            "EV MAX: el auto desactiva FORZADO solo. "+
+            "FORZADO se configura únicamente con HEV.",
+            10,0xFF40566B,false));
+        column(options,soc,1);
         LinearLayout regen=vertical();regen.addView(text("REGENERACIÓN",12,0xFF334B5A,true));
         regen.addView(p.regen);column(options,regen,1);
 
@@ -217,15 +222,31 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
             p.maxPct.setEnabled(checked));
         p.minPct.setEnabled(existing.minEnabled);
         p.maxPct.setEnabled(existing.maxEnabled);
-        p.forced.setEnabled(existing.strategy==
-            T1OptimizedModePolicy.Strategy.FORCED);
-        p.strategy.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+        final Runnable syncSocAvailability=()->{
+            boolean electric=p.power.getSelectedItemPosition()!=
+                T1OptimizedModePolicy.Power.HEV.ordinal();
+            // EV needs SMART to exit HEV FORZADO; EV MAX itself turns
+            // FORZADO off in this T1. Do not offer contradictory EV+
+            // FORZADO settings or re-apply FORZADO after switching.
+            if(electric&&p.strategy.getSelectedItemPosition()!=
+                    T1OptimizedModePolicy.Strategy.SMART.ordinal())
+                p.strategy.setSelection(
+                    T1OptimizedModePolicy.Strategy.SMART.ordinal());
+            p.strategy.setEnabled(!electric);
+            p.forced.setEnabled(!electric&&p.strategy.getSelectedItemPosition()==
+                T1OptimizedModePolicy.Strategy.FORCED.ordinal());
+        };
+        p.power.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
             @Override public void onItemSelected(android.widget.AdapterView<?> parent,
-                    View view,int position,long id){
-                p.forced.setEnabled(position==T1OptimizedModePolicy.Strategy.FORCED.ordinal());
-            }
+                    View view,int position,long id){syncSocAvailability.run();}
             @Override public void onNothingSelected(android.widget.AdapterView<?> parent){}
         });
+        p.strategy.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
+            @Override public void onItemSelected(android.widget.AdapterView<?> parent,
+                    View view,int position,long id){syncSocAvailability.run();}
+            @Override public void onNothingSelected(android.widget.AdapterView<?> parent){}
+        });
+        syncSocAvailability.run();
     }
     @Override protected void onCreate(Bundle state){
         super.onCreate(state);
