@@ -909,8 +909,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         commentaryLeft.setPadding(3,2,9,2);
         commentaryRight.setPadding(9,2,3,2);
         LinearLayout top=row();top.setGravity(Gravity.CENTER_VERTICAL);
-        root.addView(top);
-        cockpitNavRow=top;
+        // Top row now lives in the shared T1GlobalToolbar, not this scroll.
+        cockpitNavRow=null;
         LinearLayout title=col();
         title.addView(text("DRIVELAB / T1",19,WHITE,true));
         commentaryRight.addView(text("COCKPIT · build OEM "+getPackageVersion(),11,MUTED,false));
@@ -998,8 +998,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         T1JetourTheme.button(back,T1JetourTheme.PANEL);
         top.addView(back,new LinearLayout.LayoutParams(-2,52));
 
-        LinearLayout modes=row();root.addView(modes);
-        cockpitModeRow=modes;
+        LinearLayout modes=row(); // legacy mode telemetry buttons detached
+        cockpitModeRow=null;
         modeEvButton=topModeButton(modes,"EV",1);
         modeHevButton=topModeButton(modes,"HEV",2);
         modeMaxButton=topModeButton(modes,"EV MAX",3);
@@ -1146,6 +1146,12 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         feedback.setMaxLines(3);commentaryLeft.addView(feedback);
         liveEcoNow.setMaxLines(4);
         liveEcoNow.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        systemMonitorLine=text("RAM / CPU: esperando telemetría del sistema…",
+            11,T1JetourTheme.CYAN,false);
+        systemMonitorLine.setSingleLine(true);
+        systemMonitorLine.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        commentaryRight.addView(systemMonitorLine,
+            new LinearLayout.LayoutParams(-1,T1JetourTheme.dp(this,29)));
         LinearLayout expandRow=row();root.addView(expandRow);
         compactButton(expandRow,"DETALLES / HISTORIAL",BLUE,()->{
             boolean expand=secondary.getVisibility()==android.view.View.GONE;
@@ -1438,52 +1444,17 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         button(extra,"DIAGNÓSTICO OEM",BLUE,()->startActivity(
             new Intent(this,ReceiverVehicleActivity.class)
                 .putExtra("open_tab",3)));
+        button(extra,"SIMULADOR · WHAT IF",BLUE,this::openWhatIf);
+        button(extra,"SISTEMA RAM/CPU",TEAL,this::showSystemDiagnostics);
         secondary.addView(text("Este cockpit no reemplaza el velocímetro homologado ni "+
             "el sistema Jetour. No usar para controlar EV/HEV en marcha. "+
             "No se guardan coordenadas de clientes, ni se envían las zonas a la nube.",
             12,MUTED,false));
-        // The popup is pinned above scrolling content, but BELOW the fixed
-        // voice-assistant clearance strip owned by T1ImmersiveActivity.
-        FrameLayout cockpitFrame=new FrameLayout(this);
-        // CRITICAL: keep navigation buttons pinned ABOVE the ScrollView.
-        // A fast history refresh cannot shift their hit boxes or consume taps.
-        root.removeView(top);
-        root.removeView(modes);
-        LinearLayout fixedBody=col();
-        fixedBody.setBackgroundColor(BG);
-        // The three OEM modes worked while top navigation did not. Move
-        // navigation BELOW these working controls, outside the OEM top zone.
-        // Keep the system telemetry line non-interactive in the top strip.
-        View safeGap=new View(this);
-        fixedBody.addView(safeGap,new LinearLayout.LayoutParams(-1,
-            T1JetourTheme.dp(this,16)));
-        systemMonitorLine=text("RAM/CPU sistema: leyendo…",
-            11,T1JetourTheme.CYAN,false);
-        systemMonitorLine.setSingleLine(true);
-        systemMonitorLine.setEllipsize(
-            android.text.TextUtils.TruncateAt.END);
-        systemMonitorLine.setPadding(
-            T1JetourTheme.dp(this,10),0,
-            T1JetourTheme.dp(this,10),0);
-        systemMonitorLine.setGravity(Gravity.CENTER_VERTICAL);
-        systemMonitorLine.setBackgroundColor(0xFF11181E);
-        // Entire strip is diagnostic only; don't require tapping it.
-        systemMonitorLine.setClickable(false);
-        commentaryRight.addView(systemMonitorLine,
-            new LinearLayout.LayoutParams(-1,T1JetourTheme.dp(this,29)));
-        fixedBody.addView(modes,
-            new LinearLayout.LayoutParams(-1,-2));
-        fixedBody.addView(top,
-            new LinearLayout.LayoutParams(-1,-2));
-        fixedBody.addView(scroll,
-            new LinearLayout.LayoutParams(-1,0,1f));
-        cockpitFrame.addView(fixedBody,
-            new FrameLayout.LayoutParams(-1,-1));
-        // Disable the old full-width FrameLayout popup entirely: even
-        // disabled Android views in the highest Z-order can complicate
-        // hit-testing with an OEM overlay. The OSM banner remains available.
+        // The global mode/action toolbar is now provided by
+        // T1ImmersiveActivity OUTSIDE this ScrollView, on every Receiver page.
+        // This page has no second fixed local row: instruments scroll freely.
         roadTransitionPopup=null;
-        setContentView(cockpitFrame);
+        setContentView(scroll);
         // Open the existing diagnostic panel directly when launched from
         // the wizard; retain its original actions and user-triggered probes.
         if(getIntent()!=null&&

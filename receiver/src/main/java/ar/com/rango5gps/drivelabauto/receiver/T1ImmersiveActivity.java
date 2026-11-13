@@ -19,19 +19,43 @@ import android.widget.LinearLayout;
  * The strip can be adjusted (including zero) without root or system settings.
  */
 public abstract class T1ImmersiveActivity extends Activity {
+    private static final java.util.concurrent.atomic.AtomicBoolean AUTO_INITIALIZED=
+        new java.util.concurrent.atomic.AtomicBoolean(false);
     private static final String CLEAR_PREFS="t1_voice_overlay_clearance";
     private static final String CLEAR_HEIGHT="clear_height_dp";
-    private static final int DEFAULT_CLEAR_HEIGHT_DP=112;
+    private static final int DEFAULT_CLEAR_HEIGHT_DP=0;
     private static final int[] HEIGHTS_DP={0,80,112,144,176};
     private View clearStrip;
+    private T1GlobalToolbar globalToolbar;
+    private boolean activeScreen;
 
     @Override protected void onCreate(Bundle state){
         super.onCreate(state);
-        T1ImmersiveMode.apply(this);
+        // MainthorCar no longer places HolaJetour over this T1 screen:
+        // always use full usable height and immersive system bars.
+        getSharedPreferences(CLEAR_PREFS,Context.MODE_PRIVATE)
+            .edit().putInt(CLEAR_HEIGHT,0).apply();
+        T1ImmersiveMode.setEnabled(this,true);
+        // Automatically select both user preferences ONCE on a fresh
+        // Receiver process launch. Navigating to another screen must NEVER
+        // rearm mirrors after the driver manually folded them or chose MANUAL.
+        if(AUTO_INITIALIZED.compareAndSet(false,true)){
+            RecirculationGuardService.activateOnAppOpen(this);
+            MirrorAutomationService.activateOnAppOpen(this);
+        }
     }
     @Override protected void onResume(){
         super.onResume();
+        activeScreen=true;
         T1ImmersiveMode.apply(this);
+        RecirculationGuardService.ensureRunning(this);
+        MirrorAutomationService.ensureRunning(this);
+        if(globalToolbar!=null)globalToolbar.onResume();
+    }
+    @Override protected void onPause(){
+        activeScreen=false;
+        if(globalToolbar!=null)globalToolbar.onPause();
+        super.onPause();
     }
     @Override public void onWindowFocusChanged(boolean hasFocus){
         super.onWindowFocusChanged(hasFocus);
@@ -42,6 +66,10 @@ public abstract class T1ImmersiveActivity extends Activity {
      * with a permanent top-safe strip OUTSIDE the ScrollView.
      */
     @Override public void setContentView(View content){
+        if(globalToolbar!=null){
+            globalToolbar.onPause();
+            globalToolbar=null;
+        }
         LinearLayout shell=new LinearLayout(this);
         shell.setOrientation(LinearLayout.VERTICAL);
         shell.setBackgroundColor(overlayClearBackgroundColor());
@@ -55,9 +83,13 @@ public abstract class T1ImmersiveActivity extends Activity {
         shell.addView(blank,new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,px(clearanceDp())));
 
+        globalToolbar=new T1GlobalToolbar(this);
+        shell.addView(globalToolbar.view(),new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,ViewGroup.LayoutParams.WRAP_CONTENT));
         shell.addView(content,new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,0,1f));
         super.setContentView(shell);
+        if(activeScreen)globalToolbar.onResume();
     }
     protected int overlayClearBackgroundColor(){return Color.WHITE;}
     protected final int clearanceDp(){

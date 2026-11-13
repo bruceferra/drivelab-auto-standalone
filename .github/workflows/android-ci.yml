@@ -100,9 +100,10 @@ jobs:
           grep -Fq 'navTouchDowns++' "$cockpit"
           grep -Fq 'modeTouchDowns++' "$cockpit"
           grep -Fq 'navButtonClicks++' "$cockpit"
-          grep -Fq 'root.removeView(modes);' "$cockpit"
-          grep -Fq 'fixedBody.addView(modes,' "$cockpit"
-          grep -Fq 'fixedBody.addView(top,' "$cockpit"
+          grep -Fq 'cockpitModeRow=null;' "$cockpit"
+          grep -Fq 'cockpitNavRow=null;' "$cockpit"
+          grep -Fq 'globalToolbar=new T1GlobalToolbar(this);' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ImmersiveActivity.java
+          grep -Fq 'shell.addView(globalToolbar.view()' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ImmersiveActivity.java
           grep -Fq 'roadTransitionPopup=null;' "$cockpit"
           grep -Fq 'SISTEMA RAM/CPU' "$cockpit"
           grep -Fq 'commentaryColumns=row();' "$cockpit"
@@ -119,9 +120,11 @@ jobs:
         run: |
           set -euo pipefail
           cockpit=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
-          grep -Fq 'root.removeView(top);' "$cockpit"
-          grep -Fq 'fixedBody.addView(top,' "$cockpit"
-          grep -Fq 'fixedBody.addView(scroll,' "$cockpit"
+          grep -Fq 'globalToolbar.view()' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ImmersiveActivity.java
+          grep -Fq 'setContentView(scroll);' "$cockpit"
+          grep -Fq 'T1WazeWheelService' receiver/src/main/AndroidManifest.xml
+          grep -Fq 'collectAlternativeRoutes(root)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1WazeWheelService.java
+          grep -Fq 'if(gear==Gear.D)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/MirrorParkingPolicy.java
           grep -Fq 'historyEcoStatus.setTextIsSelectable(false);' "$cockpit"
           grep -Fq 'historyEcoStatus.setFocusable(false);' "$cockpit"
           grep -Fq 'scroll.setDescendantFocusability(' "$cockpit"
@@ -283,8 +286,9 @@ jobs:
           grep -q 'setDecorFitsSystemWindows(false)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ImmersiveMode.java
           grep -q 'WindowInsets.Type.navigationBars()' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ImmersiveMode.java
           grep -q 'setDecorFitsSystemWindows(true)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ImmersiveMode.java
-          grep -q 'T1ImmersiveMode.setEnabled(this' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/ReceiverActivity.java
-          grep -q 'T1ImmersiveMode.setEnabled(this' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
+          grep -q 'T1ImmersiveMode.setEnabled(this,true)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ImmersiveActivity.java
+          ! grep -q 'T1ImmersiveMode.setEnabled(this' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/ReceiverActivity.java
+          ! grep -q 'PANTALLA COMPLETA · ACTIVADA' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/ReceiverActivity.java
           ! grep -E 'CATEGORY_HOME|WRITE_SECURE_SETTINGS|SYSTEM_ALERT_WINDOW.*new' \
             receiver/src/main/AndroidManifest.xml
       - name: Mirror parking R/D policy regression (pure JVM)
@@ -315,7 +319,7 @@ jobs:
           base=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ImmersiveActivity.java
           cockpit=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
           hub=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/ReceiverActivity.java
-          grep -q 'DEFAULT_CLEAR_HEIGHT_DP=112' "$base"
+          grep -q 'DEFAULT_CLEAR_HEIGHT_DP=0' "$base"
           grep -q 'HEIGHTS_DP={0,80,112,144,176}' "$base"
           grep -q 'getSharedPreferences(CLEAR_PREFS' "$base"
           grep -q 'shell.addView(blank' "$base"
@@ -323,7 +327,8 @@ jobs:
           grep -q 'super.setContentView(shell)' "$base"
           grep -q 'overlayClearBackgroundColor(){return BG;}' "$cockpit"
           grep -q 'cycleClearanceDp()' "$cockpit"
-          grep -q 'cycleClearanceDp()' "$hub"
+          ! grep -q 'cycleClearanceDp()' "$hub"
+          grep -q 'globalToolbar=new T1GlobalToolbar(this);' "$base"
           grep -q 'T1ImmersiveMode.apply(this)' "$base"
           ! grep -E 'SYSTEM_ALERT_WINDOW|WRITE_SECURE_SETTINGS|policy_control|killBackgroundProcesses' "$base"
       - name: Rear seat light area read-only and cockpit thermal motor instrumentation

@@ -22,6 +22,7 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
     private String lastPairQrValue="";
     private ScrollView currentScroll;
     private boolean connectionExpanded=false;
+    private boolean advancedControlsExpanded=false;
     private long lastAutoCheckElapsed=0;
     private final Runnable pairUiRefresh=new Runnable(){
         @Override public void run(){
@@ -39,7 +40,8 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
         // the DEFAULT without touching its button. The existing foreground
         // guard continues while other screens/Maps are in front and survives
         // reboot through BootReceiver. OEM safety PAUSED is respected.
-        RecirculationGuardService.activateOnAppOpen(this);
+        // Auto air and reverse mirrors are now armed by the shared base
+        // Activity, so all Receiver pages receive the same defaults.
         quickControls=new ReceiverQuickControls(this);
         render();
     }
@@ -81,7 +83,6 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
         LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);
         body.setPadding(22,20,22,35);scroll.addView(body);
         SharedPreferences p=prefs();
-        quickControls.attach(body); // FIRST and always visible above menus
         label(body,"DRIVELAB AUTO · RECEIVER",23);
         // Read the installed APK metadata, never show a stale hard-coded
         // version banner (observed earlier 0.2.31 / 0.2.36 screenshot).
@@ -92,17 +93,8 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
         }catch(Exception ignored){}
         label(body,"v"+installedVersion+
             " · pantalla inmersiva + área libre Hola Jetour",13);
-        button(body,T1ImmersiveMode.enabled(this)?
-            "PANTALLA COMPLETA · ACTIVADA · MOSTRAR BARRAS":
-            "PANTALLA COMPLETA · DESACTIVADA · OCULTAR BARRAS",()->{
-                T1ImmersiveMode.setEnabled(this,!T1ImmersiveMode.enabled(this));
-                render();
-            });
-        button(body,"ESPACIO LIBRE SUPERIOR JETOUR · "+clearanceDp()+
-            " dp · AJUSTAR",()->{
-                cycleClearanceDp();
-                render();
-            });
+        // Immersive full screen is always enabled in this T1.
+        // HolaJetour was removed by the installed Launcher. No bar toggles.
         button(body,"VEHÍCULO · VENTANILLAS / ENERGÍA / CODE",()->
             startActivity(new Intent(this,ReceiverVehicleActivity.class)));
         button(body,"PENDIENTES · ASISTENTE DE VALIDACIÓN T1",()->
@@ -193,6 +185,16 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
         });
         button(settings,"PRUEBA DIRECTA A LA PLATA",()->direct("-34.9214,-57.9545"));
         button(settings,"PRUEBA DIRECTA A MAR DEL PLATA",()->direct("-38.0055,-57.5426"));
+        button(settings,"CONTROLES OEM AVANZADOS",()->{
+            advancedControlsExpanded=!advancedControlsExpanded;
+            render();
+        });
+        if(advancedControlsExpanded){
+            LinearLayout quickAdvanced=new LinearLayout(this);
+            quickAdvanced.setOrientation(LinearLayout.VERTICAL);
+            settings.addView(quickAdvanced);
+            quickControls.attach(quickAdvanced);
+        }
         button(settings,"ACTUALIZAR RECEIVER · INSTALACIÓN DIRECTA",
             ()->Updater.check(this,"receiver",this::report));
         if(!message.isEmpty())label(settings,"Actualizador / estado: "+message,14);

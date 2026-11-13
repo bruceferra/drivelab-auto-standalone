@@ -16,7 +16,7 @@ import android.os.SystemClock;
  * from navigation, windows, AVAS, HVAC and trip logger.
  *
  * Auto: one transition to R at <=0.5 km/h => tilt; R/non-R parking shuffle
- * does not repeat. Non-R and >10 km/h stable 800ms => restore once.
+ * does not repeat. Stable D for 800ms => restore once, without waiting to stop.
  * Manual down/up can run in P/R/N/D only while vehicle stopped and
  * DISARM auto. A successful explicit 10-UP recovery resets the policy and
  * REARMS AUTO for the next fresh R transition, without assuming measured angle.
@@ -31,6 +31,7 @@ public final class MirrorAutomationService extends Service {
     public static final String AUTO="auto", STATUS="status",LEFT="steps_left",
         RIGHT="steps_right",POSITION="position",LAST_GEAR="last_gear",LAST_SPEED="last_speed",
         SERVICE_ACTIVE="service_active",LAST_RECONNECT="last_reconnect",
+        LAST_POLL="auto_last_poll_ms",
         LAST_ERROR="last_error",LAST_TRANSITION="last_transition";
     public static final String ACTION_AUTO="t1.mirror.AUTO";
     public static final String ACTION_MANUAL="t1.mirror.MANUAL";
@@ -47,6 +48,41 @@ public final class MirrorAutomationService extends Service {
 
     @Override public IBinder onBind(Intent ignored){return null;}
     private SharedPreferences prefs(){return getSharedPreferences(PREFS,MODE_PRIVATE);}
+    /** User-selected default for this Jetour: enable on a fresh Receiver open.
+     * Never claim to know the physical mirror angle after a process restart.
+     * An already-healthy foreground service is left untouched. */
+    static void activateOnAppOpen(Context context){
+        SharedPreferences p=context.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
+        long age=System.currentTimeMillis()-p.getLong(LAST_POLL,0L);
+        if(p.getBoolean(AUTO,false)&&p.getBoolean(SERVICE_ACTIVE,false)&&
+            age>=0&&age<=3000)return;
+        // Do not rearm a possibly interrupted mirror movement.
+        if(p.getString(POSITION,"").startsWith("INCIERTA")){
+            p.edit().putString(STATUS,
+                "ESPEJOS AUTO SOLICITADO, PAUSADO POR POSICIÓN INCIERTA; "+
+                "revisar físicamente y rearmar manualmente").apply();
+            return;
+        }
+        p.edit().putString(STATUS,"ESPEJOS AUTO · iniciando servicio de fondo")
+            .apply();
+        try{
+            context.startForegroundService(new Intent(context,
+                MirrorAutomationService.class).setAction(ACTION_AUTO));
+        }catch(RuntimeException ex){
+            p.edit().putString(STATUS,"No se pudo iniciar espejos AUTO: "+
+                ex.getClass().getSimpleName()).apply();
+        }
+    }
+    /** Recovery watchdog; only for an already armed preference.
+     * Never re-arms after a manual fold or an uncertain actuator result. */
+    static void ensureRunning(Context context){
+        SharedPreferences p=context.getSharedPreferences(PREFS,MODE_PRIVATE);
+        if(!p.getBoolean(AUTO,false)||p.getString(POSITION,"")
+            .startsWith("INCIERTA"))return;
+        long age=System.currentTimeMillis()-p.getLong(LAST_POLL,0L);
+        if(p.getBoolean(SERVICE_ACTIVE,false)&&age>=0&&age<=3000)return;
+        activateOnAppOpen(context);
+    }
     private int steps(String key){
         return Math.max(1,Math.min(MirrorParkingPolicy.MAX_PULSES_PER_SIDE,prefs().getInt(key,2)));
     }
@@ -70,7 +106,7 @@ public final class MirrorAutomationService extends Service {
         }
         if(ACTION_AUTO.equals(action)){
             prefs().edit().putBoolean(AUTO,true)
-                .putString(POSITION,"D · referencia ajustada por conductor")
+                .putString(POSITION,"AUTO armado · referencia de ángulo NO medida")
                 .putString(STATUS,"AUTO armado · esperando transición nueva a R").apply();
         }else if(ACTION_RECOVER.equals(action)){
             // Pause AUTO for a stationary 10-UP recovery. It must be rearmed
@@ -124,6 +160,7 @@ public final class MirrorAutomationService extends Service {
         try{
             while(!stop){
                 boolean auto=prefs().getBoolean(AUTO,false);
+                prefs().edit().putLong(LAST_POLL,System.currentTimeMillis()).apply();
                 int manual=pendingManual;
                 if(!auto&&manual==0)break;
                 try{
@@ -191,7 +228,7 @@ public final class MirrorAutomationService extends Service {
                                 String.format(java.util.Locale.US,
                                     "AUTO esperando retorno · marcha %s "+
                                     "· velocidad %.1f (%s; 2148=%.1f / 1089=%.1f) "+
-                                    "· exige >10 km/h sostenidos",
+                                    "· retorno habilitado en D estable 800ms",
                                     gear,speed,speedRead.source,
                                     speedRead.raw2148,speedRead.raw1089)).apply();
                         }
@@ -214,9 +251,9 @@ public final class MirrorAutomationService extends Service {
                             movementStarted=false;
                         }else if(action==MirrorParkingPolicy.Action.RESTORE_AFTER_NON_R_SPEED){
                             prefs().edit().putString(STATUS,
-                                "AUTO · recuperando posición D al superar 10 km/h")
+                                "AUTO · recuperando posición D con marcha estable")
                                 .putString(LAST_TRANSITION,
-                                    "No-R >10 km/h · retorno iniciado: "+
+                                    "D estable · retorno iniciado: "+
                                     System.currentTimeMillis()).apply();
                             movementStarted=true;
                             int[] n=runPulses(oem,false,policy.leftIssued(),
@@ -300,8 +337,12 @@ public final class MirrorAutomationService extends Service {
                 if(automatic){
                     if(down && (gear!=2 || speed>8))
                         throw new IllegalStateException("Salió de R / velocidad alta durante bajada");
-                    if(!down && (gear==2 || speed<=10 || speed>75))
-                        throw new IllegalStateException("Retorno interrumpido por marcha/velocidad");
+                    if(!down && gear!=4)
+                        throw new IllegalStateException(
+                            "Retorno automático interrumpido: dejó marcha D");
+                    // For the upward return to normal rear visibility, do
+                    // NOT gate on a speed threshold or require the driver to
+                    // brake. The OEM speed remains validated at each step.
                 }else if(speed>0.5){
                     throw new IllegalStateException("Vehículo dejó de estar detenido");
                 }
