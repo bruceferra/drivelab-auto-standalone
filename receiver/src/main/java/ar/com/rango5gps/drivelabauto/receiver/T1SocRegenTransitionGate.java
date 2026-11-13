@@ -26,7 +26,7 @@ final class T1SocRegenTransitionGate {
         return t.strategy+":"+(t.needsTarget()?t.forcedSoc:-1)+":"+t.regen;
     }
 
-    Decision examine(T1SocRegenWritePolicy.Targets desired,
+    synchronized Decision examine(T1SocRegenWritePolicy.Targets desired,
                      boolean eligible,boolean oemMatches){
         String wanted=key(desired);
         if(!eligible||wanted==null){
@@ -48,7 +48,7 @@ final class T1SocRegenTransitionGate {
             Reason.WAIT_STABLE,votes,wanted);
     }
 
-    void recordConfirmed(T1SocRegenWritePolicy.Targets done){
+    synchronized void recordConfirmed(T1SocRegenWritePolicy.Targets done){
         String key=key(done);
         if(key==null)throw new IllegalArgumentException("Invalid target");
         applied=key;
@@ -56,5 +56,5 @@ final class T1SocRegenTransitionGate {
         votes=REQUIRED_MATCHES;
     }
 
-    String currentConfirmed(){return applied;}
+    synchronized String currentConfirmed(){return applied;}
 }
