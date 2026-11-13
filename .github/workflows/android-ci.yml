@@ -64,7 +64,10 @@ jobs:
           cockpit=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
           grep -Fq 'private static final int PCT_MIN=5,PCT_STEP=5,PCT_COUNT=20' "$editor"
           grep -Fq 'p.targetMinimum=percentageSelector(existing.minBattery);' "$editor"
-          grep -Fq 'p.forced=percentageSelector(existing.forcedSoc);' "$editor"
+          grep -Fq 'p.forced=forcedSocSelector(existing.forcedSoc);' "$editor"
+          grep -Fq 'int[] allowed=T1SocRegenWritePolicy.forcedSocPresets();' "$editor"
+          grep -Fq 'power,strategy,forcedSocValue(p.forced)' "$editor"
+          grep -Fq 'p.targetMinimum=percentageSelector(existing.minBattery);' "$editor"
           grep -Fq 'private int percentage(Spinner spinner)' "$editor"
           ! grep -Eq '(EditText|InputType|TYPE_CLASS_NUMBER)' "$editor"
           grep -Fq 'lastUiStats>=2400L' "$cockpit"
