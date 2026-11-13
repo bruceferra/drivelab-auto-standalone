@@ -2602,9 +2602,10 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                         f(live.rolling50,2)+" L/100 km OEM 50 km":
                         "SIN VALOR 500 m VALIDADO")+
                 " · "+source+
-                "\nLa fuente de 500 m se usa como hipótesis hasta contrastarla "+
-                "con surtidor/pantalla original. En EV puro no se divide "+
-                "por consumo cero.");
+                "\nESTOS 5 EVENTOS SON SOLO DIAGNÓSTICO, NO ALIMENTAN "+
+                "DIRECTAMENTE LA AUTONOMÍA. La media de 100 eventos y el "+
+                "OEM 50 km se contrastan por separado; en EV puro no se "+
+                "divide por consumo cero.");
         }
         autonomyDetail.setText("NAFTA UTILIZABLE · "+
             T1FuelDisplay.usableLitersText(lastSample.fuel)+
