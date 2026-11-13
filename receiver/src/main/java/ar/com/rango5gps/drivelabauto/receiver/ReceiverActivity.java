@@ -68,8 +68,9 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
     private void button(LinearLayout root,String text,Runnable task){
         Button button=new Button(this);button.setText(text);button.setAllCaps(false);
         T1JetourTheme.button(button,
-            text.contains("PENDIENT")?0xFF14566B:
-            text.contains("ACTUALIZAR RECEIVER")?0xFF0C6E70:0xFF1A3A56);
+            text.contains("PENDIENT")?0xFF426E73:
+            text.contains("ACTUALIZAR RECEIVER")?T1JetourTheme.GREEN_BUTTON:
+            T1JetourTheme.PANEL_HI);
         button.setOnClickListener(v->task.run());root.addView(button);
     }
     private void report(String text){message=text;render();}
