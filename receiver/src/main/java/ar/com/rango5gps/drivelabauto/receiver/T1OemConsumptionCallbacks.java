@@ -63,6 +63,8 @@ final class T1OemConsumptionCallbacks {
     private volatile CountDownLatch stopSignal;
     private volatile long deadlineMs;
     private volatile boolean tripMode=false;
+    private volatile boolean cockpitMode=false;
+    private volatile long lastPublishAt=0;
     private volatile String tripId="";
     private volatile Thread listenerThread;
     private final float[] lastRaw={
@@ -143,13 +145,20 @@ final class T1OemConsumptionCallbacks {
             sb.append("\nSin CSV anterior; tocá ESCUCHAR EVENTOS OEM · 3 MIN para crear uno.");
         return sb.toString();
     }
-    boolean start(){return startInternal(false,"");}
+    boolean start(){return startInternal(false,"",false);}
     /** Listener lives for the entire user-started TRIP, not three minutes. */
     boolean startForTrip(String id){
         if(id==null||!id.matches("[0-9]{8}_[0-9]{6}"))return false;
-        return startInternal(true,id);
+        return startInternal(true,id,false);
     }
-    private boolean startInternal(boolean forTrip,String id){
+    /**
+     * Dashboard-only, read-only OEM fuel callback stream. Does NOT create a
+     * trip, enable recording, persist GPS or add any OEM test CSV.
+     * Runs only while the Cockpit Activity is visible and no TRIP listener
+     * is already feeding the shared live-value cache.
+     */
+    boolean startForCockpit(){return startInternal(false,"",true);}
+    private boolean startInternal(boolean forTrip,String id,boolean passive){
         if(!running.compareAndSet(false,true))return false;
         synchronized(dataLock){
             for(int i=0;i<4;i++){
@@ -160,15 +169,20 @@ final class T1OemConsumptionCallbacks {
             recentFuel.clear();
         }
         tripMode=forTrip;
+        cockpitMode=passive;
+        lastPublishAt=0;
         tripId=id;
         stopSignal=new CountDownLatch(1);
-        state=forTrip?"TRIP · escuchando segmentos OEM":"Iniciando prueba.";
+        state=forTrip?"TRIP · escuchando segmentos OEM":
+            passive?"COCKPIT · lectura continua sin grabar viaje":
+                "Iniciando prueba.";
         registration="Conectando ClusterInteraction OEM…";
         logFile=null;
-        deadlineMs=forTrip?Long.MAX_VALUE:
+        deadlineMs=forTrip||passive?Long.MAX_VALUE:
             SystemClock.elapsedRealtime()+DURATION_MS;
         listenerThread=new Thread(this::listen,
-            forTrip?"T1-Trip-500m-OEM":"T1-Avg-CI-Callbacks");
+            forTrip?"T1-Trip-500m-OEM":
+                passive?"T1-Cockpit-Live-Fuel":"T1-Avg-CI-Callbacks");
         listenerThread.start();
         return true;
     }
@@ -213,6 +227,29 @@ final class T1OemConsumptionCallbacks {
             if(channel==0&&Float.isFinite(raw)&&raw>=0&&raw<=35){
                 recentFuel.addLast(raw);
                 while(recentFuel.size()>5)recentFuel.removeFirst();
+            }
+            // Keep dashboard fuel numbers fresh whether a trip is
+            // being recorded or merely the Cockpit is open. The OEM
+            // 50km channel may repeat extremely often: throttle that
+            // publication, but never drop genuine 500m segment events.
+            long now=lastEventMs[channel];
+            if((tripMode||cockpitMode)&&
+                (channel==0||(channel==2&&now-lastPublishAt>=8000L))){
+                double sum=0;
+                for(float recent:recentFuel)sum+=recent;
+                float average=recentFuel.isEmpty()?Float.NaN:
+                    (float)(sum/recentFuel.size());
+                app.getSharedPreferences("t1_live_consumption",
+                    Context.MODE_PRIVATE).edit()
+                    .putLong("sampleAt",now)
+                    .putLong("fuelAt",lastEventMs[0])
+                    .putFloat("fuelRaw",lastRaw[0])
+                    .putFloat("fuelRecent",average)
+                    .putInt("fuelRecentCount",recentFuel.size())
+                    .putFloat("oem50",lastRaw[2])
+                    .putString("source",tripMode?"TRIP":"COCKPIT")
+                    .apply();
+                lastPublishAt=now;
             }
             File file=logFile;
             if(file!=null){
@@ -260,9 +297,9 @@ final class T1OemConsumptionCallbacks {
             File dir=T1TripRecorderService.tripDir(app);
             String time=new SimpleDateFormat("yyyyMMdd_HHmmss",Locale.ROOT)
                 .format(new Date());
-            File file=new File(dir,tripMode?
+            File file=cockpitMode?null:new File(dir,tripMode?
                 "trip_oem_"+tripId+".csv":"oem_callbacks_"+time+".csv");
-            boolean resume=tripMode&&file.isFile()&&file.length()>0;
+            boolean resume=tripMode&&file!=null&&file.isFile()&&file.length()>0;
             if(resume){
                 // Rebuild counts and raw sums from the original event log.
                 // No previous 500 m event is duplicated or discarded merely
@@ -303,12 +340,12 @@ final class T1OemConsumptionCallbacks {
                     }
                 }
             }
-            if(!resume){
+            if(!resume&&!cockpitMode){
                 try(FileOutputStream out=new FileOutputStream(file,false)){
                     out.write("timestamp_epoch_ms,channel,value_float_raw\n"
                         .getBytes(StandardCharsets.UTF_8));
                 }
-            }else{
+            }else if(resume){
                 // Isolate a torn final record from subsequent full lines.
                 try(java.io.RandomAccessFile raf=new java.io.RandomAccessFile(
                         file,"rw")){
@@ -320,7 +357,8 @@ final class T1OemConsumptionCallbacks {
                     }
                 }
             }
-            logFile=file;
+            // Cockpit observation must never produce diagnostic CSV files.
+            logFile=cockpitMode?null:file;
             CountDownLatch ready=new CountDownLatch(1);
             AtomicReference<IBinder> remote=new AtomicReference<>();
             connection=new ServiceConnection(){
@@ -358,9 +396,11 @@ final class T1OemConsumptionCallbacks {
             registration="Inscripciones aceptadas: "+ok+"/4"+
                 (errors.length()>0?" · "+errors:"");
             if(ok==0)throw new IllegalStateException("Todas las inscripciones rechazadas");
-            if(tripMode){
+            if(tripMode||cockpitMode){
                 stopSignal.await();
-                state="TRIP finalizado; eventos de 500 m conservados.";
+                state=tripMode?
+                    "TRIP finalizado; eventos de 500 m conservados.":
+                    "COCKPIT cerrado; escucha OEM terminada.";
             }else{
                 long remaining=deadlineMs-SystemClock.elapsedRealtime();
                 if(remaining>0)stopSignal.await(remaining,TimeUnit.MILLISECONDS);
