@@ -30,8 +30,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private static final int BG=T1JetourTheme.NIGHT,CARD=T1JetourTheme.PANEL,
         WHITE=T1JetourTheme.WHITE,MUTED=T1JetourTheme.MUTED,
-        TEAL=0xFF0E878B,BLUE=0xFF1B5878,
-        GOLD=T1JetourTheme.AMBER,RED=0xFF9A3E48;
+        TEAL=0xFF416F77,BLUE=T1JetourTheme.PANEL_HI,
+        GOLD=T1JetourTheme.AMBER,RED=T1JetourTheme.RED_BUTTON;
     private final Handler ui=new Handler(Looper.getMainLooper());
     private final AtomicBoolean reading=new AtomicBoolean(false);
     private boolean visible=false;
@@ -322,7 +322,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         boolean enabled=T1OptimizedAutoService.enabled(this);
         if(autoModeButton!=null){
             autoModeButton.setText(enabled?"AUTO · ON":"AUTO · OFF");
-            T1JetourTheme.button(autoModeButton,enabled?TEAL:RED);
+            T1JetourTheme.button(autoModeButton,
+                enabled?T1JetourTheme.GREEN_BUTTON:T1JetourTheme.RED_BUTTON);
         }
         if(autoModeLive!=null)
             autoModeLive.setText(T1OptimizedAutoService.status(this));
