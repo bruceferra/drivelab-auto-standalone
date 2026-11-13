@@ -28,8 +28,9 @@ import org.json.JSONObject;
  */
 public final class T1ValidationWizardActivity extends T1ImmersiveActivity {
     private static final int BG=T1JetourTheme.NIGHT,CARD=T1JetourTheme.PANEL,
-        FG=T1JetourTheme.WHITE,MUTED=T1JetourTheme.MUTED,BLUE=0xFF155773,
-        GREEN=0xFF0D7773,GOLD=0xFF936520,RED=0xFF963D4A;
+        FG=T1JetourTheme.WHITE,MUTED=T1JetourTheme.MUTED,
+        BLUE=T1JetourTheme.PANEL_HI,GREEN=T1JetourTheme.GREEN_BUTTON,
+        GOLD=T1JetourTheme.AMBER_BUTTON,RED=T1JetourTheme.RED_BUTTON;
     private static final String PREFS="t1_validation_wizard_v1";
     private static final String NOT_TESTED="PENDIENTE", TESTED="PROBADO",
         NO_SIGNAL="SIN SEÑAL", CONFIRMED="VALIDADO POR USUARIO";
