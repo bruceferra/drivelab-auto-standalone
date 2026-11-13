@@ -60,6 +60,22 @@ public final class RecirculationGuardService extends Service {
                 error.getClass().getSimpleName()).apply();
         }
     }
+    /** Resume watchdog when changing Receiver screens or returning from Waze.
+     * An OEM safety PAUSED state is NEVER cleared automatically. */
+    static void ensureRunning(android.content.Context context){
+        SharedPreferences p=context.getSharedPreferences(PREFS,MODE_PRIVATE);
+        if(!MODE_INTERIOR.equals(p.getString(MODE,MODE_AUTO))||
+            p.getBoolean(PAUSED,false))return;
+        long age=System.currentTimeMillis()-p.getLong(LAST_POLL,0L);
+        if(p.getBoolean(MONITORING,false)&&age>=0&&age<8000)return;
+        try{
+            context.startForegroundService(new Intent(context,
+                RecirculationGuardService.class).setAction(ACTION_RESTORE));
+        }catch(RuntimeException ex){
+            p.edit().putString(STATUS,
+                "No se reanudó recirculación: "+ex.getClass().getSimpleName()).apply();
+        }
+    }
     @Override public IBinder onBind(Intent i){return null;}
 
     @Override public int onStartCommand(Intent i,int flags,int startId){
