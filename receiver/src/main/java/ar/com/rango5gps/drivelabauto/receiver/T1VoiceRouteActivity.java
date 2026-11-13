@@ -39,6 +39,7 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
     private static final int BG=T1JetourTheme.NIGHT;
     private EditText spoken;
     private TextView status,chosen;
+    private Button geminiChoice,chatgptChoice,selectedAction;
     private SpeechRecognizer recognizer;
     private boolean listening,openingAssistant;
 
@@ -79,9 +80,25 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
             "que no sean navegación. No cambia el asistente OEM del vehículo.");
     }
     private void showSelected(){
+        String active=name(selectedAi());
         if(chosen!=null)
-            chosen.setText("CONSULTAS GENERALES → "+name(selectedAi())+
-                "  |  NAVEGACIÓN → WAZE");
+            chosen.setText("IA ACTIVA: "+active+
+                " (preguntas reconocidas)  |  NAVEGACIÓN → WAZE");
+        if(geminiChoice!=null){
+            geminiChoice.setText(GEMINI.equals(selectedAi())?
+                "✓ GEMINI · ELEGIDO":"USAR GEMINI PARA CONSULTAS");
+            T1JetourTheme.button(geminiChoice,GEMINI.equals(selectedAi())?
+                T1JetourTheme.GREEN_BUTTON:T1JetourTheme.PANEL);
+        }
+        if(chatgptChoice!=null){
+            chatgptChoice.setText(CHATGPT.equals(selectedAi())?
+                "✓ CHATGPT · ELEGIDO":"USAR CHATGPT PARA CONSULTAS");
+            T1JetourTheme.button(chatgptChoice,CHATGPT.equals(selectedAi())?
+                T1JetourTheme.GREEN_BUTTON:T1JetourTheme.PANEL);
+        }
+        if(selectedAction!=null)
+            selectedAction.setText("CONSULTAR "+active.toUpperCase()+
+                " · TEXTO RECONOCIDO / ESCRITO");
     }
     @Override protected void onCreate(Bundle state){
         super.onCreate(state);
@@ -121,12 +138,21 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
                 confirmDestination(line);
             });
 
-        label(root,"PROBAR ASISTENTES INSTALADOS",17,T1JetourTheme.CYAN);
+        label(root,"ASISTENTE NATIVO · EXPERIMENTAL",17,T1JetourTheme.CYAN);
+        button(root,"🎙 PROBAR VOZ DEL SISTEMA (SIN ABRIR APP COMPLETA)",
+            T1JetourTheme.GREEN_BUTTON,this::openSystemVoice);
+        label(root,"Este botón solicita la sesión de voz configurada por "+
+            "Android en la Jetour. Si la ROM no ofrece un asistente de voz, "+
+            "DriveLab no puede forzar Gemini Live ni el Gemini de Android Auto. "+
+            "La IA elegida abajo se aplica a consultas reconocidas por DriveLab, "+
+            "NO al asistente predeterminado de Android.",12,T1JetourTheme.MUTED);
+        label(root,"PROBAR APPS INSTALADAS · PANTALLA COMPLETA",
+            17,T1JetourTheme.CYAN);
         button(root,"GEMINI · ABRIR ASISTENTE / VOZ (PRUEBA)",
             T1JetourTheme.GREEN_BUTTON,()->openAssistant(GEMINI,true));
         button(root,"CHATGPT · ABRIR ASISTENTE / VOZ (PRUEBA)",
             T1JetourTheme.PANEL_HI,()->openAssistant(CHATGPT,true));
-        button(root,"CONSULTAR A LA IA CON EL TEXTO ESCRITO",
+        selectedAction=button(root,"CONSULTAR IA ELEGIDA",
             T1JetourTheme.PANEL,
             ()->{
                 String question=spoken.getText().toString().trim();
@@ -141,11 +167,13 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
             "su micrófono. Esto no es Gemini integrado en Android Auto.",
             12,T1JetourTheme.MUTED);
 
-        label(root,"IA PREDETERMINADA DEL BOTÓN ÚNICO",16,T1JetourTheme.CYAN);
-        button(root,"USAR GEMINI PARA LAS CONSULTAS",
+        label(root,"IA PREDETERMINADA PARA PREGUNTAS RECONOCIDAS",
+            16,T1JetourTheme.CYAN);
+        geminiChoice=button(root,"USAR GEMINI PARA LAS CONSULTAS",
             T1JetourTheme.PANEL,()->chooseAi(GEMINI));
-        button(root,"USAR CHATGPT PARA LAS CONSULTAS",
+        chatgptChoice=button(root,"USAR CHATGPT PARA LAS CONSULTAS",
             T1JetourTheme.PANEL,()->chooseAi(CHATGPT));
+        showSelected();
         button(root,"MICRÓFONO EXTERNO · ALTERNATIVA DE RECONOCIMIENTO",
             T1JetourTheme.PANEL,this::listenExternal);
 
@@ -305,6 +333,30 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
                 e.getClass().getSimpleName()+"). Sin ruta enviada.");
         }
     }
+    /** This is the ONLY platform-supported system assistant probe here.
+     * ACTION_VOICE_COMMAND goes to the OS default Digital Assistant, not
+     * necessarily Gemini, and never uses a private Gemini deep link.
+     * No silent fullscreen fallback: the user wants eyes-free behavior.
+     */
+    private void openSystemVoice(){
+        Intent voice=new Intent(Intent.ACTION_VOICE_COMMAND);
+        try{
+            if(voice.resolveActivity(getPackageManager())==null)
+                throw new ActivityNotFoundException("La ROM no ofrece ACTION_VOICE_COMMAND");
+            openingAssistant=true;
+            startActivity(voice);
+            status.setText("Android recibió la solicitud de asistente de voz "+
+                "del sistema. La app que conteste depende de los ajustes OEM, "+
+                "no de la selección Gemini/ChatGPT de DriveLab. "+
+                "Comprobá si la voz realmente responde.");
+        }catch(ActivityNotFoundException|SecurityException e){
+            status.setText("SIN ASISTENTE DE VOZ NATIVO: la ROM Jetour no "+
+                "expone una sesión compatible ("+
+                e.getClass().getSimpleName()+"). No abrí Gemini "+
+                "a pantalla completa. Para voz tipo Android Auto se necesita "+
+                "la integración oficial o un servicio conversacional propio.");
+        }
+    }
     private boolean installed(String packageId){
         return getPackageManager().getLaunchIntentForPackage(packageId)!=null;
     }
@@ -369,8 +421,8 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         if(cb!=null)cb.setPrimaryClip(
             ClipData.newPlainText("Consulta DriveLab",question));
         status.setText(name(packageId)+" no acepta Compartir texto en esta ROM. "+
-            "Copié la consulta al portapapeles: pegala en su chat.");
-        openAssistant(packageId,false);
+            "Copié tu consulta al portapapeles. No abrí la app completa "+
+            "automáticamente: tocá su botón de prueba solo si estás detenido.");
     }
     @Override protected void onPause(){
         listening=false;

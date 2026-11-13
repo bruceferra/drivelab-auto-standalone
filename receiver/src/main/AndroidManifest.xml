@@ -24,6 +24,7 @@
         <!-- Android 11 app-visibility for platform speech recognition. -->
         <intent><action android:name="android.speech.RecognitionService" /></intent>
         <intent><action android:name="android.intent.action.ASSIST" /></intent>
+        <intent><action android:name="android.intent.action.VOICE_COMMAND" /></intent>
         <intent><action android:name="android.intent.action.SEND" />
             <data android:mimeType="text/plain" /></intent>
         <intent><action android:name="android.intent.action.MAIN" />

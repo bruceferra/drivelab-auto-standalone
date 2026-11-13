@@ -904,12 +904,16 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         cockpitScroll=scroll;
         LinearLayout root=col();root.setPadding(18,10,18,28);
         scroll.addView(root);
+        // Keep the upper area button-only: status below the six metrics.
+        LinearLayout commentaryLeft=col(),commentaryRight=col();
+        commentaryLeft.setPadding(3,2,9,2);
+        commentaryRight.setPadding(9,2,3,2);
         LinearLayout top=row();top.setGravity(Gravity.CENTER_VERTICAL);
         root.addView(top);
         cockpitNavRow=top;
         LinearLayout title=col();
         title.addView(text("DRIVELAB / T1",19,WHITE,true));
-        title.addView(text("COCKPIT · build OEM "+getPackageVersion(),12,MUTED,false));
+        commentaryRight.addView(text("COCKPIT · build OEM "+getPackageVersion(),11,MUTED,false));
         top.addView(title,new LinearLayout.LayoutParams(0,-2,1));
         Button microphone=new Button(this);
         microphone.setAllCaps(false);
@@ -972,6 +976,15 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         });
         T1JetourTheme.button(optimized,BLUE);
         top.addView(optimized,new LinearLayout.LayoutParams(-2,52));
+        Button hardware=new Button(this);
+        hardware.setText("SISTEMA RAM/CPU");hardware.setTextSize(12);
+        hardware.setAllCaps(false);
+        hardware.setOnClickListener(v->{
+            navClicked("SISTEMA RAM/CPU");
+            showSystemDiagnostics();
+        });
+        T1JetourTheme.button(hardware,TEAL);
+        top.addView(hardware,new LinearLayout.LayoutParams(-2,52));
         Button back=new Button(this);
         back.setText("INICIO");back.setTextSize(12);
         back.setAllCaps(false);back.setOnClickListener(v->{
@@ -992,16 +1005,16 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         modeMaxButton=topModeButton(modes,"EV MAX",3);
         modeAtTop=text("MODO OEM: esperando 1043 · controles manuales P o D",
             14,MUTED,false);
-        root.addView(modeAtTop);
+        commentaryLeft.addView(modeAtTop);
         autoModeLive=text("MODO OPTIMIZADO OFF · sin comandos",13,TEAL,true);
-        root.addView(autoModeLive);
+        commentaryLeft.addView(autoModeLive);
         updateAutoModeUi();
         vehicleModeStatus=text("MODO CONDUCCIÓN · 2053: esperando OEM   |   "+
             "COMBUSTIBLE · 1079: esperando OEM",12,WHITE,true);
         vehicleModeStatus.setSingleLine(true);
         vehicleModeStatus.setEllipsize(android.text.TextUtils.TruncateAt.END);
         vehicleModeStatus.setOnClickListener(v->showRawVehicleSignals());
-        root.addView(vehicleModeStatus);
+        commentaryLeft.addView(vehicleModeStatus);
         osmBanner=text("OSM · esperando vía…",12,0xFFB3E9F1,true);
         osmBanner.setSingleLine(true);
         osmBanner.setEllipsize(android.text.TextUtils.TruncateAt.END);
@@ -1026,7 +1039,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 .setPositiveButton("DESCARGAR MAPA",(d,w)->updateOfflineMap(true))
                 .show();
         });
-        root.addView(osmBanner);
+        commentaryLeft.addView(osmBanner);
         osmBanner.setVisibility(osmEnabled()?
             android.view.View.VISIBLE:android.view.View.GONE);
         // Three independent button sets: JORNADA, VIAJE 1 and VIAJE 2.
@@ -1056,26 +1069,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         secondPauseButton=compactButton(secondActions,"PAUSAR",GOLD,this::pauseSecond);
         secondEndButton=compactButton(secondActions,"TERMINAR",RED,this::finishSecond);
 
-        // SECONDARY NAVIGATION: same safe touch zone as the working
-        // journey controls. If the OEM overlay covers the pinned top bar,
-        // these buttons still let the owner reach settings or exit.
-        LinearLayout rescue=row();root.addView(rescue);
-        compactButton(rescue,"OPTIMIZADO",BLUE,()->
-            {navClicked("RESCATE OPT");openOptimizedMode();});
-        compactButton(rescue,"PENDIENTES",BLUE,()->
-            {navClicked("RESCATE PENDIENTES");startActivity(
-                new Intent(this,T1ValidationWizardActivity.class));});
-        compactButton(rescue,"PANTALLA",BLUE,()->
-            {navClicked("RESCATE PANTALLA");openDisplaySettings();});
-        compactButton(rescue,"SISTEMA RAM/CPU",TEAL,()->
-            {navClicked("RESCATE SISTEMA");showSystemDiagnostics();});
-        compactButton(rescue,"INICIO",GOLD,()->{
-            navClicked("RESCATE INICIO");
-            Intent home=new Intent(this,ReceiverActivity.class);
-            home.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|
-                Intent.FLAG_ACTIVITY_SINGLE_TOP);
-            startActivity(home);finish();
-        });
+        // Unique navigation row: no duplicate rescue controls.
+        // RAM/CPU access is preserved as a primary button.
 
         // Restore the user's original instrument cards. Only remove the
         // oversize speedometer; the 4 non-speed gauges retain their live OEM
@@ -1090,7 +1085,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         tempEngine=compactMetric(powertrain,"TEMP. MOTOR · RAW EXP.","SIN LECTURA");
         tempBattery=compactMetric(powertrain,"TEMP. BATERÍA HV · OEM","SIN LECTURA");
         socStrategy=text("SOC · ESPERANDO OEM",12,WHITE,true);
-        root.addView(socStrategy);
+        commentaryLeft.addView(socStrategy);
 
         // Three selectable readings visible together. Selecting a card
         // switches trip-dependent values in the six compact tiles.
@@ -1123,26 +1118,34 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         electricNow=compactMetric(metrics,"ELECTRICIDAD CONSUMIDA · EXP.","—");
         costNow=compactMetric(metrics,"COSTO COMBUSTIBLE · EXP.","—");
         autonomyNow=compactMetric(metrics,"AUTONOMÍA TOTAL · EXP.","SIN DATOS");
+        LinearLayout commentaryColumns=row();
+        root.addView(commentaryColumns);
+        commentaryColumns.addView(commentaryLeft,
+            new LinearLayout.LayoutParams(0,-2,1f));
+        commentaryColumns.addView(commentaryRight,
+            new LinearLayout.LayoutParams(0,-2,1f));
         liveFuelNow=text(
             "CONSUMO RECIENTE · esperando OEM 500 m / 1085…",
             14,T1JetourTheme.CYAN,true);
         liveFuelNow.setPadding(12,10,12,10);
         liveFuelNow.setBackground(bg(CARD,12));
-        root.addView(liveFuelNow);
+        commentaryRight.addView(liveFuelNow);
         liveEcoNow=text(
             "ECO EN VIVO · esperando recorrido OSM",
             13,WHITE,true);
         liveEcoNow.setPadding(10,9,10,9);
         liveEcoNow.setBackground(bg(CARD,12));
-        root.addView(liveEcoNow);
+        commentaryRight.addView(liveEcoNow);
         clientSyncStatus=text("CLIENTE QR · verificando pendientes",12,MUTED,false);
         clientSyncStatus.setSingleLine(true);
         clientSyncStatus.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        root.addView(clientSyncStatus);
+        commentaryLeft.addView(clientSyncStatus);
 
         feedback=text("Listo · trayectos locales y CSV intactos.",
             12,0xFFB2DDD9,false);
-        feedback.setMaxLines(3);root.addView(feedback);
+        feedback.setMaxLines(3);commentaryLeft.addView(feedback);
+        liveEcoNow.setMaxLines(4);
+        liveEcoNow.setEllipsize(android.text.TextUtils.TruncateAt.END);
         LinearLayout expandRow=row();root.addView(expandRow);
         compactButton(expandRow,"DETALLES / HISTORIAL",BLUE,()->{
             boolean expand=secondary.getVisibility()==android.view.View.GONE;
@@ -1231,6 +1234,10 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         LinearLayout repairActions=row();secondary.addView(repairActions);
         compactButton(repairActions,"RECONSTRUIR KM DEL HISTORIAL",TEAL,
             this::runHistoryRepair);
+        compactButton(repairActions,"BORRAR SELECCIONADO",RED,
+            this::confirmDeleteSelectedHistory);
+        compactButton(repairActions,"ELIMINAR TODO",RED,
+            this::confirmDeleteAllHistory);
         secondary.addView(text("IZQUIERDA: VIAJES 1/2 · DERECHA: "+
             "JORNADAS COMPLETAS. Elegí una tarjeta y verás los seis "+
             "indicadores a lo ancho, con original y corregido.",12,MUTED,true));
@@ -1462,7 +1469,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         systemMonitorLine.setBackgroundColor(0xFF11181E);
         // Entire strip is diagnostic only; don't require tapping it.
         systemMonitorLine.setClickable(false);
-        fixedBody.addView(systemMonitorLine,
+        commentaryRight.addView(systemMonitorLine,
             new LinearLayout.LayoutParams(-1,T1JetourTheme.dp(this,29)));
         fixedBody.addView(modes,
             new LinearLayout.LayoutParams(-1,-2));
@@ -2036,6 +2043,87 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                         shown.summary());
             });
         },"T1-Historical-Eco-OSM").start();
+    }
+    /** Deletion is never implicit or triggered by a background repair.
+     * The active trip guard is checked again on the worker thread. */
+    private void confirmDeleteSelectedHistory(){
+        final String key=selectedHistoryKey;
+        if(key==null||!key.matches("[012]:[0-9_]+")){
+            message("Elegí primero un viaje o una jornada del historial.");
+            return;
+        }
+        int type=Character.digit(key.charAt(0),10);
+        String id=key.substring(2);
+        String what=type==0?"jornada completa":("Viaje "+type);
+        new AlertDialog.Builder(this)
+            .setTitle("BORRAR "+what.toUpperCase(Locale.ROOT))
+            .setMessage("Se eliminará únicamente este registro LOCAL y sus "+
+                "archivos derivados propios. Una jornada vinculada a Viajes "+
+                "1/2 no se puede borrar hasta eliminar esos viajes. "+
+                "Los datos ya enviados a la nube NO se eliminan.\n\n"+
+                "Registro: "+id)
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("BORRAR REGISTRO",(d,w)->performHistoryDeletion(type,id))
+            .show();
+    }
+    private void confirmDeleteAllHistory(){
+        final EditText typed=new EditText(this);
+        typed.setSingleLine(true);
+        typed.setInputType(InputType.TYPE_CLASS_TEXT|
+            InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS);
+        typed.setHint("Escribí ELIMINAR TODO");
+        LinearLayout holder=col();
+        holder.setPadding(24,9,24,5);
+        holder.addView(typed);
+        new AlertDialog.Builder(this)
+            .setTitle("ELIMINAR TODOS LOS VIAJES Y JORNADAS")
+            .setMessage("BORRADO LOCAL irreversible: Viaje 1, Viaje 2, "+
+                "todas las jornadas, CSV de recorrido, consumo y "+
+                "correcciones. No borra cargas eléctricas, perfiles, mapas "+
+                "ni copias que ya estén en Supabase. No permite borrar "+
+                "si existe un viaje o jornada activo, pausado o pendiente.\n"+
+                "Escribí exactamente ELIMINAR TODO para confirmar.")
+            .setView(holder)
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("ELIMINAR TODO",(d,w)->{
+                if(!"ELIMINAR TODO".equals(typed.getText().toString().trim())){
+                    message("No se borró nada: la confirmación escrita no coincide.");
+                    return;
+                }
+                performHistoryDeletion(-1,null);
+            }).show();
+    }
+    private void performHistoryDeletion(int slot,String id){
+        if(T1TripDeletion.busy()){
+            message("Ya hay un borrado en curso.");return;
+        }
+        if(feedback!=null)feedback.setText("Borrando historial local en segundo plano…");
+        new Thread(()->{
+            String result;
+            boolean success;
+            try{
+                result=slot<0?T1TripDeletion.deleteAll(getApplicationContext()):
+                    T1TripDeletion.deleteSelected(getApplicationContext(),slot,id);
+                success=true;
+            }catch(Exception ex){
+                result="NO SE BORRÓ EL REGISTRO: "+ex.getMessage();
+                success=false;
+            }
+            final String msg=result;
+            final boolean done=success;
+            ui.post(()->{
+                message(msg);
+                if(!done||isFinishing()||isDestroyed())return;
+                selectedHistoryKey="";
+                renderedHistorySignature="";
+                renderedHistoryDetailSignature="";
+                cachedMasterHistory=new ArrayList<>();
+                ecoHistoryCache.clear();
+                lastTotals=0;
+                updateHistory();
+                updateStats();
+            });
+        },"T1-History-Delete-User-Confirmed").start();
     }
     private void runHistoryRepair(){runHistoryRepair(true);}
     private void runHistoryRepair(boolean manual){
