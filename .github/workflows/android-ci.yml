@@ -243,7 +243,7 @@ jobs:
           grep -q 'b.transact(2,d,r,0)' "$probe"
           ! grep -E 'transact\(15|setInt\(|setFloat\(|setProperty\(' "$probe"
           grep -q 'REGISTRAR LED 30 S · NO ESCRIBE' "$ui"
-          grep -q 'COPIAR INFORME LED' "$ui"
+          grep -q 'COMPARTIR LED' "$ui"
           grep -q 'reading.speed>0.5' "$ui"
           grep -q 'T1HorizonLedReadOnlyProbe.Snapshot.transitions' "$ui"
           thermal=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ThermalMotorProbe.java
@@ -252,7 +252,7 @@ jobs:
           grep -q 'engineTemperatureDisplay()' "$thermal"
           grep -q 'engineTempSource="CLUSTER ENGINE TEMP · 559940105 · RAW"' "$thermal"
           grep -q 'tempEngine.setText(result.engineTemperatureDisplay())' "$ui"
-          grep -q 'TEMPERATURA MOTOR · 559940105 · EXP.' "$ui"
+          grep -q '559940105 temperatura motor RAW' "$ui"
 
       - name: Photo evidence EV HEV mode and 12V voltage domain regression
         shell: bash
