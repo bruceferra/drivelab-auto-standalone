@@ -1,4 +1,4 @@
-name: Receiver voice destination · Android build
+name: Receiver voice assistant · Gemini ChatGPT Waze routing
 on:
   pull_request:
     paths:
@@ -25,6 +25,15 @@ jobs:
           set -euo pipefail
           tool=$(command -v sdkmanager || find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)
           "$tool" 'platforms;android-35' 'build-tools;35.0.0'
+      - name: JVM tests of Waze-vs-AI natural speech routing
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-voice-route
+          javac -encoding UTF-8 -d /tmp/t1-voice-route \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1VoiceIntentPolicy.java \
+            receiver/tests/T1VoiceIntentPolicyTest.java
+          java -cp /tmp/t1-voice-route ar.com.rango5gps.drivelabauto.receiver.T1VoiceIntentPolicyTest
       - name: Compile Receiver with integrated microphone
         run: gradle --no-daemon :receiver:assembleDebug
       - name: Verify voice integration is packaged and safe
@@ -36,5 +45,9 @@ jobs:
           grep -Fq 'android:name=".T1VoiceRouteActivity"' receiver/src/main/AndroidManifest.xml
           grep -Fq 'RecognizerIntent.ACTION_RECOGNIZE_SPEECH' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1VoiceRouteActivity.java
           grep -Fq 'setPackage("com.waze")' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1VoiceRouteActivity.java
+          grep -Fq 'android.permission.RECORD_AUDIO' receiver/src/main/AndroidManifest.xml
+          grep -Fq 'com.google.android.apps.bard' receiver/src/main/AndroidManifest.xml
+          grep -Fq 'com.openai.chatgpt' receiver/src/main/AndroidManifest.xml
+          grep -Fq 'T1PremiumCockpitActivity.class' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/ReceiverQuickControls.java
           ! grep -E 'transact\(15|setIntData|setCarProperty|1040,|1041,' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1VoiceRouteActivity.java
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging receiver/build/outputs/apk/debug/receiver-debug.apk | grep "ar.com.rango5gps.drivelabauto.receiver"
