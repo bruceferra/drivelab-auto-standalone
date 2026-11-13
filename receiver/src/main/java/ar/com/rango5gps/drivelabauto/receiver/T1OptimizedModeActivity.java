@@ -629,15 +629,24 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
             return "VÍA: "+T1OptimizedModePolicy.roadName(road)+
                 " · PERFIL DESACTIVADO. No se ejecutan órdenes OEM "+
                 "ni respaldo automático de este bloque.";
+        T1OptimizedModePolicy.Road actuallyApplied=
+            T1OptimizedAutoService.verifiedAppliedRoad(this);
+        String appliedLabel=T1OptimizedAutoService.verifiedAppliedBranchLabel(this);
+        int previous=actuallyApplied==road&&"1".equals(appliedLabel)?
+            T1OptimizedDualRulePolicy.PRIMARY:
+            actuallyApplied==road&&"2".equals(appliedLabel)?
+                T1OptimizedDualRulePolicy.SECONDARY:
+                T1OptimizedDualRulePolicy.NONE;
         T1OptimizedDualRulePolicy.Choice choice=
-            T1OptimizedDualRulePolicy.select(
+            T1OptimizedDualRulePolicy.selectWithHold(
                 T1OptimizedModeStore.get(this,road),
                 T1OptimizedModeStore.getSecond(this,road),
-                T1OptimizedModeStore.secondEnabled(this,road),soc);
-        String outcome=choice.matched()?
-            choice.label()+" · "+
+                T1OptimizedModeStore.secondEnabled(this,road),soc,previous);
+        String outcome=choice.held?
+            "MANTENER "+choice.title(road)+" · sin cambios OEM en el rango intermedio":
+            choice.matched()?choice.title(road)+" · "+
                 T1OptimizedModePolicy.evaluate(road,choice.rule,soc).summary():
-            choice.reason+" · mantener modo actual sin cambios";
+                choice.reason+" · mantener modo actual sin cambios";
         return "VÍA: "+T1OptimizedModePolicy.roadName(road)+
             " · "+info+"\n"+outcome+
             "\nAUTO: 1043/1040/1041/1046 por tipo de vía. "+
