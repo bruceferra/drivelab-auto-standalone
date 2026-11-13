@@ -29,7 +29,8 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         MUTED=T1JetourTheme.MUTED, AQUA=T1JetourTheme.CYAN;
     private final EnumMap<T1OptimizedModePolicy.Road,Profile> profiles=
         new EnumMap<>(T1OptimizedModePolicy.Road.class);
-    private TextView preview,automaticState;
+    private TextView preview,automaticState,shadowStats;
+    private volatile boolean shadowDownloadBusy;
     private Button automaticButton;
     private T1OptimizedModePolicy.Road road=T1OptimizedModePolicy.Road.UNKNOWN;
     @Override protected int overlayClearBackgroundColor(){return BG;}
@@ -423,6 +424,9 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
             "por QR; sin menú de otras aplicaciones ni GPS/VIN. "+
             "Si falla la red, conserva el CSV local.",12,MUTED,false));
         refreshAutoUi();
+        // Shadow cartography comparison is entirely read-only.
+        // Two local datasets from VPS; the actual optimizer remains OSM-only.
+        labelShadowMaps(root);
         for(T1OptimizedModePolicy.Road r:T1OptimizedModePolicy.Road.values())
             card(root,r);
         LinearLayout actions=horizontal();root.addView(actions);
@@ -508,6 +512,75 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
             preview.setText("NO GUARDADO: "+ex.getMessage());
             return false;
         }
+    }
+    private void labelShadowMaps(LinearLayout root){
+        root.addView(text("CARTOGRAFÍA · COMPARACIÓN OSM / OVERTURE / IGN",
+            17,T1JetourTheme.CYAN,true));
+        root.addView(text("El perfil que maneja la T1 sigue usando SOLO "+
+            "OpenStreetMap. Las otras dos bases se consultan simultáneamente "+
+            "y se registran, sin cambiar ningún modo ni bloquear el GPS. "+
+            "Si no están publicadas en el VPS, se indica explícitamente.",
+            13,MUTED,false));
+        shadowStats=text(T1RoadShadowMonitor.report(this),
+            14,Color.WHITE,false);
+        root.addView(shadowStats);
+        Button installBoth=new Button(this);
+        installBoth.setAllCaps(false);
+        installBoth.setText("DESCARGAR OVERTURE + IGN · VPS");
+        T1JetourTheme.button(installBoth,T1JetourTheme.PANEL_HI);
+        installBoth.setOnClickListener(v->installShadowMaps());
+        root.addView(installBoth);
+        Button check=new Button(this);
+        check.setAllCaps(false);
+        check.setText("ACTUALIZAR MÉTRICAS · 3 MAPAS");
+        T1JetourTheme.button(check,T1JetourTheme.PANEL_HI);
+        check.setOnClickListener(v->refreshShadow());
+        root.addView(check);
+        Button share=new Button(this);
+        share.setAllCaps(false);
+        share.setText("SUBIR DIAGNÓSTICO 3 MAPAS · QR");
+        T1JetourTheme.button(share,T1JetourTheme.PANEL_HI);
+        share.setOnClickListener(v->{
+            String report=T1RoadShadowMonitor.report(this);
+            T1ReportShare.share(this,"mapas_osm_overture_ign",report,
+                msg->{
+                    if(!isFinishing()&&!isDestroyed()){
+                        shadowStats.setText(report+"\\n"+msg);
+                    }
+                });
+        });
+        root.addView(share);
+    }
+    private void refreshShadow(){
+        if(shadowStats!=null)
+            shadowStats.setText(T1RoadShadowMonitor.report(this));
+    }
+    private void installShadowMaps(){
+        if(shadowDownloadBusy)return;
+        shadowDownloadBusy=true;
+        new Thread(()->{
+            StringBuilder output=new StringBuilder();
+            for(T1ShadowRoadMap.Source source:T1ShadowRoadMap.Source.values()){
+                try{
+                    T1ShadowRoadMap.install(this,source,(label,pct)->
+                        runOnUiThread(()->{
+                            if(shadowStats!=null&&!isFinishing()&&!isDestroyed())
+                                shadowStats.setText(label+" · "+pct+"%\\n"+
+                                    T1RoadShadowMonitor.report(this));
+                        }));
+                    output.append(source.display).append(": instalada\\n");
+                }catch(Exception ex){
+                    output.append(source.display).append(": NO INSTALADA · ")
+                        .append(ex.getMessage()).append("\\n");
+                }
+            }
+            shadowDownloadBusy=false;
+            runOnUiThread(()->{
+                if(shadowStats!=null&&!isFinishing()&&!isDestroyed())
+                    shadowStats.setText(output.toString()+"\\n"+
+                        T1RoadShadowMonitor.report(this));
+            });
+        },"T1-Shadow-Maps-VPS-Download").start();
     }
     private void refreshAutoUi(){
         boolean enabled=T1OptimizedAutoService.enabled(this);
@@ -615,6 +688,7 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
     @Override protected void onResume(){
         super.onResume();
         refreshAutoUi();
+        refreshShadow();
     }
     private String currentRecommendation(){
         road=T1OptimizedModeStore.lastRoad(this);
