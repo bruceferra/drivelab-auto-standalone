@@ -26,10 +26,18 @@ public final class T1SocRegenWritePolicyTest {
         check(T1SocRegenWritePolicy.testAlternative(1046,3)==1,"regen test2");
         check(T1SocRegenWritePolicy.testAlternative(1040,-1)==-1,"sentinel deny");
         check(T1SocRegenWritePolicy.parked(1,0),"parked");
-        check(!T1SocRegenWritePolicy.parked(4,0),"D denied");
-        check(!T1SocRegenWritePolicy.parked(1,1),"moving denied");
-        check(!T1SocRegenWritePolicy.parked(-1,0),"missing gear");
-        check(!T1SocRegenWritePolicy.parked(1,Double.NaN),"bad speed");
+        check(!T1SocRegenWritePolicy.parked(4,0),"not parked D");
+        check(!T1SocRegenWritePolicy.parked(1,1),"not parked moving");
+        check(T1SocRegenWritePolicy.regenDriveEligible(1,0),"P/0 allowed");
+        check(T1SocRegenWritePolicy.regenDriveEligible(4,83),"D/83 allowed");
+        check(T1SocRegenWritePolicy.regenDriveEligible(4,0),"D/0 allowed");
+        check(T1SocRegenWritePolicy.regenDriveEligible(4,160),"D/160 allowed");
+        check(!T1SocRegenWritePolicy.regenDriveEligible(4,161),"speed too high");
+        check(!T1SocRegenWritePolicy.regenDriveEligible(3,40),"R denied");
+        check(!T1SocRegenWritePolicy.regenDriveEligible(2,40),"N denied");
+        check(!T1SocRegenWritePolicy.regenDriveEligible(1,15),"P moving denied");
+        check(!T1SocRegenWritePolicy.regenDriveEligible(4,Double.NaN),"bad speed");
+        check(!T1SocRegenWritePolicy.regenDriveEligible(-1,0),"missing gear");
         T1OptimizedModePolicy.Rule forced=new T1OptimizedModePolicy.Rule(
             T1OptimizedModePolicy.Power.HEV,
             T1OptimizedModePolicy.Strategy.FORCED,64,false,30,
@@ -52,6 +60,6 @@ public final class T1SocRegenWritePolicyTest {
             T1SocRegenWritePolicy.desired(conditional,20);
         check(fallback.valid()&&fallback.strategy==2&&fallback.regen==2
             &&!fallback.needsTarget(),"safe fallback");
-        System.out.println("OK: SOC / regen write policy tests (parked, presets, fallback)");
+        System.out.println("OK: SOC / regen policy (D movement permitted, P, presets, fallback)");
     }
 }
