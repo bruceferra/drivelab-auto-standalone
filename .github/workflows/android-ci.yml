@@ -247,6 +247,28 @@ jobs:
           grep -Fq 'socProfileGate.recordConfirmed(targets);' "$auto"
           grep -Fq 'showSocDiagnostic()' "$editor"
           ! grep -Fq 'auxVotes=' "$auto"
+      - name: Private cloud SOC diagnostic CSV and Android chooser removal (pure JVM)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-oem-report
+          javac -encoding UTF-8 -d /tmp/t1-oem-report \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OemReportCsv.java \
+            receiver/tests/T1OemReportCsvTest.java
+          java -cp /tmp/t1-oem-report ar.com.rango5gps.drivelabauto.receiver.T1OemReportCsvTest
+          activity=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeActivity.java
+          store=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OemDiagnosticLog.java
+          server=server/supabase/drivelab-auto-diagnostics/index.ts
+          client=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CloudDiagnostics.java
+          grep -Fq 'T1CloudDiagnostics.upload(this,cloudCsv,' "$activity"
+          grep -Fq 'SUBIR AL SERVIDOR' "$activity"
+          grep -Fq 'new Intent(this,ReceiverVehicleActivity.class)' "$activity"
+          ! grep -Fq 'Intent.createChooser(' "$activity"
+          ! grep -Fq 'Intent.ACTION_SEND' "$activity"
+          grep -Fq 'code_diag_' "$store"
+          grep -Fq 'T1TripRecorderService.tripDir(app)' "$store"
+          grep -Fq 'code_diag' "$server"
+          grep -Fq 'code_diag' "$client"
       - name: Optimized road chip only after SOC, 3 GPS votes and OEM confirmation (pure JVM)
         shell: bash
         run: |
