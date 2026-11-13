@@ -432,9 +432,10 @@ public final class T1OptimizedAutoService extends Service {
                 "20,30,40,50,60,70. Sin escritura.");
             return;
         }
-        // The raw integer 1041 getter can be opaque (e.g. 56) although
-        // the original T1 UI shows 20. Accept only a supported float
-        // confirmation, never interpret 56 as a previous/target percent.
+        // Observed T1Launcher 1041 readback map: raw30=>20%,
+        // raw40=>30%, raw48=>40%, raw56=>50%. FloatRaw=1 is NOT
+        // a validated percentage. Confirm only observed pairings;
+        // never compare raw integer directly to the percent preset.
         // 1041 is NOT stored as the visible percentage. T1Launcher photos:
         // 30=>20%, 40=>30%, 48=>40%, 56=>50%. The float getter may
         // return 1 and must not be treated as a target percentage.
