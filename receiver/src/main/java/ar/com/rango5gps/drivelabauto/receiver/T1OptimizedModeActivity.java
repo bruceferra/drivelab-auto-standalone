@@ -69,9 +69,9 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         s.setSelection(initial);
         return s;
     }
-    /** Every percentage in the optimizer is selected by touch, never typed.
-     * 5, 10, ... 100; saved legacy values like 48/56 are rounded for display
-     * to the nearest selectable value, only persisted on explicit SAVE.
+    /** The battery CONDITION is free 5%-100% in 5% increments.
+     * SOC FORZADO uses the separate OEM 1041 allowlist, never arbitrary
+     * percentages that would fail on the setter.
      */
     private static final int PCT_MIN=5,PCT_STEP=5,PCT_COUNT=20;
     private Spinner percentageSelector(int previouslySaved){
@@ -82,6 +82,27 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
             Math.max(0,(int)Math.round((previouslySaved-PCT_MIN)/
                 (double)PCT_STEP)));
         return selector(options,selected);
+    }
+    private Spinner forcedSocSelector(int oldValue){
+        int[] allowed=T1SocRegenWritePolicy.forcedSocPresets();
+        String[] choices=new String[allowed.length];
+        for(int i=0;i<allowed.length;i++)
+            choices[i]=allowed[i]+" %";
+        return selector(choices,
+            T1SocRegenWritePolicy.nearestForcedSocPresetIndex(oldValue));
+    }
+    private int forcedSocValue(Spinner source){
+        int[] allowed=T1SocRegenWritePolicy.forcedSocPresets();
+        if(source==null||source.getSelectedItemPosition()<0||
+            source.getSelectedItemPosition()>=allowed.length)
+            throw new IllegalArgumentException(
+                "Elegí un SOC FORZADO permitido por la Jetour.");
+        int chosen=allowed[source.getSelectedItemPosition()];
+        if(!T1SocRegenWritePolicy.accepted(
+            T1SocRegenWritePolicy.TARGET,chosen))
+            throw new IllegalArgumentException(
+                "Este valor SOC no está autorizado para escribir.");
+        return chosen;
     }
     private void card(LinearLayout parent,T1OptimizedModePolicy.Road which){
         T1OptimizedModePolicy.Rule existing=T1OptimizedModeStore.get(this,which);
@@ -134,13 +155,13 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
 
         LinearLayout target=vertical();
         target.addView(text("OBJETIVO SOC FORZADO",12,0xFF334B5A,true));
-        target.addView(text("Seleccioná de 5 a 100 % (cada 5). "+
-            "Objetivos SOC verificados para escritura OEM automática: "+
-            "20, 30, 40, 50, 60 o 70 %. Los demás se guardan como "+
-            "preferencia pero NO se envían sin validación del vehículo.",
+        target.addView(text("Solo objetivos admitidos por la lista OEM "+
+            "1041: 20, 30, 40, 48, 50, 56, 60, 64, 70 y 72 %. "+
+            "No se muestran porcentajes arbitrarios. "+
+            "DriveLab comprueba la lectura de vuelta del vehículo.",
             11,0xFF40566B,false));
         LinearLayout targetEditor=horizontal();
-        p.forced=percentageSelector(existing.forcedSoc);
+        p.forced=forcedSocSelector(existing.forcedSoc);
         column(targetEditor,p.forced,1);
         targetEditor.addView(text("%",15,0xFF334B5A,true));
         target.addView(targetEditor);
@@ -227,7 +248,7 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
             p.regen.getSelectedItemPosition()];
         // Even disabled fields must be validated to prevent hidden bad prefs.
         return new T1OptimizedModePolicy.Rule(
-            power,strategy,percentage(p.forced),p.conditional.isChecked(),
+            power,strategy,forcedSocValue(p.forced),p.conditional.isChecked(),
             percentage(p.targetMinimum),
             T1OptimizedModePolicy.Comparison.values()[
                 p.comparison.getSelectedItemPosition()],regen);
