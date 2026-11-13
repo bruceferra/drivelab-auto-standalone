@@ -36,6 +36,13 @@ import java.util.concurrent.atomic.AtomicBoolean;
 public final class T1OptimizedAutoService extends Service {
     static final String PREFS="t1_optimized_auto_v1";
     static final String ENABLED="enabled",STATUS="status",LAST_ROAD="last_road";
+    // Distinct from the unverified GPS category shown by the OSM advisor.
+    // The first-row chip may say MODO CIUDAD only after the three road votes,
+    // battery condition and both OEM write/readback phases are verified.
+    private static final String VERIFIED_ROAD="verified_applied_road",
+        VERIFIED_PROFILE="verified_applied_profile",
+        VERIFIED_TIME="verified_applied_at",DISPLAY_REASON="verified_display_reason";
+    private static final long VERIFIED_TTL_MS=25000L;
     static final String ACTION_ON="t1.optimized.ON",
         ACTION_OFF="t1.optimized.OFF";
     private static final int NOTIFICATION=7543;
@@ -63,6 +70,63 @@ public final class T1OptimizedAutoService extends Service {
     static String status(Context c){
         return prefs(c).getString(STATUS,"MODO OPTIMIZADO OFF · sin órdenes OEM");
     }
+    private static String profileSignature(T1OptimizedModePolicy.Rule rule){
+        if(rule==null)return "";
+        return rule.power+":"+rule.strategy+":"+rule.forcedSoc+":"+
+            rule.regeneration+":"+rule.minEnabled+":"+rule.minBattery+":"+
+            rule.maxEnabled+":"+rule.maxBattery;
+    }
+    /** ONLY a fully verified active profile is allowed to paint the chip green.
+     * Unlike T1OptimizedModeStore.lastRoad, this is NOT a GPS guess.
+     */
+    static T1OptimizedModePolicy.Road verifiedAppliedRoad(Context c){
+        if(!enabled(c))return null;
+        SharedPreferences p=prefs(c);
+        String roadName=p.getString(VERIFIED_ROAD,"");
+        if(roadName.isEmpty())return null;
+        long age=System.currentTimeMillis()-p.getLong(VERIFIED_TIME,0L);
+        if(age<0||age>VERIFIED_TTL_MS)return null;
+        T1OptimizedModePolicy.Road road;
+        try{road=T1OptimizedModePolicy.Road.valueOf(roadName);}
+        catch(Exception ignored){return null;}
+        if(road==T1OptimizedModePolicy.Road.UNKNOWN||
+            road!=T1OptimizedModeStore.lastRoad(c))return null;
+        String stored=p.getString(VERIFIED_PROFILE,"");
+        if(!stored.equals(profileSignature(T1OptimizedModeStore.get(c,road))))
+            return null; // changed user configuration needs fresh validation
+        return road;
+    }
+    static String roadDisplayReason(Context c){
+        if(!enabled(c))return "OPTIMIZADO OFF";
+        String reason=prefs(c).getString(DISPLAY_REASON,"MODO · VERIFICANDO");
+        // Never return a green/verified label based on stale SharedPreferences.
+        if("CONFIRMADO".equals(reason)&&verifiedAppliedRoad(c)==null)
+            return "MODO · VERIFICANDO";
+        return reason;
+    }
+    private static void clearVerified(SharedPreferences.Editor edit,String reason){
+        edit.putString(VERIFIED_ROAD,"")
+            .putString(VERIFIED_PROFILE,"")
+            .putLong(VERIFIED_TIME,0L)
+            .putString(DISPLAY_REASON,reason);
+    }
+    private void pendingRoad(String reason){
+        SharedPreferences p=pref();
+        if(p.getString(VERIFIED_ROAD,"").isEmpty()&&
+            reason.equals(p.getString(DISPLAY_REASON,"")))return;
+        SharedPreferences.Editor edit=p.edit();
+        clearVerified(edit,reason);
+        edit.apply();
+    }
+    private void verifiedRoad(T1OptimizedModePolicy.Road road,
+                              T1OptimizedModePolicy.Rule rule){
+        if(stopping||!enabled(this))return;
+        pref().edit().putString(VERIFIED_ROAD,road.name())
+            .putString(VERIFIED_PROFILE,profileSignature(rule))
+            .putLong(VERIFIED_TIME,System.currentTimeMillis())
+            .putString(DISPLAY_REASON,"CONFIRMADO")
+            .apply();
+    }
     static String activate(Context c){
         if(c.checkSelfPermission(Manifest.permission.ACCESS_FINE_LOCATION)!=
             PackageManager.PERMISSION_GRANTED)
@@ -70,9 +134,11 @@ public final class T1OptimizedAutoService extends Service {
         if(!T1OfflineRoadMap.installed(c))
             return "NO ACTIVADO: primero descargá el mapa offline PBA+CABA";
         // Only after explicit user ON. No automatic powertrain writes on boot.
-        prefs(c).edit().putBoolean(ENABLED,true)
-            .putString(STATUS,"AUTO ON · esperando 3 lecturas de vía fiables")
-            .apply();
+        SharedPreferences.Editor activation=prefs(c).edit()
+            .putBoolean(ENABLED,true)
+            .putString(STATUS,"AUTO ON · esperando 3 lecturas de vía fiables");
+        clearVerified(activation,"MODO · VERIFICANDO");
+        activation.apply();
         // The on-screen OSM advisor should show the same map classification
         // as the independent foreground auto controller.
         c.getSharedPreferences("t1_osm_advisory_opt_in",Context.MODE_PRIVATE)
@@ -85,16 +151,19 @@ public final class T1OptimizedAutoService extends Service {
                 "1040/1041/1046 siguen activos; lectura de vuelta "+
                 "obligatoria, sin restauraciones a valores desconocidos.";
         }catch(RuntimeException e){
-            prefs(c).edit().putBoolean(ENABLED,false)
+            SharedPreferences.Editor error=prefs(c).edit()
+                .putBoolean(ENABLED,false)
                 .putString(STATUS,"AUTO NO INICIADO: "+
-                    e.getClass().getSimpleName()).apply();
+                    e.getClass().getSimpleName());
+            clearVerified(error,"OPTIMIZADO OFF");error.apply();
             return status(c);
         }
     }
     static void disable(Context c){
-        prefs(c).edit().putBoolean(ENABLED,false)
-            .putString(STATUS,"MODO OPTIMIZADO OFF · control OEM manual")
-            .apply();
+        SharedPreferences.Editor off=prefs(c).edit()
+            .putBoolean(ENABLED,false)
+            .putString(STATUS,"MODO OPTIMIZADO OFF · control OEM manual");
+        clearVerified(off,"OPTIMIZADO OFF");off.apply();
         try{
             c.startService(new Intent(c,T1OptimizedAutoService.class)
                 .setAction(ACTION_OFF));
@@ -121,6 +190,8 @@ public final class T1OptimizedAutoService extends Service {
             return START_NOT_STICKY;
         }
         if(worker!=null&&worker.isAlive())return START_STICKY;
+        // A restarted service does not inherit an unverified green chip.
+        pendingRoad("MODO · VERIFICANDO");
         stopping=false;
         pilot=new T1ManualThreeModePilot(this);
         socRegenPilot=new T1SocRegenPilot(this);
@@ -213,6 +284,7 @@ public final class T1OptimizedAutoService extends Service {
         if(changing.get())return;
         Location gps=current();
         if(gps==null){
+            pendingRoad("VÍA SIN IDENTIFICAR");
             gate.examine(null,null,Double.NaN,Double.NaN,-1,-1,
                 SystemClock.elapsedRealtime(),false,false);
             note("AUTO ON · sin GPS preciso reciente; sin cambios");
@@ -220,6 +292,8 @@ public final class T1OptimizedAutoService extends Service {
         }
         long fixNanos=gps.getElapsedRealtimeNanos();
         if(fixNanos<=usedGpsNanos){
+            // No new fix: do not renew VERIFIED_TIME. The UI will expire
+            // if no fresh, verified profile arrives within the TTL.
             note("AUTO ON · esperando nueva posición GPS");
             return;
         }
@@ -247,6 +321,21 @@ public final class T1OptimizedAutoService extends Service {
         T1OptimizedAutoGate.Decision decision=gate.examine(
             road,rule,battery,snapshot.speed,snapshot.gear,
             snapshot.powerMode,SystemClock.elapsedRealtime(),confident,fresh);
+        T1OptimizedModePolicy.Decision conditions=
+            T1OptimizedModePolicy.evaluate(road,rule,battery);
+        if(!conditions.conditionSatisfied){
+            // Critically, HEV fallback with 13% and a configured 15% CITY
+            // minimum MUST NOT be represented as "MODO CIUDAD".
+            pendingRoad("SOC NO CUMPLE");
+        }else if(!confident||road==T1OptimizedModePolicy.Road.UNKNOWN){
+            pendingRoad("VÍA SIN IDENTIFICAR");
+        }else if(decision.reason!=T1OptimizedAutoGate.Reason.SAME_MODE){
+            pendingRoad(T1OptimizedAppliedRoadPolicy.label(
+                T1OptimizedAppliedRoadPolicy.evaluate(
+                    road,rule,battery,
+                    decision.reason!=T1OptimizedAutoGate.Reason.WAIT_STABLE,
+                    false,false)));
+        }
         if(!decision.ready()){
             if(decision.reason==T1OptimizedAutoGate.Reason.SAME_MODE){
                 maybeApplySocRegen(road,rule,battery,snapshot,
@@ -276,6 +365,7 @@ public final class T1OptimizedAutoService extends Service {
                 }else{
                     // No blind retries and no second fallback write if the
                     // OEM declined the first request.
+                    pendingRoad("MODO · OEM NO CONFIRMADO");
                     pref().edit().putBoolean(ENABLED,false)
                         .putString(STATUS,"AUTO DESACTIVADO · "+
                             "OEM no confirmó "+mode+" · "+result).apply();
@@ -298,13 +388,20 @@ public final class T1OptimizedAutoService extends Service {
                 snapshot.gear,snapshot.speed);
         T1SocRegenWritePolicy.Targets targets=
             T1SocRegenWritePolicy.desired(rule,battery);
+        if(!T1OptimizedModePolicy.evaluate(road,rule,battery).conditionSatisfied){
+            pendingRoad("SOC NO CUMPLE");
+            // Existing fallback vehicle policy stays untouched, but that
+            // fallback cannot be shown as the selected road profile.
+        }
         if(!eligible){
+            pendingRoad("MODO · VERIFICANDO");
             socProfileGate.examine(targets,false,false);
             note("AUTO ON · SOC/regeneración: esperando lecturas "+
                 "OEM fiables de marcha/velocidad en P o D");
             return;
         }
         if(!targets.valid()){
+            pendingRoad("SOC/REGEN PENDIENTE");
             socProfileGate.examine(targets,false,false);
             note("AUTO ON · SOC objetivo fuera de los seis presets "+
                 "20,30,40,50,60,70. Sin escritura.");
@@ -323,17 +420,36 @@ public final class T1OptimizedAutoService extends Service {
             socProfileGate.examine(targets,true,currentMatches);
         if(d.reason==T1SocRegenTransitionGate.Reason.APPLIED||
            d.reason==T1SocRegenTransitionGate.Reason.OEM_MATCHES){
-            // Stable destination: NO repeat of 1/3, 2/3, 3/3 and NO
-            // unnecessary Binder writes on each new GPS city fix.
-            note("AUTO ON · "+T1OptimizedModePolicy.roadName(road)+
-                " · perfil SOC/regen estable · sin revalidación triple");
+            // All three GPS observations have already passed via SAME_MODE.
+            // A cached 1041 readback is only usable if the current OEM
+            // strategy and regen remain aligned. Never infer applied from
+            // a fallback or mere road classification.
+            boolean baseMatches=snapshot.socMode==targets.strategy&&
+                snapshot.regen1046==targets.regen;
+            boolean auxVerified=(d.reason==
+                T1SocRegenTransitionGate.Reason.OEM_MATCHES&&currentMatches)||
+                (d.reason==T1SocRegenTransitionGate.Reason.APPLIED&&baseMatches);
+            T1OptimizedAppliedRoadPolicy.Reason display=
+                T1OptimizedAppliedRoadPolicy.evaluate(
+                    road,rule,battery,true,true,auxVerified&&!targets.fallback);
+            if(display==T1OptimizedAppliedRoadPolicy.Reason.APPLIED){
+                verifiedRoad(road,rule);
+                note("AUTO ON · MODO "+T1OptimizedModePolicy.roadName(road)+
+                    " APLICADO · 3/3, condición SOC y 1043/1040/1046 confirmados");
+            }else{
+                pendingRoad(T1OptimizedAppliedRoadPolicy.label(display));
+                note("AUTO ON · "+T1OptimizedModePolicy.roadName(road)+
+                    " detectada; perfil NO aplicado: "+display);
+            }
             return;
         }
         if(d.reason==T1SocRegenTransitionGate.Reason.WAIT_STABLE){
+            pendingRoad("MODO · VERIFICANDO");
             note("AUTO ON · transición SOC/regen nueva "+
                 d.matches+"/3 · "+targets.summary());
             return;
         }
+        pendingRoad("SOC/REGEN PENDIENTE");
         long now=SystemClock.elapsedRealtime();
         if(auxLastWriteAt>=0&&now-auxLastWriteAt<120000L){
             note("AUTO ON · cambio de perfil SOC/regen en espera anti-oscilación");
@@ -360,6 +476,7 @@ public final class T1OptimizedAutoService extends Service {
                     note("AUTO ON · "+result);
                 }else{
                     // No repeated actuation after uncertain OEM readback.
+                    pendingRoad("SOC/REGEN SIN CONFIRMAR");
                     pref().edit().putBoolean(ENABLED,false)
                         .putString(STATUS,"AUTO DESACTIVADO · "+
                             result).apply();
