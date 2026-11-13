@@ -41,6 +41,7 @@ public final class T1OptimizedAutoService extends Service {
     // battery condition and both OEM write/readback phases are verified.
     private static final String VERIFIED_ROAD="verified_applied_road",
         VERIFIED_PROFILE="verified_applied_profile",
+        VERIFIED_BRANCH="verified_applied_rule_slot",
         VERIFIED_TIME="verified_applied_at",DISPLAY_REASON="verified_display_reason";
     private static final long VERIFIED_TTL_MS=25000L;
     static final String ACTION_ON="t1.optimized.ON",
@@ -92,10 +93,23 @@ public final class T1OptimizedAutoService extends Service {
         if(road==T1OptimizedModePolicy.Road.UNKNOWN||
             !T1OptimizedModeStore.isEnabled(c,road)||
             road!=T1OptimizedModeStore.lastRoad(c))return null;
+        int slot=p.getInt(VERIFIED_BRANCH,T1OptimizedDualRulePolicy.NONE);
+        if(slot!=T1OptimizedDualRulePolicy.PRIMARY&&
+           slot!=T1OptimizedDualRulePolicy.SECONDARY)return null;
+        if(slot==T1OptimizedDualRulePolicy.SECONDARY&&
+            !T1OptimizedModeStore.secondEnabled(c,road))return null;
         String stored=p.getString(VERIFIED_PROFILE,"");
-        if(!stored.equals(profileSignature(T1OptimizedModeStore.get(c,road))))
-            return null; // changed user configuration needs fresh validation
+        if(!stored.equals(profileSignature(
+                T1OptimizedModeStore.getBranch(c,road,slot))))
+            return null; // new rule/edit needs a fresh OEM confirmation
         return road;
+    }
+    static String verifiedAppliedBranchLabel(Context c){
+        if(verifiedAppliedRoad(c)==null)return "";
+        int slot=prefs(c).getInt(VERIFIED_BRANCH,
+            T1OptimizedDualRulePolicy.NONE);
+        return slot==T1OptimizedDualRulePolicy.PRIMARY?"A":
+            slot==T1OptimizedDualRulePolicy.SECONDARY?"B":"";
     }
     static String roadDisplayReason(Context c){
         if(!enabled(c))return "OPTIMIZADO OFF";
@@ -111,6 +125,7 @@ public final class T1OptimizedAutoService extends Service {
     private static void clearVerified(SharedPreferences.Editor edit,String reason){
         edit.putString(VERIFIED_ROAD,"")
             .putString(VERIFIED_PROFILE,"")
+            .putInt(VERIFIED_BRANCH,T1OptimizedDualRulePolicy.NONE)
             .putLong(VERIFIED_TIME,0L)
             .putString(DISPLAY_REASON,reason);
     }
@@ -123,11 +138,14 @@ public final class T1OptimizedAutoService extends Service {
         edit.apply();
     }
     private void verifiedRoad(T1OptimizedModePolicy.Road road,
-                              T1OptimizedModePolicy.Rule rule){
+                              T1OptimizedModePolicy.Rule rule,int slot){
         if(stopping||!enabled(this)||
-            !T1OptimizedModeStore.isEnabled(this,road))return;
+            !T1OptimizedModeStore.isEnabled(this,road)||
+            (slot==T1OptimizedDualRulePolicy.SECONDARY&&
+                !T1OptimizedModeStore.secondEnabled(this,road)))return;
         pref().edit().putString(VERIFIED_ROAD,road.name())
             .putString(VERIFIED_PROFILE,profileSignature(rule))
+            .putInt(VERIFIED_BRANCH,slot)
             .putLong(VERIFIED_TIME,System.currentTimeMillis())
             .putString(DISPLAY_REASON,"CONFIRMADO")
             .apply();
@@ -322,7 +340,14 @@ public final class T1OptimizedAutoService extends Service {
         double battery=Double.isFinite(snapshot.socDisplay)&&
             snapshot.socDisplay>=0&&snapshot.socDisplay<=100?
             snapshot.socDisplay:snapshot.socInternal;
-        T1OptimizedModePolicy.Rule rule=T1OptimizedModeStore.get(this,road);
+        // Rule A and B have independent battery ranges and all OEM targets.
+        // Choose one, never both; with no match, NEVER force HEV fallback.
+        T1OptimizedDualRulePolicy.Choice selected=
+            T1OptimizedDualRulePolicy.select(
+                T1OptimizedModeStore.get(this,road),
+                T1OptimizedModeStore.getSecond(this,road),
+                T1OptimizedModeStore.secondEnabled(this,road),battery);
+        T1OptimizedModePolicy.Rule rule=selected.rule;
         if(!T1OptimizedModeStore.isEnabled(this,road)){
             // Hard block: no 1043 EV/HEV fallback, 1040 strategy,
             // 1041 forced SOC, nor 1046 regen writes for this road.
@@ -333,6 +358,19 @@ public final class T1OptimizedAutoService extends Service {
             socProfileGate.reset();
             note("AUTO ON · "+T1OptimizedModePolicy.roadName(road)+
                 " · BLOQUE DESACTIVADO · cero órdenes OEM");
+            return;
+        }
+        if(!selected.matched()){
+            // Still observe the road in the primary three-GPS gate, but
+            // no propulsion, SMART/FORZADO, SOC or regen target is allowed.
+            gate.examine(road,null,battery,snapshot.speed,snapshot.gear,
+                snapshot.powerMode,SystemClock.elapsedRealtime(),
+                confident,fresh);
+            pendingRoad("SOC SIN REGLA · MANTENER");
+            socProfileGate.reset();
+            note("AUTO ON · "+T1OptimizedModePolicy.roadName(road)+
+                " · "+selected.reason+
+                " · sin órdenes OEM, conserva modo actual");
             return;
         }
         T1OptimizedAutoGate.Decision decision=gate.examine(
@@ -355,8 +393,8 @@ public final class T1OptimizedAutoService extends Service {
         }
         if(!decision.ready()){
             if(decision.reason==T1OptimizedAutoGate.Reason.SAME_MODE){
-                maybeApplySocRegen(road,rule,battery,snapshot,
-                    confident,fresh);
+                maybeApplySocRegen(road,rule,selected.slot,battery,
+                    snapshot,confident,fresh);
             }else{
                 note("AUTO ON · "+decision.text);
             }
@@ -368,7 +406,8 @@ public final class T1OptimizedAutoService extends Service {
         int target=decision.target;
         final String mode=target==1?"EV":target==2?"HEV":"EV MAX";
         note("AUTO ON · "+T1OptimizedModePolicy.roadName(road)+
-            " · solicitando "+mode+" (1043="+target+")");
+            " · "+selected.label()+" · solicitando "+
+            mode+" (1043="+target+")");
         gate.recordCommand(SystemClock.elapsedRealtime(),target);
         boolean submitted=pilot.request(target,
             ()->!stopping&&enabled(T1OptimizedAutoService.this)&&
@@ -405,7 +444,7 @@ public final class T1OptimizedAutoService extends Service {
     }
     private void maybeApplySocRegen(
             T1OptimizedModePolicy.Road road,
-            T1OptimizedModePolicy.Rule rule,double battery,
+            T1OptimizedModePolicy.Rule rule,int ruleSlot,double battery,
             T1TripTelemetry.Sample snapshot,
             boolean confident,boolean fresh){
         boolean eligible=confident&&fresh&&
@@ -478,8 +517,10 @@ public final class T1OptimizedAutoService extends Service {
                 T1OptimizedAppliedRoadPolicy.evaluate(
                     road,rule,battery,true,true,auxVerified&&!targets.fallback);
             if(display==T1OptimizedAppliedRoadPolicy.Reason.APPLIED){
-                verifiedRoad(road,rule);
+                verifiedRoad(road,rule,ruleSlot);
                 note("AUTO ON · MODO "+T1OptimizedModePolicy.roadName(road)+
+                    " REGLA "+(ruleSlot==T1OptimizedDualRulePolicy.PRIMARY?
+                        "A":"B")+
                     " APLICADO · 3/3, condición SOC y 1043/1040/1046 confirmados");
             }else{
                 pendingRoad(T1OptimizedAppliedRoadPolicy.label(display));
