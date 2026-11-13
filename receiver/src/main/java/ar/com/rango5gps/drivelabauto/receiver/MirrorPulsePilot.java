@@ -307,6 +307,48 @@ public final class MirrorPulsePilot {
     }
 
     /**
+     * One button: read OEM 2003 first, invert only observed 0/1, write ONCE
+     * with stationary/slow gear guard, then read back. Never trust UI cache.
+     */
+    public boolean toggleFold2003(Callback callback){
+        if(!foreground||!busy.compareAndSet(false,true))return false;
+        stop.set(false);
+        new Thread(()->{
+            Connection c=null;String status;
+            synchronized(MirrorAutomationService.OEM_MIRROR_MUTEX){
+                try{
+                    requireReady();
+                    c=connect();
+                    requireSlowManeuver(c.binder);
+                    int before=readInt(c.binder,2003);
+                    if(before!=0&&before!=1)
+                        throw new IllegalStateException(
+                            "OEM 2003 desconocido: "+before+"; sin orden");
+                    int target=before==0?1:0;
+                    requireReady();
+                    writeFold2003(c.binder,target);
+                    SystemClock.sleep(250);
+                    int after=readInt(c.binder,2003);
+                    status=(target==0?"PLEGAR":"DESPLEGAR")+
+                        " 2003 "+before+"→"+after+
+                        (after==target?" · lectura coherente":
+                            " · CAMBIO NO CONFIRMADO")+
+                        ". Verificá físicamente.";
+                }catch(Exception ex){
+                    status="ESPEJOS SIN ORDEN / NO CONFIRMADO · "+
+                        ex.getClass().getSimpleName()+" · "+
+                        String.valueOf(ex.getMessage());
+                }finally{
+                    if(c!=null)c.close();
+                    busy.set(false);
+                }
+            }
+            emit(callback,status);
+        },"T1-Fold2003-Toggle-Verified").start();
+        return true;
+    }
+
+    /**
      * Folding 2003 is used during narrow entrance manoeuvres, so P is not
      * required. Keep an explicit low-speed guard; folded mirrors must not
      * be treated as suitable for ordinary road driving.
