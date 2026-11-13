@@ -132,8 +132,7 @@ final class T1EcoTripMonitor implements AutoCloseable {
             .putString("id",tripId)
             .putString("summary",
                 "VIAJE TOTAL · "+rolling.headline()+
-                "
-"+T1EcoTripMetrics.fmt(rolling.km(),2)+" km medidos"+
+                "\n"+T1EcoTripMetrics.fmt(rolling.km(),2)+" km medidos"+
                 " · "+rolling.abruptAccelerationEvents()+
                 " aceleraciones y "+rolling.abruptBrakeEvents()+
                 " frenadas fuertes estimadas")
