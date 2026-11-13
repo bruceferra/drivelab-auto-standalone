@@ -363,7 +363,7 @@ jobs:
           import json
           m=json.load(open('output/receiver.json'))
           assert m['versionName']=='0.2.73'
-          assert m['versionCode']==73, 'manifest code mismatch'
+          assert m['versionCode']==74, 'manifest code mismatch'
           assert m['packageName']=='ar.com.rango5gps.drivelabauto.receiver'
           assert m['apkUrl']=='https://github.com/bruceferra/drivelab-auto-standalone/releases/download/v0.2.73/DriveLab-Auto-Receiver-v0.2.73.apk'
           assert len(m['sha256'])==64
@@ -382,9 +382,9 @@ jobs:
             --title 'DriveLab Auto Receiver 0.2.73 - SOC y via sin revalidaciones repetidas' \
             --notes 'Receiver 0.2.73 code74. Optimizado: la via CIUDAD/CARRETERA/AUTOPISTA confirmada conserva votos y no revalida 1/3 2/3 3/3 sin transicion real; SOC/regen hace 3 lecturas solo ante cambio de perfil, luego fija el perfil confirmado sin comandos redundantes. El piloto 1041 no consulta ni utiliza SOC objetivo anterior como precondicion ni rollback. Escribe SOLO el nuevo objetivo 20,30,40,50,60,70 permitido y confirma mediante getters entero/flotante. Diagnostico persistente y compartible en CONFIGURAR OPT. separa ETAPA 1 preflight OEM, ETAPA 2 envio por Binder, ETAPA 3 lectura del nuevo objetivo, documenta RAW y fallos. Ante readback incierto se detiene sin reintentar a ciegas. Mantenidas escrituras 1040/1041/1046, EV/HEV/EV MAX 1043, indicadores de via, espejos, AVAS, botones, Waze experimental, datos, firma y Sender 0.2.16.'
           mkdir -p verify
-          gh release download v0.2.72 --pattern 'sender.json' --dir verify
-          gh release download v0.2.72 --pattern 'receiver.json' --dir verify
+          gh release download v0.2.73 --pattern 'sender.json' --dir verify
+          gh release download v0.2.73 --pattern 'receiver.json' --dir verify
           cmp output/sender.json verify/sender.json
           cmp output/receiver.json verify/receiver.json
-          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.72
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.73
           gh release view v0.2.73 --json assets --jq '.assets[].name'
