@@ -13,16 +13,35 @@ final class T1OptimizedModeStore {
         SharedPreferences p=preferences(c);
         T1OptimizedModePolicy.Rule d=T1OptimizedModePolicy.defaultRule(r);
         String k="road_"+r.name()+"_";
+        // Migration: an old single threshold is kept with its original
+        // comparator. After the first save, both bounds become independent.
+        boolean legacyEnabled=p.getBoolean(
+            k+"threshold_enabled",d.thresholdEnabled);
+        T1OptimizedModePolicy.Comparison legacyComparison=
+            enumOr(T1OptimizedModePolicy.Comparison.class,
+                p.getString(k+"comparison",d.comparison.name()),d.comparison);
+        int legacyPct=p.getInt(k+"min_pct",d.minBattery);
+        boolean v2=p.contains(k+"min_enabled_v2")||
+            p.contains(k+"max_enabled_v2");
+        boolean minOn=v2?p.getBoolean(k+"min_enabled_v2",false):
+            legacyEnabled&&legacyComparison==
+                T1OptimizedModePolicy.Comparison.GREATER_OR_EQUAL;
+        boolean maxOn=v2?p.getBoolean(k+"max_enabled_v2",false):
+            legacyEnabled&&legacyComparison==
+                T1OptimizedModePolicy.Comparison.LESS_OR_EQUAL;
+        int minimum=v2?legacyPct:
+            legacyComparison==T1OptimizedModePolicy.Comparison.LESS_OR_EQUAL?
+                5:legacyPct;
+        int maximum=v2?p.getInt(k+"max_pct_v2",100):
+            legacyComparison==T1OptimizedModePolicy.Comparison.LESS_OR_EQUAL?
+                legacyPct:100;
         return new T1OptimizedModePolicy.Rule(
             enumOr(T1OptimizedModePolicy.Power.class,
                 p.getString(k+"power",d.power.name()),d.power),
             enumOr(T1OptimizedModePolicy.Strategy.class,
                 p.getString(k+"strategy",d.strategy.name()),d.strategy),
             p.getInt(k+"soc",d.forcedSoc),
-            p.getBoolean(k+"threshold_enabled",d.thresholdEnabled),
-            p.getInt(k+"min_pct",d.minBattery),
-            enumOr(T1OptimizedModePolicy.Comparison.class,
-                p.getString(k+"comparison",d.comparison.name()),d.comparison),
+            minOn,minimum,maxOn,maximum,
             enumOr(T1OptimizedModePolicy.Regen.class,
                 p.getString(k+"regen",d.regeneration.name()),d.regeneration));
     }
@@ -33,9 +52,17 @@ final class T1OptimizedModeStore {
             .putString(k+"power",v.power.name())
             .putString(k+"strategy",v.strategy.name())
             .putInt(k+"soc",v.forcedSoc)
+            .putBoolean(k+"min_enabled_v2",v.minEnabled)
+            .putBoolean(k+"max_enabled_v2",v.maxEnabled)
+            .putInt(k+"max_pct_v2",v.maxBattery)
+            // Keep old keys for a safe on-disk migration; new code
+            // always prefers both v2 flags.
             .putBoolean(k+"threshold_enabled",v.thresholdEnabled)
-            .putInt(k+"min_pct",v.minBattery)
-            .putString(k+"comparison",v.comparison.name())
+            .putInt(k+"min_pct",v.minEnabled?v.minBattery:v.maxBattery)
+            .putString(k+"comparison",
+                v.minEnabled?
+                    T1OptimizedModePolicy.Comparison.GREATER_OR_EQUAL.name():
+                    T1OptimizedModePolicy.Comparison.LESS_OR_EQUAL.name())
             .putString(k+"regen",v.regeneration.name())
             .apply();
     }
