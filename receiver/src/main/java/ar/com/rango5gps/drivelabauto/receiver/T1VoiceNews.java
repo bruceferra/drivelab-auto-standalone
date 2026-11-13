@@ -20,17 +20,6 @@ import java.util.TimeZone;
 final class T1VoiceNews {
     private static final long NEWS_MAX_AGE=48L*60*60*1000;
     private T1VoiceNews(){}
-    static String topic(String phrase){
-        if(phrase==null)return null;
-        String s=T1VoiceMath.normalize(phrase);
-        if(s.matches(".*\\b(?:trump|presidente de estados unidos)\\b.*"))
-            return "Donald Trump";
-        if(s.matches(".*\\b(?:san lorenzo|cicl[oó]n)\\b.*"))
-            return "San Lorenzo futbol resultado";
-        if(s.matches(".*\\b(?:noticias|actualidad|titulares|que paso hoy)\\b.*"))
-            return "Argentina noticias";
-        return null;
-    }
     private static long published(String value){
         if(value==null)return -1;
         try{
@@ -42,7 +31,7 @@ final class T1VoiceNews {
         }catch(Exception e){return -1;}
     }
     static String headlines(String phrase)throws Exception{
-        String topic=topic(phrase);
+        String topic=T1VoiceNewsTopic.topic(phrase);
         if(topic==null)return null;
         String encoded=URLEncoder.encode(topic+" when:2d","UTF-8");
         String url="https://news.google.com/rss/search?q="+encoded+
