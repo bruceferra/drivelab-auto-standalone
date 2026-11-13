@@ -33,7 +33,7 @@ public final class T1WazeWheelService extends AccessibilityService {
         PENDING_TIME="capture_started",LAST="last_key",
         LAST_STATUS="status",LAST_TIME="last_time";
     static final String NEXT="wheel_next",PREV="wheel_prev",
-        OK="wheel_ok",BACK="wheel_back";
+        OK="wheel_ok",BACK="wheel_back",ROUTES="wheel_routes";
     private static final String WAZE="com.waze";
     private static final String[] DECISION={
         "aceptar","cancelar","confirmar","continuar","omitir","descartar",
@@ -53,6 +53,7 @@ public final class T1WazeWheelService extends AccessibilityService {
     private WindowManager windows;
     private int selected=0;
     private String selectedLabel="",seenPackage="";
+    private boolean alternateList;
     private long lastButtonAt;
     private static final class Candidate{
         final AccessibilityNodeInfo node;
@@ -68,7 +69,8 @@ public final class T1WazeWheelService extends AccessibilityService {
     }
     static void learn(Context c,String action){
         if(!NEXT.equals(action)&&!PREV.equals(action)&&
-           !OK.equals(action)&&!BACK.equals(action))return;
+           !OK.equals(action)&&!BACK.equals(action)&&
+           !ROUTES.equals(action))return;
         c.getSharedPreferences(PREFS,Context.MODE_PRIVATE).edit()
             .putString(PENDING,action)
             .putLong(PENDING_TIME,System.currentTimeMillis())
@@ -81,7 +83,8 @@ public final class T1WazeWheelService extends AccessibilityService {
             "\nSIGUIENTE="+p.getInt(NEXT,KeyEvent.KEYCODE_DPAD_RIGHT)+
             " · ANTERIOR="+p.getInt(PREV,KeyEvent.KEYCODE_DPAD_LEFT)+
             " · OK="+p.getInt(OK,KeyEvent.KEYCODE_DPAD_CENTER)+
-            " · ATRÁS="+p.getInt(BACK,KeyEvent.KEYCODE_BACK);
+            " · ATRÁS="+p.getInt(BACK,KeyEvent.KEYCODE_BACK)+
+            " · RUTAS="+p.getInt(ROUTES,-1);
     }
     private void status(String message){
         prefs().edit().putString(LAST_STATUS,message)
@@ -130,6 +133,8 @@ public final class T1WazeWheelService extends AccessibilityService {
         int prev=p.getInt(PREV,KeyEvent.KEYCODE_DPAD_LEFT);
         int ok=p.getInt(OK,KeyEvent.KEYCODE_DPAD_CENTER);
         int back=p.getInt(BACK,KeyEvent.KEYCODE_BACK);
+        int routes=p.getInt(ROUTES,-1);
+        boolean routeShortcut=routes>0&&code==routes;
         boolean forward=code==next||
             (next==KeyEvent.KEYCODE_DPAD_RIGHT&&code==KeyEvent.KEYCODE_DPAD_DOWN);
         boolean backward=code==prev||
@@ -137,38 +142,161 @@ public final class T1WazeWheelService extends AccessibilityService {
         boolean confirm=code==ok||(ok==KeyEvent.KEYCODE_DPAD_CENTER&&
             code==KeyEvent.KEYCODE_ENTER);
         boolean cancel=code==back;
-        if(!forward&&!backward&&!confirm&&!cancel)return false;
+        if(!forward&&!backward&&!confirm&&!cancel&&!routeShortcut)return false;
         if(SystemClock.elapsedRealtime()-lastButtonAt<150)return true;
-        if(!collectPromptChoices(root)){
-            status("Waze sin diálogo accesible compatible. "+
-                "No se consumió la tecla "+code);
-            hideHint();
+
+        // First priority: list of actual Waze route alternatives. Not a
+        // coordinate-based selector; the candidates are real clickable nodes.
+        if(collectAlternativeRoutes(root)){
+            lastButtonAt=SystemClock.elapsedRealtime();
+            if(cancel){
+                hideHint();
+                selectedLabel="";
+                status("Waze: volver de rutas alternativas");
+                return performGlobalAction(GLOBAL_ACTION_BACK);
+            }
+            if(routeShortcut){
+                highlight();
+                return true;
+            }
+            if(forward||backward){
+                selected=Math.floorMod(selected+(forward?1:-1),choices.size());
+                selectedLabel=choices.get(selected).label;
+                highlight();
+                return true;
+            }
+            return clickSelected("RUTA ALTERNATIVA · OK");
+        }
+        // Second priority: genuine confirmation/cancel prompts on Waze.
+        if(collectPromptChoices(root)){
+            lastButtonAt=SystemClock.elapsedRealtime();
+            if(routeShortcut)return false;
+            if(forward||backward){
+                selected=Math.floorMod(selected+(forward?1:-1),choices.size());
+                selectedLabel=choices.get(selected).label;
+                highlight();
+                return true;
+            }
+            if(cancel){
+                for(int i=0;i<choices.size();i++){
+                    String norm=normalize(choices.get(i).label);
+                    if(norm.equals("cancelar")||norm.equals("cancel")||
+                        norm.equals("no")||norm.equals("volver")||
+                        norm.equals("descartar")){
+                        selected=i;selectedLabel=choices.get(i).label;
+                        return clickSelected("ATRÁS");
+                    }
+                }
+                hideHint();
+                status("ATRÁS: diálogo Waze detectado sin cancelar etiquetado");
+                return performGlobalAction(GLOBAL_ACTION_BACK);
+            }
+            return clickSelected("OK");
+        }
+        // Map view: pressing the physical OK button, or a separately
+        // calibrated RUTAS shortcut, tries ONLY the publicly-visible,
+        // accessibility-labelled Waze routes control. No fabricated URI.
+        if(confirm||routeShortcut){
+            AccessibilityNodeInfo routesButton=findRoutesButton(root,0,new int[]{0});
+            if(routesButton==null){
+                status("RUTAS: Waze no expone el ícono de rutas accesible. "+
+                    "No se hizo ningún toque.");
+                hideHint();
+                return false;
+            }
+            String label=labelOf(routesButton);
+            boolean opened=routesButton.performAction(
+                AccessibilityNodeInfo.ACTION_CLICK);
+            lastButtonAt=SystemClock.elapsedRealtime();
+            status("ABRIR RUTAS: "+label+" → "+
+                (opened?"clic enviado":"rechazado por Waze"));
+            hideHint();selectedLabel="";
+            return opened;
+        }
+        // In the map view, generic wheel turn / back still belongs to Waze.
+        return false;
+    }
+    /** Exact accessible button match, no screen coordinates or guessed tap. */
+    private AccessibilityNodeInfo findRoutesButton(
+            AccessibilityNodeInfo root,int depth,int[] visited){
+        if(root==null||depth>18||visited[0]++>450||
+            !root.isVisibleToUser())return null;
+        String id=root.getViewIdResourceName();
+        String label=normalize(labelOf(root));
+        String key=id==null?"":normalize(id);
+        boolean route=(label.equals("rutas")||label.equals("routes")||
+            label.contains("ruta alternativa")||
+            label.contains("rutas alternativas")||
+            label.equals("ver rutas")||label.equals("view routes")||
+            label.equals("alternate routes")||
+            label.equals("alternative routes")||
+            key.contains("alternativeroute")||
+            key.contains("alternativeroute")||
+            key.contains("routealternatives"));
+        if(route&&root.isClickable())return root;
+        if(route&&root.getParent()!=null&&root.getParent().isClickable())
+            return root.getParent();
+        for(int i=0;i<root.getChildCount();i++){
+            AccessibilityNodeInfo found=findRoutesButton(
+                root.getChild(i),depth+1,visited);
+            if(found!=null)return found;
+        }
+        return null;
+    }
+    private static boolean isRouteLabel(String label){
+        String n=normalize(label);
+        // Restrict to route ETA or explicit alternatives descriptions.
+        return n.matches(".*\\b[0-9]{1,3}\\s*(min|minutos|minutes)\\b.*")||
+            n.contains("ruta via ")||n.contains("route via ")||
+            n.startsWith("ruta alternativa ")||
+            n.startsWith("alternative route ");
+    }
+    private static final class RouteRead {
+        int titleCount=0,etaCards=0;
+    }
+    private void inspectRouteCards(AccessibilityNodeInfo node,int depth,
+                                   int[] visited,RouteRead found){
+        if(node==null||depth>18||visited[0]++>450||
+            !node.isVisibleToUser())return;
+        String label=labelOf(node),normal=normalize(label);
+        if(normal.equals("rutas alternativas")||
+            normal.equals("alternate routes")||
+            normal.equals("alternative routes")||
+            normal.equals("routes")||normal.equals("rutas"))
+            found.titleCount++;
+        if(node.isClickable()&&isRouteLabel(label)){
+            Rect region=new Rect();node.getBoundsInScreen(region);
+            if(region.height()>25&&region.width()>40){
+                choices.add(new Candidate(node,label));
+                found.etaCards++;
+            }
+        }
+        for(int i=0;i<node.getChildCount();i++)
+            inspectRouteCards(node.getChild(i),depth+1,visited,found);
+    }
+    private boolean collectAlternativeRoutes(AccessibilityNodeInfo root){
+        choices.clear();
+        RouteRead found=new RouteRead();
+        inspectRouteCards(root,0,new int[]{0},found);
+        // Require the routes dialog/panel AND >=2 real choice nodes.
+        // If Waze has unlabelled custom-drawn cards, do not guess.
+        if(found.titleCount==0||found.etaCards<2||found.etaCards>6){
+            choices.clear();
             return false;
         }
-        lastButtonAt=SystemClock.elapsedRealtime();
-        if(forward||backward){
-            selected=Math.floorMod(selected+(forward?1:-1),choices.size());
-            selectedLabel=choices.get(selected).label;
-            highlight();
-            return true;
-        }
-        if(cancel){
-            for(int i=0;i<choices.size();i++){
-                String norm=normalize(choices.get(i).label);
-                if(norm.equals("cancelar")||norm.equals("cancel")||
-                    norm.equals("no")||norm.equals("volver")||
-                    norm.equals("descartar")){
-                    selected=i;selectedLabel=choices.get(i).label;
-                    return clickSelected("ATRÁS");
+        Collections.sort(choices,Comparator
+            .comparingInt((Candidate c)->c.bounds.top)
+            .thenComparingInt(c->c.bounds.left));
+        alternateList=true;
+        if(!selectedLabel.isEmpty()){
+            for(int i=0;i<choices.size();i++)
+                if(selectedLabel.equals(choices.get(i).label)){
+                    selected=i;return true;
                 }
-            }
-            // Only send BACK when we detected a modal choice set.
-            hideHint();
-            status("ATRÁS: diálogo visible, sin cancelar accesible. "+
-                "Se solicitó Android BACK.");
-            return performGlobalAction(GLOBAL_ACTION_BACK);
         }
-        return clickSelected("OK");
+        selected=Math.max(0,Math.min(selected,choices.size()-1));
+        selectedLabel=choices.get(selected).label;
+        return true;
     }
     private static String normalize(String value){
         String s=Normalizer.normalize(value,Normalizer.Form.NFD)
@@ -201,6 +329,7 @@ public final class T1WazeWheelService extends AccessibilityService {
     }
     private boolean collectPromptChoices(AccessibilityNodeInfo root){
         choices.clear();
+        alternateList=false;
         visit(root,0,new int[]{0});
         Collections.sort(choices,Comparator
             .comparingInt((Candidate c)->c.bounds.top)
@@ -232,7 +361,8 @@ public final class T1WazeWheelService extends AccessibilityService {
         if(choices.isEmpty())return;
         Candidate c=choices.get(selected);
         c.node.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS);
-        String text="VOLANTE  "+(selected+1)+"/"+choices.size()+
+        String text=(alternateList?"RUTAS A/B/C  ":"VOLANTE  ")+
+            (selected+1)+"/"+choices.size()+
             "  ·  "+c.label+"  ·  OK / ATRÁS";
         if(hint==null){
             hint=new TextView(this);
