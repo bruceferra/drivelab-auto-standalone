@@ -17,8 +17,11 @@ import android.widget.TextView;
  * activity re-render on tap. Motor actions still perform OEM safety checks.
  */
 final class ReceiverQuickControls {
-    private static final int TEAL=0xFF0B707A,BLUE=0xFF205A7A,ORANGE=0xFF825B2B,
-        PURPLE=0xFF225D78,RED=0xFF983E4A,GREY=0xFF274259,GREEN=0xFF126F62;
+    // Neutral OEM charcoal surfaces, aqua selection, green and red intent.
+    private static final int TEAL=0xFF426E74,BLUE=0xFF304A57,
+        ORANGE=T1JetourTheme.AMBER_BUTTON,
+        PURPLE=0xFF394C55,RED=T1JetourTheme.RED_BUTTON,
+        GREY=T1JetourTheme.PANEL_HI,GREEN=T1JetourTheme.GREEN_BUTTON;
     private final Activity activity;
     private final MirrorPulsePilot fold;
     private final VehicleWindowGroup windows;
@@ -88,7 +91,8 @@ final class ReceiverQuickControls {
         GradientDrawable bg=new GradientDrawable(
             GradientDrawable.Orientation.TOP_BOTTOM,new int[]{upper,lower});
         bg.setCornerRadius(17);
-        bg.setStroke(selected?5:2,selected?0xFFFFD86B:0xFFD1E3EC);
+        bg.setStroke(selected?3:1,
+            selected?T1JetourTheme.CYAN:T1JetourTheme.BORDER);
         return bg;
     }
     private void styleSurface(Button b,int base){
@@ -103,7 +107,7 @@ final class ReceiverQuickControls {
         b.setBackground(backgrounds);
         b.setElevation(b.isSelected()?2f:7f);
         b.setTranslationY(b.isSelected()?2f:0f);
-        b.setTextColor(Color.WHITE);
+        b.setTextColor(T1JetourTheme.WHITE);
         b.setTypeface(null,b.isSelected()?
             android.graphics.Typeface.BOLD:android.graphics.Typeface.NORMAL);
     }
@@ -125,6 +129,17 @@ final class ReceiverQuickControls {
             }
             return false;
         });
+        // Keep existing 3D/long-press interaction; visual icon is original.
+        String upper=text.toUpperCase(java.util.Locale.ROOT);
+        String icon=upper.contains("ESPEJO")?"steer":
+            upper.contains("VENTIL")?"pulse":null;
+        if(icon!=null){
+            T1JetourTheme.Icon glyph=new T1JetourTheme.Icon(icon,T1JetourTheme.CYAN);
+            int px=T1JetourTheme.dp(activity,17);
+            glyph.setBounds(0,0,px,px);
+            b.setCompoundDrawablePadding(T1JetourTheme.dp(activity,4));
+            b.setCompoundDrawables(glyph,null,null,null);
+        }
         b.setOnClickListener(v->cb.run());
         parent.addView(b,new LinearLayout.LayoutParams(0,68,1));
         return b;
