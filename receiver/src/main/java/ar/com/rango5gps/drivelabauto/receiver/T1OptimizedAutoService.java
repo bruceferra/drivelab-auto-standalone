@@ -377,6 +377,13 @@ public final class T1OptimizedAutoService extends Service {
             result->{
                 changing.set(false);
                 if(stopping||!enabled(T1OptimizedAutoService.this))return;
+                // User switched this block OFF while a command was pending:
+                // never mark it applied or disable the other road profiles.
+                if(!T1OptimizedModeStore.isEnabled(T1OptimizedAutoService.this,road)){
+                    pendingRoad("PERFIL DESACTIVADO");
+                    note("AUTO ON · bloque desactivado · sin nuevos comandos OEM");
+                    return;
+                }
                 if(result.startsWith("LECTURA CONFIRMADA:")){
                     note("AUTO ON · "+mode+" CONFIRMADO por OEM 1043. "+
                         "SOC/regeneración se sincronizan en el "+
@@ -491,6 +498,13 @@ public final class T1OptimizedAutoService extends Service {
             result->{
                 changing.set(false);
                 if(stopping||!enabled(T1OptimizedAutoService.this))return;
+                // User switched this block OFF while a command was pending:
+                // never mark it applied or disable the other road profiles.
+                if(!T1OptimizedModeStore.isEnabled(T1OptimizedAutoService.this,road)){
+                    pendingRoad("PERFIL DESACTIVADO");
+                    note("AUTO ON · bloque desactivado · sin nuevos comandos OEM");
+                    return;
+                }
                 if(result.startsWith("LECTURA CONFIRMADA:")){
                     socProfileGate.recordConfirmed(targets);
                     note("AUTO ON · "+result);
