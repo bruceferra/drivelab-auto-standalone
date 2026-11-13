@@ -17,6 +17,8 @@ import java.util.Date;
 import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Iterator;
+import org.json.JSONObject;
 
 /**
  * Single entry point for unfinished T1 interoperability checks.
@@ -309,6 +311,8 @@ public final class T1ValidationWizardActivity extends T1ImmersiveActivity {
             LinearLayout pair=row();card.addView(pair);
             Button a=small(pair,"1 · CAPTURA A",BLUE,()->capture(task,false));
             Button b=small(pair,"2 · CAPTURA B",GREEN,()->capture(task,true));
+            // Captura A se guarda durante 30 minutos: podés abrir temporalmente
+            // la pantalla original Jetour, cambiar una opción y volver a B.
             // Callbacks guard concurrency; buttons never remain disabled
             // after returning from another Activity while a read completes.
             card.addView(text("Entre A y B accioná una sola opción " +
@@ -434,8 +438,8 @@ public final class T1ValidationWizardActivity extends T1ImmersiveActivity {
             status("Otra lectura OEM sigue activa; esperá su resultado.");return;
         }
         if(after&&!hasBase(task)){
-            status("FALTA CAPTURA A: volvé a tomar la lectura inicial " +
-                "con el mando OEM en su primer estado.");return;
+            status("FALTA CAPTURA A RECIENTE: tomá una lectura inicial " +
+                "con el mando OEM en su primer estado. La base dura 30 minutos.");return;
         }
         busy=true;
         String id=task.id;
@@ -448,10 +452,11 @@ public final class T1ValidationWizardActivity extends T1ImmersiveActivity {
                         Map<String,String> copy=new LinkedHashMap<>(map);
                         if(!after){
                             beforeWiper.put(id,copy);
+                            saveBaseline(id,"wiper",new JSONObject(copy).toString());
                             storeReport(id,"CAPTURA A · "+now()+"\n"+
                                 summarizeMap(copy,id));
                         }else{
-                            Map<String,String> a=beforeWiper.get(id);
+                            Map<String,String> a=cachedWiper(id);
                             storeReport(id,compareWiper(a,copy,id));
                         }
                     }finally{busy=false;}
@@ -470,9 +475,10 @@ public final class T1ValidationWizardActivity extends T1ImmersiveActivity {
                         try{
                             if(!after){
                                 beforeCabin.put(id,snapshot);
+                                saveBaseline(id,"cabin",encodeCabin(snapshot));
                                 storeReport(id,"CAPTURA A · "+snapshot.describe());
                             }else{
-                                T1CabinLightReadOnlyProbe.Snapshot old=beforeCabin.get(id);
+                                T1CabinLightReadOnlyProbe.Snapshot old=cachedCabin(id);
                                 if(old!=null)storeReport(id,
                                     T1CabinLightReadOnlyProbe.Snapshot.compare(old,snapshot));
                             }
@@ -487,9 +493,10 @@ public final class T1ValidationWizardActivity extends T1ImmersiveActivity {
                         try{
                             if(!after){
                                 beforeSeats.put(id,snapshot);
+                                saveBaseline(id,"seat",encodeSeats(snapshot));
                                 storeReport(id,"CAPTURA A · "+snapshot.summary());
                             }else{
-                                T1RearSeatLightsProbe.Snapshot old=beforeSeats.get(id);
+                                T1RearSeatLightsProbe.Snapshot old=cachedSeats(id);
                                 if(old!=null)storeReport(id,
                                     T1RearSeatLightsProbe.Snapshot.compare(old,snapshot));
                             }
@@ -503,10 +510,103 @@ public final class T1ValidationWizardActivity extends T1ImmersiveActivity {
         }
     }
     private boolean hasBase(Task task){
-        if("wiper".equals(task.kind))return beforeWiper.containsKey(task.id);
-        if("cabin".equals(task.kind))return beforeCabin.containsKey(task.id);
-        if("seat".equals(task.kind))return beforeSeats.containsKey(task.id);
+        if("wiper".equals(task.kind))return cachedWiper(task.id)!=null;
+        if("cabin".equals(task.kind))return cachedCabin(task.id)!=null;
+        if("seat".equals(task.kind))return cachedSeats(task.id)!=null;
         return false;
+    }
+    private void saveBaseline(String id,String kind,String json){
+        prefs.edit().putString(id+"_baseline_"+kind,json)
+            .putLong(id+"_baseline_at",System.currentTimeMillis()).apply();
+    }
+    private boolean recent(String id){
+        long stamp=prefs.getLong(id+"_baseline_at",0L);
+        long age=System.currentTimeMillis()-stamp;
+        return stamp>0&&age>=0&&age<=1800000L;
+    }
+    private static String encodeCabin(T1CabinLightReadOnlyProbe.Snapshot s){
+        JSONObject j=new JSONObject();
+        try{
+            j.put("header",s.header);
+            for(Map.Entry<Integer,String> e:s.values.entrySet())
+                j.put(Integer.toString(e.getKey()),e.getValue());
+        }catch(Exception ignored){}
+        return j.toString();
+    }
+    private static T1CabinLightReadOnlyProbe.Snapshot decodeCabin(String raw){
+        try{
+            JSONObject j=new JSONObject(raw);
+            T1CabinLightReadOnlyProbe.Snapshot s=
+                new T1CabinLightReadOnlyProbe.Snapshot();
+            s.header=j.optString("header","");
+            Iterator<String> it=j.keys();
+            while(it.hasNext()){
+                String key=it.next();
+                if("header".equals(key))continue;
+                try{s.values.put(Integer.parseInt(key),j.optString(key,""));}
+                catch(NumberFormatException ignored){}
+            }
+            return s.values.isEmpty()?null:s;
+        }catch(Exception e){return null;}
+    }
+    private static String encodeSeats(T1RearSeatLightsProbe.Snapshot s){
+        JSONObject j=new JSONObject();
+        try{
+            j.put("header",s.header);
+            for(int k=0;k<s.readings.length;k++)
+                for(int i=0;i<s.readings[k].length;i++)
+                    if(s.readings[k][i]!=null)
+                        j.put(k+"_"+i,s.readings[k][i]);
+        }catch(Exception ignored){}
+        return j.toString();
+    }
+    private static T1RearSeatLightsProbe.Snapshot decodeSeats(String raw){
+        try{
+            JSONObject j=new JSONObject(raw);
+            T1RearSeatLightsProbe.Snapshot s=
+                new T1RearSeatLightsProbe.Snapshot();
+            s.header=j.optString("header","");
+            int count=0;
+            for(int k=0;k<s.readings.length;k++)
+                for(int i=0;i<s.readings[k].length;i++){
+                    String key=k+"_"+i;
+                    if(j.has(key)){
+                        s.readings[k][i]=j.optString(key,"");count++;
+                    }
+                }
+            return count==0?null:s;
+        }catch(Exception e){return null;}
+    }
+    private Map<String,String> cachedWiper(String id){
+        if(!recent(id))return null;
+        Map<String,String> memory=beforeWiper.get(id);
+        if(memory!=null)return memory;
+        try{
+            JSONObject j=new JSONObject(prefs.getString(id+"_baseline_wiper","{}"));
+            Map<String,String> map=new LinkedHashMap<>();
+            Iterator<String> it=j.keys();
+            while(it.hasNext()){
+                String key=it.next();map.put(key,j.optString(key,""));
+            }
+            if(!map.isEmpty()){beforeWiper.put(id,map);return map;}
+        }catch(Exception ignored){}
+        return null;
+    }
+    private T1CabinLightReadOnlyProbe.Snapshot cachedCabin(String id){
+        if(!recent(id))return null;
+        T1CabinLightReadOnlyProbe.Snapshot s=beforeCabin.get(id);
+        if(s!=null)return s;
+        s=decodeCabin(prefs.getString(id+"_baseline_cabin","{}"));
+        if(s!=null)beforeCabin.put(id,s);
+        return s;
+    }
+    private T1RearSeatLightsProbe.Snapshot cachedSeats(String id){
+        if(!recent(id))return null;
+        T1RearSeatLightsProbe.Snapshot s=beforeSeats.get(id);
+        if(s!=null)return s;
+        s=decodeSeats(prefs.getString(id+"_baseline_seat","{}"));
+        if(s!=null)beforeSeats.put(id,s);
+        return s;
     }
     private static boolean useful(String x){
         return x!=null&&!x.isEmpty()&&!x.startsWith("SIN ")&&
