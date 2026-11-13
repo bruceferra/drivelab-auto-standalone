@@ -25,7 +25,9 @@ import java.util.function.BooleanSupplier;
  * No separate unlock wizard: the owner explicitly enables MODO OPTIMIZADO
  * once. The first automatic write is an experiment with direct OEM readback.
  * Every apply uses two fresh gear/speed reads, individually checked values,
- * one attempt per id, readback, and best-effort rollback of partial changes.
+ * one attempt per id, readback, and best-effort rollback of confirmed
+ * strategy/regen changes only. 1041 is NEVER rolled back on stale raw
+ * readback: the actual OEM UI must be checked before any next attempt.
  * D with valid 2148 speed is eligible, as is P/0; R/N/unknown are denied.
  */
 final class T1SocRegenPilot {
@@ -103,6 +105,21 @@ final class T1SocRegenPilot {
             return reply.readInt();
         }finally{data.recycle();reply.recycle();}
     }
+    /** Independent candidate getter for target 1041: the int getter can
+     * return an opaque/raw 56 while the OEM UI shows a target of 20%.
+     * This is only confirmation if the float getter itself equals a
+     * supported requested value. Never reinterpret raw 56 as a SOC preset.
+     */
+    private static double readSocTargetFloat(IBinder b)throws Exception{
+        Parcel data=Parcel.obtain(),reply=Parcel.obtain();
+        try{
+            data.writeInterfaceToken(TOKEN);data.writeInt(1041);
+            if(!b.transact(6,data,reply,0))
+                throw new IllegalStateException("Float OEM 1041 rechazado");
+            reply.readException();
+            return reply.readFloat();
+        }finally{data.recycle();reply.recycle();}
+    }
     private static float readSpeed(IBinder b)throws Exception{
         Parcel data=Parcel.obtain(),reply=Parcel.obtain();
         try{
@@ -159,13 +176,21 @@ final class T1SocRegenPilot {
             if(enabled!=null&&!enabled.getAsBoolean())
                 throw new IllegalStateException("AUTO apagado; lectura abortada");
             int actual=readInt(b,id);
+            double asFloat=Double.NaN;
+            if(id==1041){
+                try{asFloat=readSocTargetFloat(b);}catch(Exception ignored){}
+            }
             T1OemDiagnosticLog.add(app,"SOC_REGEN_READBACK",
-                "id="+id+" esperado="+target+" recibido="+actual);
-            if(actual==target)return;
+                "id="+id+" esperado="+target+" intRaw="+actual+
+                " floatRaw="+asFloat);
+            if(actual==target||
+                (id==1041&&Double.isFinite(asFloat)&&
+                    Math.abs(asFloat-target)<0.05))return;
             SystemClock.sleep(300);
         }
         throw new IllegalStateException(
-            "OEM NO confirmó id="+id+" valor="+target);
+            "OEM no confirmó por getters id="+id+" objetivo="+target+
+            ". La escritura puede HABERSE APLICADO; no repetir automáticamente.");
     }
 
     private String tryApply(T1SocRegenWritePolicy.Targets targets,
@@ -187,9 +212,15 @@ final class T1SocRegenPilot {
             LinkedHashMap<Integer,Integer> original=new LinkedHashMap<>();
             for(Map.Entry<Integer,Integer> item:wanted.entrySet()){
                 int id=item.getKey(),now=readInt(b,id);
-                if(!T1SocRegenWritePolicy.accepted(id,now))
+                if(id!=1041&&!T1SocRegenWritePolicy.accepted(id,now))
                     throw new IllegalStateException(
                         "Estado OEM "+id+"="+now+" no reconocido; sin escritura");
+                // 1041 is a raw getter, NOT an authorized former preset.
+                // Preserve it for diagnostics but never use it as rollback.
+                if(id==1041&&!T1SocRegenWritePolicy.accepted(id,now))
+                    T1OemDiagnosticLog.add(app,"SOC_REGEN_1041_RAW",
+                        "getterInt="+now+" no representa preset validado; "+
+                        "solo se escribirá objetivo de perfil permitido");
                 original.put(id,now);
             }
             int writes=0;
@@ -213,6 +244,17 @@ final class T1SocRegenPilot {
                 Integer[] changedIds=changed.keySet().toArray(new Integer[0]);
                 for(int n=changedIds.length-1;n>=0;n--){
                     int id=changedIds[n],previous=changed.get(id);
+                    if(id==1041){
+                        // The ECU may have applied the requested 20 while
+                        // readInt still reports opaque raw 56. A readback
+                        // mismatch MUST NOT cause a second SOC-target write
+                        // to a guessed prior value. Driver verifies OEM UI.
+                        allRestored=false;
+                        restored.append("1041 SIN ROLLBACK; objetivo solicitado=")
+                            .append(targets.forcedSoc)
+                            .append(", valor físico por confirmar en Jetour; ");
+                        continue;
+                    }
                     try{
                         // Best-effort restoration is allowed even after AUTO
                         // is disabled, but ONLY if OEM position remains P/D
