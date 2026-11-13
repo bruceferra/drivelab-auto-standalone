@@ -59,5 +59,15 @@ final class T1SocRegenWritePolicy {
     static boolean parked(int gear,double speed){
         return gear==1&&Double.isFinite(speed)&&Math.abs(speed)<0.05;
     }
+    /**
+     * Regeneration is an in-driving OEM setting: unlike a one-shot parked
+     * SOC calibration, the actual profile must follow a verified road change
+     * in D. Gear 4 = D, verified 2148 finite 0..160 km/h. P is valid only
+     * at zero. Never in R, N, unknown gear or absent speed telemetry.
+     */
+    static boolean regenDriveEligible(int gear,double speed){
+        return Double.isFinite(speed)&&speed>=0&&speed<=160&&
+            (gear==4||parked(gear,speed));
+    }
     private T1SocRegenWritePolicy(){}
 }
