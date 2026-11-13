@@ -1,6 +1,7 @@
 package ar.com.rango5gps.drivelabauto.receiver;
 
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
@@ -19,8 +20,8 @@ import java.util.Locale;
 
 /**
  * Offline four-profile editor and EXPLICIT opt-in automatic EV/HEV/EV MAX
- * controller. SOC/regen write paths are separately checked and only
- * armed after physical user-started readback + restore tests, P/0 only.
+ * controller. SOC/regen writes remain available after explicit AUTO ON
+ * with guarded P/0 or D eligibility, verified against the NEW objective.
  */
 public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
     private static final int BG=T1JetourTheme.NIGHT,
@@ -221,6 +222,15 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         column(switchRow,automaticButton,1);
         automaticState=text("AUTO: verificando estado…",14,Color.WHITE,true);
         root.addView(automaticState);
+        Button socDiag=new Button(this);
+        socDiag.setAllCaps(false);
+        socDiag.setText("VER / COMPARTIR DIAGNÓSTICO SOC · 1/2/3");
+        T1JetourTheme.button(socDiag,T1JetourTheme.PANEL_HI);
+        socDiag.setOnClickListener(v->showSocDiagnostic());
+        root.addView(socDiag);
+        root.addView(text("Paso 1: seguridad OEM. Paso 2: envío del "+
+            "nuevo SOC. Paso 3: confirmación por getters 1041. "+
+            "El informe no incluye GPS ni VIN.",12,MUTED,false));
         refreshAutoUi();
         for(T1OptimizedModePolicy.Road r:T1OptimizedModePolicy.Road.values())
             card(root,r);
@@ -297,6 +307,24 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         }
         if(automaticState!=null)
             automaticState.setText(T1OptimizedAutoService.status(this));
+    }
+    private void showSocDiagnostic(){
+        String report=T1OemDiagnosticLog.report(this);
+        new android.app.AlertDialog.Builder(this)
+            .setTitle("DIAGNÓSTICO · MODO OPTIMIZADO / SOC")
+            .setMessage("1: marcha y velocidad. 2: escritura Binder. "+
+                "3: lectura del NUEVO objetivo, entero y flotante. "+
+                "Si no confirma, no se repite automáticamente.\n\n"+report)
+            .setNegativeButton("CERRAR",null)
+            .setPositiveButton("COMPARTIR",(d,w)->{
+                Intent send=new Intent(Intent.ACTION_SEND);
+                send.setType("text/plain");
+                send.putExtra(Intent.EXTRA_SUBJECT,
+                    "DriveLab Auto · diagnóstico SOC OEM");
+                send.putExtra(Intent.EXTRA_TEXT,report);
+                startActivity(Intent.createChooser(send,
+                    "Compartir diagnóstico OEM SOC"));
+            }).show();
     }
     private void toggleAutomatic(){
         if(T1OptimizedAutoService.enabled(this)){
