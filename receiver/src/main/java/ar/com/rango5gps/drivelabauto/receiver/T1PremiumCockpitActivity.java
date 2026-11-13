@@ -2539,32 +2539,58 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private void updateAutonomy(){
         if(autonomyNow==null||lastSample==null)return;
         SharedPreferences settings=getSharedPreferences(RANGE_PREFS,MODE_PRIVATE);
-        double baseL100=settings.getFloat("fuel_l100",
-                (float)T1ExperimentalRange.DEFAULT_L100),
-            fullEv=settings.getFloat("full_ev_km",100f);
+        // An explicitly configured consumption wins; otherwise a newer
+        // logged pump cycle supersedes the original fixed 887km/66.230L.
+        double baseL100=settings.contains("fuel_l100")?
+            settings.getFloat("fuel_l100",
+                (float)T1ExperimentalRange.DEFAULT_L100):
+            T1FuelCalibration.latestL100(this);
+        double fullEv=settings.getFloat("full_ev_km",100f);
         SharedPreferences fuel=getSharedPreferences(
             "t1_live_consumption",MODE_PRIVATE);
         double raw=fuel.getFloat("fuelRaw",Float.NaN),
             recent=fuel.getFloat("fuelRecent",Float.NaN);
         long lastAt=fuel.getLong("fuelAt",0);
         int count=fuel.getInt("fuelRecentCount",0);
+        long now=System.currentTimeMillis();
+        long cached50At=fuel.getLong("sampleAt",0L);
         double fifty=Double.isFinite(lastSample.oemFuelRolling50)?
             lastSample.oemFuelRolling50:
-            fuel.getFloat("oem50",Float.NaN);
+            (cached50At>0&&now>=cached50At&&now-cached50At<=180000L?
+                fuel.getFloat("oem50",Float.NaN):Double.NaN);
         T1LiveConsumption.State live=T1LiveConsumption.evaluate(
-            raw,recent,count,lastAt,System.currentTimeMillis(),fifty,
+            raw,recent,count,lastAt,now,fifty,
             lastSample.fuel,baseL100);
-        double selected=live.hasRollingCandidate?
-            live.rolling500Candidate:
-            live.rolling50Valid?live.rolling50:baseL100;
+        // Restore the OEM raw 100x500m event ring from previous journeys.
+        // It is NOT used as a direct L/100 denominator until cross-checked.
+        T1Fuel500mWindow history=T1Fuel500mWindow.decode(
+            fuel.getString("rawFuel100",""));
+        double before=fuel.getFloat("stableFuelL100",Float.NaN);
+        double priorAnchor=fuel.getFloat("stableAnchorL100",Float.NaN);
+        long beforeAt=fuel.getLong("stableFuelAt",0L);
+        if(!Double.isFinite(priorAnchor)||
+            Math.abs(priorAnchor-baseL100)>0.001){
+            before=Double.NaN;beforeAt=0L;
+        }
+        T1StableAutonomy.Result stable=T1StableAutonomy.estimate(
+            baseL100,fifty,history.mean(),history.size(),
+            before,beforeAt,now,lastSample.speed);
+        double selected=stable.l100;
+        fuel.edit().putFloat("stableFuelL100",(float)selected)
+            .putFloat("stableAnchorL100",(float)baseL100)
+            .putLong("stableFuelAt",now).apply();
         T1ExperimentalRange.Estimate e=T1ExperimentalRange.estimate(
             lastSample.fuel,lastSample.socDisplay,selected,fullEv);
         autonomyNow.setText(Double.isFinite(e.totalKm)?
-            "~ "+f(e.totalKm,0)+" km":
+            "~ "+f(e.totalKm,0)+" km · ESTABLE":
             "SIN ESTIMACIÓN TOTAL");
-        String source=live.hasRollingCandidate?
-            "RITMO RECIENTE OEM 500 m · EXPERIMENTAL":
-            live.rolling50Valid?"PROMEDIO OEM 50 km":"BASE MANUAL/HISTÓRICA";
+        String source=stable.source;
+        String rawWindow=history.size()+"/100 muestras OEM 500 m"+
+            (history.size()>0?
+                " · media cruda "+f(history.mean(),2):" · sin eventos")+
+            (stable.rawCorroborated?
+                " · CONCUERDA con OEM 50 km (sin calibración independiente)":
+                " · NO USAR COMO L/100 HASTA VALIDAR");
         if(liveFuelNow!=null){
             String last500=live.rawFresh?
                 f(live.last500Raw,2)+" (valor OEM sin calibración de unidades)":
@@ -2591,11 +2617,18 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 "~ "+f(e.fuelKm,0)+" km":"NO FIABLE / SIN DATO")+
             " + eléctrico: "+(e.electricOk?
                 "~ "+f(e.electricKm,0)+" km":"SIN DATO")+
-            "\nAutonomía al ritmo estimado: "+f(selected,2)+
+            "\nConsumo ESTABLE: "+f(selected,2)+
             " L/100 km · "+source+
-            " · actualiza con muestras OEM 500 m / 50 km. "+
-            "SOLO PROYECCIÓN: depende del combustible restante, "+
-            "SOC, tráfico y condiciones, no sustituye la autonomía Jetour.");
+            "\nBase surtidor/manual: "+f(stable.anchorL100,2)+
+            " L/100 km · OEM 50 km: "+
+            (stable.oem50Used?f(stable.oem50L100,2)+" L/100 km":
+                "SIN DATO ÚTIL / NO COMPARABLE")+
+            "\nVentana propia: "+rawWindow+
+            "\nLos 5 segmentos recientes son SOLO diagnóstico; no cambian "+
+            "directamente la autonomía principal. "+
+            "PROYECCIÓN PHEV: la referencia histórica puede incluir km EV; "+
+            "sumar el alcance eléctrico es orientativo y puede sobreestimar. "+
+            "Sin autonomía certificada ni equivalencia exacta con Jetour.");
     }
     private void adjustAutonomy(){
         LinearLayout form=col();form.setPadding(25,12,25,5);
