@@ -19,7 +19,7 @@ public final class T1EcoTripMetricsTest {
         check(T1EcoTripMetrics.speedBin(-1)==-1,"negative rejected");
         check(Double.isNaN(m.ecoScore()),"no samples no rating");
         for(int i=0;i<30;i++)
-            m.add(1600000000000L+i*3000L,.1,3,
+            m.add(1600000000000L+i*5000L,.1,5,
                 i<15?T1EcoTripMetrics.CITY:T1EcoTripMetrics.MOTORWAY,
                 i<15?30:115,0.1);
         close(m.km(),3,"distance");
@@ -36,7 +36,7 @@ public final class T1EcoTripMetricsTest {
         close(m.km(),3,"bad gap rejected");
         T1EcoTripMetrics mixed=new T1EcoTripMetrics();
         for(int i=0;i<30;i++)
-            mixed.add(1600000000000L+i*3000L,.1,3,
+            mixed.add(1600000000000L+i*5000L,.1,5,
                 i<10?T1EcoTripMetrics.UNKNOWN:T1EcoTripMetrics.ROAD,
                 60,2.8);
         close(mixed.percent(T1EcoTripMetrics.UNKNOWN),100d/3,"unknown retained");
@@ -44,7 +44,7 @@ public final class T1EcoTripMetricsTest {
         check(mixed.ecoScore()<m.ecoScore(),"abrupt driving lower eco");
         T1EcoTripMetrics unknown=new T1EcoTripMetrics();
         for(int i=0;i<30;i++)
-            unknown.add(1600000000000L+i*3000L,.1,3,
+            unknown.add(1600000000000L+i*5000L,.1,5,
                 T1EcoTripMetrics.UNKNOWN,90,0.1);
         check(Double.isNaN(unknown.ecoScore()),"unknown OSM no score");
         System.out.println("OK: road type OSM shares, 5kmh distance/time bins, confidence and Eco v1");
