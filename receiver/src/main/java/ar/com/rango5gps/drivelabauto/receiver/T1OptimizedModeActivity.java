@@ -33,9 +33,8 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
     private T1OptimizedModePolicy.Road road=T1OptimizedModePolicy.Road.UNKNOWN;
     @Override protected int overlayClearBackgroundColor(){return BG;}
     static final class Profile {
-        Spinner power,strategy,regen,comparison;
-        CheckBox conditional;
-        Spinner forced,targetMinimum;
+        Spinner power,strategy,regen,forced,minPct,maxPct;
+        CheckBox minEnabled,maxEnabled;
     }
     private GradientDrawable background(int color,int radius){
         return T1JetourTheme.surface(color,radius);
@@ -130,27 +129,38 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         regen.addView(p.regen);column(options,regen,1);
 
         LinearLayout second=horizontal();box.addView(second);
-        // Left: a CONDITION on actual observed battery percentage.
-        // Right: separate target percentage requested in FORCED mode.
+        // Two independent AND conditions on ACTUAL OEM battery SOC.
+        // Disable either limit to get an open-ended minimum or maximum.
+        // A missing SOC reading never satisfies enabled bounds.
         LinearLayout threshold=vertical();
-        threshold.addView(text("CONDICIÓN DE BATERÍA (SOC ACTUAL)",
+        threshold.addView(text("RANGO DE BATERÍA · SOC ACTUAL",
             12,0xFF334B5A,true));
-        p.conditional=new CheckBox(this);
-        p.conditional.setText("ACTIVAR CONDICIÓN");
-        p.conditional.setTextColor(T1JetourTheme.WHITE);
-        p.conditional.setButtonTintList(android.content.res.ColorStateList.valueOf(
+        threshold.addView(text("Activá uno o ambos límites. Con ambos activos "+
+            "se usa el rango inclusivo: SOC ≥ mínimo Y SOC ≤ máximo. "+
+            "Si apagás uno, el otro funciona por sí solo.",
+            11,0xFF40566B,false));
+        LinearLayout lower=horizontal();
+        p.minEnabled=new CheckBox(this);
+        p.minEnabled.setText("MÍNIMO ≥");
+        p.minEnabled.setTextColor(T1JetourTheme.WHITE);
+        p.minEnabled.setButtonTintList(android.content.res.ColorStateList.valueOf(
             T1JetourTheme.CYAN));
-        p.conditional.setChecked(existing.thresholdEnabled);
-        threshold.addView(p.conditional);
-        LinearLayout thresholdEditor=horizontal();
-        p.comparison=selector(new String[]{
-                "Mayor o igual (≥)","Menor o igual (≤)"},
-            existing.comparison.ordinal());
-        column(thresholdEditor,p.comparison,2);
-        p.targetMinimum=percentageSelector(existing.minBattery);
-        column(thresholdEditor,p.targetMinimum,1);
-        thresholdEditor.addView(text("%",15,0xFF334B5A,true));
-        threshold.addView(thresholdEditor);
+        p.minEnabled.setChecked(existing.minEnabled);
+        column(lower,p.minEnabled,2);
+        p.minPct=percentageSelector(existing.minBattery);
+        column(lower,p.minPct,1);
+        threshold.addView(lower);
+        LinearLayout upper=horizontal();
+        p.maxEnabled=new CheckBox(this);
+        p.maxEnabled.setText("MÁXIMO ≤");
+        p.maxEnabled.setTextColor(T1JetourTheme.WHITE);
+        p.maxEnabled.setButtonTintList(android.content.res.ColorStateList.valueOf(
+            T1JetourTheme.CYAN));
+        p.maxEnabled.setChecked(existing.maxEnabled);
+        column(upper,p.maxEnabled,2);
+        p.maxPct=percentageSelector(existing.maxBattery);
+        column(upper,p.maxPct,1);
+        threshold.addView(upper);
         column(second,threshold,1);
 
         LinearLayout target=vertical();
@@ -167,12 +177,12 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         target.addView(targetEditor);
         column(second,target,1);
         profiles.put(which,p);
-        p.conditional.setOnCheckedChangeListener((b,checked)->{
-            p.targetMinimum.setEnabled(checked);
-            p.comparison.setEnabled(checked);
-        });
-        p.targetMinimum.setEnabled(existing.thresholdEnabled);
-        p.comparison.setEnabled(existing.thresholdEnabled);
+        p.minEnabled.setOnCheckedChangeListener((b,checked)->
+            p.minPct.setEnabled(checked));
+        p.maxEnabled.setOnCheckedChangeListener((b,checked)->
+            p.maxPct.setEnabled(checked));
+        p.minPct.setEnabled(existing.minEnabled);
+        p.maxPct.setEnabled(existing.maxEnabled);
         p.forced.setEnabled(existing.strategy==
             T1OptimizedModePolicy.Strategy.FORCED);
         p.strategy.setOnItemSelectedListener(new android.widget.AdapterView.OnItemSelectedListener(){
@@ -246,12 +256,17 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
                 p.strategy.getSelectedItemPosition()];
         T1OptimizedModePolicy.Regen regen=T1OptimizedModePolicy.Regen.values()[
             p.regen.getSelectedItemPosition()];
-        // Even disabled fields must be validated to prevent hidden bad prefs.
+        int lower=percentage(p.minPct),upper=percentage(p.maxPct);
+        boolean minimumEnabled=p.minEnabled.isChecked(),
+            maximumEnabled=p.maxEnabled.isChecked();
+        if(minimumEnabled&&maximumEnabled&&lower>upper)
+            throw new IllegalArgumentException(
+                "Rango de batería inválido: mínimo "+lower+
+                " % mayor al máximo "+upper+
+                " %. Ajustá uno de los desplegables.");
         return new T1OptimizedModePolicy.Rule(
-            power,strategy,forcedSocValue(p.forced),p.conditional.isChecked(),
-            percentage(p.targetMinimum),
-            T1OptimizedModePolicy.Comparison.values()[
-                p.comparison.getSelectedItemPosition()],regen);
+            power,strategy,forcedSocValue(p.forced),
+            minimumEnabled,lower,maximumEnabled,upper,regen);
     }
     private boolean saveProfiles(){
         try{
