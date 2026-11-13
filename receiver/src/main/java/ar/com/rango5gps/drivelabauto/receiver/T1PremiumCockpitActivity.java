@@ -904,12 +904,16 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         cockpitScroll=scroll;
         LinearLayout root=col();root.setPadding(18,10,18,28);
         scroll.addView(root);
+        // Keep the upper area button-only: status below the six metrics.
+        LinearLayout commentaryLeft=col(),commentaryRight=col();
+        commentaryLeft.setPadding(3,2,9,2);
+        commentaryRight.setPadding(9,2,3,2);
         LinearLayout top=row();top.setGravity(Gravity.CENTER_VERTICAL);
         root.addView(top);
         cockpitNavRow=top;
         LinearLayout title=col();
         title.addView(text("DRIVELAB / T1",19,WHITE,true));
-        title.addView(text("COCKPIT · build OEM "+getPackageVersion(),12,MUTED,false));
+        commentaryRight.addView(text("COCKPIT · build OEM "+getPackageVersion(),11,MUTED,false));
         top.addView(title,new LinearLayout.LayoutParams(0,-2,1));
         Button microphone=new Button(this);
         microphone.setAllCaps(false);
@@ -972,6 +976,15 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         });
         T1JetourTheme.button(optimized,BLUE);
         top.addView(optimized,new LinearLayout.LayoutParams(-2,52));
+        Button hardware=new Button(this);
+        hardware.setText("SISTEMA RAM/CPU");hardware.setTextSize(12);
+        hardware.setAllCaps(false);
+        hardware.setOnClickListener(v->{
+            navClicked("SISTEMA RAM/CPU");
+            showSystemDiagnostics();
+        });
+        T1JetourTheme.button(hardware,TEAL);
+        top.addView(hardware,new LinearLayout.LayoutParams(-2,52));
         Button back=new Button(this);
         back.setText("INICIO");back.setTextSize(12);
         back.setAllCaps(false);back.setOnClickListener(v->{
@@ -992,16 +1005,16 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         modeMaxButton=topModeButton(modes,"EV MAX",3);
         modeAtTop=text("MODO OEM: esperando 1043 · controles manuales P o D",
             14,MUTED,false);
-        root.addView(modeAtTop);
+        commentaryLeft.addView(modeAtTop);
         autoModeLive=text("MODO OPTIMIZADO OFF · sin comandos",13,TEAL,true);
-        root.addView(autoModeLive);
+        commentaryLeft.addView(autoModeLive);
         updateAutoModeUi();
         vehicleModeStatus=text("MODO CONDUCCIÓN · 2053: esperando OEM   |   "+
             "COMBUSTIBLE · 1079: esperando OEM",12,WHITE,true);
         vehicleModeStatus.setSingleLine(true);
         vehicleModeStatus.setEllipsize(android.text.TextUtils.TruncateAt.END);
         vehicleModeStatus.setOnClickListener(v->showRawVehicleSignals());
-        root.addView(vehicleModeStatus);
+        commentaryLeft.addView(vehicleModeStatus);
         osmBanner=text("OSM · esperando vía…",12,0xFFB3E9F1,true);
         osmBanner.setSingleLine(true);
         osmBanner.setEllipsize(android.text.TextUtils.TruncateAt.END);
@@ -1026,7 +1039,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 .setPositiveButton("DESCARGAR MAPA",(d,w)->updateOfflineMap(true))
                 .show();
         });
-        root.addView(osmBanner);
+        commentaryLeft.addView(osmBanner);
         osmBanner.setVisibility(osmEnabled()?
             android.view.View.VISIBLE:android.view.View.GONE);
         // Three independent button sets: JORNADA, VIAJE 1 and VIAJE 2.
@@ -1056,26 +1069,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         secondPauseButton=compactButton(secondActions,"PAUSAR",GOLD,this::pauseSecond);
         secondEndButton=compactButton(secondActions,"TERMINAR",RED,this::finishSecond);
 
-        // SECONDARY NAVIGATION: same safe touch zone as the working
-        // journey controls. If the OEM overlay covers the pinned top bar,
-        // these buttons still let the owner reach settings or exit.
-        LinearLayout rescue=row();root.addView(rescue);
-        compactButton(rescue,"OPTIMIZADO",BLUE,()->
-            {navClicked("RESCATE OPT");openOptimizedMode();});
-        compactButton(rescue,"PENDIENTES",BLUE,()->
-            {navClicked("RESCATE PENDIENTES");startActivity(
-                new Intent(this,T1ValidationWizardActivity.class));});
-        compactButton(rescue,"PANTALLA",BLUE,()->
-            {navClicked("RESCATE PANTALLA");openDisplaySettings();});
-        compactButton(rescue,"SISTEMA RAM/CPU",TEAL,()->
-            {navClicked("RESCATE SISTEMA");showSystemDiagnostics();});
-        compactButton(rescue,"INICIO",GOLD,()->{
-            navClicked("RESCATE INICIO");
-            Intent home=new Intent(this,ReceiverActivity.class);
-            home.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|
-                Intent.FLAG_ACTIVITY_SINGLE_TOP);
-            startActivity(home);finish();
-        });
+        // Unique navigation row: no duplicate rescue controls.
+        // RAM/CPU access is preserved as a primary button.
 
         // Restore the user's original instrument cards. Only remove the
         // oversize speedometer; the 4 non-speed gauges retain their live OEM
@@ -1090,7 +1085,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         tempEngine=compactMetric(powertrain,"TEMP. MOTOR · RAW EXP.","SIN LECTURA");
         tempBattery=compactMetric(powertrain,"TEMP. BATERÍA HV · OEM","SIN LECTURA");
         socStrategy=text("SOC · ESPERANDO OEM",12,WHITE,true);
-        root.addView(socStrategy);
+        commentaryLeft.addView(socStrategy);
 
         // Three selectable readings visible together. Selecting a card
         // switches trip-dependent values in the six compact tiles.
@@ -1123,26 +1118,34 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         electricNow=compactMetric(metrics,"ELECTRICIDAD CONSUMIDA · EXP.","—");
         costNow=compactMetric(metrics,"COSTO COMBUSTIBLE · EXP.","—");
         autonomyNow=compactMetric(metrics,"AUTONOMÍA TOTAL · EXP.","SIN DATOS");
+        LinearLayout commentaryColumns=row();
+        root.addView(commentaryColumns);
+        commentaryColumns.addView(commentaryLeft,
+            new LinearLayout.LayoutParams(0,-2,1f));
+        commentaryColumns.addView(commentaryRight,
+            new LinearLayout.LayoutParams(0,-2,1f));
         liveFuelNow=text(
             "CONSUMO RECIENTE · esperando OEM 500 m / 1085…",
             14,T1JetourTheme.CYAN,true);
         liveFuelNow.setPadding(12,10,12,10);
         liveFuelNow.setBackground(bg(CARD,12));
-        root.addView(liveFuelNow);
+        commentaryRight.addView(liveFuelNow);
         liveEcoNow=text(
             "ECO EN VIVO · esperando recorrido OSM",
             13,WHITE,true);
         liveEcoNow.setPadding(10,9,10,9);
         liveEcoNow.setBackground(bg(CARD,12));
-        root.addView(liveEcoNow);
+        commentaryRight.addView(liveEcoNow);
         clientSyncStatus=text("CLIENTE QR · verificando pendientes",12,MUTED,false);
         clientSyncStatus.setSingleLine(true);
         clientSyncStatus.setEllipsize(android.text.TextUtils.TruncateAt.END);
-        root.addView(clientSyncStatus);
+        commentaryLeft.addView(clientSyncStatus);
 
         feedback=text("Listo · trayectos locales y CSV intactos.",
             12,0xFFB2DDD9,false);
-        feedback.setMaxLines(3);root.addView(feedback);
+        feedback.setMaxLines(3);commentaryLeft.addView(feedback);
+        liveEcoNow.setMaxLines(4);
+        liveEcoNow.setEllipsize(android.text.TextUtils.TruncateAt.END);
         LinearLayout expandRow=row();root.addView(expandRow);
         compactButton(expandRow,"DETALLES / HISTORIAL",BLUE,()->{
             boolean expand=secondary.getVisibility()==android.view.View.GONE;
@@ -1462,7 +1465,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         systemMonitorLine.setBackgroundColor(0xFF11181E);
         // Entire strip is diagnostic only; don't require tapping it.
         systemMonitorLine.setClickable(false);
-        fixedBody.addView(systemMonitorLine,
+        commentaryRight.addView(systemMonitorLine,
             new LinearLayout.LayoutParams(-1,T1JetourTheme.dp(this,29)));
         fixedBody.addView(modes,
             new LinearLayout.LayoutParams(-1,-2));
