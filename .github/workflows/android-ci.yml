@@ -73,7 +73,9 @@ jobs:
           grep -Fq 'lastUiStats>=2400L' "$cockpit"
           grep -Fq 'if(!android.text.TextUtils.equals(' "$cockpit"
           grep -Fq 'T1-Cockpit-Continuity-Background' "$cockpit"
-          ! grep -Fq 'String recovered=T1JourneyStore.reconcileInterrupted(this);' "$cockpit"
+          grep -Fq 'private void maybeReconcileContinuity()' "$cockpit"
+          grep -Fq 'private void updateStats(){' "$cockpit"
+          grep -Fq '        maybeReconcileContinuity();' "$cockpit"
       - name: Cockpit full-system RAM/CPU and recovering NAV touch telemetry
         shell: bash
         run: |
