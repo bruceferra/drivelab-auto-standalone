@@ -148,8 +148,12 @@ final class T1JetourTheme {
            v.contains("PRUEBA"))return "list";
         if(v.contains("COCKPIT")||v.contains("TABLERO")||
            v.contains("SIMULADOR"))return "gauge";
-        if(v.contains("VEHÍCULO")||v.contains("ESPEJO")||
-           v.contains("MODO OPTIMIZADO"))return "car";
+        if(v.contains("ESPEJO"))return "mirror";
+        if(v.contains("VENTAN"))return "window";
+        if(v.contains("PEATÓN"))return "pedestrian";
+        if(v.contains("AIRE")||v.contains("VENTIL"))return "fan";
+        if(v.contains("VEHÍCULO")||v.contains("MODO OPTIMIZADO"))
+            return "car";
         if(v.contains("ENERGÍA")||v.contains("SOC")||
            v.contains("EV MAX"))return "battery";
         if(v.contains("VOLANTE"))return "steer";
@@ -209,6 +213,31 @@ final class T1JetourTheme {
                     canvas.drawLine(5,12,19,12,paint);
                     canvas.drawCircle(7,19,1.7f,paint);
                     canvas.drawCircle(17,19,1.7f,paint);break;
+                case "mirror":
+                    canvas.drawRoundRect(3,5,19,16,6,6,paint);
+                    canvas.drawLine(19,10,22,10,paint);
+                    canvas.drawLine(12,16,12,20,paint);
+                    canvas.drawLine(9,20,15,20,paint);break;
+                case "window":
+                    Path window=new Path();
+                    window.moveTo(5,4);window.lineTo(19,4);
+                    window.lineTo(21,19);window.lineTo(3,19);
+                    window.close();
+                    canvas.drawPath(window,paint);
+                    canvas.drawLine(6,12,18,12,paint);break;
+                case "fan":
+                    canvas.drawCircle(12,12,2,paint);
+                    canvas.drawArc(4,2,14,13,155,195,false,paint);
+                    canvas.drawArc(10,2,22,14,255,190,false,paint);
+                    canvas.drawArc(8,10,22,22,35,185,false,paint);
+                    canvas.drawArc(1,10,15,22,105,185,false,paint);break;
+                case "pedestrian":
+                    canvas.drawCircle(13,4,2,paint);
+                    canvas.drawLine(12,7,10,14,paint);
+                    canvas.drawLine(10,14,7,20,paint);
+                    canvas.drawLine(10,14,17,20,paint);
+                    canvas.drawLine(12,9,7,12,paint);
+                    canvas.drawLine(12,9,18,12,paint);break;
                 case "pulse":
                     Path wave=new Path();
                     wave.moveTo(2,12);wave.lineTo(7,12);
