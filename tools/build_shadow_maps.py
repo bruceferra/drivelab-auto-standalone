@@ -63,7 +63,12 @@ def classification(src, props):
     if any(x in words for x in ("ruta secundaria", "camino rural",
                                 "camino vecinal", "ripio")):
         return "secondary"
-    return None  # no silently inferred highway class
+    # This input is explicitly the IGN **provincial road network** layer,
+    # which certifies road existence but not its urban/motorway classification.
+    # Treat it as general ROAD in the shadow adapter unless the official
+    # attributes explicitly identify motorway. Never classify it as motorway
+    # from speed, and NEVER use it for a vehicle profile decision.
+    return "primary"
 
 def polylines(geometry):
     if not geometry: return []
@@ -125,7 +130,7 @@ def main():
                 kind=classification(args.source,props)
                 if kind is None: ignored+=1;continue
                 ref=str(props.get("ref") or props.get("ruta") or
-                    props.get("RUTA") or "").strip()[:160]
+                    props.get("RUTA") or props.get("rtn") or "").strip()[:160]
                 maxspeed=str(props.get("maxspeed") or "")[:60]
                 roadid=str(feature.get("id") or f"row-{features}")
                 for i,shape in enumerate(polylines(feature.get("geometry"))):
