@@ -56,6 +56,10 @@ public final class MirrorAutomationService extends Service {
         long age=System.currentTimeMillis()-p.getLong(LAST_POLL,0L);
         if(p.getBoolean(AUTO,false)&&p.getBoolean(SERVICE_ACTIVE,false)&&
             age>=0&&age<=3000)return;
+        // Preserve deliberate MANUAL choice after a fold/unfold or a user
+        // pressing the visible MANUAL button. Old code unconditionally
+        // armed AUTO again on each fresh Receiver process launch.
+        if(p.contains(AUTO)&&!p.getBoolean(AUTO,false))return;
         // Do not rearm a possibly interrupted mirror movement.
         if(p.getString(POSITION,"").startsWith("INCIERTA")){
             p.edit().putString(STATUS,

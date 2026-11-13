@@ -105,6 +105,20 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
             startActivity(new Intent(this,T1PremiumCockpitActivity.class)));
         button(body,"TABLERO · TANQUES / CONSUMO / TELEMETRÍA",()->
             startActivity(new Intent(this,T1TankDashboardActivity.class)));
+        // Vehicle controls are NOT network pairing settings. Keep this
+        // entry visible without opening XIAOMI / AJUSTES / ACTUALIZAR.
+        button(body,advancedControlsExpanded?
+            "OCULTAR CONTROLES OEM AVANZADOS":
+            "CONTROLES OEM AVANZADOS · ESPEJOS R",()->{
+            advancedControlsExpanded=!advancedControlsExpanded;
+            render();
+        });
+        if(advancedControlsExpanded){
+            LinearLayout quickAdvanced=new LinearLayout(this);
+            quickAdvanced.setOrientation(LinearLayout.VERTICAL);
+            body.addView(quickAdvanced);
+            quickControls.attach(quickAdvanced);
+        }
         label(body,"Conexión Receiver: "+p.getString("status","Sin iniciar")+
             " · IP "+ReceiverService.localIp()+
             " · "+p.getString("pair_port_status","sin datos del puerto 48392"),14);
@@ -185,16 +199,6 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
         });
         button(settings,"PRUEBA DIRECTA A LA PLATA",()->direct("-34.9214,-57.9545"));
         button(settings,"PRUEBA DIRECTA A MAR DEL PLATA",()->direct("-38.0055,-57.5426"));
-        button(settings,"CONTROLES OEM AVANZADOS",()->{
-            advancedControlsExpanded=!advancedControlsExpanded;
-            render();
-        });
-        if(advancedControlsExpanded){
-            LinearLayout quickAdvanced=new LinearLayout(this);
-            quickAdvanced.setOrientation(LinearLayout.VERTICAL);
-            settings.addView(quickAdvanced);
-            quickControls.attach(quickAdvanced);
-        }
         button(settings,"ACTUALIZAR RECEIVER · INSTALACIÓN DIRECTA",
             ()->Updater.check(this,"receiver",this::report));
         if(!message.isEmpty())label(settings,"Actualizador / estado: "+message,14);
