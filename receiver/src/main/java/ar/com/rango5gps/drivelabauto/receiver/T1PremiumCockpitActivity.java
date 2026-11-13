@@ -1444,6 +1444,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         button(extra,"DIAGNÓSTICO OEM",BLUE,()->startActivity(
             new Intent(this,ReceiverVehicleActivity.class)
                 .putExtra("open_tab",3)));
+        button(extra,"SIMULADOR · WHAT IF",BLUE,this::openWhatIf);
+        button(extra,"SISTEMA RAM/CPU",TEAL,this::showSystemDiagnostics);
         secondary.addView(text("Este cockpit no reemplaza el velocímetro homologado ni "+
             "el sistema Jetour. No usar para controlar EV/HEV en marcha. "+
             "No se guardan coordenadas de clientes, ni se envían las zonas a la nube.",
