@@ -110,6 +110,12 @@ public final class T1WazeWheelService extends AccessibilityService {
         final int code=event.getKeyCode();
         final long now=System.currentTimeMillis();
         SharedPreferences p=prefs();
+        AccessibilityNodeInfo root=getRootInActiveWindow();
+        String pkg=root==null?"":String.valueOf(root.getPackageName());
+        if(!WAZE.equals(pkg)){
+            hideHint();
+            return false; // no key logging or interception outside Waze
+        }
         String pending=p.getString(PENDING,"");
         if(!pending.isEmpty()){
             if(now-p.getLong(PENDING_TIME,0)<45000){
@@ -123,12 +129,7 @@ public final class T1WazeWheelService extends AccessibilityService {
             p.edit().remove(PENDING).apply();
         }
         p.edit().putInt(LAST,code).putLong(LAST_TIME,now).apply();
-        AccessibilityNodeInfo root=getRootInActiveWindow();
-        String pkg=root==null?"":String.valueOf(root.getPackageName());
-        if(!WAZE.equals(pkg)||!p.getBoolean(ENABLED,false)){
-            if(!WAZE.equals(pkg))hideHint();
-            return false;
-        }
+        if(!p.getBoolean(ENABLED,false))return false;
         int next=p.getInt(NEXT,KeyEvent.KEYCODE_DPAD_RIGHT);
         int prev=p.getInt(PREV,KeyEvent.KEYCODE_DPAD_LEFT);
         int ok=p.getInt(OK,KeyEvent.KEYCODE_DPAD_CENTER);
