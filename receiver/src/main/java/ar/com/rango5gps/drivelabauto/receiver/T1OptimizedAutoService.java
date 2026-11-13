@@ -22,11 +22,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 /**
  * Explicitly enabled, foreground-backed road mode controller.
  *
- * Changes ONLY OEM property 1043 (1 EV, 2 HEV, 3 EV MAX) using the same
- * double-preflight/readback pilot as the manual OEM controls. Road/SOC
- * strategy is not an automotive safety sensor; require repeated precise,
- * fresh GPS matches before one command. Never write SOC setpoint,
- * Smart/Forced or regeneration (their setters are not validated).
+ * Changes OEM 1043 (EV/HEV/EV MAX) using proven double-preflight/readback.
+ * For SOC 1040/1041 and regen 1046, auto can run ONLY after separate
+ * user-started P/0 tests that wrote/confirmed/restored each OEM property.
+ * The new controls remain strictly P/0 (not while D or in motion), even
+ * after verification, to avoid surprise changes in braking deceleration.
  *
  * OEM refusal disables the controller: do not blindly retry/fallback-write.
  */
@@ -45,6 +45,10 @@ public final class T1OptimizedAutoService extends Service {
     private final AtomicBoolean changing=new AtomicBoolean(false);
     private final T1OptimizedAutoGate gate=new T1OptimizedAutoGate();
     private T1ManualThreeModePilot pilot;
+    private T1SocRegenPilot socRegenPilot;
+    private T1OptimizedModePolicy.Road auxRoad;
+    private int auxVotes=0;
+    private long auxLastWriteAt=-1;
     private long usedGpsNanos=0;
 
     private SharedPreferences pref(){return prefs(this);}
@@ -73,8 +77,9 @@ public final class T1OptimizedAutoService extends Service {
         try{
             c.startForegroundService(new Intent(c,
                 T1OptimizedAutoService.class).setAction(ACTION_ON));
-            return "MODO OPTIMIZADO ON · EV/HEV/EV MAX automáticos por zona; "+
-                "SOC forzado/regeneración aún no se escriben";
+            return "MODO OPTIMIZADO ON · 1043 automático por vía. "+
+                "SOC FORZADO y REGENERACIÓN automáticos SOLO en P/0 "+
+                "tras validar cada escritura/restauración manual.";
         }catch(RuntimeException e){
             prefs(c).edit().putBoolean(ENABLED,false)
                 .putString(STATUS,"AUTO NO INICIADO: "+
@@ -114,6 +119,7 @@ public final class T1OptimizedAutoService extends Service {
         if(worker!=null&&worker.isAlive())return START_STICKY;
         stopping=false;
         pilot=new T1ManualThreeModePilot(this);
+        socRegenPilot=new T1SocRegenPilot(this);
         showNotification();
         try{
             locations=(LocationManager)getSystemService(LOCATION_SERVICE);
@@ -231,7 +237,13 @@ public final class T1OptimizedAutoService extends Service {
             road,rule,battery,snapshot.speed,snapshot.gear,
             snapshot.powerMode,SystemClock.elapsedRealtime(),confident,fresh);
         if(!decision.ready()){
-            note("AUTO ON · "+decision.text);
+            if(decision.reason==T1OptimizedAutoGate.Reason.SAME_MODE){
+                maybeApplySocRegen(road,rule,battery,snapshot,
+                    confident,fresh);
+            }else{
+                auxVotes=0;
+                note("AUTO ON · "+decision.text);
+            }
             return;
         }
         if(pilot.busy()||!changing.compareAndSet(false,true)){
@@ -249,7 +261,8 @@ public final class T1OptimizedAutoService extends Service {
                 if(stopping||!enabled(T1OptimizedAutoService.this))return;
                 if(result.startsWith("LECTURA CONFIRMADA:")){
                     note("AUTO ON · "+mode+" CONFIRMADO por OEM 1043. "+
-                        "SOC forzado y regeneración NO aplicados.");
+                        "SOC/regeneración se verifican aparte, "+
+                        "solo en P/0 y tras las pruebas manuales.");
                 }else{
                     // No blind retries and no second fallback write if the
                     // OEM declined the first request.
@@ -265,6 +278,80 @@ public final class T1OptimizedAutoService extends Service {
             note("AUTO ON · piloto OEM ocupado; espera");
         }
     }
+    private void maybeApplySocRegen(
+            T1OptimizedModePolicy.Road road,
+            T1OptimizedModePolicy.Rule rule,double battery,
+            T1TripTelemetry.Sample snapshot,
+            boolean confident,boolean fresh){
+        if(!confident||!fresh||
+            !T1SocRegenWritePolicy.parked(snapshot.gear,snapshot.speed)){
+            auxVotes=0;
+            note("AUTO ON · 1043 coincide. SOC/regeneración: "+
+                "sin cambios (requiere P/0 para no variar frenada en marcha).");
+            return;
+        }
+        T1SocRegenWritePolicy.Targets targets=
+            T1SocRegenWritePolicy.desired(rule,battery);
+        if(!targets.valid()){
+            note("AUTO ON · SOC objetivo fuera de presets OEM conocidos "+
+                "(20,30,40,48,50,56,60,64,70,72). Sin escritura.");
+            return;
+        }
+        if(!T1SocRegenPilot.confirmed(this,1040)||
+           !T1SocRegenPilot.confirmed(this,1046)||
+           (targets.needsTarget()&&!T1SocRegenPilot.confirmed(this,1041))){
+            note("AUTO ON · 1043 coincide. SOC/regeneración BLOQUEADOS "+
+                "hasta comprobar escritura y restauración de 1040/1041/1046 "+
+                "en Optimizado → pruebas P/0.");
+            return;
+        }
+        if(snapshot.socMode==targets.strategy&&
+           snapshot.regen1046==targets.regen&&
+           (!targets.needsTarget()||snapshot.socTargetInt==targets.forcedSoc)){
+            auxVotes=0;
+            note("AUTO ON · perfil SOC/REGENERACIÓN ya coincide: "+
+                targets.summary());
+            return;
+        }
+        if(auxRoad!=road){auxRoad=road;auxVotes=1;}
+        else auxVotes=Math.min(10,auxVotes+1);
+        if(auxVotes<3){
+            note("AUTO ON · verificando perfil SOC/regeneración "+auxVotes+
+                "/3 · únicamente P/0");
+            return;
+        }
+        long now=SystemClock.elapsedRealtime();
+        if(auxLastWriteAt>=0&&now-auxLastWriteAt<120000L){
+            note("AUTO ON · SOC/regeneración en espera anti-oscilación");
+            return;
+        }
+        if(pilot.busy()||socRegenPilot.busy()||
+           !changing.compareAndSet(false,true)){
+            note("AUTO ON · esperando que termine otra orden OEM");
+            return;
+        }
+        auxLastWriteAt=now;auxVotes=0;auxRoad=null;
+        note("AUTO ON · SOC/REGENERACIÓN (en P/0): "+
+            targets.summary()+" · pidiendo readback");
+        boolean submitted=socRegenPilot.apply(targets,result->{
+            changing.set(false);
+            if(stopping||!enabled(T1OptimizedAutoService.this))return;
+            if(result.startsWith("LECTURA CONFIRMADA:")){
+                note("AUTO ON · "+result);
+            }else{
+                pref().edit().putBoolean(ENABLED,false)
+                    .putString(STATUS,"AUTO DESACTIVADO · "+
+                        result).apply();
+                stopping=true;stopSelf();
+            }
+        });
+        if(!submitted){
+            changing.set(false);
+            note("AUTO ON · SOC/regeneración no enviados: "+
+                "piloto no disponible o prueba de escritura pendiente");
+        }
+    }
+
     @Override public void onDestroy(){
         stopping=true;
         if(worker!=null)worker.interrupt();
