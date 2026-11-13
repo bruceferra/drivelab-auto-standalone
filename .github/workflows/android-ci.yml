@@ -96,10 +96,12 @@ jobs:
           java -cp /tmp/soc-regen-policy ar.com.rango5gps.drivelabauto.receiver.T1SocRegenWritePolicyTest
           code=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocRegenPilot.java
           grep -Fq 'data.writeInt(id);data.writeInt(value)' "$code"
-          grep -Fq 'preflight(b,"ANTES_ESCRITURA_"' "$code"
-          grep -Fq 'flags().edit().putBoolean("ok_"+id,true)' "$code"
-          grep -Fq 'verify(b,id,initial)' "$code"
-          grep -Fq 'if(!T1SocRegenWritePolicy.parked(gear,speed))' "$code"
+          grep -Fq 'preflight(b,"SOC_REGEN_ANTES_"' "$code"
+          grep -Fq 'regenDriveEligible(gear,speed)' "$code"
+          grep -Fq 'verify(b,id,target,active)' "$code"
+          grep -Fq 'set(b,id,previous,null)' "$code"
+          ! grep -Fq 'boolean test(' "$code"
+          grep -Fq 'boolean apply(' "$code"
       - name: T1 cockpit client reset, live autonomy, engine and SOC policy (pure JVM)
         shell: bash
         run: |
