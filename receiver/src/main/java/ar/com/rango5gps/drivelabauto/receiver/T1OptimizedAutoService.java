@@ -299,7 +299,7 @@ public final class T1OptimizedAutoService extends Service {
             T1SocRegenWritePolicy.desired(rule,battery);
         if(!targets.valid()){
             note("AUTO ON · SOC objetivo fuera de presets OEM conocidos "+
-                "(20,30,40,48,50,56,60,64,70,72). Sin escritura.");
+                "(20,30,40,50,60,70). Sin escritura.");
             return;
         }
         if(snapshot.socMode==targets.strategy&&
