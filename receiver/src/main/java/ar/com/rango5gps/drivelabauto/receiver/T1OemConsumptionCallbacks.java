@@ -56,6 +56,7 @@ final class T1OemConsumptionCallbacks {
     private final double[] rawSums=new double[2]; // 500m callback sums, raw and uncalibrated
     private final long[] lastEventMs=new long[4];
     private final java.util.ArrayDeque<Float> recentFuel=new java.util.ArrayDeque<>();
+    private T1Fuel500mWindow history100=new T1Fuel500mWindow();
     private final String[] last={"—","—","—","—"};
     private volatile String state="Sin prueba. Registro de eventos apagado.";
     private volatile String registration="Sin registros.";
@@ -208,6 +209,48 @@ final class T1OemConsumptionCallbacks {
             in.recycle();out.recycle();
         }
     }
+    /** Rehydrate 100 raw OEM segment events on cold start. Historical TRIP
+     * CSVs are read only when a persisted ring does not already exist.
+     * No user GPS, individual trip history, or identifying data is copied.
+     * Gaps between recordings are not interpreted as continuously driven 50 km.
+     */
+    private void restoreFuelHistory(){
+        android.content.SharedPreferences p=app.getSharedPreferences(
+            "t1_live_consumption",Context.MODE_PRIVATE);
+        String encoded=p.getString("rawFuel100","");
+        T1Fuel500mWindow window=T1Fuel500mWindow.decode(encoded);
+        if(window.size()==0){
+            try{
+                File dir=T1TripRecorderService.tripDir(app);
+                File[] files=dir.listFiles(f->f.isFile()&&
+                    f.getName().matches("trip_oem_[0-9]{8}_[0-9]{6}\\\\.csv"));
+                if(files!=null){
+                    java.util.Arrays.sort(files,(a,b)->a.getName().compareTo(b.getName()));
+                    // Read only the ends of recent trip files: avoids a full
+                    // multi-GB historical scan and never runs on UI thread.
+                    for(int i=Math.max(0,files.length-30);i<files.length;i++){
+                        try(java.io.RandomAccessFile input=
+                                new java.io.RandomAccessFile(files[i],"r")){
+                            long offset=Math.max(0,input.length()-300000L);
+                            input.seek(offset);
+                            if(offset>0)input.readLine(); // partial line
+                            String line;
+                            while((line=input.readLine())!=null){
+                                String[] fields=line.split(",",-1);
+                                if(fields.length<3||
+                                    !"NAFTA_500_m".equals(fields[1]))continue;
+                                try{window.add(Float.parseFloat(fields[2]));}
+                                catch(NumberFormatException ignored){}
+                            }
+                        }catch(Exception ignored){}
+                    }
+                }
+            }catch(Exception ignored){}
+            if(window.size()>0)
+                p.edit().putString("rawFuel100",window.encode()).apply();
+        }
+        synchronized(dataLock){history100=window;}
+    }
     private void record(int channel,float raw){
         String value=Float.toString(raw);
         synchronized(dataLock){
@@ -227,6 +270,15 @@ final class T1OemConsumptionCallbacks {
             if(channel==0&&Float.isFinite(raw)&&raw>=0&&raw<=35){
                 recentFuel.addLast(raw);
                 while(recentFuel.size()>5)recentFuel.removeFirst();
+                // One OEM notification = one reported 500m segment. Keep
+                // at most 100 raw events across journeys/restarts; no conversion
+                // to litres until calibrated against the OEM 50km reading.
+                history100.add(raw);
+                app.getSharedPreferences("t1_live_consumption",
+                    Context.MODE_PRIVATE).edit()
+                    .putString("rawFuel100",history100.encode())
+                    .putLong("rawFuel100At",System.currentTimeMillis())
+                    .apply();
             }
             // Keep dashboard fuel numbers fresh whether a trip is
             // being recorded or merely the Cockpit is open. The OEM
@@ -294,6 +346,9 @@ final class T1OemConsumptionCallbacks {
         boolean[] registered=new boolean[4];
         StringBuilder errors=new StringBuilder();
         try{
+            // Restoration/backfill is performed on the listener's own thread,
+            // not on Cockpit/UI. Never changes trip logs or source CSV files.
+            restoreFuelHistory();
             File dir=T1TripRecorderService.tripDir(app);
             String time=new SimpleDateFormat("yyyyMMdd_HHmmss",Locale.ROOT)
                 .format(new Date());
