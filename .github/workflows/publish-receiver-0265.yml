@@ -184,10 +184,11 @@ jobs:
             receiver/tests/T1SocRegenWritePolicyTest.java
           java -cp /tmp/soc-regen-guard ar.com.rango5gps.drivelabauto.receiver.T1SocRegenWritePolicyTest
           src=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocRegenPilot.java
-          grep -Fq 'if(!T1SocRegenWritePolicy.parked(gear,speed))' "$src"
-          grep -Fq 'verify(b,id,initial)' "$src"
+          grep -Fq 'regenDriveEligible(gear,speed)' "$src"
+          grep -Fq 'verify(b,id,target,active)' "$src"
           grep -Fq 'BUSY.compareAndSet(false,true)' "$src"
-          grep -Fq 'flags().edit().putBoolean("ok_"+id,true)' "$src"
+          grep -Fq 'set(b,id,previous,null)' "$src"
+          ! grep -Fq 'boolean test(' "$src"
       - name: Build Receiver and verify unchanged signing identity / Sender OTA
         shell: bash
         run: |
@@ -255,7 +256,7 @@ jobs:
             output/receiver.json output/sender.json output/receiver.sha256 \
             --target "$GITHUB_SHA" --latest \
             --title 'DriveLab Auto Receiver 0.2.65 - Optimizador SOC forzado y regeneración verificada' \
-            --notes 'Receiver 0.2.65 code66. El optimizador de cuatro perfiles ahora tiene una ruta REAL experimental de escritura y lectura OEM para 1040 SMART=2/FORZADO=4, 1041 objetivo SOC y 1046 regeneracion=1/2/3 usando VehicleService Binder transact(15), el mismo contrato que el control probado de 1043, con doble preflight P/0 y readback. Cada clave comienza BLOQUEADA hasta una prueba manual individual, solo en P/0, que escribe un valor alternativo OEM, lo verifica, restaura el original y confirma la restauracion; cualquier fallo la mantiene bloqueada y exige consultar ajustes originales. Una vez confirmadas las pruebas, si el optimizador esta ON, el mapa/OSM es estable y el modo de propulsion 1043 ya coincide, aplica el perfil SOC/regen AUTOMATICAMENTE SOLO EN P Y 0 KM/H, nunca D ni con vehiculo moviendose, con anticiclado 120s y sin repeticion a ciegas. Si hay fallo, intenta restauracion controlada de cambios parciales, desactiva AUTO e informa el error. Los valores SOC forzado estan limitados a presets observados de OEM 20/30/40/48/50/56/60/64/70/72. No se promete control en D: el comportamiento de los setters 1040/1041/1046 aun debe verificarse en esta T1. Se conservan todos los viajes, Sender 0.2.16, Gemini/ChatGPT/Waze, tema Jetour, controles anteriores, y firma Receiver 0.2.64. Ver docs/OPTIMIZADOR_SOC_REGEN_ESCRITURAS_20261113.md.'
+            --notes 'Receiver 0.2.65 code66. Modo OPTIMIZADO automatico: EV/HEV/EV MAX 1043, SMART/FORZADO 1040, objetivo SOC 1041 y regeneracion 1046 por categoria de via OSM. Sigue el perfil sin detenerse al pasar de colectora a autopista: cambios en D con velocidad OEM valida, o P/0, tres coincidencias GPS, lectura de marcha y velocidad dos veces, un comando Binder transact(15) por valor no coincidente y readback OEM. SIN botones de desbloqueo ni tres pruebas manuales: un unico interruptor MODO OPTIMIZADO ON/OFF. La escritura de 1040/1041/1046 es EXPERIMENTAL hasta confirmar en vehiculo; si la ECU rechaza un valor, no confirma lectura o cambia la marcha, se detiene AUTO y se informa. Si hay fallos parciales intenta restaurar valores OEM originales; registro diagnostico sin ubicacion ni VIN. Objetivo SOC FORZADO restringido a presets inventariados 20/30/40/48/50/56/60/64/70/72. Evita R/N/velocidad desconocida, sin reintentos ciegos, espera 120 s entre grupos de comandos SOC/regen. Mantiene funciones de 0.2.64, Sender 0.2.16, datos de viajes, firmware y firma de actualizador sin cambios. Ver docs/OPTIMIZADOR_SOC_REGEN_ESCRITURAS_20261113.md.'
           mkdir -p verify
           gh release download v0.2.65 --pattern 'sender.json' --dir verify
           gh release download v0.2.65 --pattern 'receiver.json' --dir verify
