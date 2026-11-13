@@ -41,6 +41,18 @@ En la comparación `v0.2.64...v0.2.65` se añaden el análisis OSM histórico EC
 - Una configuración antigua no compatible se muestra en el preset permitido más cercano; no se cambia ninguna preferencia hasta pulsar **GUARDAR LOS 4 PERFILES**.
 - No se convierten los presets irregulares (48%, 56%, 64%, 72%) en múltiplos de 5. No se deben confundir con el umbral libre de batería. La lista sale de la investigación del contrato OEM; la aceptación real por cada firmware sigue dependiendo de confirmación con readback físico.
 
+## Modo optimizado — rango SOC de batería independiente por límite
+
+Cada uno de los cuatro perfiles (ciudad, carretera, autopista, respaldo desconocido) tiene **dos casillas y dos desplegables** para el SOC ACTUAL, independientes del objetivo SOC forzado:
+
+- **MÍNIMO ≥**: casilla activada + porcentaje seleccionable entre **5% y 100%**, de 5 en 5.
+- **MÁXIMO ≤**: casilla activada + porcentaje seleccionable entre **5% y 100%**, de 5 en 5.
+- Si ambas están activas, el perfil solo se cumple cuando **SOC actual ≥ mínimo Y SOC actual ≤ máximo** (límites inclusivos). Ejemplo: mínimo 10%, máximo 40% → solo SOC 10–40%. Si una está desactivada, solo se aplica la otra; ambas desactivadas permiten el perfil con cualquier lectura SOC, incluso sin dato válido.
+- Si ambos límites están encendidos y mínimo es mayor que máximo, **GUARDAR** rechaza la configuración con explicación; el evaluador también falla cerrado para preferencias corruptas. Si falta SOC OEM y hay alguna casilla activada, no se activa ese perfil.
+- Persistencia nueva `min_enabled_v2`, `max_enabled_v2` y `max_pct_v2` por cada tipo de vía. La versión anterior de una sola condición **≥ o ≤** migra a la casilla correspondiente sin cambiar su significado. No se borran ni reinician los perfiles.
+- La selección independiente de **objetivo SOC FORZADO 1041** conserva estrictamente la lista admitida por la política OEM: 20/30/40/48/50/56/60/64/70/72. Un SOC objetivo FORZADO no es una condición de SOC actual. Un perfil cuyo rango no se cumple retorna recomendación de respaldo HEV SMART, sin ordenar la configuración del perfil condicionado.
+- Pruebas JVM: extremos inclusivos, solo mínimo, solo máximo, ambos apagados, SOC OEM inválido, mínimo mayor que máximo y compatibilidad de comparador heredado.
+
 ## Restricciones / observaciones
 
 La ficha oficial global Jetour T1 identifica **Snapdragon 8155**, chip automotriz; no es el Snapdragon usado en Galaxy S23/S25. La central de la T1 argentina podría variar y por eso se muestra `Build.HARDWARE` y `BOARD`. Medición RAM GLOBAL no implica permiso para enumerar memoria exacta de otros procesos; se muestra solo el total del sistema y RAM de DriveLab por separado.
