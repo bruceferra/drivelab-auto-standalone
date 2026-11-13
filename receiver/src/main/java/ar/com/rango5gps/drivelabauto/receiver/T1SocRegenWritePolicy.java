@@ -65,12 +65,32 @@ final class T1SocRegenWritePolicy {
                 rule,battery);
         if(!decision.conditionSatisfied)
             return new Targets(SMART,-1,REGEN_MEDIUM,true);
-        int strategy=rule.strategy==T1OptimizedModePolicy.Strategy.FORCED?
-            FORCED:SMART;
+        // EV needs SMART and EV MAX clears FORZADO in OEM itself.
+        // Never re-enable FORZADO after either electric-only mode.
+        int strategy=electricPowerRequiresSmart(rule.power)?SMART:
+            rule.strategy==T1OptimizedModePolicy.Strategy.FORCED?
+                FORCED:SMART;
         int regen=rule.regeneration==T1OptimizedModePolicy.Regen.LOW?
             REGEN_LOW:rule.regeneration==T1OptimizedModePolicy.Regen.HIGH?
             REGEN_HIGH:REGEN_MEDIUM;
-        return new Targets(strategy,rule.forcedSoc,regen,false);
+        return new Targets(strategy,strategy==FORCED?rule.forcedSoc:-1,
+            regen,false);
+    }
+    /**
+     * Only plain EV needs an explicit forced-SOC release. The T1 itself
+     * already clears FORZADO on EV MAX; writing SMART before EV MAX would
+     * be an unnecessary duplicate OEM command.
+     */
+    static boolean mustDisarmForcedBeforeEv(int powerTarget,int currentSocStrategy){
+        return powerTarget==1&&currentSocStrategy==FORCED;
+    }
+    /** While EV/EV MAX is selected, FORZADO cannot be re-applied by the
+     * background SOC/regen synchronization, even if an old profile had
+     * accidentally saved FORZADO for an electric-only propulsion mode.
+     */
+    static boolean electricPowerRequiresSmart(T1OptimizedModePolicy.Power power){
+        return power==T1OptimizedModePolicy.Power.EV||
+            power==T1OptimizedModePolicy.Power.EV_MAX;
     }
     static boolean parked(int gear,double speed){
         return gear==1&&Double.isFinite(speed)&&Math.abs(speed)<0.05;
