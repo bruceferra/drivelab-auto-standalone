@@ -80,7 +80,7 @@ jobs:
           java -cp /tmp/t1-journey-test ar.com.rango5gps.drivelabauto.receiver.T1JourneyMetricsTest
           java -cp /tmp/t1-journey-test ar.com.rango5gps.drivelabauto.receiver.T1ZonePolicyTest
           # The new cockpit must NEVER issue arbitrary OEM setters or mode writes.
-          ! grep -E 'transact\\(15|setInt\\(|setFloat\\(' \
+          ! grep -E 'transact\(15|setInt\(|setFloat\(' \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ModeZoneStore.java
           grep -q 'T1PremiumCockpitActivity' receiver/src/main/AndroidManifest.xml
@@ -104,7 +104,7 @@ jobs:
           grep -q 'POWER_MODE_ID=1043,HEV=2' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ManualHevPolicy.java
           grep -q 'checkStopped(b,confirmedMode,"CONTROL_2")' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ManualHevExperiment.java
           grep -q 'd.writeInt(T1ManualHevPolicy.HEV)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ManualHevExperiment.java
-          ! grep -E 'transact\\(15|setInt\\(' \
+          ! grep -E 'transact\(15|setInt\(' \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ModeZoneStore.java
           grep -q 'LAST_SAMPLE_TIME' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripRecorderService.java
           grep -q 'T1JourneyStore.fulfillPending' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripRecorderService.java
@@ -113,7 +113,7 @@ jobs:
         run: |
           set -euo pipefail
           # A new light probe must perform NO property setter or unsafe OEM write.
-          ! grep -E 'transact\\(15|writeHev|setProperty\\(' \
+          ! grep -E 'transact\(15|writeHev|setProperty\(' \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CabinLightReadOnlyProbe.java
           grep -q 'b.transact(2,in,out,0)' \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CabinLightReadOnlyProbe.java
@@ -130,7 +130,7 @@ jobs:
           grep -q 'CAPTURA B · DESPUÉS' \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
           # The 12V probe only reads IALCar properties from our fixed catalog.
-          ! grep -E 'transact\\(15|setInt\\(|writeProperty|setProperty' \
+          ! grep -E 'transact\(15|setInt\(|writeProperty|setProperty' \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1Aux12vReadOnlyProbe.java
           grep -q 'b.transact(2,data,reply,0)' \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1Aux12vReadOnlyProbe.java
@@ -210,7 +210,7 @@ jobs:
           grep -q 'new Candidate(557860127' "$thermal"
           grep -q 'new Candidate(557867145' "$thermal"
           grep -q 'binder.transact(9,d,r,0)' "$thermal"
-          ! grep -E 'transact\\(15|setInt\\(|setFloat\\(|setProperty\\(' "$seat" "$thermal"
+          ! grep -E 'transact\(15|setInt\(|setFloat\(|setProperty\(' "$seat" "$thermal"
           grep -q 'ASIENTOS A · APAGADAS' "$cockpit"
           grep -q 'ASIENTOS B · ENCENDIDAS' "$cockpit"
           grep -q 'COPIAR INFORME ASIENTOS' "$cockpit"
@@ -227,7 +227,7 @@ jobs:
           grep -q '557847073' "$belt"
           grep -q '557862921' "$belt"
           grep -q 'b.transact(2,data,reply,0)' "$belt"
-          ! grep -E 'transact\\(15|setInt\\(|setFloat\\(|setProperty\\(' "$belt"
+          ! grep -E 'transact\(15|setInt\(|setFloat\(|setProperty\(' "$belt"
           grep -q 'CINTURONES A · SUELTOS' "$cockpit"
           grep -q 'CINTURONES B · ABROCHADO' "$cockpit"
       - name: Front horizon LED show/welcome status read only regression
@@ -241,7 +241,7 @@ jobs:
           grep -q '557867035' "$probe"
           grep -q '557867047' "$probe"
           grep -q 'b.transact(2,d,r,0)' "$probe"
-          ! grep -E 'transact\\(15|setInt\\(|setFloat\\(|setProperty\\(' "$probe"
+          ! grep -E 'transact\(15|setInt\(|setFloat\(|setProperty\(' "$probe"
           grep -q 'REGISTRAR LED 30 S · NO ESCRIBE' "$ui"
           grep -q 'COPIAR INFORME LED' "$ui"
           grep -q 'reading.speed>0.5' "$ui"
@@ -276,7 +276,7 @@ jobs:
           grep -q 'HAL_PHEV_POWER_MODE_READ=557867211' "$hal"
           grep -q 'HAL_PHEV_POWER_MODE_WRITE_UNTESTED=557843642' "$hal"
           grep -q 'b.transact(2,d,r,0)' "$hal"
-          ! grep -E 'transact\\(15|setInt\\(|setFloat\\(|setProperty\\(' "$hal"
+          ! grep -E 'transact\(15|setInt\(|setFloat\(|setProperty\(' "$hal"
           grep -q 'T1PhevHalModeProbe.inspect(app,mode)' \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ManualHevExperiment.java
           grep -q 'getPackageInfo(' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/ReceiverActivity.java
@@ -309,7 +309,7 @@ jobs:
           grep -q '"motorway".equals(tag)' "$osm"
           grep -q '"residential".equals(tag)' "$osm"
           # OSM may never import or call a vehicle write interface.
-          ! grep -E 'VehicleService|IVehicleControl|transact\\(15|setProperty\\(|1043.*write' "$osm"
+          ! grep -E 'VehicleService|IVehicleControl|transact\(15|setProperty\(|1043.*write' "$osm"
           # No code path may invoke the triple mode pilot from a GPS callback:
           ! grep -E 'threeModePilot|T1ManualThreeModePilot' \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OsmRoadAdvisor.java
