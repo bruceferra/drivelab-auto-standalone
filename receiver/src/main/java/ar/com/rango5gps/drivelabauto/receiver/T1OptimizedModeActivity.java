@@ -30,7 +30,7 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         MUTED=T1JetourTheme.MUTED, AQUA=T1JetourTheme.CYAN;
     private final EnumMap<T1OptimizedModePolicy.Road,Profile> profiles=
         new EnumMap<>(T1OptimizedModePolicy.Road.class);
-    private TextView preview,automaticState,writeStatus;
+    private TextView preview,automaticState;
     private Button automaticButton;
     private T1OptimizedModePolicy.Road road=T1OptimizedModePolicy.Road.UNKNOWN;
     @Override protected int overlayClearBackgroundColor(){return BG;}
@@ -168,13 +168,13 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         Button close=new Button(this);close.setAllCaps(false);close.setText("VOLVER");
         T1JetourTheme.button(close,T1JetourTheme.PANEL_HI);
         close.setOnClickListener(v->finish());title.addView(close);
-        root.addView(text("El modo optimizado cambia EV/HEV/EV MAX (1043) "+
-            "según el mapa y el SOC. También está preparado para aplicar "+
-            "SMART/FORZADO (1040), objetivo SOC (1041) y regeneración (1046) "+
-            "automáticamente al quedar EN P Y A 0 KM/H, si antes se probó "+
-            "la escritura y restauración de cada código en tu Jetour. "+
-            "Nunca cambia la fuerza de regeneración durante la marcha. "+
-            "Cada comando lleva verificación OEM; ante rechazo se detiene AUTO.",
+        root.addView(text("MODO OPTIMIZADO automático según el camino: "+
+            "EV/HEV/EV MAX (1043), SMART/FORZADO (1040), objetivo SOC (1041) "+
+            "y regeneración (1046). Los perfiles cambian mientras circulás "+
+            "en D sin obligarte a detenerte. GPS y telemetría deben ser "+
+            "válidos; cada orden OEM se confirma por lectura posterior. "+
+            "Si un comando falla se detiene la automatización, y vos "+
+            "podés comprobar el resultado en el menú original Jetour.",
             13,MUTED,false));
         LinearLayout switchRow=horizontal();root.addView(switchRow);
         automaticButton=new Button(this);
@@ -186,37 +186,6 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         automaticState=text("AUTO: verificando estado…",14,Color.WHITE,true);
         root.addView(automaticState);
         refreshAutoUi();
-        LinearLayout verification=vertical();
-        verification.setPadding(12,10,12,12);
-        verification.setBackground(background(CARD,14));
-        root.addView(verification);
-        verification.addView(text(
-            "COMPROBAR ESCRITURAS OEM ANTES DEL AUTO COMPLETO",
-            17,AQUA,true));
-        verification.addView(text(
-            "Con el vehículo inmóvil, P, freno de estacionamiento. "+
-            "Cada prueba cambia UNA propiedad, comprueba que la ECU responda "+
-            "y RESTITUYE el valor inicial con lectura de confirmación. "+
-            "No se habilita automáticamente ninguna propiedad que falle. "+
-            "Probar preferentemente con la batería cargada y en área segura.",
-            12,MUTED,false));
-        writeStatus=text(T1SocRegenPilot.status(this),13,Color.WHITE,false);
-        verification.addView(writeStatus);
-        Button testStrategy=new Button(this);
-        testStrategy.setText("PROBAR 1040 · SMART / FORZADO (P/0)");
-        T1JetourTheme.button(testStrategy,T1JetourTheme.PANEL_HI);
-        testStrategy.setOnClickListener(v->askWriteTest(1040));
-        verification.addView(testStrategy);
-        Button testSoc=new Button(this);
-        testSoc.setText("PROBAR 1041 · OBJETIVO SOC (P/0)");
-        T1JetourTheme.button(testSoc,T1JetourTheme.PANEL_HI);
-        testSoc.setOnClickListener(v->askWriteTest(1041));
-        verification.addView(testSoc);
-        Button testRegen=new Button(this);
-        testRegen.setText("PROBAR 1046 · REGENERACIÓN (P/0)");
-        T1JetourTheme.button(testRegen,T1JetourTheme.PANEL_HI);
-        testRegen.setOnClickListener(v->askWriteTest(1046));
-        verification.addView(testRegen);
         for(T1OptimizedModePolicy.Road r:T1OptimizedModePolicy.Road.values())
             card(root,r);
         LinearLayout actions=horizontal();root.addView(actions);
@@ -236,43 +205,6 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         setContentView(scroll);
         showCurrent();
     }
-    private void askWriteTest(int id){
-        if(T1OptimizedAutoService.enabled(this)){
-            preview.setText("Primero apagá AUTO para ensayar escritura y "+
-                "restauración manual sin que haya otra orden simultánea.");
-            return;
-        }
-        new android.app.AlertDialog.Builder(this)
-            .setTitle("PRUEBA REAL OEM "+id+" · P/0")
-            .setMessage("Se enviará un valor alternativo al vehículo "+
-                "únicamente en P y a 0 km/h, se verificará mediante lectura "+
-                "OEM y se intentará restaurar el valor anterior. Esto puede "+
-                "cambiar momentáneamente el modo SOC o la regeneración. "+
-                "Aplicalo solo con freno de estacionamiento y en lugar "+
-                "seguro; nunca en circulación. Si la restauración falla, "+
-                "reponé inmediatamente el estado con el menú original.")
-            .setNegativeButton("CANCELAR",null)
-            .setPositiveButton("COMPROBAR",(d,w)->{
-                if(writeStatus!=null)writeStatus.setText(
-                    "Probando "+id+" · no cambiar de marcha ni tocar "+
-                    "el control OEM hasta finalizar…");
-                boolean started=new T1SocRegenPilot(this).test(id,message->{
-                    if(isFinishing()||isDestroyed())return;
-                    if(writeStatus!=null)
-                        writeStatus.setText(message+"\n"+
-                            T1SocRegenPilot.status(this));
-                    preview.setText(message);
-                    new android.app.AlertDialog.Builder(this)
-                        .setTitle("RESULTADO ESCRITURA "+id)
-                        .setMessage(message)
-                        .setPositiveButton("CERRAR",null).show();
-                });
-                if(!started&&writeStatus!=null)
-                    writeStatus.setText("Otra operación OEM está en curso. "+
-                        "No se envió ninguna orden.");
-            }).show();
-    }
-
     private int percentage(EditText e){
         try{
             String x=e.getText().toString().trim();
@@ -309,8 +241,8 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
             for(T1OptimizedModePolicy.Road r:next.keySet())
                 T1OptimizedModeStore.save(this,r,next.get(r));
             preview.setText("GUARDADOS LOS CUATRO PERFILES · "+
-                "1043 se aplica por vía. SOC/regen solo si previamente "+
-                "validados, y únicamente en P/0.\n"+
+                "1043/1040/1041/1046 automáticos en P o D con "+
+                "lectura OEM confirmada.\n"+
                 currentRecommendation());
             return true;
         }catch(IllegalArgumentException ex){
@@ -329,8 +261,6 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         }
         if(automaticState!=null)
             automaticState.setText(T1OptimizedAutoService.status(this));
-        if(writeStatus!=null&&!new T1SocRegenPilot(this).busy())
-            writeStatus.setText(T1SocRegenPilot.status(this));
     }
     private void toggleAutomatic(){
         if(T1OptimizedAutoService.enabled(this)){
@@ -347,11 +277,10 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
                 "en pantalla. La app necesita GPS preciso y el mapa "+
                 "offline PBA+CABA. Verifica marcha P/0 o D con velocidad "+
                 "OEM válida, tres lecturas de vía consecutivas y el "+
-                "resultado del comando 1043. La gestión SMART/FORZADO, "+
-                "objetivo SOC y regeneración también podrán aplicarse "+
-                "automáticamente, pero SOLO EN P/0 y después de que "+
-                "cada una haya superado su propia prueba de escritura, "+
-                "lectura y restauración. No cambia la frenada en marcha. "+
+                "resultado del comando 1043. Se intentan también los "+
+                "cambios 1040/1041/1046 en D, sin detenerte, cuando el "+
+                "perfil y las lecturas OEM son confiables. Son escrituras "+
+                "experimentales: se comprueba cada una con readback. "+
                 "Ante un rechazo OEM se desactiva AUTO. Podés apagar "+
                 "el optimizador desde este botón o la notificación.")
             .setNegativeButton("CANCELAR",null)
@@ -378,9 +307,9 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
             road,T1OptimizedModeStore.get(this,road),soc);
         return "VÍA: "+T1OptimizedModePolicy.roadName(road)+
             " · "+info+"\n"+result.summary()+
-            "\nAUTO: 1043 por carretera; 1040/1041/1046 se "+
-            "aplican solo al quedar P/0 y tras tres pruebas OEM "+
-            "confirmadas. Sin las pruebas se conservan los mandos originales. "+
+            "\nAUTO: 1043/1040/1041/1046 por tipo de vía. "+
+            "Los cambios de regeneración pueden ocurrir en movimiento "+
+            "cuando el perfil cambia, con verificación OEM. "+
             "La condición SOC usa batería ACTUAL, no objetivo forzado. "+
             T1SocRegenPilot.status(this);
     }
