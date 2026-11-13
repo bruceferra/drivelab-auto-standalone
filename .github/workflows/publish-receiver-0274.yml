@@ -337,6 +337,23 @@ jobs:
           grep -Fq 'verifiedRoad(road,rule);' "$service"
           grep -Fq 'VERIFIED_TTL_MS=25000L' "$service"
           grep -Fq 'clearVerified(off,"OPTIMIZADO OFF")' "$service"
+      - name: Verify fuel usable liters CI186 minus 5.3 in both dashboards
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/fuel-usable-0274
+          javac -encoding UTF-8 -d /tmp/fuel-usable-0274 \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1FuelDisplay.java \
+            receiver/tests/T1FuelDisplayTest.java
+          java -cp /tmp/fuel-usable-0274 T1FuelDisplayTest
+          tank=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TankDashboardActivity.java
+          simple=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1InstrumentView.java
+          premium=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumInstrumentView.java
+          cockpit=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
+          grep -Fq 'T1FuelDisplay.usableLitersText(lastFuel)' "$tank"
+          grep -Fq 'T1FuelDisplay.usableLiters(' "$simple"
+          grep -Fq 'T1FuelDisplay.usableLiters(' "$premium"
+          grep -Fq 'T1FuelDisplay.usableLitersText(lastSample.fuel)' "$cockpit"
       - name: Build Receiver and verify unchanged signing identity / Sender OTA
         shell: bash
         run: |
@@ -404,7 +421,7 @@ jobs:
             output/receiver.json output/sender.json output/receiver.sha256 \
             --target "$GITHUB_SHA" --latest \
             --title 'DriveLab Auto Receiver 0.2.74 - Modo visible solo tras validacion OEM' \
-            --notes 'Receiver 0.2.74 code75: El encabezado MODO CIUDAD/CARRETERA/AUTOPISTA solo verde con 3 muestras GPS, bateria configurada cumplida y OEM 1043+SOC/regen confirmado; 13 por ciento con minimo 15 muestra SOC NO CUMPLE gris. NUEVO: cada uno de los cuatro bloques CIUDAD, CARRETERA, AUTOPISTA y DESCONOCIDO tiene ACTIVADO/DESACTIVADO independiente, guardado de inmediato. Un bloque desactivado detecta GPS para informar pero nunca ordena EV/HEV/EV MAX 1043, SOC 1040/1041 ni regeneracion 1046; tampoco fallback HEV y no afecta otros bloques. Rehabilitar exige nueva validacion; ninguna etiqueta falsa en verde. Preserva SOC forzado 20/30/40/50/60/70, diagnostico 1/2/3, espejos, AVAS, Waze experimental, viajes, firma OTA y Sender 0.2.16 intactos.'
+            --notes 'Receiver 0.2.74 code75: NAFTA UTILIZABLE en ambos tableros = CI186 bruto menos 5.3 litros hasta corte termico observado; ej CI186 30.10 litros => 24.80 disponibles. Raw CI186 sigue visible para diagnostico, autonomia no descuenta dos veces y 67L referencia de carga fisica es capacidad aproximada.  El encabezado MODO CIUDAD/CARRETERA/AUTOPISTA solo verde con 3 muestras GPS, bateria configurada cumplida y OEM 1043+SOC/regen confirmado; 13 por ciento con minimo 15 muestra SOC NO CUMPLE gris. NUEVO: cada uno de los cuatro bloques CIUDAD, CARRETERA, AUTOPISTA y DESCONOCIDO tiene ACTIVADO/DESACTIVADO independiente, guardado de inmediato. Un bloque desactivado detecta GPS para informar pero nunca ordena EV/HEV/EV MAX 1043, SOC 1040/1041 ni regeneracion 1046; tampoco fallback HEV y no afecta otros bloques. Rehabilitar exige nueva validacion; ninguna etiqueta falsa en verde. Preserva SOC forzado 20/30/40/50/60/70, diagnostico 1/2/3, espejos, AVAS, Waze experimental, viajes, firma OTA y Sender 0.2.16 intactos.'
           mkdir -p verify
           gh release download v0.2.74 --pattern 'sender.json' --dir verify
           gh release download v0.2.74 --pattern 'receiver.json' --dir verify
