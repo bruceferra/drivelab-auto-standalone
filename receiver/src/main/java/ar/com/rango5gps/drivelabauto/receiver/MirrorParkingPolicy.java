@@ -10,14 +10,16 @@ package ar.com.rango5gps.drivelabauto.receiver;
  *
  * Mirrors are relative to the driver's personally adjusted D pose.
  * One R maneuver tilts once; R/non-R shuffling at parking speed does nothing.
- * Restore requires VERIFIED non-R (D/N/P) and >10 km/h continuously
- * for 800 ms; N can move and must not be interpreted as zero speed.
+ * Restore requires confirmed D continuously for 800 ms, even if stationary.
+ * Speed is checked for plausibility; returning to the normal driving view
+ * must not wait for acceleration or braking. N/P never trigger restore.
  * No automatic homing against hard stops.
  */
 public final class MirrorParkingPolicy {
     public enum Gear { P, R, N, D, UNKNOWN }
     public enum Phase { NORMAL, TILTING, TILTED, RESTORING, UNKNOWN_POSITION }
     public enum Action { NONE, TILT_ON_R, RESTORE_AFTER_NON_R_SPEED }
+    // Legacy threshold is deliberately no longer used to gate D restoration.
     public static final double RETURN_THRESHOLD_KMH=10.0;
     public static final long RETURN_DWELL_MS=800;
     public static final int MAX_PULSES_PER_SIDE=20;
@@ -67,8 +69,7 @@ public final class MirrorParkingPolicy {
             return Action.NONE;
         }
         if(phase==Phase.TILTED){
-            if(gear!=Gear.R && gear!=Gear.UNKNOWN &&
-                    speedKmh>RETURN_THRESHOLD_KMH){
+            if(gear==Gear.D){
                 if(forwardSince<0)forwardSince=elapsedMs;
                 if(elapsedMs-forwardSince>=RETURN_DWELL_MS){
                     phase=Phase.RESTORING;
