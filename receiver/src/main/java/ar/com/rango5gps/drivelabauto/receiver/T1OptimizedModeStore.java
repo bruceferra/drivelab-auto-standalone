@@ -45,6 +45,58 @@ final class T1OptimizedModeStore {
             enumOr(T1OptimizedModePolicy.Regen.class,
                 p.getString(k+"regen",d.regeneration.name()),d.regeneration));
     }
+    /** Rule B is opt-in, OFF by default to preserve all previous
+     * single-rule settings across an OTA update.
+     */
+    static boolean secondEnabled(Context c,T1OptimizedModePolicy.Road r){
+        return preferences(c).getBoolean("road_"+r.name()+"_b_enabled",false);
+    }
+    static T1OptimizedModePolicy.Rule getSecond(
+            Context c,T1OptimizedModePolicy.Road r){
+        SharedPreferences p=preferences(c);
+        String k="road_"+r.name()+"_b_";
+        // Safe suggested template for a low-battery rule, not active
+        // until the driver explicitly enables and saves Rule B.
+        T1OptimizedModePolicy.Rule d=new T1OptimizedModePolicy.Rule(
+            T1OptimizedModePolicy.Power.HEV,
+            T1OptimizedModePolicy.Strategy.SMART,40,
+            false,5,true,30,T1OptimizedModePolicy.Regen.MEDIUM);
+        return new T1OptimizedModePolicy.Rule(
+            enumOr(T1OptimizedModePolicy.Power.class,
+                p.getString(k+"power",d.power.name()),d.power),
+            enumOr(T1OptimizedModePolicy.Strategy.class,
+                p.getString(k+"strategy",d.strategy.name()),d.strategy),
+            p.getInt(k+"soc",d.forcedSoc),
+            p.getBoolean(k+"min_enabled",d.minEnabled),
+            p.getInt(k+"min_pct",d.minBattery),
+            p.getBoolean(k+"max_enabled",d.maxEnabled),
+            p.getInt(k+"max_pct",d.maxBattery),
+            enumOr(T1OptimizedModePolicy.Regen.class,
+                p.getString(k+"regen",d.regeneration.name()),d.regeneration));
+    }
+    static T1OptimizedModePolicy.Rule getBranch(
+            Context c,T1OptimizedModePolicy.Road r,int slot){
+        return slot==T1OptimizedDualRulePolicy.PRIMARY?get(c,r):
+            slot==T1OptimizedDualRulePolicy.SECONDARY?getSecond(c,r):
+                null;
+    }
+    /** Always save rule B together with its own activation flag. */
+    static void saveSecond(Context c,T1OptimizedModePolicy.Road r,
+                           T1OptimizedModePolicy.Rule v,boolean enabled){
+        String k="road_"+r.name()+"_b_";
+        preferences(c).edit()
+            .putString(k+"power",v.power.name())
+            .putString(k+"strategy",v.strategy.name())
+            .putInt(k+"soc",v.forcedSoc)
+            .putBoolean(k+"min_enabled",v.minEnabled)
+            .putInt(k+"min_pct",v.minBattery)
+            .putBoolean(k+"max_enabled",v.maxEnabled)
+            .putInt(k+"max_pct",v.maxBattery)
+            .putString(k+"regen",v.regeneration.name())
+            .putBoolean(k+"enabled",enabled)
+            .commit();
+    }
+
     /** Entire-road kill switch. All four blocks default to enabled to
      * preserve existing user profiles across OTA upgrades. Toggling this
      * is persisted immediately; editing other settings still needs GUARDAR.
