@@ -84,6 +84,22 @@ jobs:
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ModeZoneStore.java
           grep -q 'T1PremiumCockpitActivity' receiver/src/main/AndroidManifest.xml
+      - name: OEM SOC/regen verified-only auto-write policy (pure JVM)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/soc-regen-policy
+          javac -encoding UTF-8 -d /tmp/soc-regen-policy \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModePolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocRegenWritePolicy.java \
+            receiver/tests/T1SocRegenWritePolicyTest.java
+          java -cp /tmp/soc-regen-policy ar.com.rango5gps.drivelabauto.receiver.T1SocRegenWritePolicyTest
+          code=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocRegenPilot.java
+          grep -Fq 'data.writeInt(id);data.writeInt(value)' "$code"
+          grep -Fq 'preflight(b,"ANTES_ESCRITURA_"' "$code"
+          grep -Fq 'flags().edit().putBoolean("ok_"+id,true)' "$code"
+          grep -Fq 'verify(b,id,initial)' "$code"
+          grep -Fq 'if(!T1SocRegenWritePolicy.parked(gear,speed))' "$code"
       - name: T1 cockpit client reset, live autonomy, engine and SOC policy (pure JVM)
         shell: bash
         run: |
