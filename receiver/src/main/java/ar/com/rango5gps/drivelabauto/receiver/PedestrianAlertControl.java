@@ -51,6 +51,50 @@ public final class PedestrianAlertControl {
         long t=lastAttemptAt;
         return t!=0&&SystemClock.elapsedRealtime()-t<COOLDOWN_MS;
     }
+    /** Read-only OEM 2074 inspection. Never toggles the warning sound,
+     * and shares BUSY with toggle so a poll never overlaps a write.
+     */
+    public boolean readState(Callback callback){
+        if(!foreground||!busy.compareAndSet(false,true))return false;
+        new Thread(()->{
+            boolean bound=false;
+            ServiceConnection connection=null;
+            Integer state=null;
+            String status;
+            try{
+                CountDownLatch latch=new CountDownLatch(1);
+                AtomicReference<IBinder> remote=new AtomicReference<>();
+                connection=new ServiceConnection(){
+                    @Override public void onServiceConnected(ComponentName c,IBinder b){
+                        remote.set(b);latch.countDown();
+                    }
+                    @Override public void onServiceDisconnected(ComponentName c){}
+                    @Override public void onNullBinding(ComponentName c){latch.countDown();}
+                    @Override public void onBindingDied(ComponentName c){}
+                };
+                bound=app.bindService(new Intent().setComponent(
+                    new ComponentName(PKG,CLS)),connection,0);
+                if(!bound||!latch.await(4,TimeUnit.SECONDS))
+                    throw new IllegalStateException("Sin enlace OEM 2074");
+                IBinder binder=remote.get();
+                if(binder==null||!TOKEN.equals(binder.getInterfaceDescriptor()))
+                    throw new SecurityException("Interfaz OEM inesperada");
+                state=read(binder);
+                status=state==null?"2074: SIN LECTURA":
+                    "2074: "+(state==ON?"PEATÓN ON":"PEATÓN OFF")+
+                    " · lectura OEM";
+            }catch(Exception e){
+                status="2074 SIN LECTURA: "+e.getClass().getSimpleName();
+            }finally{
+                if(bound&&connection!=null)
+                    try{app.unbindService(connection);}catch(Exception ignored){}
+                busy.set(false);
+            }
+            final Result result=new Result(state,state,false,status);
+            main.post(()->callback.done(result));
+        },"T1-Pedestrian-ReadOnly-2074").start();
+        return true;
+    }
     /** Explicit on-screen manual tap; never automatic or a persistent guard.
      * No gear/speed reads are required for the manual OEM setting.
      * The vehicle's original control service remains final authority.
@@ -106,13 +150,20 @@ public final class PedestrianAlertControl {
                 }finally{
                     data.recycle();reply.recycle();
                 }
-                // Short readback, no 12-second artificial waiting.
-                SystemClock.sleep(180);
-                after=read(b);
+                // Some T1 units delay 2074 getter updates after setter.
+                // Poll READ-ONLY for up to 1.5 seconds; never send a second
+                // toggle based on a stale value or a "setter returned OK".
+                long deadline=SystemClock.elapsedRealtime()+1500L;
+                do{
+                    SystemClock.sleep(180);
+                    after=read(b);
+                    if(after!=null&&after==requested)break;
+                }while(foreground&&SystemClock.elapsedRealtime()<deadline);
                 status=after!=null&&after==requested?
                     "Alerta peatonal "+(after==ON?"ACTIVADA":"DESACTIVADA")+
                         " · OEM confirmado":
-                    "Orden enviada, cambio de estado 2074 no confirmado";
+                    "Orden enviada, cambio 2074 NO CONFIRMADO; "+
+                    "verificar control original Jetour";
             }catch(Exception e){
                 status=(written?"Orden enviada; ":"SIN ORDEN · ")+
                     e.getClass().getSimpleName()+": "+e.getMessage();
