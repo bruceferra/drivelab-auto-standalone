@@ -432,6 +432,18 @@ public final class T1OptimizedAutoService extends Service {
                 "20,30,40,50,60,70. Sin escritura.");
             return;
         }
+        // EV MAX clears FORZADO itself on the user's Jetour T1.
+        // Do not send an unnecessary 1040=SMART from the optimizer:
+        // wait for the OEM to reflect this automatic switch before
+        // synchronizing any regeneration parameter.
+        if(!targets.fallback&&
+           rule.power==T1OptimizedModePolicy.Power.EV_MAX&&
+           snapshot.socMode!=T1SocRegenWritePolicy.SMART){
+            pendingRoad("EV MAX · SMART OEM PENDIENTE");
+            note("AUTO ON · EV MAX desactiva SOC FORZADO automáticamente; "+
+                "esperando 1040=SMART OEM sin escribir 1040");
+            return;
+        }
         // Observed T1Launcher 1041 readback map: raw30=>20%,
         // raw40=>30%, raw48=>40%, raw56=>50%. FloatRaw=1 is NOT
         // a validated percentage. Confirm only observed pairings;

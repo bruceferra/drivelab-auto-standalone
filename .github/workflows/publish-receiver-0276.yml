@@ -1,0 +1,500 @@
+name: Signed Receiver 0.2.76 - EV SMART before EV, EV MAX OEM automatic
+# UI-only palette aligned with original Jetour T1 ADB screenshots.
+# Green, red, amber, cyan and all dropdown controls retain readable text.
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-receiver-0276.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: signed-drivelabauto-publication
+  cancel-in-progress: false
+jobs:
+  receiver:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    env:
+      RECEIVER_STORE_PASSWORD: ${{ secrets.RECEIVER_STORE_PASSWORD }}
+      RECEIVER_KEY_ALIAS: ${{ secrets.RECEIVER_KEY_ALIAS }}
+      RECEIVER_KEY_PASSWORD: ${{ secrets.RECEIVER_KEY_PASSWORD }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Android SDK 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool=$(command -v sdkmanager || find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)
+          "$tool" 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Restore original Receiver signing certificate
+        shell: bash
+        env:
+          RECEIVER_KEYSTORE_B64: ${{ secrets.RECEIVER_KEYSTORE_B64 }}
+        run: |
+          set -euo pipefail
+          test -n "$RECEIVER_KEYSTORE_B64"
+          test -n "$RECEIVER_STORE_PASSWORD" && test -n "$RECEIVER_KEY_ALIAS" && test -n "$RECEIVER_KEY_PASSWORD"
+          printf %s "$RECEIVER_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/receiver.p12"
+          chmod 600 "$RUNNER_TEMP/receiver.p12"
+          echo "RECEIVER_KEYSTORE=$RUNNER_TEMP/receiver.p12" >> "$GITHUB_ENV"
+      - name: Pure JVM daily-session rollup regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/rollup-classes
+          javac -d /tmp/rollup-classes \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1DailyTripSummary.java \
+            receiver/tests/T1DailyTripSummaryTest.java
+          java -cp /tmp/rollup-classes ar.com.rango5gps.drivelabauto.receiver.T1DailyTripSummaryTest
+      - name: Verify manual drive-mode gate with pure JVM test
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/modegate-classes
+          javac -d /tmp/modegate-classes \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1DriveModeGate.java \
+            receiver/tests/T1DriveModeGateTest.java
+          java -cp /tmp/modegate-classes ar.com.rango5gps.drivelabauto.receiver.T1DriveModeGateTest
+      - name: Test four-road optimized profiles (pure JVM)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/optimized-classes
+          javac -d /tmp/optimized-classes \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModePolicy.java \
+            receiver/tests/T1OptimizedModePolicyTest.java
+          java -cp /tmp/optimized-classes ar.com.rango5gps.drivelabauto.receiver.T1OptimizedModePolicyTest
+      - name: Test road-entry banners and debounce (pure JVM)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/road-popup-classes
+          javac -d /tmp/road-popup-classes \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModePolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1RoadTransitionGate.java \
+            receiver/tests/T1RoadTransitionGateTest.java
+          java -cp /tmp/road-popup-classes ar.com.rango5gps.drivelabauto.receiver.T1RoadTransitionGateTest
+      - name: Verify historical energy-balance simulator and CSV compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/whatif-classes
+          javac -d /tmp/whatif-classes \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1WhatIfEnergyModel.java \
+            receiver/tests/T1WhatIfEnergyModelTest.java
+          java -cp /tmp/whatif-classes ar.com.rango5gps.drivelabauto.receiver.T1WhatIfEnergyModelTest
+      - name: Verify OEM-first trip distance and no-GPS-doublecount regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/distance-classes
+          javac -d /tmp/distance-classes \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripDistancePolicy.java \
+            receiver/tests/T1TripDistancePolicyTest.java
+          java -cp /tmp/distance-classes ar.com.rango5gps.drivelabauto.receiver.T1TripDistancePolicyTest
+      - name: Verify OEM 1004 recirculation polarity (pure JVM)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/recirc-classes
+          javac -d /tmp/recirc-classes \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/RecirculationPolicy.java \
+            receiver/tests/RecirculationPolicyTest.java
+          java -cp /tmp/recirc-classes RecirculationPolicyTest
+          grep -q 'RecirculationGuardService.activateOnAppOpen(this)' \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ImmersiveActivity.java
+          grep -q 'MirrorAutomationService.activateOnAppOpen(this)' \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ImmersiveActivity.java
+          grep -q 'ACTION_RESTORE' \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/BootReceiver.java
+
+      - name: Verify OSM city avenue maxspeed rules (pure JVM)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/osm-classes
+          javac -d /tmp/osm-classes \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModePolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1RoadSpeedClassifier.java \
+            receiver/tests/T1RoadSpeedClassifierTest.java
+          java -cp /tmp/osm-classes ar.com.rango5gps.drivelabauto.receiver.T1RoadSpeedClassifierTest
+
+      - name: Verify automatic road-to-OEM 1043 gate (pure JVM)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/optimized-auto-classes
+          javac -d /tmp/optimized-auto-classes \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1DriveModeGate.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModePolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedAutoGate.java \
+            receiver/tests/T1OptimizedAutoGateTest.java
+          java -cp /tmp/optimized-auto-classes ar.com.rango5gps.drivelabauto.receiver.T1OptimizedAutoGateTest
+          grep -q 'T1OptimizedAutoService.activate(this)' \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
+          grep -q 'T1OptimizedAutoService.activate(this)' \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeActivity.java
+          grep -q 'T1OptimizedAutoService' receiver/src/main/AndroidManifest.xml
+
+      - name: Verify audited closed-trip and full-Jornada OEM reconstruction
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/master-history-classes
+          javac -d /tmp/master-history-classes \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripDistancePolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1MasterTripHistory.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1HistoricalDistanceRepair.java \
+            receiver/tests/T1HistoricalMasterRebuildTest.java
+          java -cp /tmp/master-history-classes ar.com.rango5gps.drivelabauto.receiver.T1HistoricalMasterRebuildTest
+          grep -q 'VIAJES · 1 Y 2' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
+          grep -q 'JORNADAS · TOTAL' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
+          grep -q 'requestLocationUpdates(provider,2500,0f' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedAutoService.java
+
+      - name: Verify HAL body diagnostic stays strictly read-only
+        shell: bash
+        run: |
+          set -euo pipefail
+          probe=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/WiperParkingProbe.java
+          wizard=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ValidationWizardActivity.java
+          grep -Fq 'WIPER_MODE_READ=557843863' "$probe"
+          grep -Fq 'REAR_WIPER_READ=557843559' "$probe"
+          grep -Fq 'LIGHT_STATUS_IDS' "$probe"
+          grep -Fq 'lights_exterior_hal' "$wizard"
+          test "$(grep -c 'b.transact(' "$probe")" -eq 2
+          grep -Fq 'b.transact(2' "$probe"
+          grep -Fq 'b.transact(5' "$probe"
+          ! grep -Eq 'b.transact\((3|4|6|7|8|9|1[0-9]|2[0-9])' "$probe"
+          ! grep -Eq 'data.writeInt\((557843862|557843558|557843861)' "$probe"
+      - name: Eco trip speed bins, OSM coverage and live 500m autonomy (pure JVM)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-eco-rating
+          javac -encoding UTF-8 -d /tmp/t1-eco-rating \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1EcoTripMetrics.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TrafficFlowPolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1LiveConsumption.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripMath.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ExperimentalRange.java \
+            receiver/tests/T1EcoTripMetricsTest.java \
+            receiver/tests/T1TrafficFlowPolicyTest.java \
+            receiver/tests/T1LiveConsumptionTest.java
+          java -cp /tmp/t1-eco-rating ar.com.rango5gps.drivelabauto.receiver.T1EcoTripMetricsTest
+          java -cp /tmp/t1-eco-rating ar.com.rango5gps.drivelabauto.receiver.T1TrafficFlowPolicyTest
+          java -cp /tmp/t1-eco-rating ar.com.rango5gps.drivelabauto.receiver.T1LiveConsumptionTest
+          grep -Fq 'eco.sample(s.timestamp,measure.km,dt' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripRecorderService.java
+          grep -Fq 'historyEcoStatus.setText' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
+          grep -Fq 'T1EcoTripMonitor.live(this,ecoScope)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
+      - name: SOC regen guarded write policy regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/soc-regen-guard
+          javac -encoding UTF-8 -d /tmp/soc-regen-guard \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModePolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocRegenWritePolicy.java \
+            receiver/tests/T1SocRegenWritePolicyTest.java
+          java -cp /tmp/soc-regen-guard ar.com.rango5gps.drivelabauto.receiver.T1SocRegenWritePolicyTest
+          src=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocRegenPilot.java
+          grep -Fq 'regenDriveEligible(gear,speed)' "$src"
+          grep -Fq 'verify(b,id,target,active)' "$src"
+          grep -Fq 'BUSY.compareAndSet(false,true)' "$src"
+          grep -Fq 'set(b,id,previous,null)' "$src"
+          ! grep -Fq 'boolean test(' "$src"
+      - name: Verify 500m live OEM callbacks work without recording trip
+        shell: bash
+        run: |
+          set -euo pipefail
+          callback=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OemConsumptionCallbacks.java
+          cockpit=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
+          grep -Fq 'boolean startForCockpit()' "$callback"
+          grep -Fq 'logFile=cockpitMode?null:file' "$callback"
+          grep -Fq '.putString("source",tripMode?"TRIP":"COCKPIT")' "$callback"
+          grep -Fq 'if(tripFeeding)' "$cockpit"
+          grep -Fq 'if(passive.startForCockpit())dashboardConsumption=passive;' "$cockpit"
+          grep -Fq 'dashboardConsumption.stop();' "$cockpit"
+      - name: Verify Cockpit navigation remains independent of history scroll
+        shell: bash
+        run: |
+          set -euo pipefail
+          cockpit=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
+          grep -Fq 'cockpitNavRow=null;' "$cockpit"
+          grep -Fq 'setContentView(scroll);' "$cockpit"
+          grep -Fq 'shell.addView(globalToolbar.view()' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ImmersiveActivity.java
+          grep -Fq 'historyEcoStatus.setTextIsSelectable(false);' "$cockpit"
+          grep -Fq 'historyUiBusy.compareAndSet(false,true)' "$cockpit"
+          grep -Fq 'snapshot=loadHistorySnapshot();' "$cockpit"
+          grep -Fq 'if(!snapshot.signature.equals(renderedHistorySignature))' "$cockpit"
+          grep -Fq 'button.setFocusable(false);' "$cockpit"
+      - name: Verify full-system telemetry and navigational touch recovery
+        shell: bash
+        run: |
+          set -euo pipefail
+          cockpit=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
+          monitor=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SystemLoadMonitor.java
+          grep -Fq 'manager.getMemoryInfo(mem)' "$monitor"
+          grep -Fq 'mem.totalMem,mem.availMem' "$monitor"
+          grep -Fq 'new FileReader("/proc/stat")' "$monitor"
+          grep -Fq 'dispatchTouchEvent(MotionEvent event)' "$cockpit"
+          grep -Fq 'navTouchDowns++' "$cockpit"
+          grep -Fq 'modeTouchDowns++' "$cockpit"
+          grep -Fq 'cockpitModeRow=null;' "$cockpit"
+          grep -Fq 'commentaryRight.addView(systemMonitorLine,' "$cockpit"
+          grep -Fq 'T1WazeWheelService' receiver/src/main/AndroidManifest.xml
+          grep -Fq 'roadTransitionPopup=null;' "$cockpit"
+          grep -Fq 'SISTEMA RAM/CPU' "$cockpit"
+          ! grep -Fq 'cockpitFrame.addView(roadTransitionPopup' "$cockpit"
+      - name: Check SOC target settings and preserve write pipeline
+        shell: bash
+        run: |
+          set -euo pipefail
+          soc=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocRegenWritePolicy.java
+          pilot=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocRegenPilot.java
+          auto=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedAutoService.java
+          grep -Fq 'SOC_PRESETS={20,30,40,50,60,70}' "$soc"
+          grep -Fq 'socRegenPilot.apply(targets,' "$auto"
+          grep -Fq 'private static double readSocTargetFloat' "$pilot"
+          grep -Fq 'if(id==1041){' "$pilot"
+          grep -Fq '1041 SIN ROLLBACK' "$pilot"
+          ! grep -Fq 'current==56?64:56' "$soc"
+      - name: Check global read-only road mode, mirrors and pedestrian AVAS status
+        shell: bash
+        run: |
+          set -euo pipefail
+          global=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1GlobalToolbar.java
+          map=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedAutoService.java
+          mirrors=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/MirrorPulsePilot.java
+          pedestrian=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/PedestrianAlertControl.java
+          grep -Fq 'roadModeButton.setOnClickListener(null);' "$global"
+          grep -Fq 'T1OptimizedAutoService.verifiedAppliedRoad(owner)' "$global"
+          grep -Fq 'roadModeButton.setText("MODO "+road);' "$global"
+          grep -Fq 'T1OptimizedModeStore.markReading(this,' "$map"
+          grep -Fq '!T1OptimizedModeStore.isEnabled(this,road)' "$map"
+          grep -Fq 'socProfileGate.reset();' "$map"
+          grep -Fq 'PERFIL DESACTIVADO' "$map"
+          grep -Fq 'setEnabled(Context c,T1OptimizedModePolicy.Road r,boolean enabled)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeStore.java
+          grep -Fq 'p.blockEnabled.setOnCheckedChangeListener' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeActivity.java
+          grep -Fq 'mirrorState==0?"DESPLEGAR ESPEJOS"' "$global"
+          grep -Fq 'mirrorState==1?"PLEGAR ESPEJOS"' "$global"
+          grep -Fq 'button(actions,"VENTILACIÓN TOTAL",T1JetourTheme.PANEL_HI' "$global"
+          grep -Fq 'button(actions,"CIERRE TOTAL",T1JetourTheme.PANEL_HI' "$global"
+          grep -Fq 'private void readAvasState()' "$global"
+          grep -Fq 'avsButton.setText(pedestrianState==1?"PEATÓN ON"' "$global"
+          grep -Fq 'pedestrianState==0?"PEATÓN OFF"' "$global"
+          grep -Fq 'T1JetourTheme.RED_BUTTON:T1JetourTheme.PANEL_HI' "$global"
+          grep -Fq 'public boolean readState(Callback callback)' "$pedestrian"
+          grep -Fq 'int value=readInt(c.binder,2003);' "$mirrors"
+      - name: Regression stable road gate, SOC transition and 3-stage diagnosis
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/soc-profile-0273
+          javac -encoding UTF-8 -d /tmp/soc-profile-0273 \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModePolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocRegenWritePolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocRegenTransitionGate.java \
+            receiver/tests/T1SocRegenTransitionGateTest.java
+          java -cp /tmp/soc-profile-0273 ar.com.rango5gps.drivelabauto.receiver.T1SocRegenTransitionGateTest
+          pilot=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocRegenPilot.java
+          auto=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedAutoService.java
+          editor=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeActivity.java
+          gate=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedAutoGate.java
+          grep -Fq '1041_SIN_SOC_PREVIO' "$pilot"
+          grep -Fq 'ETAPA_1_PRECHECK' "$pilot"
+          grep -Fq 'ETAPA_2_WRITE_REQ' "$pilot"
+          grep -Fq 'ETAPA_3_READBACK' "$pilot"
+          grep -Fq 'ETAPA_3_INCIERTA' "$pilot"
+          grep -Fq 'socProfileGate.recordConfirmed(targets);' "$auto"
+          grep -Fq 'VER / SUBIR DIAGNÓSTICO SOC' "$editor"
+          ! grep -Fq 'auxVotes=' "$auto"
+          ! grep -Fq 'votes=0;' <(sed -n '/void recordCommand(/,$p' "$gate")
+      - name: Reject premature road label (13pct SOC < 15pct CITY) - JVM
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/road-chip-0274
+          javac -encoding UTF-8 -d /tmp/road-chip-0274 \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModePolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedAppliedRoadPolicy.java \
+            receiver/tests/T1OptimizedAppliedRoadPolicyTest.java
+          java -cp /tmp/road-chip-0274 ar.com.rango5gps.drivelabauto.receiver.T1OptimizedAppliedRoadPolicyTest
+          toolbar=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1GlobalToolbar.java
+          service=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedAutoService.java
+          grep -Fq 'T1OptimizedAutoService.verifiedAppliedRoad(owner)' "$toolbar"
+          grep -Fq 'T1JetourTheme.GREEN_BUTTON' "$toolbar"
+          ! grep -Fq 'T1OptimizedModeStore.lastRoad(owner)' "$toolbar"
+          grep -Fq 'conditions.conditionSatisfied' "$service"
+          grep -Fq 'verifiedRoad(road,rule);' "$service"
+          grep -Fq 'VERIFIED_TTL_MS=25000L' "$service"
+          grep -Fq 'clearVerified(off,"OPTIMIZADO OFF")' "$service"
+      - name: Verify fuel usable liters CI186 minus 5.3 in both dashboards
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/fuel-usable-0274
+          javac -encoding UTF-8 -d /tmp/fuel-usable-0274 \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1FuelDisplay.java \
+            receiver/tests/T1FuelDisplayTest.java
+          java -cp /tmp/fuel-usable-0274 T1FuelDisplayTest
+          tank=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TankDashboardActivity.java
+          simple=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1InstrumentView.java
+          premium=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumInstrumentView.java
+          cockpit=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
+          grep -Fq 'T1FuelDisplay.usableLitersText(lastFuel)' "$tank"
+          grep -Fq 'T1FuelDisplay.usableLiters(' "$simple"
+          grep -Fq 'T1FuelDisplay.usableLiters(' "$premium"
+          grep -Fq 'T1FuelDisplay.usableLitersText(lastSample.fuel)' "$cockpit"
+      - name: Confirm observed 1041 readback encoding without extrapolating or changing setter
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/soc-1041-0275
+          javac -encoding UTF-8 -d /tmp/soc-1041-0275 \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModePolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocRegenWritePolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocTargetCodec.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocModePolicy.java \
+            receiver/tests/T1SocTargetCodecTest.java
+          java -cp /tmp/soc-1041-0275 ar.com.rango5gps.drivelabauto.receiver.T1SocTargetCodecTest
+          pilot=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocRegenPilot.java
+          service=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedAutoService.java
+          grep -Fq 'T1SocTargetCodec.confirmsRequested(' "$pilot"
+          grep -Fq 'T1SocTargetCodec.confirmsRequested(' "$service"
+          grep -Fq '1041_RAW_ANTES_OPCIONAL' "$pilot"
+          ! grep -Fq 'snapshot.socTargetInt==targets.forcedSoc' "$service"
+      - name: Check direct SOC report cloud transport and CSV contract, no share chooser
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/soc-cloud-0275
+          javac -encoding UTF-8 -d /tmp/soc-cloud-0275 \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OemReportCsv.java \
+            receiver/tests/T1OemReportCsvTest.java
+          java -cp /tmp/soc-cloud-0275 ar.com.rango5gps.drivelabauto.receiver.T1OemReportCsvTest
+          editor=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeActivity.java
+          log=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OemDiagnosticLog.java
+          cloud=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CloudDiagnostics.java
+          backend=server/supabase/drivelab-auto-diagnostics/index.ts
+          grep -Fq 'T1CloudDiagnostics.upload(this,cloudCsv,' "$editor"
+          grep -Fq 'SUBIR AL SERVIDOR' "$editor"
+          grep -Fq 'new Intent(this,ReceiverVehicleActivity.class)' "$editor"
+          ! grep -Fq 'Intent.createChooser(' "$editor"
+          ! grep -Fq 'Intent.ACTION_SEND' "$editor"
+          grep -Fq 'T1TripRecorderService.tripDir(app)' "$log"
+          grep -Fq 'code_diag_' "$log"
+          grep -Fq 'code_diag' "$cloud"
+          grep -Fq 'code_diag' "$backend"
+      - name: EV pre-SMART 1040 confirmation before 1043, EV MAX self-managed
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/ev-0276
+          javac -encoding UTF-8 -d /tmp/ev-0276 \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModePolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocRegenWritePolicy.java \
+            receiver/tests/T1SocRegenWritePolicyTest.java
+          java -cp /tmp/ev-0276 ar.com.rango5gps.drivelabauto.receiver.T1SocRegenWritePolicyTest
+          python3 - <<'PY'
+          from pathlib import Path
+          root=Path('receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver')
+          pilot=(root/'T1ManualThreeModePilot.java').read_text()
+          svc=(root/'T1OptimizedAutoService.java').read_text()
+          ui=(root/'T1OptimizedModeActivity.java').read_text()
+          policy=(root/'T1SocRegenWritePolicy.java').read_text()
+          assert pilot.index('ensureSmartBeforeEv(b,target,visible);') < pilot.index('data.writeInt(1043);data.writeInt(target);'), 'pre-SMART must precede EV 1043'
+          assert 'if(powerTarget!=1)return;' in pilot, 'do not touch EV MAX'
+          assert 'data.writeInt(1040);data.writeInt(2); // SMART' in pilot
+          assert 'EV_SMART_READBACK' in pilot
+          assert 'EV_POST_SMART_SEGURIDAD' in pilot
+          assert 'T1SocRegenPilot.oemSocWriteInProgress()' in pilot
+          assert 'rule.power==T1OptimizedModePolicy.Power.EV_MAX' in svc
+          assert 'esperando 1040=SMART OEM sin escribir 1040' in svc
+          assert 'electricPowerRequiresSmart(rule.power)?SMART:' in policy
+          assert 'p.strategy.setEnabled(!electric);' in ui
+          print('PASS: EV SMART->1043, EV MAX OEM self-clear, no forced reactivation')
+          PY
+      - name: Build Receiver and verify unchanged signing identity / Sender OTA
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'bruceferra/drivelab-auto-standalone'
+          test "$GITHUB_REF_NAME" = main
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.75
+          ! gh release view v0.2.76 >/dev/null 2>&1
+          mkdir -p /tmp/prior output
+          gh release download v0.2.75 --pattern 'DriveLab-Auto-Receiver-v0.2.75.apk' --dir /tmp/prior
+          gh release download v0.2.75 --pattern 'sender.json' --dir /tmp/prior
+          cp /tmp/prior/sender.json output/sender.json
+          python3 - <<'PY'
+          import json
+          m=json.load(open('output/sender.json'))
+          assert m['packageName']=='ar.com.rango5gps.drivelabauto.sender'
+          assert m['versionCode']==17 and m['versionName']=='0.2.16'
+          assert m['apkUrl']=='https://github.com/bruceferra/drivelab-auto-standalone/releases/download/v0.2.16/DriveLab-Auto-Sender-v0.2.16.apk'
+          PY
+          gradle --no-daemon :receiver:assembleRelease
+          apk='receiver/build/outputs/apk/release/receiver-release.apk'
+          test -s "$apk"
+          sig="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          "$sig" verify --print-certs "$apk"
+          "$sig" verify --print-certs /tmp/prior/DriveLab-Auto-Receiver-v0.2.75.apk
+          oldcert=$("$sig" verify --print-certs /tmp/prior/DriveLab-Auto-Receiver-v0.2.75.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          newcert=$("$sig" verify --print-certs "$apk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          test -n "$oldcert" && test "$oldcert" = "$newcert"
+          badge=$("$aapt" dump badging "$apk" | head -1)
+          echo "$badge"
+          echo "$badge" | grep -F "package: name='ar.com.rango5gps.drivelabauto.receiver'"
+          echo "$badge" | grep -F "versionCode='77'"
+          echo "$badge" | grep -F "versionName='0.2.76'"
+          name='DriveLab-Auto-Receiver-v0.2.76.apk'
+          cp "$apk" "output/$name"
+          export RECEIVER_SHA=$(sha256sum "output/$name" | awk '{print $1}')
+          python3 - <<'PY'
+          import json,os
+          m={'packageName':'ar.com.rango5gps.drivelabauto.receiver',
+             'versionName':'0.2.76','versionCode':77,
+             'sha256':os.environ['RECEIVER_SHA'],
+             'apkUrl':'https://github.com/bruceferra/drivelab-auto-standalone/releases/download/v0.2.76/DriveLab-Auto-Receiver-v0.2.76.apk'}
+          with open('output/receiver.json','w') as f:json.dump(m,f,indent=2)
+          PY
+          # Prevent regression: manifest code must match the signed APK.
+          python3 - <<'PY'
+          import json
+          m=json.load(open('output/receiver.json'))
+          assert m['versionName']=='0.2.76'
+          assert m['versionCode']==77, 'manifest code mismatch'
+          assert m['packageName']=='ar.com.rango5gps.drivelabauto.receiver'
+          assert m['apkUrl']=='https://github.com/bruceferra/drivelab-auto-standalone/releases/download/v0.2.76/DriveLab-Auto-Receiver-v0.2.76.apk'
+          assert len(m['sha256'])==64
+          print('OK: APK code77 == OTA manifest code77')
+          PY
+          sha256sum "output/$name" > output/receiver.sha256
+      - name: Publish Receiver 0.2.76 as latest, preserve Sender 0.2.16
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.75
+          gh release create v0.2.76 \
+            output/DriveLab-Auto-Receiver-v0.2.76.apk \
+            output/receiver.json output/sender.json output/receiver.sha256 \
+            --target "$GITHUB_SHA" --latest \
+            --title 'DriveLab Auto Receiver 0.2.76 - EV pasa de FORZADO a SMART antes de cambiar' \
+            --notes 'Receiver 0.2.76 code77. Cambio EV desde HEV SOC FORZADO: el piloto compartido por botones manuales y optimizador detecta 1040=4, manda UNA sola orden OEM 1040=2 SMART, verifica readback y seguridad P/0 o D con velocidad valida, y SOLO despues envia 1043=1 EV. Si SMART ya estaba activo, evita la escritura adicional. Si la lectura no confirma, no solicita EV ni repite a ciegas. EV MAX se conserva sin preparacion: la T1 automaticamente desactiva FORZADO con 1043=3; el optimizador espera el readback SMART OEM y no manda 1040 adicional para EV MAX. El sistema tampoco reactiva SOC FORZADO en EV o EV MAX; solo perfiles HEV admiten FORZADO. El editor muestra SMART fijo para EV/EV MAX y permite FORZADO al elegir HEV. Se sigue respetando SOC minimo/maximo configurado (por ejemplo minimo >=20), 3 lecturas GPS y perfil activado. Se preservan el mapeo 1041 de fotos raw30=20%,40=30%,48=40%,56=50%, regeneracion 1046 probada, informe SOC por nube QR directa, cuatro switches de perfiles, litros utiles CI186 menos 5.3 y todos los demas controles. Sender 0.2.16 sin cambios y firma OTA igual a Receiver 0.2.75.'
+          mkdir -p verify
+          gh release download v0.2.76 --pattern 'sender.json' --dir verify
+          gh release download v0.2.76 --pattern 'receiver.json' --dir verify
+          cmp output/sender.json verify/sender.json
+          cmp output/receiver.json verify/receiver.json
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.76
+          gh release view v0.2.76 --json assets --jq '.assets[].name'

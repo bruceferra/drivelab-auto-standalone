@@ -107,6 +107,46 @@ public final class T1SocRegenWritePolicyTest {
             T1SocRegenWritePolicy.desired(bounded,Double.NaN);
         check(unknownSoc.fallback&&unknownSoc.strategy==2,
             "unknown OEM SOC must not apply a conditioned FORZADO profile");
-        System.out.println("OK: SOC / regen reference policy; forced SOC 20..70 step 10, 1041 rollback disallowed");
+        check(T1SocRegenWritePolicy.mustDisarmForcedBeforeEv(1,4),
+            "only EV 1043=1 needs SMART before a previous FORZADO 1040=4");
+        check(!T1SocRegenWritePolicy.mustDisarmForcedBeforeEv(1,2),
+            "EV already in SMART must not write 1040 again");
+        check(!T1SocRegenWritePolicy.mustDisarmForcedBeforeEv(3,4),
+            "EV MAX autonomously clears FORZADO; no pre-SMART write");
+        check(!T1SocRegenWritePolicy.mustDisarmForcedBeforeEv(2,4),
+            "HEV FORZADO must not be disabled to remain in HEV");
+        check(T1SocRegenWritePolicy.electricPowerRequiresSmart(
+            T1OptimizedModePolicy.Power.EV),"EV profile must stay SMART");
+        check(T1SocRegenWritePolicy.electricPowerRequiresSmart(
+            T1OptimizedModePolicy.Power.EV_MAX),"EV MAX profile must not restore FORZADO");
+        check(!T1SocRegenWritePolicy.electricPowerRequiresSmart(
+            T1OptimizedModePolicy.Power.HEV),"HEV allows FORZADO");
+        T1OptimizedModePolicy.Rule oldEvForced=new T1OptimizedModePolicy.Rule(
+            T1OptimizedModePolicy.Power.EV,
+            T1OptimizedModePolicy.Strategy.FORCED,30,true,20,
+            T1OptimizedModePolicy.Regen.LOW);
+        T1SocRegenWritePolicy.Targets electric=
+            T1SocRegenWritePolicy.desired(oldEvForced,25);
+        check(electric.valid()&&electric.strategy==2&&
+            !electric.needsTarget()&&electric.forcedSoc==-1&&
+            electric.regen==1,
+            "legacy EV FORZADO profile must normalize to SMART, no 1041 write");
+        T1SocRegenWritePolicy.Targets tooLow=
+            T1SocRegenWritePolicy.desired(oldEvForced,18);
+        check(tooLow.fallback&&tooLow.strategy==2,
+            "EV conditional min 20% must not request EV at battery 18%");
+        T1OptimizedModePolicy.Rule oldEvMaxForced=new T1OptimizedModePolicy.Rule(
+            T1OptimizedModePolicy.Power.EV_MAX,
+            T1OptimizedModePolicy.Strategy.FORCED,50,false,0,
+            T1OptimizedModePolicy.Regen.HIGH);
+        T1SocRegenWritePolicy.Targets maxEffective=
+            T1SocRegenWritePolicy.desired(oldEvMaxForced,35);
+        check(maxEffective.valid()&&maxEffective.strategy==2&&
+            !maxEffective.needsTarget()&&maxEffective.regen==3,
+            "EV MAX OEM clears forced; optimizer must not turn FORZADO back on");
+        check(T1OptimizedModePolicy.evaluate(
+            T1OptimizedModePolicy.Road.CITY,oldEvForced,25).summary()
+            .contains("SMART"),"EV preview must reflect effective SMART");
+        System.out.println("OK: EV (not EV MAX) pre-SMART; EV and EV MAX never re-force; SOC condition honored");
     }
 }

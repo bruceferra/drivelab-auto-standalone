@@ -41,6 +41,7 @@ final class T1SocRegenPilot {
 
     T1SocRegenPilot(Context context){app=context.getApplicationContext();}
     boolean busy(){return BUSY.get();}
+    static boolean oemSocWriteInProgress(){return BUSY.get();}
 
     boolean apply(T1SocRegenWritePolicy.Targets desired,
                   BooleanSupplier stillEnabled,Callback callback){

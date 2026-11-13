@@ -20,6 +20,9 @@ import java.util.function.BooleanSupplier;
  * modes while in D. D write from DriveLab remains an EXPERIMENT and the OEM
  * VehicleService may reject it; never claim D acceptance until observed.
  *
+ * EV from HEV FORZADO first sends and confirms 1040=2 SMART, then requests
+ * 1043=1 EV only if gear/speed remain eligible. EV MAX (1043=3) already
+ * clears FORZADO in the OEM and skips that pre-SMART step entirely.
  * Two fresh direct OEM preflight readings are mandatory: stable 1033=1 and
  * exactly 0 km/h, OR stable 1033=4 with finite plausible speed 0..160 km/h.
  * No pedal requirement: 3011 brake status is diagnostic only (0/1).
@@ -39,6 +42,9 @@ final class T1ManualThreeModePilot {
     boolean busy(){return GLOBAL_BUSY.get();}
     boolean request(int target,BooleanSupplier screenVisible,Callback cb){
         if(target!=1&&target!=2&&target!=3)return false;
+        // Another 1040/1041/1046 profile transaction could undo SMART
+        // between disarming FORZADO and applying EV. Do not race it.
+        if(target==1&&T1SocRegenPilot.oemSocWriteInProgress())return false;
         if(!GLOBAL_BUSY.compareAndSet(false,true))return false;
         T1OemDiagnosticLog.begin(app,
             "Control manual triple · objetivo 1043="+target+
@@ -98,6 +104,10 @@ final class T1ManualThreeModePilot {
                 throw new IllegalStateException(
                     "Marcha cambió durante preflight: "+startGear+" -> "+confirmGear);
             if(!visible.getAsBoolean())throw new SecurityException("Sin foco");
+            // Only EV (1043=1) needs to release a previous HEV FORZADO.
+            // EV MAX (1043=3) does this by itself on the real T1 and must
+            // never receive this additional 1040 write.
+            ensureSmartBeforeEv(b,target,visible);
             Parcel data=Parcel.obtain(),reply=Parcel.obtain();
             try{
                 data.writeInterfaceToken(TOKEN);
@@ -126,6 +136,79 @@ final class T1ManualThreeModePilot {
                 ". No reenviar sin revisar el log.";
         }finally{try{app.unbindService(c);}catch(Exception ignored){}}
     }
+    /**
+     * Before requesting EV from HEV FORZADO, the T1 requires SOC strategy
+     * SMART=2. Same Binder link, single 1040 setter, verified readback and
+     * another fresh drive-safety check before 1043=1. No SOC target 1041
+     * or regeneration 1046 write is needed. EV MAX skips this entirely.
+     */
+    private void ensureSmartBeforeEv(IBinder b,int powerTarget,
+                                     BooleanSupplier enabled)throws Exception{
+        if(powerTarget!=1)return;
+        if(T1SocRegenPilot.oemSocWriteInProgress())
+            throw new IllegalStateException(
+                "Otro cambio de SOC está en curso; no liberar FORZADO ni pedir EV");
+        int before=readInt(b,1040);
+        T1OemDiagnosticLog.add(app,"EV_PRE_SMART_LECTURA",
+            "1043 objetivo EV; 1040 estrategia actual="+before+
+            (before==4?" (FORZADO)":""));
+        if(!T1SocRegenWritePolicy.accepted(1040,before))
+            throw new IllegalStateException(
+                "No se puede comprobar SMART/FORZADO (1040="+before+
+                "); EV no solicitado");
+        if(!T1SocRegenWritePolicy.mustDisarmForcedBeforeEv(powerTarget,before)){
+            T1OemDiagnosticLog.add(app,"EV_SMART_YA_ACTIVO",
+                "1040=2 SMART; se solicita EV directamente, sin escritura 1040");
+            return;
+        }
+        if(!enabled.getAsBoolean()||!b.isBinderAlive())
+            throw new IllegalStateException("EV suspendido antes de pasar a SMART");
+        SystemClock.sleep(180);
+        int again=readInt(b,1040);
+        if(again!=before)
+            throw new IllegalStateException(
+                "Gestión SOC cambió durante preflight "+before+
+                "->"+again+"; no cambiar EV");
+        int currentPower=readInt(b,1043);
+        checkDrivePosition(b,currentPower,1,"EV_PRE_SMART_SEGURIDAD");
+        if(!enabled.getAsBoolean())
+            throw new IllegalStateException("EV cancelado antes de SMART");
+        Parcel data=Parcel.obtain(),reply=Parcel.obtain();
+        try{
+            data.writeInterfaceToken(TOKEN);
+            data.writeInt(1040);data.writeInt(2); // SMART
+            data.writeString(app.getPackageName());
+            T1OemDiagnosticLog.add(app,"EV_SMART_WRITE_REQ",
+                "Un solo Binder transact(15) 1040=2, antes de 1043=1");
+            if(!b.transact(15,data,reply,0))
+                throw new IllegalStateException(
+                    "OEM no acepta cambio 1040=2; EV no solicitado");
+            reply.readException();
+            T1OemDiagnosticLog.add(app,"EV_SMART_BINDER_OK",
+                "1040=2 recibido por Binder; pendiente confirmación OEM");
+        }finally{data.recycle();reply.recycle();}
+        long until=SystemClock.elapsedRealtime()+4000L;
+        while(SystemClock.elapsedRealtime()<until&&enabled.getAsBoolean()&&
+              b.isBinderAlive()){
+            SystemClock.sleep(260);
+            int actual=readInt(b,1040);
+            T1OemDiagnosticLog.add(app,"EV_SMART_READBACK",
+                "1040 esperado=2, obtenido="+actual);
+            if(actual==2){
+                // The second 1043 request is conditional on an *updated*
+                // validated gear/speed reading, not the stale first preflight.
+                int current=readInt(b,1043);
+                checkDrivePosition(b,current,1,"EV_POST_SMART_SEGURIDAD");
+                T1OemDiagnosticLog.add(app,"EV_SMART_CONFIRMADO",
+                    "1040=2 OEM confirmado; habilitado 1043=1 EV");
+                return;
+            }
+        }
+        throw new IllegalStateException(
+            "1040 SMART no confirmado; NO se envió EV (1043=1). "+
+            "Revisar menú Jetour; sin reintento ni rollback automático");
+    }
+
     private int checkDrivePosition(IBinder b,int mode,int target,String stage)
             throws Exception{
         int gear=readInt(b,1033);
