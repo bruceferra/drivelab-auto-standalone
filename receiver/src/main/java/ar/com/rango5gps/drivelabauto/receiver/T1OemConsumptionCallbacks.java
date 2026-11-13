@@ -54,6 +54,8 @@ final class T1OemConsumptionCallbacks {
     private final Object dataLock=new Object();
     private final int[] count=new int[4];
     private final double[] rawSums=new double[2]; // 500m callback sums, raw and uncalibrated
+    private final long[] lastEventMs=new long[4];
+    private final java.util.ArrayDeque<Float> recentFuel=new java.util.ArrayDeque<>();
     private final String[] last={"—","—","—","—"};
     private volatile String state="Sin prueba. Registro de eventos apagado.";
     private volatile String registration="Sin registros.";
@@ -71,17 +73,29 @@ final class T1OemConsumptionCallbacks {
         final int fuelCount,electricCount;
         final float fuelLast,electricLast,fuel50Last,electric50Last;
         final double fuelRawSum,electricRawSum;
+        final long fuelLastAtMs;
+        final double fuelRecentL100Candidate;
+        final int fuelRecentCount;
         SegmentSnapshot(int fu,int el,float f,float e,float f50,float e50,
-                        double fuelSum,double electricSum){
+                        double fuelSum,double electricSum,long timestamp,
+                        double recent,int recentCount){
             fuelCount=fu;electricCount=el;fuelLast=f;electricLast=e;
             fuel50Last=f50;electric50Last=e50;
             fuelRawSum=fuelSum;electricRawSum=electricSum;
+            fuelLastAtMs=timestamp;
+            fuelRecentL100Candidate=recent;
+            fuelRecentCount=recentCount;
         }
     }
     SegmentSnapshot tripSegments(){
         synchronized(dataLock){
+            double sum=0;
+            for(float x:recentFuel)sum+=x;
             return new SegmentSnapshot(count[0],count[1],lastRaw[0],
-                lastRaw[1],lastRaw[2],lastRaw[3],rawSums[0],rawSums[1]);
+                lastRaw[1],lastRaw[2],lastRaw[3],rawSums[0],rawSums[1],
+                lastEventMs[0],
+                recentFuel.isEmpty()?Double.NaN:sum/recentFuel.size(),
+                recentFuel.size());
         }
     }
 
@@ -142,6 +156,8 @@ final class T1OemConsumptionCallbacks {
                 count[i]=0;last[i]="—";lastRaw[i]=Float.NaN;
             }
             rawSums[0]=0d;rawSums[1]=0d;
+            java.util.Arrays.fill(lastEventMs,0L);
+            recentFuel.clear();
         }
         tripMode=forTrip;
         tripId=id;
@@ -190,7 +206,14 @@ final class T1OemConsumptionCallbacks {
             count[channel]++;
             last[channel]=value;
             lastRaw[channel]=raw;
+            lastEventMs[channel]=System.currentTimeMillis();
             if(channel<2&&Float.isFinite(raw))rawSums[channel]+=raw;
+            // Candidate rolling L/100 over the latest five *independent*
+            // 500 m fuel callbacks. Not confirmed fuel metering.
+            if(channel==0&&Float.isFinite(raw)&&raw>=0&&raw<=35){
+                recentFuel.addLast(raw);
+                while(recentFuel.size()>5)recentFuel.removeFirst();
+            }
             File file=logFile;
             if(file!=null){
                 String row=System.currentTimeMillis()+","+
@@ -265,8 +288,16 @@ final class T1OemConsumptionCallbacks {
                                 count[channel]++;
                                 last[channel]=Float.toString(value);
                                 lastRaw[channel]=value;
+                                try{
+                                    lastEventMs[channel]=Long.parseLong(fields[0]);
+                                }catch(NumberFormatException ignored){}
                                 if(channel<2&&Float.isFinite(value))
                                     rawSums[channel]+=value;
+                                if(channel==0&&Float.isFinite(value)&&
+                                   value>=0&&value<=35){
+                                    recentFuel.addLast(value);
+                                    while(recentFuel.size()>5)recentFuel.removeFirst();
+                                }
                             }
                         }catch(NumberFormatException ignored){}
                     }
