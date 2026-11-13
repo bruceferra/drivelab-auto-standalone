@@ -10,9 +10,11 @@ final class T1SocModePolicy {
         return mode<0?"SIN LECTURA":"SIN MAPEO ("+mode+")";
     }
     static double socTarget(int rawInt,double rawFloat){
-        if(rawInt>=0&&rawInt<=100)return rawInt;
-        if(Double.isFinite(rawFloat)&&rawFloat>=0&&rawFloat<=100)return rawFloat;
-        return Double.NaN;
+        // T1Launcher observations: raw 56 means selected FORZADO 50%.
+        // Unknown raw encodings (60/70% not photographed) stay unknown.
+        // rawFloat=1 is not a valid percentage for this getter.
+        int selected=T1SocTargetCodec.observedPercentForRaw(rawInt);
+        return selected<0?Double.NaN:selected;
     }
     private T1SocModePolicy(){}
 }

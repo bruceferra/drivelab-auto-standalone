@@ -12,7 +12,7 @@ final class T1SocRegenWritePolicy {
     private static final int[] SOC_PRESETS={20,30,40,50,60,70};
     /** Requested 20..70 multiples-of-ten ONLY for 1041 target writes.
      * Writes remain enabled with strict OEM readback, fail-stop and no
-     * guessed rollback to opaque getter values (such as integer 56). */
+     * guessed rollback to 1041 readback codes (raw56=50% in T1Launcher). */
     static int[] forcedSocPresets(){
         return SOC_PRESETS.clone();
     }

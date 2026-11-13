@@ -260,13 +260,15 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         root.addView(automaticState);
         Button socDiag=new Button(this);
         socDiag.setAllCaps(false);
-        socDiag.setText("VER / COMPARTIR DIAGNÓSTICO SOC · 1/2/3");
+        socDiag.setText("VER / SUBIR DIAGNÓSTICO SOC · 1/2/3");
         T1JetourTheme.button(socDiag,T1JetourTheme.PANEL_HI);
         socDiag.setOnClickListener(v->showSocDiagnostic());
         root.addView(socDiag);
         root.addView(text("Paso 1: seguridad OEM. Paso 2: envío del "+
             "nuevo SOC. Paso 3: confirmación por getters 1041. "+
-            "El informe no incluye GPS ni VIN.",12,MUTED,false));
+            "SUBIR envía directamente al servidor privado ya vinculado "+
+            "por QR; sin menú de otras aplicaciones ni GPS/VIN. "+
+            "Si falla la red, conserva el CSV local.",12,MUTED,false));
         refreshAutoUi();
         for(T1OptimizedModePolicy.Road r:T1OptimizedModePolicy.Road.values())
             card(root,r);
@@ -354,17 +356,62 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
             .setTitle("DIAGNÓSTICO · MODO OPTIMIZADO / SOC")
             .setMessage("1: marcha y velocidad. 2: escritura Binder. "+
                 "3: lectura del NUEVO objetivo, entero y flotante. "+
-                "Si no confirma, no se repite automáticamente.\n\n"+report)
+                "Si no confirma, no se repite automáticamente.\n\n"+
+                report+"\n\nSUBIR: servidor privado DriveLab "+
+                "(vinculación QR, no otras aplicaciones).")
             .setNegativeButton("CERRAR",null)
-            .setPositiveButton("COMPARTIR",(d,w)->{
-                Intent send=new Intent(Intent.ACTION_SEND);
-                send.setType("text/plain");
-                send.putExtra(Intent.EXTRA_SUBJECT,
-                    "DriveLab Auto · diagnóstico SOC OEM");
-                send.putExtra(Intent.EXTRA_TEXT,report);
-                startActivity(Intent.createChooser(send,
-                    "Compartir diagnóstico OEM SOC"));
-            }).show();
+            .setPositiveButton("SUBIR AL SERVIDOR",
+                (d,w)->uploadSocDiagnostic())
+            .show();
+    }
+    /** Explicit upload only: never ACTION_SEND, no system app chooser. */
+    private void uploadSocDiagnostic(){
+        if(!T1CloudDiagnostics.active(this)){
+            new android.app.AlertDialog.Builder(this)
+                .setTitle("NUBE PRIVADA NO VINCULADA")
+                .setMessage("Este informe sigue guardado en la T1. "+
+                    "Vinculá primero este Receiver con tu Xiaomi mediante "+
+                    "ACTIVAR NUBE CON QR. Después repetí SUBIR AL SERVIDOR. "+
+                    "No hace falta compartir con otra aplicación.")
+                .setNegativeButton("CERRAR",null)
+                .setPositiveButton("VINCULAR QR",(d,w)->{
+                    Intent open=new Intent(this,ReceiverVehicleActivity.class);
+                    open.putExtra("open_tab",3);
+                    startActivity(open);
+                }).show();
+            return;
+        }
+        final java.io.File cloudCsv;
+        try{
+            cloudCsv=T1OemDiagnosticLog.exportCloudCsv(this);
+        }catch(Exception failure){
+            new android.app.AlertDialog.Builder(this)
+                .setTitle("INFORME NO PREPARADO")
+                .setMessage(failure.getMessage()==null?
+                    "No se pudo conservar el informe local":
+                    failure.getMessage())
+                .setPositiveButton("CERRAR",null).show();
+            return;
+        }
+        if(preview!=null)
+            preview.setText("SUBIENDO DIAGNÓSTICO SOC · "+
+                cloudCsv.getName()+" · servidor privado HTTPS…");
+        T1CloudDiagnostics.upload(this,cloudCsv,(message,qrUrl)->{
+            // T1CloudDiagnostics invokes this callback on Android main thread
+            // only after server responses have been verified.
+            if(isFinishing()||isDestroyed())return;
+            if(preview!=null)preview.setText(message);
+            boolean received=message.startsWith("SERVIDOR OK");
+            new android.app.AlertDialog.Builder(this)
+                .setTitle(received?
+                    "DIAGNÓSTICO RECIBIDO EN SERVIDOR":
+                    "DIAGNÓSTICO NO SUBIDO")
+                .setMessage(message+"\n\n"+
+                    (received?"También quedó una copia privada en la T1.":
+                        "El CSV quedó guardado. Verificá QR/internet "+
+                        "y repetí SUBIR AL SERVIDOR."))
+                .setPositiveButton("CERRAR",null).show();
+        });
     }
     private void toggleAutomatic(){
         if(T1OptimizedAutoService.enabled(this)){

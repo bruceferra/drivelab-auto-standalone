@@ -58,7 +58,10 @@ public final class T1CockpitLiveTest {
             "no OEM fuel means no total");
         require("SMART".equals(T1SocModePolicy.name(2)),"smart mapping");
         require("FORZADO".equals(T1SocModePolicy.name(4)),"forced mapping");
-        close(T1SocModePolicy.socTarget(70,Double.NaN),70,"soc target int");
+        close(T1SocModePolicy.socTarget(56,1.0),50,
+            "SOC 1041 raw56 is FORZADO 50% in owner photos");
+        require(Double.isNaN(T1SocModePolicy.socTarget(70,1.0)),
+            "1041 raw70 not mapped, and floatRaw1 is not percent");
         require("EV MAX".equals(T1ZonePolicy.name(3)),"blue EV code");
         require(T1PowerFlowPolicy.engine(1500)==T1PowerFlowPolicy.Engine.ON,"rpm engine on");
         require(T1PowerFlowPolicy.engine(0)==T1PowerFlowPolicy.Engine.OFF,"engine off");
