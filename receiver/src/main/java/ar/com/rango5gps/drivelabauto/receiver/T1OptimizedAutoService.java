@@ -330,7 +330,13 @@ public final class T1OptimizedAutoService extends Service {
             return;
         }
         usedGpsNanos=fixNanos;
+        // OSM remains the sole control source. Concurrent read-only shadow
+        // audits use THIS GPS fix on independent workers; neither Overture
+        // nor IGN may delay, override or write any OEM driving profile.
+        long osmStart=SystemClock.elapsedRealtime();
         T1OsmRoadAdvisor.Result found=T1OfflineRoadMap.roadAt(this,gps);
+        long osmLookupMs=SystemClock.elapsedRealtime()-osmStart;
+        T1RoadShadowMonitor.observe(this,gps,found,osmLookupMs);
         T1OptimizedModePolicy.Road road=
             T1OptimizedModePolicy.Road.valueOf(found.road.name());
         boolean confident=road!=T1OptimizedModePolicy.Road.UNKNOWN&&
