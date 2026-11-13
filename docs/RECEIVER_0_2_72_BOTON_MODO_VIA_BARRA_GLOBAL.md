@@ -20,3 +20,11 @@ El chip informa la categoría de la vía, NO confirma que la ECU haya aplicado u
 
 ## Validación
 CI Android, chequeos de indicador sin acción, firma code73 idéntica a code72, OTA y Sender 0.2.16 sin cambios. Falta comprobación visual en la pantalla física Jetour T1.
+
+## Otros ajustes incorporados tras prueba física del usuario
+- **ESPEJOS**: el texto siempre indica la acción que sigue: getter 2003=0 (plegados) ⇒ DESPLEGAR ESPEJOS; 2003=1 (desplegados) ⇒ PLEGAR ESPEJOS. Se consulta al entrar a la pantalla, después de cada orden y periódicamente. El getter de solo lectura ahora funciona en marcha sin interlock de velocidad (los setters siguen sujetos a la misma restricción de velocidad que antes). Si 2003 no está disponible, aparece ESPEJOS · SIN ESTADO; no inventa estado inverso. Tras un setter único, relee durante ~1,4 s sin segundo comando.
+- **VENTILACIÓN TOTAL y CIERRE TOTAL**: ambos grises; son acciones puntuales, nunca indicadores de selección continua.
+- **PEATÓN 2074**: el control lee el getter OEM en entrada, después de alternar y periódicamente. Si 1, PEATÓN ON en verde; si 0, PEATÓN OFF en rojo; si no hay lectura confirmada, color neutro y PEATÓN · SIN LECTURA. Tras una sola escritura el getter se relee durante ~1,5 s por posible actualización tardía, sin reenvío.
+- Las acciones AVAS pueden ser denegadas por VehicleService; no inferimos cambio físico de la recepción Binder y siempre mostramos la lectura real cuando está disponible.
+
+Estos cambios conservan los límites del vehículo, no cambian la lista SOC de 20/30/40/50/60/70, ni desactivan escrituras 1040/1041/1046.
