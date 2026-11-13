@@ -1426,8 +1426,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                !liveText.contains("sin muestra reciente"))
                 liveEcoNow.setText(liveText);
             else liveEcoNow.setText(T1EcoTripMonitor.live(this,0)+
-                (ecoScope!=0?"
-(El viaje seleccionado todavía no tiene "+
+                (ecoScope!=0?"\n(El viaje seleccionado todavía no tiene "+
                     "muestras propias)":""));
         }
         if(System.currentTimeMillis()-lastTotals>5000){
