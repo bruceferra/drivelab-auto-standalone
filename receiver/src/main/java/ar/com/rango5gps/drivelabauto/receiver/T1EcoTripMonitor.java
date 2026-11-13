@@ -27,6 +27,7 @@ final class T1EcoTripMonitor implements AutoCloseable {
     private FileOutputStream writer;
     private long lastMatchedAt=0,lastMatchedFixNanos=0,lastSample=0;
     private int cachedRoad=T1EcoTripMetrics.UNKNOWN,samples=0;
+    private int cachedPostedKmh=-1;
 
     static File file(Context c,String id){
         if(id==null||!id.matches("[0-9]{8}_[0-9]{6}"))
@@ -56,7 +57,7 @@ final class T1EcoTripMonitor implements AutoCloseable {
             boolean append=resuming&&destination.isFile()&&destination.length()>0;
             writer=new FileOutputStream(destination,append);
             if(!append)writer.write(
-                "timestamp_ms,distance_km,seconds,road_class,speed_kmh,accel_mps2\n"
+                "timestamp_ms,distance_km,seconds,road_class,speed_kmh,accel_mps2,osm_limit_kmh\n"
                 .getBytes(StandardCharsets.UTF_8));
         }catch(IOException ex){writer=null;}
     }
@@ -71,6 +72,7 @@ final class T1EcoTripMonitor implements AutoCloseable {
         if(fixNanos!=lastMatchedFixNanos&&
             timestamp-lastMatchedAt>=MATCH_INTERVAL_MS){
             T1OsmRoadAdvisor.Result result=T1OfflineRoadMap.roadAt(app,point);
+            cachedPostedKmh=result.speedLimitKmh;
             cachedRoad=result.road==T1OsmRoadAdvisor.Road.CITY?
                 T1EcoTripMetrics.CITY:
                 result.road==T1OsmRoadAdvisor.Road.ROAD?
@@ -91,7 +93,8 @@ final class T1EcoTripMonitor implements AutoCloseable {
         lastSample=ms;
         double seconds=elapsedMs/1000.0;
         int road=matched(location,ms);
-        rolling.add(ms,km,seconds,road,speed,acceleration);
+        int limit=road==T1EcoTripMetrics.UNKNOWN?-1:cachedPostedKmh;
+        rolling.add(ms,km,seconds,road,speed,acceleration,limit);
         if(T1JourneyStore.active(app)&&!T1JourneyStore.paused(app)){
             long start=T1JourneyStore.startedAt(app);
             if(start>0&&start!=client1Start){
@@ -99,7 +102,8 @@ final class T1EcoTripMonitor implements AutoCloseable {
                 client1=T1EcoTripReport.readSidecar(file(app,tripId),
                     start,ms-1);
             }
-            if(start>0)client1.add(ms,km,seconds,road,speed,acceleration);
+            if(start>0)client1.add(ms,km,seconds,road,speed,
+                acceleration,limit);
         }
         if(T1JourneyStore2.active(app)&&!T1JourneyStore2.paused(app)){
             long start=T1JourneyStore2.startedAt(app);
@@ -108,7 +112,8 @@ final class T1EcoTripMonitor implements AutoCloseable {
                 client2=T1EcoTripReport.readSidecar(file(app,tripId),
                     start,ms-1);
             }
-            if(start>0)client2.add(ms,km,seconds,road,speed,acceleration);
+            if(start>0)client2.add(ms,km,seconds,road,speed,
+                acceleration,limit);
         }
         if(writer!=null)try{
             String line=ms+","+
@@ -117,7 +122,8 @@ final class T1EcoTripMonitor implements AutoCloseable {
                 road+","+
                 String.format(Locale.ROOT,"%.3f",speed)+","+
                 (Double.isFinite(acceleration)?
-                    String.format(Locale.ROOT,"%.4f",acceleration):"")+"\n";
+                    String.format(Locale.ROOT,"%.4f",acceleration):"")+","+
+                limit+"\n";
             writer.write(line.getBytes(StandardCharsets.UTF_8));
             if(++samples%5==0)writer.flush();
         }catch(IOException ex){
