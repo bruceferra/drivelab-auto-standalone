@@ -80,9 +80,14 @@ final class T1OptimizedModePolicy {
         String summary(){
             if(!conditionSatisfied)
                 return "HEV · SMART (respaldo recomendado) · "+explanation;
+            // EV MAX clears FORZADO in the T1; normal EV can only
+            // be entered after SMART. Never promise a contradictory
+            // applied EV/EV MAX + FORZADO profile in the preview.
+            boolean forcedHev=requested.power==Power.HEV&&
+                requested.strategy==Strategy.FORCED;
             return requested.power.name().replace('_',' ')+
-                " · "+(requested.strategy==Strategy.SMART?"SMART":
-                    "SOC FORZADO "+requested.forcedSoc+" %")+
+                " · "+(forcedHev?"SOC FORZADO "+requested.forcedSoc+" %":
+                    "SMART")+
                 " · regeneración "+regenerationName(requested.regeneration)+
                 (requested.thresholdEnabled?
                     " · "+requested.rangeSummary():"")+
