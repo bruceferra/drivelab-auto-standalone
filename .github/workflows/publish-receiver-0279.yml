@@ -460,6 +460,14 @@ jobs:
               assert name in editor
           print('PASS: no overlap, remembered A/B profile at SOC gap, unique heading, no extra OEM write')
           PY
+      - name: Deletion of all local trip history refreshes BOTH columns and never silently succeeds
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-trip-delete-0279
+          javac -encoding UTF-8 -d /tmp/t1-trip-delete-0279 \
+            receiver/tests/T1HistoryDeletionSourceContractTest.java
+          java -cp /tmp/t1-trip-delete-0279 ar.com.rango5gps.drivelabauto.receiver.T1HistoryDeletionSourceContractTest
       - name: Verify wheel calibration before Waze foreground gate and no OEM hijack
         shell: bash
         run: |
@@ -534,8 +542,8 @@ jobs:
             output/DriveLab-Auto-Receiver-v0.2.79.apk \
             output/receiver.json output/sender.json output/receiver.sha256 \
             --target "$GITHUB_SHA" --latest \
-            --title 'DriveLab Auto Receiver 0.2.79 - Diagnostico de ruedita en pantalla sin abrir Waze' \
-            --notes 'Receiver 0.2.79 code80. Diagnostico de ruedita del volante directamente en DriveLab, sin entrar y salir de Waze. Durante APRENDER TECLA (45s, activacion explicita), se registra el primer KeyEvent recibido tanto por la Activity visible como por el AccessibilityService, incluso cuando T1Launcher o la ventanita OEM quitan el foco de com.waze. El servicio intenta capturar ANTES de la comprobacion de ventana Waze y no intercepta ni consume el evento mientras aprende: los mandos del amigo y la palabra Zoom conservan su comportamiento. El cuadro de estado y los codigos suben al PRINCIPIO de RUTAS VOLANTE, con indicador de foco de ventana, estado de servicio de accesibilidad, segundo restante y nombre de paquete visible durante captura. Boton abrir ajustes de accesibilidad evita crash si no existe Settings en la ROM T1 y recomienda WebADB. Fuera de los 45s, el control normal de rutas sigue estrictamente limitado a Waze y a nodos accesibles; si el mando solo existe como evento CAN/Binder OEM no es posible recibirlo como KeyEvent y se necesitara puente con el T1Launcher real o diagnostico shell. Sin root, sin cambios en servicios OEM, sin cambio de gesto ni inyeccion de teclas. Todas las mejoras de 0.2.78 (8 reglas secuenciales SOC con memoria y validacion de superposicion, 1043/1040/1041/1046, mapas y cluster, bateria y combustible utilizable) intactas. APK firmada como 0.2.78, Sender v0.2.16 sin cambios.'
+            --title 'DriveLab Auto Receiver 0.2.79 - Ruedita en pantalla y borrado de historial completo' \
+            --notes 'Receiver 0.2.79 code80. Diagnostico de ruedita del volante directamente en DriveLab, sin entrar y salir de Waze. Durante APRENDER TECLA (45s, activacion explicita), se registra el primer KeyEvent recibido tanto por la Activity visible como por el AccessibilityService, incluso cuando T1Launcher o la ventanita OEM quitan el foco de com.waze. El servicio intenta capturar ANTES de la comprobacion de ventana Waze y no intercepta ni consume el evento mientras aprende: los mandos del amigo y la palabra Zoom conservan su comportamiento. El cuadro de estado y los codigos suben al PRINCIPIO de RUTAS VOLANTE, con indicador de foco de ventana, estado de servicio de accesibilidad, segundo restante y nombre de paquete visible durante captura. Boton abrir ajustes de accesibilidad evita crash si no existe Settings en la ROM T1 y recomienda WebADB. Fuera de los 45s, el control normal de rutas sigue estrictamente limitado a Waze y a nodos accesibles; si el mando solo existe como evento CAN/Binder OEM no es posible recibirlo como KeyEvent y se necesitara puente con el T1Launcher real o diagnostico shell. Sin root, sin cambios en servicios OEM, sin cambio de gesto ni inyeccion de teclas. Corrige ademas BORRAR SELECCIONADO y ELIMINAR TODO: verifica CSV originales, elimina columnas obsoletas de VIAJE 1/2, invalida instantaneas viejas en segundo plano, fuerza lectura nueva de ambos CSV, informa motivo de bloqueo (activo/pausado/pendiente) en ventana junto a botones, no borra cargas ni nube. Todas las mejoras de 0.2.78 (8 reglas secuenciales SOC con memoria y validacion de superposicion, 1043/1040/1041/1046, mapas y cluster, bateria y combustible utilizable) intactas. APK firmada como 0.2.78, Sender v0.2.16 sin cambios.'
           mkdir -p verify
           gh release download v0.2.79 --pattern 'sender.json' --dir verify
           gh release download v0.2.79 --pattern 'receiver.json' --dir verify
