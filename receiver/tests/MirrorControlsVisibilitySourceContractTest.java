@@ -36,10 +36,24 @@ public final class MirrorControlsVisibilitySourceContractTest {
         check(visible>=0 && settings>visible &&
               !hub.contains("button(settings,\"CONTROLES OEM AVANZADOS\""),
               "OEM advanced controls must be reachable without opening connection settings");
-        check(service.contains("if(p.contains(AUTO)&&!p.getBoolean(AUTO,false))return;"),
-              "manual mode must not auto-rearm after Receiver process restart");
+        String base=Files.readString(root.resolve("T1ImmersiveActivity.java"));
+        String air=Files.readString(root.resolve("RecirculationGuardService.java"));
+        check(base.contains("AUTO_INITIALIZED.compareAndSet(false,true)") &&
+              base.contains("RecirculationGuardService.activateOnAppOpen(this)") &&
+              base.contains("MirrorAutomationService.activateOnAppOpen(this)"),
+              "mirror AUTO and cabin INTERIOR must re-arm once per new app process");
+        check(!service.contains("if(p.contains(AUTO)&&!p.getBoolean(AUTO,false))return;") &&
+              service.contains("context.startForegroundService(new Intent(context,") &&
+              service.contains(".setAction(ACTION_AUTO)"),
+              "old MANUAL mode must not prevent the requested next-launch default AUTO");
+        check(service.contains("startsWith(\"INCIERTA\")") &&
+              base.contains("MirrorAutomationService.ensureRunning(this)"),
+              "uncertain physical position must never auto-rearm; navigation only watchdogs ON");
+        check(air.contains("putString(MODE,MODE_INTERIOR)") &&
+              air.contains("if(safetyPaused)return;"),
+              "interior air auto defaults ON without bypassing OEM defog safety");
         check(!toolbar.contains("oem.write(2068")&&!toolbar.contains("oem.write(2069"),
               "toolbar must never directly issue mirror actuator writes");
-        System.out.println("PASS: visible reverse mirror controls, user mode persistence, heartbeat, diagnostics");
+        System.out.println("PASS: reverse mirror AUTO default on app launch, cabin INTERIOR, safety guards and diagnostics");
     }
 }
