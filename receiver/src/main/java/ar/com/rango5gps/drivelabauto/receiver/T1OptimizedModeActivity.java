@@ -21,8 +21,8 @@ import java.util.Locale;
 
 /**
  * Offline four-profile editor and EXPLICIT opt-in automatic EV/HEV/EV MAX
- * controller. Only OEM 1043 is writable automatically. Forced SOC and
- * regenerative braking remain preferences/suggestions.
+ * controller. SOC/regen write paths are separately checked and only
+ * armed after physical user-started readback + restore tests, P/0 only.
  */
 public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
     private static final int BG=T1JetourTheme.NIGHT,
@@ -168,14 +168,13 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         Button close=new Button(this);close.setAllCaps(false);close.setText("VOLVER");
         T1JetourTheme.button(close,T1JetourTheme.PANEL_HI);
         close.setOnClickListener(v->finish());title.addView(close);
-        root.addView(text("MODO OPTIMIZADO ON aplica EV / HEV / EV MAX "+
-            "(señal 1043) automáticamente según el mapa OFFLINE y la "+
-            "condición SOC de cada perfil. Solo se hacen cambios con GPS "+
-            "preciso, clasificación estable y doble comprobación OEM de "+
-            "marcha/velocidad y modo. SOC SMART/FORZADO (1040/1041) y "+
-            "REGENERACIÓN (1046) siguen SOLO COMO PREFERENCIAS: sus "+
-            "comandos todavía no están validados. Si OEM rechaza un "+
-            "cambio, AUTO se desactiva; no repite órdenes ciegamente.",
+        root.addView(text("MODO OPTIMIZADO automático según el camino: "+
+            "EV/HEV/EV MAX (1043), SMART/FORZADO (1040), objetivo SOC (1041) "+
+            "y regeneración (1046). Los perfiles cambian mientras circulás "+
+            "en D sin obligarte a detenerte. GPS y telemetría deben ser "+
+            "válidos; cada orden OEM se confirma por lectura posterior. "+
+            "Si un comando falla se detiene la automatización, y vos "+
+            "podés comprobar el resultado en el menú original Jetour.",
             13,MUTED,false));
         LinearLayout switchRow=horizontal();root.addView(switchRow);
         automaticButton=new Button(this);
@@ -242,7 +241,8 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
             for(T1OptimizedModePolicy.Road r:next.keySet())
                 T1OptimizedModeStore.save(this,r,next.get(r));
             preview.setText("GUARDADOS LOS CUATRO PERFILES · "+
-                "el modo automático solo controla 1043 si está ON.\n"+
+                "1043/1040/1041/1046 automáticos en P o D con "+
+                "lectura OEM confirmada.\n"+
                 currentRecommendation());
             return true;
         }catch(IllegalArgumentException ex){
@@ -277,11 +277,12 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
                 "en pantalla. La app necesita GPS preciso y el mapa "+
                 "offline PBA+CABA. Verifica marcha P/0 o D con velocidad "+
                 "OEM válida, tres lecturas de vía consecutivas y el "+
-                "resultado del comando 1043. No aplica todavía SOC "+
-                "Forzado/Smart ni regeneración, aunque los hayas "+
-                "configurado. Ante un rechazo OEM se desactiva "+
-                "automáticamente. Podés apagarlo con este mismo botón "+
-                "o con la notificación del sistema.")
+                "resultado del comando 1043. Se intentan también los "+
+                "cambios 1040/1041/1046 en D, sin detenerte, cuando el "+
+                "perfil y las lecturas OEM son confiables. Son escrituras "+
+                "experimentales: se comprueba cada una con readback. "+
+                "Ante un rechazo OEM se desactiva AUTO. Podés apagar "+
+                "el optimizador desde este botón o la notificación.")
             .setNegativeButton("CANCELAR",null)
             .setPositiveButton("ACTIVAR",(d,w)->{
                 String message=T1OptimizedAutoService.activate(this);
@@ -306,10 +307,11 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
             road,T1OptimizedModeStore.get(this,road),soc);
         return "VÍA: "+T1OptimizedModePolicy.roadName(road)+
             " · "+info+"\n"+result.summary()+
-            "\nEl modo automático aplica solo 1043 si está encendido. "+
-            "Una condición SOC necesita batería OEM válida. "+
-            "Si la lectura está ausente, se recomienda HEV SMART. "+
-            "La condición usa el SOC actual, no el objetivo SOC forzado.";
+            "\nAUTO: 1043/1040/1041/1046 por tipo de vía. "+
+            "Los cambios de regeneración pueden ocurrir en movimiento "+
+            "cuando el perfil cambia, con verificación OEM. "+
+            "La condición SOC usa batería ACTUAL, no objetivo forzado. "+
+            " · optimización SOC/regeneración experimental ON/OFF";
     }
     private void showCurrent(){
         preview.setText(currentRecommendation()+"\n"+

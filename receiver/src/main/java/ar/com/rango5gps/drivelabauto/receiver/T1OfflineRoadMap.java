@@ -320,7 +320,8 @@ final class T1OfflineRoadMap {
         return new T1OsmRoadAdvisor.Result(best,highway,name,nearest,
             "OSM highway="+highway+" · máxima publicada="+
             (limit<0?"SIN DATO":limit+" km/h")+
-            " · SQLite PBA+CABA v3. Solo sugerencias, sin comandos.");
+            " · SQLite PBA+CABA v3. Solo sugerencias, sin comandos.",
+            limit);
     }
     private static T1OsmRoadAdvisor.Result unknown(String note){
         return new T1OsmRoadAdvisor.Result(

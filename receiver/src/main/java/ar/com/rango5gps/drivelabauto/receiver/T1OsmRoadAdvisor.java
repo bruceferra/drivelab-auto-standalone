@@ -23,9 +23,15 @@ final class T1OsmRoadAdvisor {
         final Road road;
         final String roadTag,name,detail;
         final double distanceMeters;
+        final int speedLimitKmh;
         Result(Road road,String roadTag,String name,double meters,String detail){
+            this(road,roadTag,name,meters,detail,-1);
+        }
+        Result(Road road,String roadTag,String name,double meters,String detail,
+               int postedKmh){
             this.road=road;this.roadTag=roadTag;this.name=name;
             this.distanceMeters=meters;this.detail=detail;
+            this.speedLimitKmh=postedKmh;
         }
         String recommendation(boolean forced){
             if(road==Road.CITY)return "SUGERENCIA: EV · ciudad";

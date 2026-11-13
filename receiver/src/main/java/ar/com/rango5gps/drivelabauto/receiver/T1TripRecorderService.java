@@ -311,6 +311,7 @@ public final class T1TripRecorderService extends Service {
         T1MotionSensor motion=new T1MotionSensor(this);
         motion.start(); // optional headunit sensor; absence means blank CSV
         boolean segmentStarted=segments.startForTrip(tripId);
+        T1EcoTripMonitor eco=new T1EcoTripMonitor(this,tripId,restoring);
         p().edit().putString(SEG_STATUS,segmentStarted?
             "Grabando eventos OEM por tramo durante todo el TRIP":
             "Listener OEM no iniciado; TRIP normal continúa").apply();
@@ -449,11 +450,24 @@ public final class T1TripRecorderService extends Service {
                         }
                     }
                 }
+                // Same accepted OEM interval used for all distance scopes.
+                // Eco sidecar preserves 5km/h bins and OSM road classification;
+                // no second GPS odometer and no raw coordinates exported.
+                eco.sample(s.timestamp,measure.km,dt,s.speed,accelLong,latest);
                 String loc=latest==null?",,,":
                     n(latest.getLatitude())+","+n(latest.getLongitude())+","+
                         n(latest.getAccuracy())+",";
                 T1OemConsumptionCallbacks.SegmentSnapshot seg=
                     segments.tripSegments();
+                getSharedPreferences("t1_live_consumption",MODE_PRIVATE)
+                    .edit()
+                    .putLong("sampleAt",s.timestamp)
+                    .putLong("fuelAt",seg.fuelLastAtMs)
+                    .putFloat("fuelRaw",seg.fuelLast)
+                    .putFloat("fuelRecent",(float)seg.fuelRecentL100Candidate)
+                    .putInt("fuelRecentCount",seg.fuelRecentCount)
+                    .putFloat("oem50",(float)s.oemFuelRolling50)
+                    .apply();
                 String line=s.timestamp+","+s.gear+","+n(s.speed)+","+
                     n(s.fuel)+","+n(s.socInternal)+","+n(s.socDisplay)+","+
                     n(s.voltage)+","+n(s.current)+","+
@@ -531,6 +545,7 @@ public final class T1TripRecorderService extends Service {
         }catch(Exception ex){
             finalStatus="TRIP interrumpido · "+ex.getClass().getSimpleName();
         }finally{
+            eco.close();
             motion.stop();
             segments.stop();
             segments.awaitStopped(7000);
