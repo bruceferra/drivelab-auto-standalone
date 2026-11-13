@@ -94,7 +94,7 @@ final class T1ShadowRoadMap {
            !"roads.sqlite.gz".equals(m.optString("filename"))||
            !"portable_btree_bounds_v3".equals(m.optString("spatialIndex"))||
            m.optInt("roadCount")<100||
-           !m.optBoolean("completeRoadCoverage",false))
+           !m.optBoolean("extractComplete",false))
             throw new IOException("Manifiesto shadow incompleto o incorrecto");
         long size=m.getLong("bytes");
         String sha=m.getString("sha256").toLowerCase(Locale.ROOT);
