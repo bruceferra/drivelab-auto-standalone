@@ -29,11 +29,12 @@ final class T1GlobalToolbar {
     private final PedestrianAlertControl avas;
     private final LinearLayout container;
     private final Button[] modes=new Button[3];
-    private Button optimizer,mirrorButton,airButton,avsButton;
+    private Button optimizer,mirrorButton,airButton,avsButton,roadModeButton;
     private TextView info;
     private boolean foreground;
-    private long lastPoll=0;
+    private long lastPoll=0, lastDevicesPoll=0;
     private int mirrorState=-1; // OEM 2003: 0 folded, 1 unfolded
+    private int pedestrianState=-1; // OEM 2074: 1 ON, 0 OFF, -1 unknown
     private final Runnable poll=new Runnable(){
         @Override public void run(){
             if(!foreground)return;
@@ -42,6 +43,13 @@ final class T1GlobalToolbar {
             if(now-lastPoll>=15000){
                 lastPoll=now;
                 readDisplayMode();
+            }
+            // Re-read OEM fold/AVAS states in case the driver changed them
+            // from the original Jetour screen, not just from DriveLab.
+            if(now-lastDevicesPoll>=12000){
+                lastDevicesPoll=now;
+                if(!mirrors.busy())readMirrorState();
+                if(!avas.busy())readAvasState();
             }
             main.postDelayed(this,3000L);
         }
@@ -88,6 +96,15 @@ final class T1GlobalToolbar {
         modes[0]=button(header,"EV",T1JetourTheme.PANEL_HI,85,()->changeMode(1));
         modes[1]=button(header,"HEV",T1JetourTheme.PANEL_HI,85,()->changeMode(2));
         modes[2]=button(header,"EV MAX",T1JetourTheme.PANEL_HI,100,()->changeMode(3));
+        // Read-only dynamic road-mode chip: CITY/ROAD/MOTORWAY/UNKNOWN.
+        // The OEM powertrain buttons above remain active manual controls;
+        // this one never sends vehicle commands and cannot be tapped.
+        roadModeButton=button(header,"MODO DESCONOCIDO",
+            T1JetourTheme.PANEL_HI,183,()->{});
+        roadModeButton.setOnClickListener(null);
+        roadModeButton.setClickable(false);
+        roadModeButton.setLongClickable(false);
+        roadModeButton.setFocusable(false);
         info=new TextView(owner);
         info.setText("Modo OEM: verificando…");
         info.setTextColor(T1JetourTheme.CYAN);
@@ -114,9 +131,9 @@ final class T1GlobalToolbar {
             ()->navigate(T1OptimizedModeActivity.class));
         mirrorButton=button(actions,"ESPEJOS · LEER",T1JetourTheme.PANEL_HI,150,
             this::toggleMirror);
-        avsButton=button(actions,"PEATÓN ON/OFF",T1JetourTheme.PANEL_HI,130,
+        avsButton=button(actions,"PEATÓN · LEYENDO",T1JetourTheme.PANEL_HI,135,
             this::toggleAvas);
-        button(actions,"VENTILACIÓN TOTAL",T1JetourTheme.GREEN_BUTTON,165,
+        button(actions,"VENTILACIÓN TOTAL",T1JetourTheme.PANEL_HI,165,
             ()->windows(WindowGroupPolicy.VENT_QUARTER));
         button(actions,"CIERRE TOTAL",T1JetourTheme.PANEL_HI,133,
             ()->windows(WindowGroupPolicy.CLOSE));
@@ -148,8 +165,11 @@ final class T1GlobalToolbar {
         windows.setForeground(true);
         avas.setForeground(true);
         refreshAutoAndAir();
+        // Re-observe the hardware instead of carrying a stale button label.
         readMirrorState();
+        readAvasState();
         lastPoll=0;
+        lastDevicesPoll=android.os.SystemClock.elapsedRealtime();
         main.removeCallbacks(poll);
         main.post(poll);
     }
@@ -171,6 +191,7 @@ final class T1GlobalToolbar {
         optimizer.setText(automatic?"OPTIMIZADO ON":"OPTIMIZADO OFF");
         T1JetourTheme.button(optimizer,automatic?
             T1JetourTheme.GREEN_BUTTON:T1JetourTheme.RED_BUTTON);
+        refreshRoadMode(automatic);
         SharedPreferences air=owner.getSharedPreferences(
             RecirculationGuardService.PREFS,Context.MODE_PRIVATE);
         boolean interior=RecirculationGuardService.MODE_INTERIOR.equals(
@@ -188,6 +209,24 @@ final class T1GlobalToolbar {
             airButton.setText(interior?"AIRE AUTO · REVISAR":"AIRE INTERIOR AUTO");
             T1JetourTheme.button(airButton,T1JetourTheme.PANEL_HI);
         }
+    }
+    /** The road state is sourced from the same fresh offline OSM cache as
+     * the optimizer, never from a saved preference for a selected profile.
+     * With AUTO OFF the chip is neutral: green means the optimizer is ON,
+     * not that a mode command has necessarily been applied by the OEM.
+     */
+    private void refreshRoadMode(boolean automatic){
+        if(roadModeButton==null)return;
+        T1OptimizedModePolicy.Road active=
+            T1OptimizedModeStore.lastRoad(owner);
+        String road=T1OptimizedModePolicy.roadName(active);
+        roadModeButton.setText("MODO "+road);
+        T1JetourTheme.button(roadModeButton,automatic?
+            T1JetourTheme.GREEN_BUTTON:T1JetourTheme.PANEL_HI);
+        roadModeButton.setContentDescription(
+            "Clasificación de vía "+road+", solo lectura. "+
+            "Modo optimizado "+(automatic?"activado":"desactivado")+
+            ". No confirma un cambio OEM.");
     }
     private void airStatus(){
         SharedPreferences air=owner.getSharedPreferences(
@@ -263,18 +302,50 @@ final class T1GlobalToolbar {
                 note(result);
             }).show();
     }
+    private void showMirrorState(){
+        // The label states the NEXT action, never the current position.
+        mirrorButton.setText(mirrorState==0?"DESPLEGAR ESPEJOS":
+            mirrorState==1?"PLEGAR ESPEJOS":"ESPEJOS · SIN ESTADO");
+        T1JetourTheme.button(mirrorButton,T1JetourTheme.PANEL_HI);
+        mirrorButton.setContentDescription(mirrorState==0?
+            "Espejos plegados según OEM 2003. Tocar para desplegar":
+            mirrorState==1?
+            "Espejos desplegados según OEM 2003. Tocar para plegar":
+            "Estado de plegado sin lectura OEM; el botón no indica un estado");
+    }
     private void readMirrorState(){
+        if(!foreground||mirrors.busy())return;
+        // Mark as pending; never display a stale cached action as confirmed.
         mirrorState=-1;
         mirrorButton.setText("ESPEJOS · LEYENDO");
         if(!mirrors.readFold2003(status->{
             if(!foreground)return;
-            // A 2003 state is only accepted after the OEM foreground read.
-            if(status.startsWith("LECTURA 2003=0"))mirrorState=0;
-            else if(status.startsWith("LECTURA 2003=1"))mirrorState=1;
+            if(status.startsWith("LECTURA 2003=0 "))mirrorState=0;
+            else if(status.startsWith("LECTURA 2003=1 "))mirrorState=1;
             else mirrorState=-1;
-            mirrorButton.setText(mirrorState==0?"DESPLEGAR ESPEJOS":
-                mirrorState==1?"PLEGAR ESPEJOS":"ESPEJOS · SIN ESTADO");
-        }))mirrorButton.setText("ESPEJOS · SIN ESTADO");
+            showMirrorState();
+        }))showMirrorState();
+    }
+    private void showAvasState(){
+        avsButton.setText(pedestrianState==1?"PEATÓN ON":
+            pedestrianState==0?"PEATÓN OFF":"PEATÓN · SIN LECTURA");
+        T1JetourTheme.button(avsButton,pedestrianState==1?
+            T1JetourTheme.GREEN_BUTTON:pedestrianState==0?
+            T1JetourTheme.RED_BUTTON:T1JetourTheme.PANEL_HI);
+        avsButton.setContentDescription("Alerta peatonal 2074: "+
+            (pedestrianState==1?"activada":pedestrianState==0?
+                "desactivada":"sin lectura OEM")+
+            ". Tocar para alternar tras leer el estado del vehículo.");
+    }
+    private void readAvasState(){
+        if(!foreground||avas.busy())return;
+        pedestrianState=-1;
+        avsButton.setText("PEATÓN · LEYENDO");
+        if(!avas.readState(result->{
+            if(!foreground)return;
+            pedestrianState=result.after==null?-1:result.after;
+            showAvasState();
+        }))showAvasState();
     }
     private void toggleMirror(){
         if(!foreground)return;
@@ -289,19 +360,36 @@ final class T1GlobalToolbar {
                 note("Espejos: no se detuvo AUTO; sin orden");return;
             }
         }
+        mirrorState=-1; // Do not pre-commit the inverted state.
         mirrorButton.setText("ESPEJOS · CONFIRMANDO");
         if(!mirrors.toggleFold2003(status->{
             if(!foreground)return;
             note(status);
             readMirrorState();
-        }))note("Espejos: control ocupado o sin lectura");
+        })){
+            note("Espejos: control ocupado o sin lectura");
+            showMirrorState();
+        }
     }
     private void toggleAvas(){
         if(!foreground)return;
+        if(avas.busy()){
+            note("Peatón: lectura u orden OEM en curso");return;
+        }
+        pedestrianState=-1;
+        avsButton.setText("PEATÓN · CONFIRMANDO");
         if(!avas.toggle(result->{
             if(!foreground)return;
+            // Use ONLY the final getter, not a guessed inverted UI state.
+            pedestrianState=result.after==null?-1:result.after;
+            showAvasState();
             note(result.summary());
-        }))note("Peatón: control ocupado o sin lectura OEM");
+            // Resync on the following poll if 2074 had delayed feedback.
+            if(result.after==null)readAvasState();
+        })){
+            note("Peatón: control ocupado o sin lectura OEM");
+            showAvasState();
+        }
     }
     private void windows(int command){
         if(!foreground)return;
