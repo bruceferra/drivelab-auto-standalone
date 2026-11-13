@@ -230,6 +230,13 @@ public final class T1OptimizedAutoService extends Service {
         boolean confident=road!=T1OptimizedModePolicy.Road.UNKNOWN&&
             Double.isFinite(found.distanceMeters)&&
             found.distanceMeters>=0&&found.distanceMeters<=35;
+        // Publish the CURRENT classified road from the live optimizer to
+        // the shared first-row read-only chip on every Receiver screen.
+        // Uncertain distance/GPS must never leave stale CIUDAD/AUTOPISTA
+        // highlighted; UNKNOWN selects the fallback profile label.
+        T1OptimizedModeStore.markReading(this,
+            confident?road:T1OptimizedModePolicy.Road.UNKNOWN,
+            found.roadTag,found.detail);
         T1TripTelemetry.Sample snapshot=new T1TripTelemetry(this).snapshot();
         long age=System.currentTimeMillis()-snapshot.timestamp;
         boolean fresh=age>=0&&age<=10000L;
