@@ -56,5 +56,12 @@ final class T1SocRegenTransitionGate {
         votes=REQUIRED_MATCHES;
     }
 
+    /** A block switched OFF must invalidate pending votes AND confirmed
+     * cache, otherwise re-enabling might skip checks based on old OEM state.
+     */
+    synchronized void reset(){
+        candidate=null;applied=null;votes=0;
+    }
+
     synchronized String currentConfirmed(){return applied;}
 }
