@@ -56,6 +56,25 @@ jobs:
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1FuelDisplay.java \
             receiver/tests/T1FuelDisplayTest.java
           java -cp /tmp/fuel-display-test T1FuelDisplayTest
+      - name: Cockpit touch guard - fixed header, stable history, background I/O
+        shell: bash
+        run: |
+          set -euo pipefail
+          cockpit=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
+          grep -Fq 'root.removeView(top);' "$cockpit"
+          grep -Fq 'fixedBody.addView(top,' "$cockpit"
+          grep -Fq 'fixedBody.addView(scroll,' "$cockpit"
+          grep -Fq 'historyEcoStatus.setTextIsSelectable(false);' "$cockpit"
+          grep -Fq 'historyEcoStatus.setFocusable(false);' "$cockpit"
+          grep -Fq 'scroll.setDescendantFocusability(' "$cockpit"
+          grep -Fq 'secondary.getVisibility()==android.view.View.VISIBLE' "$cockpit"
+          grep -Fq 'historyUiBusy.compareAndSet(false,true)' "$cockpit"
+          grep -Fq 'new Thread(()->{' "$cockpit"
+          grep -Fq 'snapshot=loadHistorySnapshot();' "$cockpit"
+          grep -Fq 'ui.post(()->{' "$cockpit"
+          grep -Fq 'if(!snapshot.signature.equals(renderedHistorySignature))' "$cockpit"
+          grep -Fq 'button.setFocusable(false);' "$cockpit"
+          grep -Fq 'paintHistoryButtons();' "$cockpit"
       - name: Cockpit live consumption must NOT depend on recording a trip
         shell: bash
         run: |
