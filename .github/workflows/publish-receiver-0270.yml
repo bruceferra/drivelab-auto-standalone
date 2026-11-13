@@ -111,7 +111,9 @@ jobs:
             receiver/tests/RecirculationPolicyTest.java
           java -cp /tmp/recirc-classes RecirculationPolicyTest
           grep -q 'RecirculationGuardService.activateOnAppOpen(this)' \
-            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/ReceiverActivity.java
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ImmersiveActivity.java
+          grep -q 'MirrorAutomationService.activateOnAppOpen(this)' \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ImmersiveActivity.java
           grep -q 'ACTION_RESTORE' \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/BootReceiver.java
 
