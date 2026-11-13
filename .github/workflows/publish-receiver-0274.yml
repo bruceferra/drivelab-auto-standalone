@@ -276,9 +276,14 @@ jobs:
           mirrors=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/MirrorPulsePilot.java
           pedestrian=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/PedestrianAlertControl.java
           grep -Fq 'roadModeButton.setOnClickListener(null);' "$global"
-          grep -Fq 'T1OptimizedModeStore.lastRoad(owner);' "$global"
+          grep -Fq 'T1OptimizedAutoService.verifiedAppliedRoad(owner)' "$global"
           grep -Fq 'roadModeButton.setText("MODO "+road);' "$global"
           grep -Fq 'T1OptimizedModeStore.markReading(this,' "$map"
+          grep -Fq '!T1OptimizedModeStore.isEnabled(this,road)' "$map"
+          grep -Fq 'socProfileGate.reset();' "$map"
+          grep -Fq 'PERFIL DESACTIVADO' "$map"
+          grep -Fq 'setEnabled(Context c,T1OptimizedModePolicy.Road r,boolean enabled)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeStore.java
+          grep -Fq 'p.blockEnabled.setOnCheckedChangeListener' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeActivity.java
           grep -Fq 'mirrorState==0?"DESPLEGAR ESPEJOS"' "$global"
           grep -Fq 'mirrorState==1?"PLEGAR ESPEJOS"' "$global"
           grep -Fq 'button(actions,"VENTILACIÓN TOTAL",T1JetourTheme.PANEL_HI' "$global"
