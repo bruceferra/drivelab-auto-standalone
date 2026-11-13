@@ -21,7 +21,8 @@ public final class T1InstrumentView extends View {
     public T1InstrumentView(Context context){super(context);}
     public void setTelemetry(Double speed,Double oemFuel,Double batterySoc){
         this.speed=finite(speed,0,220);
-        this.fuel=finite(oemFuel,0,70);
+        this.fuel=finite(T1FuelDisplay.usableLiters(
+            oemFuel==null?Double.NaN:oemFuel),0,67);
         this.soc=finite(batterySoc,0,100);
         // Keep needle smooth on successive real OEM samples; never fabricate
         // unavailable readings or interpolate across a missing source.
@@ -82,8 +83,8 @@ public final class T1InstrumentView extends View {
         text(canvas,"DRIVELAB  ·  JETOUR T1",600,28,24,WHITE);
         dial(canvas,215,146,75,"VELOCIDAD OEM",speed,shownSpeed,0,200,BLUE,
             "km/h · señal OEM","SIN SENSOR = --",false);
-        dial(canvas,600,146,75,"NAFTA · CI186",fuel,shownFuel,0,67,GOLD,
-            "L indicados · 0,01 L","No son litros físicos",true);
+        dial(canvas,600,146,75,"NAFTA UTILIZABLE",fuel,shownFuel,0,67,GOLD,
+            "L · CI186 - 5,3","Corte térmico · 0 L",true);
         dial(canvas,985,146,75,"BATERÍA PHEV",soc,shownSoc,0,100,TEAL,
             "% SOC OEM","No implica kWh de red",false);
         text(canvas,"Los tres indicadores requieren datos reales; sin lectura muestran --",

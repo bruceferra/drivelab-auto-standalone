@@ -27,7 +27,9 @@ public final class T1PremiumInstrumentView extends View {
     }
     public void update(Double speed,Double fuel,Double soc,int powerMode,
                        Double rpm,Double currentA){
-        this.speed=good(speed,0,220);this.fuel=good(fuel,0,70);
+        this.speed=good(speed,0,220);
+        this.fuel=good(T1FuelDisplay.usableLiters(
+            fuel==null?Double.NaN:fuel),0,67);
         this.soc=good(soc,0,100);
         this.rpm=good(rpm,0,12000);
         this.currentA=good(currentA,-1500,1500);
@@ -145,12 +147,12 @@ public final class T1PremiumInstrumentView extends View {
         round(c,604,5,896,172,17,CARD);
         round(c,904,5,1196,172,17,CARD);
 
-        label(c,"COMBUSTIBLE · CI186",18,35,MUTED,17,false);
+        label(c,"COMBUSTIBLE UTILIZABLE",18,35,MUTED,17,false);
         label(c,fuel==null?"SIN LECTURA":
             String.format(Locale.forLanguageTag("es-AR"),"%.2f L",fuel),
             18,98,WHITE,fuel==null?26:48,true);
         track(c,20,116,278,136,fuel==null?0:fuel/67,GOLD);
-        label(c,"LITROS OEM INDICADOS",20,161,MUTED,14,false);
+        label(c,"L · CI186 MENOS 5,3",20,161,MUTED,14,false);
 
         label(c,"BATERÍA · SOC TABLERO",318,35,MUTED,17,false);
         label(c,soc==null?"SIN LECTURA":
@@ -208,11 +210,11 @@ public final class T1PremiumInstrumentView extends View {
         label(c,"D R I V E L A B     /     J E T O U R  T 1",445,32,
             0xFFD7E6F1,18,true);
         speedGauge(c);
-        label(c,"COMBUSTIBLE · CI186",457,90,MUTED,17,false);
+        label(c,"COMBUSTIBLE UTILIZABLE",457,90,MUTED,17,false);
         label(c,fuel==null?"SIN LECTURA":
             String.format(Locale.forLanguageTag("es-AR"),"%.2f L",fuel),
             457,139,WHITE,39,true);
-        label(c,"LITROS INDICADOS",750,94,MUTED,14,false);
+        label(c,"L · CORTE CI186 5,3",750,94,MUTED,14,false);
         track(c,753,115,1140,132,fuel==null?0:fuel/67,GOLD);
         label(c,"BATERÍA · SOC TABLERO",457,227,MUTED,17,false);
         label(c,soc==null?"SIN LECTURA":
