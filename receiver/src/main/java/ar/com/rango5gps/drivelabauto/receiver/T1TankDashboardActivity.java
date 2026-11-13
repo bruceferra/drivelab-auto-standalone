@@ -39,9 +39,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * NOT a metered charger or proof of grid-billed kWh.
  */
 public final class T1TankDashboardActivity extends T1ImmersiveActivity {
-    private static final int NAVY=T1JetourTheme.DEEP,TEAL=0xFF0C7C82,
+    private static final int NAVY=T1JetourTheme.DEEP,TEAL=0xFF426E73,
         GRAY=T1JetourTheme.MUTED,PALE=T1JetourTheme.PANEL,
-        RED=0xFF96434E,BLUE=0xFF205877,
+        RED=T1JetourTheme.RED_BUTTON,BLUE=T1JetourTheme.PANEL_HI,
         WHITE=T1JetourTheme.WHITE,ASK_GPS=6021,SAVE_CSV=6022;
     @Override protected int overlayClearBackgroundColor(){return T1JetourTheme.NIGHT;}
     private final Handler ui=new Handler(Looper.getMainLooper());
