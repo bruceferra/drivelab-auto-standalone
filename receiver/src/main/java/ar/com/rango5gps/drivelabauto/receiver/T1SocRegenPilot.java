@@ -108,10 +108,10 @@ final class T1SocRegenPilot {
             return reply.readInt();
         }finally{data.recycle();reply.recycle();}
     }
-    /** Independent candidate getter for target 1041: the int getter can
-     * return an opaque/raw 56 while the OEM UI shows a target of 20%.
-     * This is only confirmation if the float getter itself equals a
-     * supported requested value. Never reinterpret raw 56 as a SOC preset.
+    /** Diagnostic-only float getter: owner's 1041 screenshot shows
+     * intRaw 56 paired with OEM 50%, while readFloat 1041 can yield 1.
+     * Use known readInt mapping in T1SocTargetCodec for verification.
+     * Keep floatRaw as uncalibrated diagnostic evidence only.
      */
     private static double readSocTargetFloat(IBinder b)throws Exception{
         Parcel data=Parcel.obtain(),reply=Parcel.obtain();
@@ -199,15 +199,28 @@ final class T1SocRegenPilot {
                 gotFloat=true;floatFailure="";
             }catch(Exception ex){floatFailure=ex.getClass().getSimpleName();}
             T1OemDiagnosticLog.add(app,"ETAPA_3_LECTURA",
-                "id="+id+" nuevo="+target+
+                "id="+id+" solicitado="+target+
                 " intRaw="+(gotInt?String.valueOf(lastInt):"ERR "+intFailure)+
                 " floatRaw="+(gotFloat?String.valueOf(lastFloat):
-                    (id==1041?"ERR "+floatFailure:"n/a")));
-            if((gotInt&&lastInt==target)||
-                (id==1041&&gotFloat&&Double.isFinite(lastFloat)&&
-                    Math.abs(lastFloat-target)<0.05)){
+                    (id==1041?"ERR "+floatFailure:"n/a"))+
+                (id==1041?" · "+T1SocTargetCodec.explain(
+                    gotInt?lastInt:Integer.MIN_VALUE,
+                    gotFloat?lastFloat:Double.NaN):""));
+            // 1041 has an ECU/launcher display encoding: raw 56=50%,
+            // raw 48=40%, raw 40=30%, raw 30=20%. Comparing raw==target
+            // would falsely accept 40 while the original UI shows 30%.
+            // floatRaw=1 is not an SOC percentage. No guesses for 60/70.
+            boolean matches=id==1041?
+                (gotInt&&T1SocTargetCodec.confirmsRequested(
+                    target,lastInt,gotFloat?lastFloat:Double.NaN)):
+                (gotInt&&lastInt==target);
+            if(matches){
                 T1OemDiagnosticLog.add(app,"ETAPA_3_OK",
-                    "id="+id+" nuevo="+target+" CONFIRMADO");
+                    "id="+id+" solicitado="+target+
+                    (id==1041?" · readInt "+lastInt+" equivale a "+
+                        target+"% según capturas T1Launcher":
+                        " · getter entero coincide")+
+                    "; escritura previa recibida por Binder");
                 return;
             }
             SystemClock.sleep(350);
@@ -215,7 +228,10 @@ final class T1SocRegenPilot {
         T1OemDiagnosticLog.add(app,"ETAPA_3_INCIERTA",
             "id="+id+" nuevo="+target+" intRaw="+lastInt+
             " floatRaw="+lastFloat+" errInt="+intFailure+
-            " errFloat="+floatFailure+"; no repetir");
+            " errFloat="+floatFailure+
+            (id==1041?" · "+T1SocTargetCodec.explain(
+                lastInt,lastFloat):"")+
+            "; no repetir");
         throw new IllegalStateException(
             "ETAPA 3 NO CONFIRMADA: id="+id+" nuevo="+target+
             " intRaw="+lastInt+" floatRaw="+lastFloat+
