@@ -1,0 +1,67 @@
+name: DriveLab · mapas Overture IGN · formato offline
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'tools/build_shadow_maps.py'
+      - 'receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ShadowRoadMap.java'
+      - '.github/workflows/shadow-map-ci.yml'
+  pull_request:
+    paths:
+      - 'tools/build_shadow_maps.py'
+      - 'receiver/**'
+      - '.github/workflows/shadow-map-ci.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  prepare-test:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check portable SQLite for both Overture and IGN
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-shadow
+          python3 - <<'PY'
+          import json,pathlib
+          f=pathlib.Path('/tmp/t1-shadow/example.geojsonseq')
+          with f.open('w',encoding='utf-8') as o:
+            for k in range(140):
+              x=-58.7+(k%20)*.01
+              y=-34.6+(k//20)*.01
+              feature={'type':'Feature','id':str(k),
+                'properties':{'class':'primary','subtype':'road',
+                              'nombre':'ruta provincial','rtn':'RP 1'},
+                'geometry':{'type':'LineString',
+                            'coordinates':[[x,y],[x+.0003,y+.0003]]}}
+              o.write(json.dumps(feature)+'\n')
+          PY
+          python3 tools/build_shadow_maps.py --source OVERTURE \
+            --input /tmp/t1-shadow/example.geojsonseq \
+            --out /tmp/t1-shadow/overture
+          python3 tools/build_shadow_maps.py --source IGN \
+            --input /tmp/t1-shadow/example.geojsonseq \
+            --out /tmp/t1-shadow/ign
+          python3 - <<'PY'
+          import hashlib,json,gzip,sqlite3,tempfile,pathlib
+          root=pathlib.Path('/tmp/t1-shadow')
+          for src in ('overture','ign'):
+            base=root/src
+            manifest=json.loads((base/'manifest.json').read_text())
+            zipped=(base/'roads.sqlite.gz').read_bytes()
+            assert manifest['bytes']==len(zipped)
+            assert manifest['sha256']==hashlib.sha256(zipped).hexdigest()
+            assert manifest['roadCount']==140
+            assert manifest['source']==src.upper()
+            with tempfile.NamedTemporaryFile(suffix='.sqlite') as dest:
+              dest.write(gzip.decompress(zipped));dest.flush()
+              db=sqlite3.connect(dest.name)
+              assert db.execute('select count(*) from roads').fetchone()[0]==140
+              assert db.execute('select count(*) from roads_bounds').fetchone()[0]==140
+              assert db.execute("select value from metadata where k='region_code'").fetchone()[0]=='AR-B+AR-C'
+              assert db.execute("select value from metadata where k='spatial_index'").fetchone()[0]=='portable_btree_bounds_v3'
+              db.close()
+          print('PASS both source packages, manifest, SHA256, road geometry and spatial schema')
+          PY
