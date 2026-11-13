@@ -213,7 +213,7 @@ jobs:
           ! grep -E 'transact\(15|setInt\(|setFloat\(|setProperty\(' "$seat" "$thermal"
           grep -q 'ASIENTOS A · APAGADAS' "$cockpit"
           grep -q 'ASIENTOS B · ENCENDIDAS' "$cockpit"
-          grep -q 'COPIAR INFORME ASIENTOS' "$cockpit"
+          grep -q 'COMPARTIR LUCES ASIENTOS' "$cockpit"
           grep -q 'TEMPERATURAS / MOTOR · VER CÓDIGOS' "$cockpit"
           grep -q 'ESTADO SIN VALIDAR' "$cockpit"
           grep -q 'RPM: SIN LECTURA' "$cockpit"
