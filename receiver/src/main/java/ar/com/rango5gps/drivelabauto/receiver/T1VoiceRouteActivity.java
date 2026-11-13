@@ -336,6 +336,24 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
             },"T1-Voice-Weather-HTTPS").start();
             return;
         }
+        if("San Lorenzo futbol resultado".equals(
+                T1VoiceNewsTopic.topic(phrase))){
+            status.setText("SAN LORENZO · consultando último marcador final…");
+            new Thread(()->{
+                String result;
+                try{result=T1VoiceFootball.latestSanLorenzo();}
+                catch(Exception ex){
+                    result="No pude confirmar el resultado en la fuente "+
+                        "de partidos. Revisá la conexión o consultá noticias.";
+                }
+                final String answer=result;
+                runOnUiThread(()->{
+                    if(!isFinishing()&&!isDestroyed())
+                        say("SAN LORENZO · "+answer,answer);
+                });
+            },"T1-Voice-Football-HTTPS").start();
+            return;
+        }
         if(T1VoiceNewsTopic.topic(phrase)!=null){
             status.setText("ACTUALIDAD · consultando titulares recientes…");
             new Thread(()->{
