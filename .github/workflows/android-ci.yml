@@ -472,6 +472,20 @@ jobs:
             receiver/tests/MirrorControlsVisibilitySourceContractTest.java
           java -cp /tmp/mirror-visible-controls \
             ar.com.rango5gps.drivelabauto.receiver.MirrorControlsVisibilitySourceContractTest
+      - name: Top row energy and OSM Overture IGN shadow safety contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-map-and-toolbar
+          javac -encoding UTF-8 -d /tmp/t1-map-and-toolbar \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModePolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocRegenWritePolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocTargetCodec.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TopRowEnergyStatus.java \
+            receiver/tests/T1TopRowEnergyStatusTest.java \
+            receiver/tests/T1ShadowMapsSourceContractTest.java
+          java -cp /tmp/t1-map-and-toolbar ar.com.rango5gps.drivelabauto.receiver.T1TopRowEnergyStatusTest
+          java -cp /tmp/t1-map-and-toolbar ar.com.rango5gps.drivelabauto.receiver.T1ShadowMapsSourceContractTest
       - name: Stable fuel autonomy 50km and 100x500m archived callback regressions
         shell: bash
         run: |
