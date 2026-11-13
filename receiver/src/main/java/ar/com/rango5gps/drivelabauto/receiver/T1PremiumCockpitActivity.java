@@ -1146,6 +1146,12 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         feedback.setMaxLines(3);commentaryLeft.addView(feedback);
         liveEcoNow.setMaxLines(4);
         liveEcoNow.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        systemMonitorLine=text("RAM / CPU: esperando telemetría del sistema…",
+            11,T1JetourTheme.CYAN,false);
+        systemMonitorLine.setSingleLine(true);
+        systemMonitorLine.setEllipsize(android.text.TextUtils.TruncateAt.END);
+        commentaryRight.addView(systemMonitorLine,
+            new LinearLayout.LayoutParams(-1,T1JetourTheme.dp(this,29)));
         LinearLayout expandRow=row();root.addView(expandRow);
         compactButton(expandRow,"DETALLES / HISTORIAL",BLUE,()->{
             boolean expand=secondary.getVisibility()==android.view.View.GONE;
@@ -1445,7 +1451,6 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         // The global mode/action toolbar is now provided by
         // T1ImmersiveActivity OUTSIDE this ScrollView, on every Receiver page.
         // This page has no second fixed local row: instruments scroll freely.
-        FrameLayout cockpitFrame=new FrameLayout(this);
         roadTransitionPopup=null;
         setContentView(scroll);
         // Open the existing diagnostic panel directly when launched from
