@@ -63,11 +63,13 @@ jobs:
           editor=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeActivity.java
           cockpit=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
           grep -Fq 'private static final int PCT_MIN=5,PCT_STEP=5,PCT_COUNT=20' "$editor"
-          grep -Fq 'p.targetMinimum=percentageSelector(existing.minBattery);' "$editor"
+          grep -Fq 'p.minPct=percentageSelector(existing.minBattery);' "$editor"
+          grep -Fq 'p.maxPct=percentageSelector(existing.maxBattery);' "$editor"
           grep -Fq 'p.forced=forcedSocSelector(existing.forcedSoc);' "$editor"
           grep -Fq 'int[] allowed=T1SocRegenWritePolicy.forcedSocPresets();' "$editor"
           grep -Fq 'power,strategy,forcedSocValue(p.forced)' "$editor"
-          grep -Fq 'p.targetMinimum=percentageSelector(existing.minBattery);' "$editor"
+          grep -Fq 'p.minPct=percentageSelector(existing.minBattery);' "$editor"
+          grep -Fq 'p.maxPct=percentageSelector(existing.maxBattery);' "$editor"
           grep -Fq 'private int percentage(Spinner spinner)' "$editor"
           ! grep -Eq '(EditText|InputType|TYPE_CLASS_NUMBER)' "$editor"
           grep -Fq 'lastUiStats>=2400L' "$cockpit"
@@ -76,6 +78,12 @@ jobs:
           grep -Fq 'private void maybeReconcileContinuity()' "$cockpit"
           grep -Fq 'private void updateStats(){' "$cockpit"
           grep -Fq '        maybeReconcileContinuity();' "$cockpit"
+          grep -Fq 'p.minEnabled.setChecked(existing.minEnabled);' "$editor"
+          grep -Fq 'p.maxEnabled.setChecked(existing.maxEnabled);' "$editor"
+          grep -Fq 'minimumEnabled&&maximumEnabled&&lower>upper' "$editor"
+          grep -Fq 'minOn,minimum,maxOn,maximum' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeStore.java
+          grep -Fq 'k+"min_enabled_v2"' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeStore.java
+          grep -Fq 'k+"max_enabled_v2"' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeStore.java
       - name: Cockpit full-system RAM/CPU and recovering NAV touch telemetry
         shell: bash
         run: |
