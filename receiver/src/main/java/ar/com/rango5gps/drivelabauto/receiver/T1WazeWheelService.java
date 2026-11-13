@@ -104,6 +104,32 @@ public final class T1WazeWheelService extends AccessibilityService {
             " · ATRÁS="+p.getInt(BACK,KeyEvent.KEYCODE_BACK)+
             " · RUTAS="+p.getInt(ROUTES,-1);
     }
+    /** Local in-screen keyboard/key diagnosis, independent of accessibility.
+     * Runs ONLY during an explicit 45-second user calibration. Never
+     * consumes the KeyEvent: existing OEM/T1Launcher handling remains intact.
+     * If the wheel uses a private CAN / Binder callback, this will not see
+     * it, which is exactly what the diagnostic helps establish.
+     */
+    static void observeActivityKey(Context c,KeyEvent event){
+        if(event==null||event.getAction()!=KeyEvent.ACTION_DOWN||
+           event.getRepeatCount()!=0)return;
+        SharedPreferences p=c.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
+        String pending=p.getString(PENDING,"");
+        if(pending.isEmpty())return;
+        long now=System.currentTimeMillis();
+        long age=now-p.getLong(PENDING_TIME,0L);
+        if(age<0||age>=LEARN_MS)return;
+        int code=event.getKeyCode();
+        String message="Capturado "+pending+" = "+code+
+            " ("+KeyEvent.keyCodeToString(code)+")"+
+            " · por pantalla DriveLab (sin Waze)";
+        p.edit().putInt(pending,code).remove(PENDING)
+            .putInt(LAST,code).putString(LAST_STATUS,message)
+            .putString(WINDOW,"DRIVELAB.ACTIVITY")
+            .putLong(LAST_TIME,now).apply();
+        Log.i("DriveLabWheel",message);
+    }
+
     private void status(String message){
         prefs().edit().putString(LAST_STATUS,message)
             .putLong(LAST_TIME,System.currentTimeMillis()).apply();
