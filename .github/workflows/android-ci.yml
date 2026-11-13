@@ -402,7 +402,7 @@ jobs:
           grep -q 'VIAJE 1 GRABANDO' "$ui"
           grep -q 'ensureContinuousTrip()' "$ui"
           grep -q 'repairWithoutOldCsv' "$ui"
-          grep -q 'boolean resume=tripMode&&file.isFile()' "$callbacks"
+          grep -q 'boolean resume=tripMode&&file!=null&&file.isFile()' "$callbacks"
           grep -q 'count\[channel\]++' "$callbacks"
           grep -q 'int required=header.split' "$sync"
           # All passenger finish operations require explicit user action.
