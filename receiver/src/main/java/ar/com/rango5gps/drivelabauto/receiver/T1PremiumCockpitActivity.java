@@ -1442,48 +1442,12 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             "el sistema Jetour. No usar para controlar EV/HEV en marcha. "+
             "No se guardan coordenadas de clientes, ni se envían las zonas a la nube.",
             12,MUTED,false));
-        // The popup is pinned above scrolling content, but BELOW the fixed
-        // voice-assistant clearance strip owned by T1ImmersiveActivity.
+        // The global mode/action toolbar is now provided by
+        // T1ImmersiveActivity OUTSIDE this ScrollView, on every Receiver page.
+        // This page has no second fixed local row: instruments scroll freely.
         FrameLayout cockpitFrame=new FrameLayout(this);
-        // CRITICAL: keep navigation buttons pinned ABOVE the ScrollView.
-        // A fast history refresh cannot shift their hit boxes or consume taps.
-        root.removeView(top);
-        root.removeView(modes);
-        LinearLayout fixedBody=col();
-        fixedBody.setBackgroundColor(BG);
-        // The three OEM modes worked while top navigation did not. Move
-        // navigation BELOW these working controls, outside the OEM top zone.
-        // Keep the system telemetry line non-interactive in the top strip.
-        View safeGap=new View(this);
-        fixedBody.addView(safeGap,new LinearLayout.LayoutParams(-1,
-            T1JetourTheme.dp(this,16)));
-        systemMonitorLine=text("RAM/CPU sistema: leyendo…",
-            11,T1JetourTheme.CYAN,false);
-        systemMonitorLine.setSingleLine(true);
-        systemMonitorLine.setEllipsize(
-            android.text.TextUtils.TruncateAt.END);
-        systemMonitorLine.setPadding(
-            T1JetourTheme.dp(this,10),0,
-            T1JetourTheme.dp(this,10),0);
-        systemMonitorLine.setGravity(Gravity.CENTER_VERTICAL);
-        systemMonitorLine.setBackgroundColor(0xFF11181E);
-        // Entire strip is diagnostic only; don't require tapping it.
-        systemMonitorLine.setClickable(false);
-        commentaryRight.addView(systemMonitorLine,
-            new LinearLayout.LayoutParams(-1,T1JetourTheme.dp(this,29)));
-        fixedBody.addView(modes,
-            new LinearLayout.LayoutParams(-1,-2));
-        fixedBody.addView(top,
-            new LinearLayout.LayoutParams(-1,-2));
-        fixedBody.addView(scroll,
-            new LinearLayout.LayoutParams(-1,0,1f));
-        cockpitFrame.addView(fixedBody,
-            new FrameLayout.LayoutParams(-1,-1));
-        // Disable the old full-width FrameLayout popup entirely: even
-        // disabled Android views in the highest Z-order can complicate
-        // hit-testing with an OEM overlay. The OSM banner remains available.
         roadTransitionPopup=null;
-        setContentView(cockpitFrame);
+        setContentView(scroll);
         // Open the existing diagnostic panel directly when launched from
         // the wizard; retain its original actions and user-triggered probes.
         if(getIntent()!=null&&
