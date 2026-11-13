@@ -312,10 +312,11 @@ final class T1SocRegenPilot {
                 for(int n=changedIds.length-1;n>=0;n--){
                     int id=changedIds[n],previous=changed.get(id);
                     if(id==1041){
-                        // The ECU may have applied the requested 20 while
-                        // readInt still reports opaque raw 56. A readback
-                        // mismatch MUST NOT cause a second SOC-target write
-                        // to a guessed prior value. Driver verifies OEM UI.
+                        // 1041 has encoded readback (raw56=>50% per
+                        // owner T1Launcher photos). A mismatch or an
+                        // unmapped 60/70 preset MUST NOT trigger another
+                        // SOC-target write or guessed rollback value.
+                        // Driver verifies the original OEM settings.
                         allRestored=false;
                         restored.append("1041 SIN ROLLBACK; objetivo solicitado=")
                             .append(targets.forcedSoc)
