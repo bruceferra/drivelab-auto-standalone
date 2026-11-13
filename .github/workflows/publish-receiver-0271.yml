@@ -254,17 +254,30 @@ jobs:
           grep -Fq 'roadTransitionPopup=null;' "$cockpit"
           grep -Fq 'SISTEMA RAM/CPU' "$cockpit"
           ! grep -Fq 'cockpitFrame.addView(roadTransitionPopup' "$cockpit"
+      - name: Check SOC target settings and preserve write pipeline
+        shell: bash
+        run: |
+          set -euo pipefail
+          soc=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocRegenWritePolicy.java
+          pilot=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocRegenPilot.java
+          auto=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedAutoService.java
+          grep -Fq 'SOC_PRESETS={20,30,40,50,60,70}' "$soc"
+          grep -Fq 'socRegenPilot.apply(targets,' "$auto"
+          grep -Fq 'private static double readSocTargetFloat' "$pilot"
+          grep -Fq 'if(id==1041){' "$pilot"
+          grep -Fq '1041 SIN ROLLBACK' "$pilot"
+          ! grep -Fq 'current==56?64:56' "$soc"
       - name: Build Receiver and verify unchanged signing identity / Sender OTA
         shell: bash
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'bruceferra/drivelab-auto-standalone'
           test "$GITHUB_REF_NAME" = main
-          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.69
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.70
           ! gh release view v0.2.71 >/dev/null 2>&1
           mkdir -p /tmp/prior output
-          gh release download v0.2.69 --pattern 'DriveLab-Auto-Receiver-v0.2.69.apk' --dir /tmp/prior
-          gh release download v0.2.69 --pattern 'sender.json' --dir /tmp/prior
+          gh release download v0.2.70 --pattern 'DriveLab-Auto-Receiver-v0.2.70.apk' --dir /tmp/prior
+          gh release download v0.2.70 --pattern 'sender.json' --dir /tmp/prior
           cp /tmp/prior/sender.json output/sender.json
           python3 - <<'PY'
           import json
@@ -279,8 +292,8 @@ jobs:
           sig="$ANDROID_HOME/build-tools/35.0.0/apksigner"
           aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
           "$sig" verify --print-certs "$apk"
-          "$sig" verify --print-certs /tmp/prior/DriveLab-Auto-Receiver-v0.2.69.apk
-          oldcert=$("$sig" verify --print-certs /tmp/prior/DriveLab-Auto-Receiver-v0.2.69.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          "$sig" verify --print-certs /tmp/prior/DriveLab-Auto-Receiver-v0.2.70.apk
+          oldcert=$("$sig" verify --print-certs /tmp/prior/DriveLab-Auto-Receiver-v0.2.70.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
           newcert=$("$sig" verify --print-certs "$apk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
           test -n "$oldcert" && test "$oldcert" = "$newcert"
           badge=$("$aapt" dump badging "$apk" | head -1)
@@ -304,7 +317,7 @@ jobs:
           import json
           m=json.load(open('output/receiver.json'))
           assert m['versionName']=='0.2.71'
-          assert m['versionCode']==71, 'manifest code mismatch'
+          assert m['versionCode']==72, 'manifest code mismatch'
           assert m['packageName']=='ar.com.rango5gps.drivelabauto.receiver'
           assert m['apkUrl']=='https://github.com/bruceferra/drivelab-auto-standalone/releases/download/v0.2.71/DriveLab-Auto-Receiver-v0.2.71.apk'
           assert len(m['sha256'])==64
@@ -315,7 +328,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.69
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.70
           gh release create v0.2.71 \
             output/DriveLab-Auto-Receiver-v0.2.71.apk \
             output/receiver.json output/sender.json output/receiver.sha256 \
