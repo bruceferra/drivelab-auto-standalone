@@ -6,12 +6,14 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
+import android.graphics.Rect;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.text.InputType;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
@@ -37,6 +39,44 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private boolean visible=false;
     private long lastTelem=0,lastTotals=0;
     private ScrollView cockpitScroll;
+    private LinearLayout cockpitNavRow,cockpitModeRow;
+    private TextView systemMonitorLine;
+    private T1SystemLoadMonitor loadMonitor;
+    private final AtomicBoolean loadReading=new AtomicBoolean(false);
+    private T1SystemLoadMonitor.Result lastSystemLoad;
+    private long monitorExpectedAt=0;
+    private long uiLagNow=0,uiLagMax=0;
+    private int navTouchDowns=0,modeTouchDowns=0,navButtonClicks=0;
+    private String lastNavButton="ninguno";
+    private final Runnable loadTick=new Runnable(){
+        @Override public void run(){
+            if(!visible)return;
+            long now=android.os.SystemClock.uptimeMillis();
+            if(monitorExpectedAt>0){
+                uiLagNow=Math.max(0,now-monitorExpectedAt);
+                uiLagMax=Math.max(uiLagMax,uiLagNow);
+            }
+            if(loadReading.compareAndSet(false,true)){
+                new Thread(()->{
+                    T1SystemLoadMonitor.Result snapshot=null;
+                    try{snapshot=loadMonitor.sample();}
+                    catch(Exception ex){
+                        T1OemDiagnosticLog.add(getApplicationContext(),
+                            "COCKPIT_HW",ex.getClass().getSimpleName());
+                    }
+                    final T1SystemLoadMonitor.Result ready=snapshot;
+                    ui.post(()->{
+                        loadReading.set(false);
+                        if(!visible||isFinishing()||isDestroyed())return;
+                        if(ready!=null)lastSystemLoad=ready;
+                        renderLoadMonitor();
+                    });
+                },"T1-Hardware-ReadOnly-Monitor").start();
+            }
+            monitorExpectedAt=android.os.SystemClock.uptimeMillis()+3000L;
+            ui.postDelayed(this,3000L);
+        }
+    };
     // Top actions belong to a FIXED sibling of the scrolling history.
     // Changes in a historical Eco result must never move or intercept them.
     private String renderedHistorySignature="";
@@ -174,12 +214,70 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             ui.postDelayed(this,700);
         }
     };
+    private void renderLoadMonitor(){
+        if(systemMonitorLine==null)return;
+        String stats=lastSystemLoad==null?
+            "RAM/CPU sistema: leyendo…":lastSystemLoad.compact();
+        systemMonitorLine.setText(stats+
+            " · UI "+uiLagNow+" ms"+
+            " · TOQUES NAV "+navTouchDowns+"/"+navButtonClicks+
+            " MODO "+modeTouchDowns);
+        systemMonitorLine.setTextColor(uiLagNow>350||
+            (lastSystemLoad!=null&&lastSystemLoad.lowMemory)?
+            T1JetourTheme.AMBER:T1JetourTheme.CYAN);
+    }
+    private void navClicked(String name){
+        navButtonClicks++;
+        lastNavButton=name;
+        renderLoadMonitor();
+    }
+    @Override public boolean dispatchTouchEvent(MotionEvent event){
+        if(event!=null&&event.getActionMasked()==MotionEvent.ACTION_DOWN){
+            Rect rect=new Rect();
+            int x=Math.round(event.getRawX()),y=Math.round(event.getRawY());
+            if(cockpitNavRow!=null&&
+                cockpitNavRow.getGlobalVisibleRect(rect)&&rect.contains(x,y))
+                navTouchDowns++;
+            else if(cockpitModeRow!=null&&
+                cockpitModeRow.getGlobalVisibleRect(rect)&&rect.contains(x,y))
+                modeTouchDowns++;
+            // If native OEM overlay swallows NAV taps before dispatch, NAV
+            // counts remain unchanged while MODE counts still increment.
+        }
+        return super.dispatchTouchEvent(event);
+    }
+    private void showSystemDiagnostics(){
+        String stats=lastSystemLoad==null?
+            "Aún no hay muestra de hardware":lastSystemLoad.details();
+        new AlertDialog.Builder(this).setTitle("DIAGNÓSTICO HARDWARE T1")
+            .setMessage(stats+
+                "\n\nLatencia interfaz ahora "+uiLagNow+
+                " ms; máximo observado "+uiLagMax+" ms."+
+                "\nTOQUES recibidos dentro de la fila de navegación: "+
+                navTouchDowns+
+                "\nClicks de botones NAV ejecutados: "+navButtonClicks+
+                " (último: "+lastNavButton+")"+
+                "\nTOQUES recibidos en EV/HEV: "+modeTouchDowns+
+                "\n\nSi tocás NAV y no sube el contador pero EV/HEV "+
+                "sí lo hace, la zona superior puede estar tapada por "+
+                "otra ventana (OEM). Si el contador sube pero no el "+
+                "click, revisar el despacho interno del botón.")
+            .setNegativeButton("CERRAR",null)
+            .setPositiveButton("COMPARTIR",(d,w)->
+                shareDiagnostic("hardware_touch",stats+
+                    "\nUI ms "+uiLagNow+" max "+uiLagMax+
+                    "\nNAV Down "+navTouchDowns+
+                    " clicks "+navButtonClicks+" last "+lastNavButton+
+                    "\nMODE Down "+modeTouchDowns,""))
+            .show();
+    }
     private static Double valid(double v,double min,double max){
         return Double.isFinite(v)&&v>=min&&v<=max?v:null;
     }
     private static String f(double v,int digits){return T1JourneyMetrics.fmt(v,digits);}
     @Override public void onCreate(Bundle b){
         super.onCreate(b);
+        loadMonitor=new T1SystemLoadMonitor(this);
         hevPilot=new T1ManualHevExperiment(this);
         threeModePilot=new T1ManualThreeModePilot(this);
         lightProbe=new T1CabinLightReadOnlyProbe(this);
@@ -202,6 +300,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         T1ClientTripSync.trigger(this,false);
         if(T1OfflineRoadMap.checkDue(this))updateOfflineMap(false);
         ui.removeCallbacks(ticker);ui.post(ticker);
+        monitorExpectedAt=0;
+        ui.removeCallbacks(loadTick);ui.post(loadTick);
         // Do not re-stamp a road observed before leaving the cockpit.
         if(osmEnabled()){
             if(lastOsmQuery==0||System.currentTimeMillis()-lastOsmQuery>45000L){
@@ -240,6 +340,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             dashboardConsumption=null;
         }
         ui.removeCallbacks(ticker);
+        ui.removeCallbacks(loadTick);
+        monitorExpectedAt=0;
         ui.removeCallbacks(hideRoadTransitionPopup);
         if(roadTransitionPopup!=null){
             roadTransitionPopup.animate().cancel();
@@ -789,7 +891,9 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         cockpitScroll=scroll;
         LinearLayout root=col();root.setPadding(18,10,18,28);
         scroll.addView(root);
-        LinearLayout top=row();top.setGravity(Gravity.CENTER_VERTICAL);root.addView(top);
+        LinearLayout top=row();top.setGravity(Gravity.CENTER_VERTICAL);
+        root.addView(top);
+        cockpitNavRow=top;
         LinearLayout title=col();
         title.addView(text("DRIVELAB / T1",19,WHITE,true));
         title.addView(text("COCKPIT · build OEM "+getPackageVersion(),12,MUTED,false));
@@ -852,6 +956,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         top.addView(back,new LinearLayout.LayoutParams(-2,52));
 
         LinearLayout modes=row();root.addView(modes);
+        cockpitModeRow=modes;
         modeEvButton=topModeButton(modes,"EV",1);
         modeHevButton=topModeButton(modes,"HEV",2);
         modeMaxButton=topModeButton(modes,"EV MAX",3);
@@ -1285,8 +1390,31 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         // CRITICAL: keep navigation buttons pinned ABOVE the ScrollView.
         // A fast history refresh cannot shift their hit boxes or consume taps.
         root.removeView(top);
+        root.removeView(modes);
         LinearLayout fixedBody=col();
         fixedBody.setBackgroundColor(BG);
+        // The three OEM modes worked while top navigation did not. Move
+        // navigation BELOW these working controls, outside the OEM top zone.
+        // Keep the system telemetry line non-interactive in the top strip.
+        View safeGap=new View(this);
+        fixedBody.addView(safeGap,new LinearLayout.LayoutParams(-1,
+            T1JetourTheme.dp(this,16)));
+        systemMonitorLine=text("RAM/CPU sistema: leyendo…",
+            11,T1JetourTheme.CYAN,false);
+        systemMonitorLine.setSingleLine(true);
+        systemMonitorLine.setEllipsize(
+            android.text.TextUtils.TruncateAt.END);
+        systemMonitorLine.setPadding(
+            T1JetourTheme.dp(this,10),0,
+            T1JetourTheme.dp(this,10),0);
+        systemMonitorLine.setGravity(Gravity.CENTER_VERTICAL);
+        systemMonitorLine.setBackgroundColor(0xFF11181E);
+        // Entire strip is diagnostic only; don't require tapping it.
+        systemMonitorLine.setClickable(false);
+        fixedBody.addView(systemMonitorLine,
+            new LinearLayout.LayoutParams(-1,T1JetourTheme.dp(this,29)));
+        fixedBody.addView(modes,
+            new LinearLayout.LayoutParams(-1,-2));
         fixedBody.addView(top,
             new LinearLayout.LayoutParams(-1,-2));
         fixedBody.addView(scroll,
