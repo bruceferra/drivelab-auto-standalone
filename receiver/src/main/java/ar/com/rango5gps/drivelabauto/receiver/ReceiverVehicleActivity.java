@@ -160,6 +160,9 @@ public final class ReceiverVehicleActivity extends T1ImmersiveActivity {
         label(root,"DRIVELAB AUTO · T1",23);
         label(root,"v0.2.31 · diagnósticos y subida QR · solo lectura",12);
         button(root,"← VOLVER A MAPAS Y PUENTE",this::finish);
+        button(root,"PENDIENTES · ASISTENTE GUIADO DE PRUEBAS",()->
+            startActivity(new android.content.Intent(this,
+                T1ValidationWizardActivity.class)));
         LinearLayout menu=new LinearLayout(this);
         menu.setOrientation(LinearLayout.HORIZONTAL);
         for(int i=0;i<tabNames.length;i++){
