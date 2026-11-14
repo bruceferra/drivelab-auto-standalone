@@ -12,6 +12,7 @@ public final class T1TripMapReplaySourceContractTest {
     public static void main(String[] args)throws Exception{
         String replay=source("T1TripMapReplay.java");
         String history=source("T1TripMapAnalysisActivity.java");
+        String replayService=source("T1TripMapReplayService.java");
         String osm=source("T1OfflineRoadMap.java");
         String optimizer=source("T1OptimizedModeActivity.java");
         String cockpit=source("T1PremiumCockpitActivity.java");
@@ -52,12 +53,18 @@ public final class T1TripMapReplaySourceContractTest {
             "Only save aggregate report, no coordinates or uploads");
         ok(history.contains("T1TripRecorderService.tripDir(this)")&&
             history.contains("T1JourneyStore.history(this)")&&
-            history.contains("T1TripMapReplay.analyze(")&&
-            history.contains("AtomicBoolean busy"),
-            "Historical whole-day/individual trip UI, asynchronous replay and single job");
+            history.contains("startForegroundService(request)")&&
+            history.contains("T1TripMapReplayService.reconcile(this)")&&
+            history.contains("void refreshReplay()")&&
+            replayService.contains("T1TripMapReplay.analyze(")&&
+            replayService.contains("AtomicBoolean ACTIVE")&&
+            replayService.contains("startForeground(NOTIFICATION_ID")&&
+            replayService.contains("START_NOT_STICKY"),
+            "Historical trip UI must monitor one independent foreground replay worker");
         ok(optimizer.contains("ANALIZAR VIAJE GRABADO")&&
             cockpit.contains("ANALIZAR VIAJE")&&
-            manifest.contains("android:name=\".T1TripMapAnalysisActivity\""),
+            manifest.contains("android:name=\".T1TripMapAnalysisActivity\"")&&
+            manifest.contains("android:name=\".T1TripMapReplayService\""),
             "Discoverable from optimizer and cockpit; declared Android Activity");
         System.out.println("PASS historical 3-map percentage replay, read-only OEM isolation, UI entry points");
     }
