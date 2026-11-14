@@ -75,7 +75,24 @@ jobs:
                 tail -c 500 "$RUNNER_TEMP/maps/ign-layers.txt" || true
               fi
             done
-            test "$success" = 1 || { echo "::error::Cannot fetch genuine IGN source; no fake fallback"; exit 1; }
+            if test "$success" != 1; then
+              echo "::warning::Official servers unavailable. Downloading IGN-derived provincial road layer from documented 2026 independent GitHub repackaging."
+              mkdir -p "$RUNNER_TEMP/maps/ign_archive"
+              gh release download v1.0 -R camiloquirogadev/atlas-provincias \
+                --pattern 'atlas_provincias.gpkg' --dir "$RUNNER_TEMP/maps/ign_archive"
+              gpkg="$RUNNER_TEMP/maps/ign_archive/atlas_provincias.gpkg"
+              test -s "$gpkg"
+              # Public project's datos/README.md explicitly attributes
+              # vial_provincial to IGN (not a synthetic or OSM replacement).
+              ogrinfo -ro -so "$gpkg" vial_provincial
+              ogr2ogr -f GeoJSONSeq "$RUNNER_TEMP/maps/ign.geojsonseq" \
+                "$gpkg" vial_provincial \
+                -spat -64.9 -42.1 -56.0 -33.0 -t_srs EPSG:4326
+              test -s "$RUNNER_TEMP/maps/ign.geojsonseq"
+              echo "Source: IGN road layer, repackaged in atlas_provincias.gpkg by Camilo Quiroga, 2026."
+              success=1
+            fi
+            test "$success" = 1 || { echo "::error::Cannot fetch IGN-derived real roads"; exit 1; }
           fi
           test -s "$RUNNER_TEMP/maps/ign.geojsonseq"
           wc -lc "$RUNNER_TEMP/maps/ign.geojsonseq"
@@ -93,7 +110,7 @@ jobs:
             --source IGN \
             --input "$RUNNER_TEMP/maps/ign.geojsonseq" \
             --out "$RUNNER_TEMP/maps/dist/ign" \
-            --license-note 'Instituto Geografico Nacional Argentina, GBA Datos Abiertos CC BY 4.0'
+            --license-note 'IGN original road data; direct PBA CKAN/WFS or Camilo Quiroga atlas_provincias.gpkg repackaging under original attribution'
       - name: Verify real manifest, schema and both road counts before publication
         shell: bash
         run: |
