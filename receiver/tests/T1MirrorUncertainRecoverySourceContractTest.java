@@ -69,6 +69,13 @@ public final class T1MirrorUncertainRecoverySourceContractTest {
             ui.contains("PULSOS SIN COMPENSAR"),
             "Shift from R into P must preserve completed per-side pulse ledger "+
             "and expose a direct recovery path");
+        int onAuto=svc.indexOf("if(ACTION_AUTO.equals(action))");
+        int activeFirst=svc.indexOf("if(running)return START_STICKY;",onAuto);
+        int holdCheck=svc.indexOf(
+            "if(prefs().getBoolean(SAFETY_HOLD,true)||",onAuto);
+        check(onAuto>=0&&activeFirst>onAuto&&holdCheck>activeFirst,
+            "Duplicate AUTO while tilting must not stop the live worker "+
+            "because pending pulses are legitimately outstanding");
         check(svc.contains("PULSE_MS=120L, PAUSE_MS=40L")&&
             svc.contains("oem.write(id,down?2:1)")&&
             svc.contains("oem.write(id,0)")&&
