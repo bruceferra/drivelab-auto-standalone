@@ -38,6 +38,13 @@ jobs:
             common/src/main/java/ar/com/rango5gps/drivelabauto/common/MapLinks.java \
             common/tests/MapLinksTest.java
           java -cp /tmp/bridge-test MapLinksTest
+      - name: T1 independent Waze cluster routing static contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-cluster-test
+          javac -encoding UTF-8 -d /tmp/t1-cluster-test receiver/tests/T1ClusterWazeSourceContractTest.java
+          java -cp /tmp/t1-cluster-test ar.com.rango5gps.drivelabauto.receiver.T1ClusterWazeSourceContractTest
       - name: Sender T1 Bluetooth A2DP + Receiver Android 11 TTS safety contract
         shell: bash
         run: |
