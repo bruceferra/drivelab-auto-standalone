@@ -28,6 +28,8 @@ final class T1ClusterWazeRouter {
     static final String AUTO_BOOT="auto_boot";
     static final String DISPLAY_ID="display_id";
     static final String DISPLAY_NAME="display_name";
+    static final String DISPLAY_WIDTH="display_width";
+    static final String DISPLAY_HEIGHT="display_height";
     static final String STATUS="status";
     static final String LAST_REQUEST_MS="last_request_ms";
     private static final String WAZE="com.waze";
@@ -78,9 +80,26 @@ final class T1ClusterWazeRouter {
         SharedPreferences p=prefs(c);
         int id=p.getInt(DISPLAY_ID,Display.INVALID_DISPLAY);
         String name=p.getString(DISPLAY_NAME,"");
-        for(Display d:candidates(c))
-            if(d.getDisplayId()==id&&name.equals(d.getName()))return d;
-        return null; // Display ID/name changed on reboot: ask user to reselect.
+        int width=p.getInt(DISPLAY_WIDTH,0);
+        int height=p.getInt(DISPLAY_HEIGHT,0);
+        List<Display> available=candidates(c);
+        for(Display d:available)
+            if(d.getDisplayId()==id&&name.equals(d.getName())&&
+                (width==0||d.getMode().getPhysicalWidth()==width)&&
+                (height==0||d.getMode().getPhysicalHeight()==height))
+                return d;
+        // IDs can change after boot. Reidentify ONLY if the name and
+        // resolution uniquely match one public non-primary display.
+        Display only=null;
+        for(Display d:available){
+            if(!name.equals(d.getName())||width<=0||height<=0||
+                d.getMode().getPhysicalWidth()!=width||
+                d.getMode().getPhysicalHeight()!=height)continue;
+            if(only!=null)return null;
+            only=d;
+        }
+        if(only!=null)p.edit().putInt(DISPLAY_ID,only.getDisplayId()).apply();
+        return only;
     }
     static void choose(Context c,Display d){
         if(d==null||d.getDisplayId()==Display.DEFAULT_DISPLAY||
@@ -91,6 +110,8 @@ final class T1ClusterWazeRouter {
         prefs(c).edit()
             .putInt(DISPLAY_ID,d.getDisplayId())
             .putString(DISPLAY_NAME,d.getName())
+            .putInt(DISPLAY_WIDTH,d.getMode().getPhysicalWidth())
+            .putInt(DISPLAY_HEIGHT,d.getMode().getPhysicalHeight())
             .putBoolean(ENABLED,false)
             .putBoolean(AUTO_BOOT,false)
             .putString(STATUS,"Display elegido: "+describe(d)+
