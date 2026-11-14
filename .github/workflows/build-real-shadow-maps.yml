@@ -1,0 +1,142 @@
+name: Build REAL Overture + IGN maps for Hostinger
+on:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/build-real-shadow-maps.yml'
+      - 'tools/build_shadow_maps.py'
+      - 'tools/download_ign_pba.py'
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: real-shadow-map-publication
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 95
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install authentic data importers
+        run: |
+          set -euo pipefail
+          python3 -m pip install --no-cache-dir 'overturemaps>=2.1,<3'
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends gdal-bin
+      - name: Download Overture PBA CABA road SEGMENTS, official Overture CLI
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/maps"
+          overturemaps download \
+            --bbox=-64.9,-42.1,-56.0,-33.0 \
+            -f geojsonseq --type=segment \
+            -o "$RUNNER_TEMP/maps/overture.geojsonseq"
+          test -s "$RUNNER_TEMP/maps/overture.geojsonseq"
+          wc -lc "$RUNNER_TEMP/maps/overture.geojsonseq"
+      - name: Download original official IGN PBA Red Vial 2026 shapefile
+        run: |
+          set -euo pipefail
+          python3 tools/download_ign_pba.py --out "$RUNNER_TEMP/maps/ign-official.zip"
+          mkdir -p "$RUNNER_TEMP/maps/ign_source"
+          unzip -q "$RUNNER_TEMP/maps/ign-official.zip" -d "$RUNNER_TEMP/maps/ign_source"
+          find "$RUNNER_TEMP/maps/ign_source" -iname '*.shp' -print
+          test "$(find "$RUNNER_TEMP/maps/ign_source" -iname '*.shp' | wc -l)" -ge 1
+      - name: Reproject official IGN road shapefile WGS84 geojsonseq
+        shell: bash
+        run: |
+          set -euo pipefail
+          shp=$(find "$RUNNER_TEMP/maps/ign_source" -type f -iname '*.shp' | head -1)
+          test -n "$shp"
+          ogr2ogr -f GeoJSONSeq "$RUNNER_TEMP/maps/ign.geojsonseq" \
+            "$shp" -t_srs EPSG:4326
+          test -s "$RUNNER_TEMP/maps/ign.geojsonseq"
+      - name: Build both genuine independent SQLite databases + SHA256 manifests
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/maps/dist/overture" "$RUNNER_TEMP/maps/dist/ign"
+          python3 tools/build_shadow_maps.py \
+            --source OVERTURE \
+            --input "$RUNNER_TEMP/maps/overture.geojsonseq" \
+            --out "$RUNNER_TEMP/maps/dist/overture" \
+            --license-note 'Overture Maps Foundation, OSM and contributing licensors'
+          python3 tools/build_shadow_maps.py \
+            --source IGN \
+            --input "$RUNNER_TEMP/maps/ign.geojsonseq" \
+            --out "$RUNNER_TEMP/maps/dist/ign" \
+            --license-note 'Instituto Geografico Nacional Argentina, GBA Datos Abiertos CC BY 4.0'
+      - name: Verify real manifest, schema and both road counts before publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,pathlib,gzip,sqlite3,tempfile,hashlib,os
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'maps/dist'
+          for source in ('overture','ign'):
+            base=root/source
+            m=json.loads((base/'manifest.json').read_text('utf-8'))
+            gz=base/'roads.sqlite.gz'
+            assert gz.stat().st_size==m['bytes']
+            with gz.open('rb') as fh:
+              h=hashlib.file_digest(fh,'sha256').hexdigest()
+            assert m['sha256']==h
+            assert m['schema']==3 and m['source']==source.upper()
+            assert m['extractComplete'] is True and m['roadCount']>100
+            with tempfile.NamedTemporaryFile(suffix='.sqlite') as tmp:
+              with gzip.open(gz,'rb') as srcfile:
+                while chunk:=srcfile.read(1<<20):tmp.write(chunk)
+              tmp.flush()
+              conn=sqlite3.connect(tmp.name)
+              assert conn.execute('select count(*) from roads').fetchone()[0]==m['roadCount']
+              assert conn.execute('select count(*) from roads_bounds').fetchone()[0]==m['roadCount']
+              assert conn.execute("select value from metadata where k='source'").fetchone()[0]==source.upper()
+              conn.close()
+            print(source, 'confirmed', m['roadCount'], 'road segments', m['sha256'])
+          PY
+      - name: Package EXACT four Hostinger files with correct directory layout
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p output
+          (cd "$RUNNER_TEMP/maps/dist" && zip -9 -q -r "$GITHUB_WORKSPACE/output/DriveLab-Mapas-Overture-IGN-PBA-CABA.zip" overture/ ign/)
+          python3 - <<'PY'
+          from zipfile import ZipFile
+          z=ZipFile('output/DriveLab-Mapas-Overture-IGN-PBA-CABA.zip')
+          paths=set(z.namelist())
+          required={'overture/manifest.json','overture/roads.sqlite.gz',
+                    'ign/manifest.json','ign/roads.sqlite.gz'}
+          assert required.issubset(paths), paths
+          assert all(n in required or n in {'overture/','ign/'} for n in paths)
+          print('Ready for Hostinger:', required)
+          PY
+          sha256sum output/*.zip > output/DriveLab-Mapas-SHA256.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DriveLab-Mapas-Overture-IGN-PBA-CABA
+          path: |
+            output/DriveLab-Mapas-Overture-IGN-PBA-CABA.zip
+            output/DriveLab-Mapas-SHA256.txt
+          retention-days: 90
+      - name: Publish DOWNLOADABLE GitHub Release (do not change latest Receiver APK)
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag=maps-pba-caba-2026-11-13
+          notes='Official open road data, Overture transport segment and IGN Provincia de Buenos Aires Red Vial. Extract ZIP under existing HTTPS /drivelab/maps/shadow/ web directory. Four files in overture/ and ign/, each with roads.sqlite.gz and SHA256 manifest.json. This map-only release is NOT an Android APK and never changes production OSM mode decisions. Overture credits Overture Maps Foundation and upstream sources; IGN credits Instituto Geografico Nacional Argentina (CC BY 4.0).'
+          if gh release view "$tag" >/dev/null 2>&1; then
+            gh release upload "$tag" output/DriveLab-Mapas-Overture-IGN-PBA-CABA.zip output/DriveLab-Mapas-SHA256.txt --clobber
+          else
+            gh release create "$tag" \
+              output/DriveLab-Mapas-Overture-IGN-PBA-CABA.zip \
+              output/DriveLab-Mapas-SHA256.txt \
+              --target "$GITHUB_SHA" \
+              --latest=false --title 'DriveLab - Mapas PBA CABA Overture + IGN (solo VPS)' \
+              --notes "$notes"
+          fi
+          gh release view "$tag" --json assets --jq '.assets[].name' | grep -Fx 'DriveLab-Mapas-Overture-IGN-PBA-CABA.zip'
