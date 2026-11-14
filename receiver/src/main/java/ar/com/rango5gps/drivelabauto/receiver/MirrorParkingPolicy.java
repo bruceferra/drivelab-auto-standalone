@@ -10,26 +10,25 @@ package ar.com.rango5gps.drivelabauto.receiver;
  *
  * Mirrors are relative to the driver's personally adjusted D pose.
  * One R maneuver tilts once; R/non-R shuffling at parking speed does nothing.
- * Restore also works in P after 1200 ms fully stopped, not only D 800 ms.
- * Speed is checked for plausibility and PARK must be stopped; returning to normal view
- * must not wait for acceleration or braking. N never triggers restore.
+ * Restore ONLY if P stays stationary for MORE THAN 30 seconds, OR D is
+ * confirmed faster than 5 km/h. While maneuvering R/P/D at <=5 km/h,
+ * mirrors STAY TILTED (including short P pauses). N never restores.
+ * This policy tracks a completed relative tilt, not a physical angle sensor.
  * No automatic homing against hard stops.
  */
 public final class MirrorParkingPolicy {
     public enum Gear { P, R, N, D, UNKNOWN }
     public enum Phase { NORMAL, TILTING, TILTED, RESTORING, UNKNOWN_POSITION }
     public enum Action { NONE, TILT_ON_R, RESTORE_AFTER_NON_R_SPEED }
-    // Legacy threshold is deliberately no longer used to gate D restoration.
-    public static final double RETURN_THRESHOLD_KMH=10.0;
-    public static final long RETURN_DWELL_MS=800;
-    public static final long RETURN_P_DWELL_MS=1200;
+    public static final double RETURN_THRESHOLD_KMH=5.0;
+    /** Strictly greater than 30s to avoid short parking shuffles. */
+    public static final long RETURN_P_DWELL_MS=30000;
     public static final int MAX_PULSES_PER_SIDE=20;
 
     private final int requestedLeft,requestedRight;
     private Phase phase=Phase.NORMAL;
     private Gear previousGear=Gear.UNKNOWN;
-    private long restoreSince=-1;
-    private Gear restoreGear=Gear.UNKNOWN;
+    private long parkedSince=-1;
     private int leftIssued=0,rightIssued=0;
 
     public MirrorParkingPolicy(int steps){this(steps,steps);}
@@ -55,7 +54,7 @@ public final class MirrorParkingPolicy {
         if(gear==null)gear=Gear.UNKNOWN;
         if(!armed || !Double.isFinite(speedKmh) || speedKmh<0 ||
                 speedKmh>250 || elapsedMs<0){
-            restoreSince=-1;restoreGear=Gear.UNKNOWN;
+            parkedSince=-1;
             previousGear=Gear.UNKNOWN; // rearm only after fresh, valid gear samples
             return Action.NONE;
         }
@@ -71,24 +70,21 @@ public final class MirrorParkingPolicy {
             return Action.NONE;
         }
         if(phase==Phase.TILTED){
-            // The vehicle can remain parked indefinitely after an R maneuver;
-            // restoring only in D leaves mirrors tilted during long P parking.
-            // Stable D is valid at any plausible speed; stable P only at 0 km/h.
-            boolean canRestore=gear==Gear.D||
-                (gear==Gear.P&&speedKmh<=0.5);
-            if(canRestore){
-                if(restoreGear!=gear||restoreSince<0){
-                    restoreGear=gear;
-                    restoreSince=elapsedMs;
-                }
-                long dwell=gear==Gear.P?RETURN_P_DWELL_MS:RETURN_DWELL_MS;
-                if(elapsedMs-restoreSince>=dwell){
+            if(gear==Gear.P && speedKmh<=0.5){
+                // Start counting only after a fresh stopped-P sample. Reset
+                // on ANY gear change, loss of speed validity or rolling.
+                if(parkedSince<0)parkedSince=elapsedMs;
+                if(elapsedMs-parkedSince>RETURN_P_DWELL_MS){
+                    parkedSince=-1;
                     phase=Phase.RESTORING;
-                    restoreSince=-1;restoreGear=Gear.UNKNOWN;
                     return Action.RESTORE_AFTER_NON_R_SPEED;
                 }
             }else{
-                restoreSince=-1;restoreGear=Gear.UNKNOWN;
+                parkedSince=-1;
+                if(gear==Gear.D && speedKmh>RETURN_THRESHOLD_KMH){
+                    phase=Phase.RESTORING;
+                    return Action.RESTORE_AFTER_NON_R_SPEED;
+                }
             }
         }
         return Action.NONE;
@@ -130,6 +126,6 @@ public final class MirrorParkingPolicy {
     /** Any interrupted or uncontrolled movement invalidates reference. */
     public void invalidate(){
         phase=Phase.UNKNOWN_POSITION;
-        restoreSince=-1;restoreGear=Gear.UNKNOWN;
+        parkedSince=-1;
     }
 }
