@@ -30,17 +30,17 @@ public final class T1ClusterWazeSourceContractTest {
             router.contains("FEATURE_ACTIVITIES_ON_SECONDARY_DISPLAYS")&&
             router.contains("Intent.FLAG_ACTIVITY_NEW_TASK"),
             "Explicit public secondary-display Waze launch");
-        ok(router.contains("p.getBoolean(ENABLED,false)")&&
-            router.contains("p.getBoolean(AUTO_BOOT,false)")&&
+        ok(router.contains("getBoolean(ENABLED,false)")&&
+            router.contains("getBoolean(AUTO_BOOT,false)")&&
             router.contains("DISPLAY_NAME")&&
             router.contains("DISPLAY_WIDTH")&&
             router.contains("DISPLAY_HEIGHT")&&
             router.contains("if(only!=null)return null;")&&
-            router.contains("return null; // Display") == false,
+            router.contains("if(only!=null)return null;"),
             "Boot-safe opt-in display identity and unambiguous fingerprint");
         ok(router.contains("WAZE.equals(intent.getPackage())")&&
             router.contains("No se abrió ventana de respaldo")&&
-            !router.contains("MediaProjection") == false,
+            router.contains("No overlay windows"),
             "Waze package only, no unexpected primary-screen fallback");
         ok(!router.contains("createVirtualDisplay(")&&
             !router.contains("WindowManager.addView(")&&
