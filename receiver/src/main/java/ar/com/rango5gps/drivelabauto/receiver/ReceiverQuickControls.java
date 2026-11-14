@@ -238,8 +238,14 @@ final class ReceiverQuickControls {
                 RecirculationGuardService.MODE_AUTO));
         styleSelected(mirrorAuto,on,GREEN);
         styleSelected(mirrorManual,!on,ORANGE);
-        styleSelected(interiorMode,interior&&
-            !a.getBoolean(RecirculationGuardService.PAUSED,false),GREEN);
+        long recircAge=System.currentTimeMillis()-
+            a.getLong(RecirculationGuardService.LAST_CONFIRMED,0L);
+        boolean recircConfirmed=interior&&
+            !a.getBoolean(RecirculationGuardService.PAUSED,false)&&
+            a.getBoolean(RecirculationGuardService.MONITORING,false)&&
+            a.getInt(RecirculationGuardService.LAST_VALUE,-1)==1&&
+            recircAge>=0&&recircAge<12000;
+        styleSelected(interiorMode,recircConfirmed,GREEN);
         styleSelected(airAuto,!interior,GREY);
         if(leftMinus!=null)leftMinus.setText("IZQ − ("+l+")");
         if(leftPlus!=null)leftPlus.setText("IZQ + ("+l+")");
@@ -253,11 +259,9 @@ final class ReceiverQuickControls {
             "  · aire: "+(interior?"INTERIOR VIGILADO 1004=1":"CLIMATIZADOR ORIGINAL")+
             (a.getBoolean(RecirculationGuardService.PAUSED,false)?
                 " (HVAC PAUSADO POR OEM)":
-                interior?(a.getBoolean(RecirculationGuardService.MONITORING,false)&&
-                    System.currentTimeMillis()-a.getLong(
-                        RecirculationGuardService.LAST_POLL,0L)<9000?
-                    " (SERVICIO ACTIVO EN SEGUNDO PLANO)":
-                    " (SIN MONITOREO RECIENTE; RECUPERANDO)"):""));
+                interior?(recircConfirmed?
+                    " (1004=1 CONFIRMADO POR OEM)":
+                    " (RECONECTANDO · SIN ESTADO OEM CONFIRMADO)"):""));
         // Display the most recent OEM action without altering scroll position.
         String current=m.getString(MirrorAutomationService.STATUS,"");
         String recirc=a.getString(RecirculationGuardService.STATUS,"");
