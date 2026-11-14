@@ -12,6 +12,8 @@ import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.speech.RecognitionListener;
 import android.speech.RecognizerIntent;
 import android.speech.SpeechRecognizer;
@@ -34,6 +36,8 @@ import java.util.Locale;
  */
 public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
     private static final int VOICE_REQUEST=7042, AUDIO_PERMISSION=7043;
+    static final String ACTION_SHORTCUT_SYSTEM_VOICE=
+        "ar.com.rango5gps.drivelabauto.receiver.SYSTEM_VOICE_SHORTCUT";
     private static final String GEMINI="com.google.android.apps.bard";
     private static final String CHATGPT="com.openai.chatgpt";
     private static final String PREF="t1_voice_router_v1";
@@ -44,6 +48,19 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
     private Button geminiChoice,chatgptChoice,selectedAction;
     private SpeechRecognizer recognizer;
     private boolean listening,openingAssistant;
+    private final Handler voiceHandler=new Handler(Looper.getMainLooper());
+    private boolean recognitionReady;
+    private final Runnable recognitionTimeout=()->{
+        if(!listening||recognitionReady||isFinishing()||isDestroyed())return;
+        listening=false;
+        if(recognizer!=null){
+            try{recognizer.cancel();}catch(Exception ignored){}
+            recognizer.destroy();recognizer=null;
+        }
+        if(status!=null)status.setText("El reconocimiento interno no responde "+
+            "en esta T1. Usá HABLAR · VOZ DEL SISTEMA: abre el asistente "+
+            "que sí escucha, sin repetir el toque.");
+    };
     private TextToSpeech speaker;
     private boolean ttsReady;
     private String answerToSpeak;
@@ -119,14 +136,16 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         label(root,"🎤  ASISTENTE DE VOZ · JETOUR T1",22,T1JetourTheme.CYAN);
         chosen=label(root,"",14,T1JetourTheme.GREEN);
         showSelected();
-        label(root,"Hablá normalmente. «Navegá a la estación» → Waze. " +
-            "«Cuánto es 37 por 12» → cálculo local hablado. " +
-            "«Cómo está el clima hoy» → pronóstico online hablado. " +
-            "Noticias, política y resultados deportivos necesitan el " +
-            "proveedor externo, que todavía puede pedir otro toque. " +
-            "Las rutas siguen pidiendo confirmación.",14,T1JetourTheme.MUTED);
+        label(root,"El asistente de voz del sistema ya inicia la escucha en "+ 
+            "esta T1. Su función depende de Android/Gemini: no confirma "+
+            "que todas las preguntas generales sean respondidas. "+
+            "Reconocimiento INTERNO es diagnóstico independiente para "+
+            "cálculos y clasificación hacia Waze.",14,T1JetourTheme.MUTED);
 
-        button(root,"🎤 HABLAR · DETECCIÓN AUTOMÁTICA",0xFF426E73,this::listen);
+        button(root,"🎤 HABLAR · VOZ DEL SISTEMA (UN TOQUE)",
+            T1JetourTheme.GREEN_BUTTON,this::openSystemVoice);
+        button(root,"RECONOCIMIENTO INTERNO · DIAGNÓSTICO",
+            T1JetourTheme.PANEL_HI,this::listen);
         spoken=new EditText(this);
         spoken.setSingleLine(false);
         spoken.setMinLines(2);
@@ -185,14 +204,16 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         button(root,"MICRÓFONO EXTERNO · ALTERNATIVA DE RECONOCIMIENTO",
             T1JetourTheme.PANEL,this::listenExternal);
 
-        status=label(root,"Abriendo reconocimiento local de Android al iniciar…",
+        status=label(root,"Elegí HABLAR para abrir el asistente del sistema. "+
+            "El reconocedor interno es opcional y no se iniciará solo.",
             14,T1JetourTheme.WHITE);
         status.setTextIsSelectable(true);
         button(root,"VOLVER",T1JetourTheme.PANEL,this::finish);
         setContentView(sc);
-        // The assigned Hola Jetour hardware launch is already a deliberate
-        // foreground user action: listen once, no hot mic and no boot listener.
-        if(state==null)root.post(this::listen);
+        // Explicit launcher shortcut = one voice command, no second tap.
+        // Ordinary in-app screen is idle: no auto-started/stuck recognizer.
+        if(state==null&&ACTION_SHORTCUT_SYSTEM_VOICE.equals(getIntent().getAction()))
+            root.post(this::openSystemVoice);
     }
 
     private Intent speechIntent(){
@@ -207,7 +228,11 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         return i;
     }
     private void listen(){
-        if(listening)return;
+        if(listening){
+            if(status!=null)status.setText("Reconocimiento interno activo. "+
+                "Si no responde, se libera automáticamente y podés reintentar.");
+            return;
+        }
         if(checkSelfPermission(Manifest.permission.RECORD_AUDIO)!=
                 PackageManager.PERMISSION_GRANTED){
             status.setText("Para reconocer la voz dentro de DriveLab, " +
@@ -227,6 +252,8 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
             recognizer=SpeechRecognizer.createSpeechRecognizer(this);
             recognizer.setRecognitionListener(new RecognitionListener(){
                 @Override public void onReadyForSpeech(Bundle b){
+                    recognitionReady=true;
+                    voiceHandler.removeCallbacks(recognitionTimeout);
                     status.setText("● ESCUCHANDO · decí una orden o pregunta.");
                 }
                 @Override public void onBeginningOfSpeech(){
@@ -238,14 +265,16 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
                     status.setText("Procesando lo que dijiste…");
                 }
                 @Override public void onError(int code){
-                    listening=false;
+                    voiceHandler.removeCallbacks(recognitionTimeout);
+                    listening=false;recognitionReady=false;
                     if(isFinishing()||isDestroyed())return;
                     status.setText("El reconocedor interno devolvió "+code+
                         ". Tocá HABLAR de nuevo o usá MICRÓFONO EXTERNO. " +
                         "Si la ROM reserva el audio, este método puede fallar.");
                 }
                 @Override public void onResults(Bundle b){
-                    listening=false;
+                    voiceHandler.removeCallbacks(recognitionTimeout);
+                    listening=false;recognitionReady=false;
                     ArrayList<String> matches=b==null?null:
                         b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
                     recognize(matches);
@@ -259,10 +288,16 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
                 @Override public void onEvent(int event,Bundle extras){}
             });
             listening=true;
-            status.setText("Inicializando micrófono sin ventana adicional…");
+            recognitionReady=false;
+            status.setText("Inicializando micrófono interno…");
             recognizer.startListening(speechIntent());
+            // The stock T1 can silently ignore SpeechRecognizer without
+            // invoking onReadyForSpeech or onError; do not leave the tap dead.
+            voiceHandler.removeCallbacks(recognitionTimeout);
+            voiceHandler.postDelayed(recognitionTimeout,6500L);
         }catch(RuntimeException e){
-            listening=false;
+            voiceHandler.removeCallbacks(recognitionTimeout);
+            listening=false;recognitionReady=false;
             status.setText("La ROM no permitió escucha integrada ("+
                 e.getClass().getSimpleName()+"). Probá el micrófono externo.");
         }
@@ -518,7 +553,8 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
             "automáticamente: tocá su botón de prueba solo si estás detenido.");
     }
     @Override protected void onPause(){
-        listening=false;
+        voiceHandler.removeCallbacks(recognitionTimeout);
+        listening=false;recognitionReady=false;
         if(recognizer!=null){
             recognizer.cancel();
             recognizer.destroy();
