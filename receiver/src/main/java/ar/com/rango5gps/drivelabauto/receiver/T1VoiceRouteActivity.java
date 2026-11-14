@@ -124,6 +124,12 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
     }
     @Override protected void onCreate(Bundle state){
         super.onCreate(state);
+        // One-time preference selection requested for this vehicle:
+        // navigation remains Waze; occasional free-form questions use Gemini.
+        // Preserve later manual changes in Advanced settings.
+        if(!prefs().getBoolean("gemini_simple_initialized_v1",false))
+            prefs().edit().putString(KEY_AI,GEMINI)
+                .putBoolean("gemini_simple_initialized_v1",true).apply();
         initSpeechOutput();
         ScrollView sc=new ScrollView(this);
         sc.setFillViewport(true);
@@ -136,25 +142,39 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         label(root,"🎤  ASISTENTE DE VOZ · JETOUR T1",22,T1JetourTheme.CYAN);
         chosen=label(root,"",14,T1JetourTheme.GREEN);
         showSelected();
-        label(root,"Reconocimiento Google de esta T1: entiende destinos y "+
-            "preguntas y devuelve el TEXTO a DriveLab. Navegación explícita "+
-            "→ Waze; cuentas y clima → respuesta hablada; actualidad y fútbol "+
-            "→ fuentes en línea. Gemini del sistema queda como opción "+
-            "separada para preguntas libres.",14,T1JetourTheme.MUTED);
+        label(root,"PRIMERO WAZE · Decí «llevame a...» para navegar. "+
+            "También responde clima, noticias y cuentas. Para preguntas "+
+            "generales, abrí Gemini cuando estés detenido.",14,T1JetourTheme.MUTED);
 
         button(root,"🎤 HABLAR · GOOGLE (DETECTAR DESTINO O PREGUNTA)",
             T1JetourTheme.GREEN_BUTTON,this::listenExternal);
-        button(root,"RECONOCIMIENTO INTERNO · DIAGNÓSTICO",
+        button(root,"GEMINI · CONSULTA OCASIONAL (DETENIDO)",
+            T1JetourTheme.PANEL_HI,()->openAssistant(GEMINI,true));
+        status=label(root,"Waze para destinos. Clima y titulares desde DriveLab. "+
+            "Preguntas libres: abrir Gemini (requiere disponibilidad en la T1).",
+            14,T1JetourTheme.WHITE);
+        status.setTextIsSelectable(true);
+        LinearLayout advanced=new LinearLayout(this);
+        advanced.setOrientation(LinearLayout.VERTICAL);
+        advanced.setVisibility(android.view.View.GONE);
+        button(root,"MOSTRAR OPCIONES AVANZADAS",T1JetourTheme.PANEL,
+            ()->{
+                boolean visible=advanced.getVisibility()==android.view.View.VISIBLE;
+                advanced.setVisibility(visible?
+                    android.view.View.GONE:android.view.View.VISIBLE);
+            });
+        root.addView(advanced);
+        button(advanced,"RECONOCIMIENTO INTERNO · DIAGNÓSTICO",
             T1JetourTheme.PANEL_HI,this::listen);
         spoken=new EditText(this);
         spoken.setSingleLine(false);
         spoken.setMinLines(2);
         spoken.setHint("Consulta, orden o destino reconocido");
         T1JetourTheme.number(spoken);
-        root.addView(spoken,new LinearLayout.LayoutParams(-1,-2));
-        button(root,"EJECUTAR LO ESCRITO / RECONOCIDO",T1JetourTheme.PANEL_HI,
+        advanced.addView(spoken,new LinearLayout.LayoutParams(-1,-2));
+        button(advanced,"EJECUTAR LO ESCRITO / RECONOCIDO",T1JetourTheme.PANEL_HI,
             ()->dispatch(spoken.getText().toString()));
-        button(root,"WAZE · NAVEGAR A DESTINO ESCRITO",0xFF426E73,
+        button(advanced,"WAZE · NAVEGAR A DESTINO ESCRITO",0xFF426E73,
             ()->{
                 String line=spoken.getText().toString().trim();
                 String route=T1VoiceIntentPolicy.routeDestination(line);
@@ -165,21 +185,21 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
                 confirmDestination(line);
             });
 
-        label(root,"ASISTENTE NATIVO · EXPERIMENTAL",17,T1JetourTheme.CYAN);
-        button(root,"🎙 PROBAR VOZ DEL SISTEMA (SIN ABRIR APP COMPLETA)",
+        label(advanced,"ASISTENTE NATIVO · EXPERIMENTAL",17,T1JetourTheme.CYAN);
+        button(advanced,"🎙 PROBAR VOZ DEL SISTEMA (SIN ABRIR APP COMPLETA)",
             T1JetourTheme.GREEN_BUTTON,this::openSystemVoice);
-        label(root,"Este botón solicita la sesión de voz configurada por "+
+        label(advanced,"Este botón solicita la sesión de voz configurada por "+
             "Android en la Jetour. Si la ROM no ofrece un asistente de voz, "+
             "DriveLab no puede forzar Gemini Live ni el Gemini de Android Auto. "+
             "La IA elegida abajo se aplica a consultas reconocidas por DriveLab, "+
             "NO al asistente predeterminado de Android.",12,T1JetourTheme.MUTED);
-        label(root,"PROBAR APPS INSTALADAS · PANTALLA COMPLETA",
+        label(advanced,"PROBAR APPS INSTALADAS · PANTALLA COMPLETA",
             17,T1JetourTheme.CYAN);
-        button(root,"GEMINI · ABRIR ASISTENTE / VOZ (PRUEBA)",
+        button(advanced,"GEMINI · ABRIR ASISTENTE / VOZ (PRUEBA)",
             T1JetourTheme.GREEN_BUTTON,()->openAssistant(GEMINI,true));
-        button(root,"CHATGPT · ABRIR ASISTENTE / VOZ (PRUEBA)",
+        button(advanced,"CHATGPT · ABRIR ASISTENTE / VOZ (PRUEBA)",
             T1JetourTheme.PANEL_HI,()->openAssistant(CHATGPT,true));
-        selectedAction=button(root,"CONSULTAR IA ELEGIDA",
+        selectedAction=button(advanced,"CONSULTAR IA ELEGIDA",
             T1JetourTheme.PANEL,
             ()->{
                 String question=spoken.getText().toString().trim();
@@ -188,26 +208,22 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
                 }
                 shareWithAi(selectedAi(),question);
             });
-        label(root,"Cada app controla su propia sesión de audio. En Gemini " +
+        label(advanced,"Cada app controla su propia sesión de audio. En Gemini " +
             "se intenta la entrada de asistente Android; si la ROM no la " +
             "expone, se abre la app normal. ChatGPT puede requerir tocar " +
             "su micrófono. Esto no es Gemini integrado en Android Auto.",
             12,T1JetourTheme.MUTED);
 
-        label(root,"IA PREDETERMINADA PARA PREGUNTAS RECONOCIDAS",
+        label(advanced,"IA PREDETERMINADA PARA PREGUNTAS RECONOCIDAS",
             16,T1JetourTheme.CYAN);
-        geminiChoice=button(root,"USAR GEMINI PARA LAS CONSULTAS",
+        geminiChoice=button(advanced,"USAR GEMINI PARA LAS CONSULTAS",
             T1JetourTheme.PANEL,()->chooseAi(GEMINI));
-        chatgptChoice=button(root,"USAR CHATGPT PARA LAS CONSULTAS",
+        chatgptChoice=button(advanced,"USAR CHATGPT PARA LAS CONSULTAS",
             T1JetourTheme.PANEL,()->chooseAi(CHATGPT));
         showSelected();
-        button(root,"MICRÓFONO GOOGLE · REPETIR RECONOCIMIENTO",
+        button(advanced,"MICRÓFONO GOOGLE · REPETIR RECONOCIMIENTO",
             T1JetourTheme.PANEL,this::listenExternal);
 
-        status=label(root,"Elegí HABLAR para reconocimiento Google. "+
-            "DriveLab clasificará el texto antes de abrir Waze u otra respuesta.",
-            14,T1JetourTheme.WHITE);
-        status.setTextIsSelectable(true);
         // Recovery entry if T1Launcher shows only one icon per package and
         // selected the VoiceAssistantShortcut alias rather than Receiver HOME.
         // This starts our main UI without uninstalling, clearing or resetting data.
