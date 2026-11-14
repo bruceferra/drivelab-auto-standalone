@@ -41,11 +41,15 @@ public final class MirrorControlsVisibilitySourceContractTest {
         check(base.contains("AUTO_INITIALIZED.compareAndSet(false,true)") &&
               base.contains("RecirculationGuardService.activateOnAppOpen(this)") &&
               base.contains("MirrorAutomationService.activateOnAppOpen(this)"),
-              "mirror AUTO and cabin INTERIOR must re-arm once per new app process");
-        check(!service.contains("if(p.contains(AUTO)&&!p.getBoolean(AUTO,false))return;") &&
-              service.contains("context.startForegroundService(new Intent(context,") &&
-              service.contains(".setAction(ACTION_AUTO)"),
-              "old MANUAL mode must not prevent the requested next-launch default AUTO");
+              "mirror safety check and cabin interior initialization remain accessible");
+        check(service.contains("static void activateOnAppOpen(Context context)") &&
+              service.contains("if(!auto){") &&
+              service.contains("if(safetyHold || pose.startsWith") &&
+              service.contains(".putBoolean(SAFETY_HOLD,true)") &&
+              service.contains("if(prefs().getBoolean(SAFETY_HOLD,true))") &&
+              !service.substring(service.indexOf("static void activateOnAppOpen(Context context)"),
+                service.indexOf("/** Recovery watchdog;")).contains("context.startForegroundService"),
+              "Mirror AUTO must remain off across app launches until physical confirmation");
         check(service.contains("startsWith(\"INCIERTA\")") &&
               base.contains("MirrorAutomationService.ensureRunning(this)"),
               "uncertain physical position must never auto-rearm; navigation only watchdogs ON");
@@ -54,6 +58,6 @@ public final class MirrorControlsVisibilitySourceContractTest {
               "interior air auto defaults ON without bypassing OEM defog safety");
         check(!toolbar.contains("oem.write(2068")&&!toolbar.contains("oem.write(2069"),
               "toolbar must never directly issue mirror actuator writes");
-        System.out.println("PASS: reverse mirror AUTO default on app launch, cabin INTERIOR, safety guards and diagnostics");
+        System.out.println("PASS: mirror AUTO fail-safe manual after restart, cabin INTERIOR unchanged, diagnostics");
     }
 }
