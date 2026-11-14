@@ -563,6 +563,111 @@ public final class T1WazeWheelService extends AccessibilityService {
         selectedLabel=choices.get(selected).label;
         return true;
     }
+    /** Explicit on-demand inspection of only accessible Waze action labels,
+     * including Display 5. Never reads GPS or unrelated app windows.
+     */
+    static void requestScan(Context context){
+        context.getSharedPreferences(PREFS,Context.MODE_PRIVATE).edit()
+            .putLong(SCAN_REQUEST,System.currentTimeMillis())
+            .putString(SCAN_RESULT,"Inspección solicitada…").apply();
+    }
+    private void scanRequestedWindow(){
+        long requested=prefs().getLong(SCAN_REQUEST,0);
+        if(requested==0||requested==lastScanAt)return;
+        lastScanAt=requested;
+        AccessibilityNodeInfo root=wazeRoot();
+        if(root==null){
+            prefs().edit().putString(SCAN_RESULT,
+                "Waze no aparece entre las ventanas accesibles del clúster.")
+                .putLong(SCAN_FINISHED,System.currentTimeMillis()).apply();
+            return;
+        }
+        ArrayList<String> labels=new ArrayList<>();
+        inspectLabels(root,0,new int[]{0},labels);
+        StringBuilder lines=new StringBuilder("Display "+wazeDisplayId+
+            " · etiquetas de acciones detectadas: "+labels.size()+"\n");
+        for(int i=0;i<Math.min(labels.size(),22);i++)
+            lines.append(i+1).append(") ").append(labels.get(i)).append("\n");
+        if(labels.isEmpty())lines.append(
+            "Waze no expone controles etiquetados: sin pulsaciones automáticas.");
+        prefs().edit().putString(SCAN_RESULT,lines.toString())
+            .putLong(SCAN_FINISHED,System.currentTimeMillis()).apply();
+    }
+    private void inspectLabels(AccessibilityNodeInfo node,int depth,int[] visited,
+                               ArrayList<String> labels){
+        if(node==null||depth>18||visited[0]++>650||
+           !node.isVisibleToUser())return;
+        String label=labelOf(node);
+        String norm=T1WazePromptPolicy.normalize(label);
+        boolean actionable=node.isClickable()||
+            T1WazePromptPolicy.action(label)||
+            T1WazePromptPolicy.question(label);
+        if(actionable&&!norm.isEmpty()&&norm.length()<95){
+            String entry=label.trim()+
+                (node.isClickable()?" [CLICK]":" [TEXTO]");
+            if(!labels.contains(entry))labels.add(entry);
+        }
+        for(int i=0;i<node.getChildCount()&&visited[0]<650;i++)
+            inspectLabels(node.getChild(i),depth+1,visited,labels);
+    }
+
+    /** The Waze UI sometimes exposes visible action TEXT, not a clickable
+     * node. A labelled button on a verified Waze display may be tapped only
+     * after explicit user choice using its Android Accessibility bounds.
+     * Never use fixed pixels or touch OEM/T1Launcher windows.
+     */
+    private boolean clickWazeLabel(Candidate chosen,String action){
+        if(chosen==null||wazeRoot()==null)return false;
+        if(chosen.node!=null){
+            try{
+                if(chosen.node.isClickable()&&chosen.node.performAction(
+                        AccessibilityNodeInfo.ACTION_CLICK)){
+                    status("Waze "+action+" · "+chosen.label+" → clic accesible enviado");
+                    hideHint();selectedLabel="";return true;
+                }
+            }catch(Exception ignored){}
+        }
+        if(!chosen.gestureAllowed||chosen.displayId<0||
+           chosen.displayId!=wazeDisplayId){
+            status("Waze "+action+" · "+chosen.label+
+                ": sin botón accesible para pulsar; sin toque");
+            return false;
+        }
+        Rect r=chosen.bounds;
+        if(r.width()<28||r.height()<20||r.width()>750||r.height()>280||
+           r.left<0||r.top<0){
+            status("Waze "+action+": botón fuera de los límites seguros");
+            return false;
+        }
+        try{
+            Path tap=new Path();
+            tap.moveTo(r.centerX(),r.centerY());
+            GestureDescription gesture=new GestureDescription.Builder()
+                .setDisplayId(chosen.displayId)
+                .addStroke(new GestureDescription.StrokeDescription(tap,0,90))
+                .build();
+            boolean sent=dispatchGesture(gesture,
+                new GestureResultCallback(){
+                    @Override public void onCompleted(GestureDescription desc){
+                        status("Waze "+action+" · "+chosen.label+
+                            ": toque enviado a Display "+chosen.displayId);
+                    }
+                    @Override public void onCancelled(GestureDescription desc){
+                        status("Waze "+action+" · "+chosen.label+
+                            ": gesto cancelado por Android");
+                    }
+                },main);
+            if(!sent)status("Waze "+action+
+                ": no se pudo enviar gesto a pantalla "+chosen.displayId);
+            hideHint();selectedLabel="";
+            return sent;
+        }catch(Exception ex){
+            status("Waze "+action+": gesto no autorizado por Android ("+
+                ex.getClass().getSimpleName()+")");
+            return false;
+        }
+    }
+
     private static String normalize(String value){
         String s=Normalizer.normalize(value,Normalizer.Form.NFD)
             .replaceAll("\\p{M}","").toLowerCase(Locale.ROOT).trim();
@@ -581,28 +686,60 @@ public final class T1WazeWheelService extends AccessibilityService {
         if(desc!=null&&desc.length()>0)return desc.toString().trim();
         return "";
     }
-    private void visit(AccessibilityNodeInfo root,int depth,int[] count){
-        if(root==null||depth>15||count[0]++>350||!root.isVisibleToUser())return;
+    private void visit(AccessibilityNodeInfo root,int depth,int[] count,
+                       boolean[] question){
+        if(root==null||depth>18||count[0]++>650||!root.isVisibleToUser())return;
         String label=labelOf(root);
-        if(root.isClickable()&&matched(label,DECISION)){
-            Rect r=new Rect();root.getBoundsInScreen(r);
-            if(r.width()>20&&r.height()>15)
-                choices.add(new Candidate(root,label));
+        if(T1WazePromptPolicy.question(label))question[0]=true;
+        if(T1WazePromptPolicy.action(label)){
+            Rect r=new Rect();
+            root.getBoundsInScreen(r);
+            if(r.width()>28&&r.height()>20&&r.width()<=750&&r.height()<=280){
+                AccessibilityNodeInfo clickable=root.isClickable()?root:null;
+                if(clickable==null){
+                    AccessibilityNodeInfo parent=root.getParent();
+                    for(int level=0;parent!=null&&level<3;level++){
+                        Rect pr=new Rect();parent.getBoundsInScreen(pr);
+                        if(parent.isClickable()&&pr.width()<=800&&pr.height()<=310){
+                            clickable=parent;break;
+                        }
+                        parent=parent.getParent();
+                    }
+                }
+                // Explicit action label is always from Waze's own view tree.
+                // Text-only fallback taps ONLY this precise reported bounds
+                // on this exact Waze display after physical confirmation.
+                String norm=T1WazePromptPolicy.normalize(label);
+                boolean duplicate=false;
+                for(Candidate c:choices)
+                    if(T1WazePromptPolicy.normalize(c.label).equals(norm))
+                        duplicate=true;
+                if(!duplicate)choices.add(new Candidate(
+                    clickable!=null?clickable:root,label,wazeDisplayId,
+                    clickable==null));
+            }
         }
-        for(int i=0;i<root.getChildCount()&&count[0]<350;i++)
-            visit(root.getChild(i),depth+1,count);
+        for(int i=0;i<root.getChildCount()&&count[0]<650;i++)
+            visit(root.getChild(i),depth+1,count,question);
     }
     private boolean collectPromptChoices(AccessibilityNodeInfo root){
         choices.clear();
         alternateList=false;mapMenuArmed=false;
-        visit(root,0,new int[]{0});
+        boolean[] question={false};
+        visit(root,0,new int[]{0},question);
         Collections.sort(choices,Comparator
             .comparingInt((Candidate c)->c.bounds.top)
             .thenComparingInt(c->c.bounds.left));
-        if(choices.size()<2)return false;
-        boolean modal=false;
-        for(Candidate c:choices)if(matched(c.label,MODAL_CUES))modal=true;
-        if(!modal)return false;
+        if(choices.size()<2||choices.size()>9)return false;
+        boolean continueTrip=false,dismiss=false;
+        for(Candidate c:choices){
+            if(T1WazePromptPolicy.continueTrip(c.label))continueTrip=true;
+            if(T1WazePromptPolicy.dismiss(c.label))dismiss=true;
+        }
+        // A normal page may contain isolated "No" or "Continuar" labels.
+        // Require either explicit continuation-question text or BOTH
+        // continue and dismiss buttons as on the actual T1 Waze dialog.
+        if(!(question[0]||(continueTrip&&dismiss)))return false;
         if(!selectedLabel.isEmpty()){
             for(int i=0;i<choices.size();i++)
                 if(selectedLabel.equals(choices.get(i).label)){
@@ -615,46 +752,59 @@ public final class T1WazeWheelService extends AccessibilityService {
     }
     private boolean clickSelected(String action){
         if(selected<0||selected>=choices.size())return false;
-        Candidate c=choices.get(selected);
-        boolean success=c.node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-        status("Waze "+action+" · "+c.label+" → "+(success?"solicitado":"rechazado"));
-        hideHint();
-        selectedLabel="";
-        return success;
+        return clickWazeLabel(choices.get(selected),action);
     }
     private void highlight(){
         if(choices.isEmpty())return;
         Candidate c=choices.get(selected);
-        c.node.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS);
+        if(c.node!=null)
+            c.node.performAction(AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS);
         String text=(alternateList?"RUTAS A/B/C  ":"VOLANTE  ")+
             (selected+1)+"/"+choices.size()+
             "  ·  "+c.label+"  ·  OK / ATRÁS";
+        if(hint!=null&&hintDisplayId!=wazeDisplayId)hideHint();
         if(hint==null){
-            hint=new TextView(this);
-            hint.setTextColor(Color.WHITE);
-            hint.setBackgroundColor(0xE51C3540);
-            hint.setTextSize(17);
-            hint.setPadding(18,10,18,10);
-            WindowManager.LayoutParams lp=new WindowManager.LayoutParams(
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.WRAP_CONTENT,
-                WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE|
-                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-                PixelFormat.TRANSLUCENT);
-            lp.gravity=Gravity.TOP|Gravity.CENTER_HORIZONTAL;
-            lp.y=22;
-            try{windows.addView(hint,lp);}
-            catch(Exception ex){hint=null;status("Waze: sin overlay "+ex.getClass().getSimpleName());}
+            try{
+                // Accessibility overlays must be attached to the WAZE DISPLAY,
+                // not DriveLab's dashboard display. User reported Display 5.
+                DisplayManager dm=getSystemService(DisplayManager.class);
+                Display display=dm==null?null:dm.getDisplay(wazeDisplayId);
+                if(display==null)throw new IllegalStateException("Display no disponible");
+                Context displayContext=createDisplayContext(display);
+                hintWindowManager=displayContext.getSystemService(WindowManager.class);
+                if(hintWindowManager==null)throw new IllegalStateException("WindowManager nulo");
+                hint=new TextView(displayContext);
+                hint.setTextColor(Color.WHITE);
+                hint.setBackgroundColor(0xE51C3540);
+                hint.setTextSize(17);
+                hint.setPadding(18,10,18,10);
+                WindowManager.LayoutParams lp=new WindowManager.LayoutParams(
+                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    WindowManager.LayoutParams.WRAP_CONTENT,
+                    WindowManager.LayoutParams.TYPE_ACCESSIBILITY_OVERLAY,
+                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|
+                        WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE|
+                        WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                    PixelFormat.TRANSLUCENT);
+                lp.gravity=Gravity.TOP|Gravity.CENTER_HORIZONTAL;
+                lp.y=22;
+                hintWindowManager.addView(hint,lp);
+                hintDisplayId=wazeDisplayId;
+            }catch(Exception ex){
+                hint=null;hintWindowManager=null;hintDisplayId=-1;
+                status("Waze: Android no permitió resaltar en Display "+
+                    wazeDisplayId+" · "+ex.getClass().getSimpleName());
+            }
         }
         if(hint!=null)hint.setText(text);
         status("Waze seleccionado: "+text);
     }
     private void hideHint(){
         if(hint==null)return;
-        try{windows.removeView(hint);}catch(Exception ignored){}
-        hint=null;
+        try{
+            if(hintWindowManager!=null)hintWindowManager.removeView(hint);
+        }catch(Exception ignored){}
+        hint=null;hintWindowManager=null;hintDisplayId=-1;
     }
     @Override public void onAccessibilityEvent(AccessibilityEvent event){
         if(event==null)return;
