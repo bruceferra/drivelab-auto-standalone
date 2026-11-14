@@ -59,6 +59,18 @@ public final class ShareToClusterActivity extends Activity {
         Intent navigation=new Intent(Intent.ACTION_VIEW,destination.wazeUri())
             .setPackage("com.waze");
         navigation.addCategory(Intent.CATEGORY_BROWSABLE);
+        if(T1ClusterWazeRouter.enabled(this)){
+            if(T1ClusterWazeRouter.routeDestination(this,navigation)){
+                Toast.makeText(this,"Waze solicitado al display elegido",
+                    Toast.LENGTH_LONG).show();
+                finish();
+            }else{
+                error(T1ClusterWazeRouter.prefs(this).getString(
+                    T1ClusterWazeRouter.STATUS,
+                    "Android no permitió Waze en clúster"));
+            }
+            return; // no center-screen fallback when cluster mode is ON
+        }
         try{
             startActivity(navigation);
             String message="coord".equals(destination.kind)?
