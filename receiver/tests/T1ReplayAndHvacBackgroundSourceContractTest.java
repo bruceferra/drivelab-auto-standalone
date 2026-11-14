@@ -58,7 +58,7 @@ public final class T1ReplayAndHvacBackgroundSourceContractTest {
             waze.contains("createDisplayContext(display)")&&
             waze.contains("T1WazePromptPolicy.dismiss")&&
             waze.contains("promptArmed")&&
-            waze.contains("INSPECCIONAR")==false&&
+            !waze.contains("performGlobalAction(GLOBAL_ACTION_BACK)")&&
             xml.contains("android:canPerformGestures=\"true\""),
             "Waze prompt only: on-display labels, user armed confirm, scoped gestures");
         ok(waze.contains("private void scanRequestedWindow()")&&
