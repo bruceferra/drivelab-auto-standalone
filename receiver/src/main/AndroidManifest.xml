@@ -106,6 +106,13 @@
         <activity android:name=".T1VoiceRouteActivity" android:exported="false" />
         <activity android:name=".T1VoiceShortcutActivity"
             android:exported="false" android:theme="@android:style/Theme.NoDisplay" />
+        <!-- Keep the primary Receiver entry before the voice alias, because
+             some OEM launchers only show ONE LAUNCHER target per APK. -->
+        <activity android:name=".ReceiverActivity" android:exported="true"
+            android:label="DriveLab Auto Receiver">
+            <intent-filter><action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" /></intent-filter>
+        </activity>
         <!-- Preserve the shortcut component name already visible in T1Launcher,
              but route it through a one-touch launcher trampoline. Its activity
              invokes the already-tested Android ACTION_VOICE_COMMAND directly.
@@ -123,9 +130,5 @@
         <activity android:name=".T1WhatIfActivity" android:exported="false" />
         <!-- Isolated historical/read-only T1 fuel dashboard; no OEM writes. -->
         <activity android:name=".T1TankDashboardActivity" android:exported="false" />
-        <activity android:name=".ReceiverActivity" android:exported="true">
-            <intent-filter><action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" /></intent-filter>
-        </activity>
     </application>
 </manifest>
