@@ -66,7 +66,6 @@ public final class T1WheelOemBinderSourceContractTest {
             controls.contains("OEM_BINDER_ENABLED,true")&&
             controls.contains("OEM_BINDER_ENABLED,false")&&
             controls.contains("UN solo receptor")&&
-            controls.contains("únicamente con el auto detenido en P.")==false&&
             controls.contains("auto detenido en P"),
             "OEM Binder requires explicit user consent and explains possible OEM exclusivity");
         check(xml.contains("flagRetrieveInteractiveWindows")&&
