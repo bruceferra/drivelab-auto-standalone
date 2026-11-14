@@ -88,8 +88,10 @@ final class T1VoiceMath {
     static String calculate(String spoken){
         if(spoken==null||spoken.length()>150)return null;
         String s=normalize(spoken);
-        s=s.replaceFirst("^(?:(?:cuanto\\s+(?:es|son|da))|calcula|"+
-            "calcular|decime\\s+cuanto\\s+es|dime\\s+cuanto\\s+es)\\s+","");
+        s=s.replaceFirst("^(?:(?:cuanto\\s+(?:es|son|da|dan))|"+
+            "que\\s+(?:es|son|da)|calcula|calcular|"+
+            "decime\\s+cuanto\\s+(?:es|da)|dime\\s+cuanto\\s+(?:es|da)|"+
+            "(?:haceme|hace)\\s+(?:la|una)\\s+cuenta(?:\\s+de)?)\\s+","");
         Matcher m=OP.matcher(s);
         if(!m.find())return null;
         String left=s.substring(0,m.start()).trim();
