@@ -39,6 +39,9 @@ public final class MirrorAutomationService extends Service {
     public static final String ACTION_UP="t1.mirror.MANUAL_UP";
     public static final String ACTION_RECOVER="t1.mirror.RECOVER_TEN_UP";
     public static final String ACTION_STOP="t1.mirror.STOP";
+    /** Explicit driver confirmation AFTER physically resetting mirrors with OEM switch.
+     * Never an angle sensor; requires a fresh OEM P and zero-speed read. */
+    public static final String ACTION_CONFIRM_NORMAL="t1.mirror.CONFIRM_NORMAL";
     private static final String CHANNEL="t1_mirror_parking";
     private static final int NOTIF_ID=7526;
     private static final long POLL_MS=250L, PULSE_MS=500L, PAUSE_MS=180L;
@@ -66,9 +69,9 @@ public final class MirrorAutomationService extends Service {
             // A restarted process has no reliable pulse/angle history.
             // Never create a fresh NORMAL FSM while mirrors may be down.
             p.edit().putBoolean(AUTO,false)
-                .putString(POSITION,"INCIERTA · espejos posiblemente bajos tras reinicio")
-                .putString(STATUS,"REARME BLOQUEADO: revisá y ajustá los espejos "+
-                    "con el control original, antes de volver a AUTO").apply();
+                .putString(STATUS,"AUTO PAUSADO: espejos pueden seguir bajos. "+
+                    "Ajustalos con el mando original, detenido en P, "+
+                    "y confirmá la referencia desde REVERSA en la barra.").apply();
             return;
         }
         p.edit().putString(STATUS,"ESPEJOS AUTO · iniciando servicio de fondo")
@@ -105,6 +108,51 @@ public final class MirrorAutomationService extends Service {
             stopSelf();return START_NOT_STICKY;
         }
         String action=intent.getAction();
+        if(ACTION_CONFIRM_NORMAL.equals(action)){
+            // This is NOT an automatic repair or an angle measurement. It
+            // only acknowledges the driver's visible manual adjustment, and
+            // fails closed if P and zero speed cannot be read from the OEM.
+            if(running){
+                prefs().edit().putString(STATUS,
+                    "CONFIRMACIÓN PENDIENTE · servicio de espejos todavía ocupado. "+
+                    "Desactivá AUTO e intentá de nuevo detenido.").apply();
+                return START_NOT_STICKY;
+            }
+            running=true;
+            foreground();
+            worker=new Thread(()->{
+                MirrorAutomationOem check=null;
+                try{
+                    check=new MirrorAutomationOem(this);
+                    int gear=check.gear();
+                    double speed=check.speedKmh();
+                    if(gear!=1||!Double.isFinite(speed)||speed<0||speed>0.5)
+                        throw new IllegalStateException(
+                            "Se requiere marcha P y 0 km/h confirmados por OEM");
+                    prefs().edit().putBoolean(AUTO,false)
+                        .putString(POSITION,
+                            "NORMAL · referencia visual confirmada por conductor")
+                        .putString(STATUS,
+                            "Referencia restablecida tras ajuste OEM. "+
+                            "Todavía MANUAL; tocá REVERSA para activar AUTO.")
+                        .remove(LAST_ERROR).apply();
+                }catch(Exception ex){
+                    String reason=ex.getMessage()==null?
+                        ex.getClass().getSimpleName():ex.getMessage();
+                    prefs().edit().putBoolean(AUTO,false)
+                        .putString(STATUS,"NO SE CONFIRMÓ LA REFERENCIA: "+reason+
+                            ". Espejos permanecen sin posición validada.").apply();
+                }finally{
+                    if(check!=null)check.close();
+                    running=false;
+                    prefs().edit().putBoolean(SERVICE_ACTIVE,false).apply();
+                    stopForeground(STOP_FOREGROUND_REMOVE);
+                    stopSelf(startId);
+                }
+            },"T1-Mirror-Reference-Acknowledge");
+            worker.start();
+            return START_NOT_STICKY;
+        }
         if(ACTION_STOP.equals(action)||ACTION_MANUAL.equals(action)){
             prefs().edit().putBoolean(AUTO,false)
                 .putString(STATUS,"MANUAL · automatización desactivada").apply();
@@ -119,9 +167,9 @@ public final class MirrorAutomationService extends Service {
             String physical=prefs().getString(POSITION,"");
             if(physical.startsWith("INCIERTA")||physical.startsWith("R · inclinados")){
                 prefs().edit().putBoolean(AUTO,false)
-                    .putString(POSITION,"INCIERTA · retorno no confirmado")
-                    .putString(STATUS,"AUTO BLOQUEADO: espejos posiblemente bajos; "+
-                        "restaurar manualmente y confirmar referencia normal").apply();
+                    .putString(STATUS,"AUTO BLOQUEADO: la app no sabe si los espejos "+
+                        "siguen bajos. Ajustá con mandos OEM, detenido en P, "+
+                        "y confirmá su posición en la barra.").apply();
                 stopSelf();return START_NOT_STICKY;
             }
             prefs().edit().putBoolean(AUTO,true)
@@ -222,17 +270,19 @@ public final class MirrorAutomationService extends Service {
                             // another R can command a tilt.
                             policy=new MirrorParkingPolicy(steps(LEFT),steps(RIGHT));
                             prefs().edit().putString(POSITION,
-                                    "Referencia D tras recuperar; ángulo sin sensor")
-                                .putString(STATUS,"RECUPERAR 10 ARRIBA completado "+
-                                    "· AUTO REACTIVADO · próximo R nuevo; "+
-                                    "posición física no medida")
-                                .putBoolean(AUTO,true).apply();
+                                    "INCIERTA · comandos de subida enviados, "+
+                                    "posición no verificada")
+                                .putString(STATUS,"10 ARRIBA enviados; no se comprobó "+
+                                    "el ángulo. Revisá con mando OEM y confirmá "+
+                                    "referencia en P antes de rearmar AUTO.")
+                                .putBoolean(AUTO,false).apply();
                         }else{
                             prefs().edit().putString(STATUS,
                                     "MANUAL "+(manual==1?"BAJAR":"SUBIR")+
                                     " · izq="+l+" der="+r+" órdenes enviadas; "+
                                     "posición física no confirmada")
-                                .putString(POSITION,"Manual: posición sin medir").apply();
+                                .putString(POSITION,"INCIERTA · ajuste manual sin "+
+                                    "comprobación de ángulo").apply();
                         }
                         movementStarted=false;
                     }else if(auto){
