@@ -395,26 +395,26 @@ final class T1GlobalToolbar {
             }
             return;
         }
-        new AlertDialog.Builder(owner).setTitle("ACTIVAR ESPEJOS AUTOMÁTICOS EN R")
-            .setMessage("Ajustá antes ambos espejos para conducir en D. "+
-                "La app NO mide su ángulo: al detectar una NUEVA entrada a "+
-                "R detenido enviará los pasos configurados, y al volver a D "+
-                "estable durante 800 ms intentará subir los mismos pasos. "+
-                "Comprobá físicamente la primera maniobra, con el vehículo detenido "+
-                "y sin obstáculos.")
-            .setNegativeButton("CANCELAR",null)
-            .setPositiveButton("ACTIVAR AUTO R",(dialog,which)->{
-                try{
-                    owner.startForegroundService(new Intent(owner,
-                        MirrorAutomationService.class)
-                        .setAction(MirrorAutomationService.ACTION_AUTO));
-                    note("ESPEJOS REVERSA · activación solicitada; verificando servicio");
-                    main.postDelayed(this::refreshMirrorAuto,650);
-                }catch(Exception ex){
-                    note("Espejos: AUTO no iniciado · "+
-                        ex.getClass().getSimpleName());
-                }
-            }).show();
+        // The driver has explicitly requested AUTO R by touching the toggle.
+        // No redundant confirmation dialog. Keep uncertainty guard: a prior
+        // interrupted actuator motion still requires physical inspection.
+        if(p.getString(MirrorAutomationService.POSITION,"")
+                .startsWith("INCIERTA")){
+            note("ESPEJOS · POSICIÓN INCIERTA. Revisá los espejos "+
+                "antes de rearmar; no se moverán automáticamente.");
+            refreshMirrorAuto();
+            return;
+        }
+        try{
+            owner.startForegroundService(new Intent(owner,
+                MirrorAutomationService.class)
+                .setAction(MirrorAutomationService.ACTION_AUTO));
+            note("ESPEJOS REVERSA · AUTO solicitado; verificando servicio");
+            main.postDelayed(this::refreshMirrorAuto,650);
+        }catch(Exception ex){
+            note("Espejos: AUTO no iniciado · "+
+                ex.getClass().getSimpleName());
+        }
     }
     private void configureReverseMirrors(){
         SharedPreferences p=owner.getSharedPreferences(
