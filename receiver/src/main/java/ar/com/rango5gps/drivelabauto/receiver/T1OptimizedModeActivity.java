@@ -536,6 +536,13 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         T1JetourTheme.button(check,T1JetourTheme.PANEL_HI);
         check.setOnClickListener(v->refreshShadow());
         root.addView(check);
+        Button history=new Button(this);
+        history.setAllCaps(false);
+        history.setText("ANALIZAR VIAJE GRABADO · CIUDAD / RUTA / AUTOPISTA · 3 MAPAS");
+        T1JetourTheme.button(history,T1JetourTheme.GREEN_BUTTON);
+        history.setOnClickListener(v->startActivity(
+            new Intent(this,T1TripMapAnalysisActivity.class)));
+        root.addView(history);
         Button share=new Button(this);
         share.setAllCaps(false);
         share.setText("SUBIR DIAGNÓSTICO 3 MAPAS · QR");
