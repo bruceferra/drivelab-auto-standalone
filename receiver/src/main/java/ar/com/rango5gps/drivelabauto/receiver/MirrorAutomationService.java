@@ -179,6 +179,11 @@ public final class MirrorAutomationService extends Service {
             return START_NOT_STICKY;
         }
         if(ACTION_AUTO.equals(action)){
+            // Some Activity/watchdog paths resend ACTION_AUTO while a 20-pulse
+            // tilt or its P+30s return is ALREADY RUNNING. Do NOT mistake the
+            // correctly outstanding pulse ledger for an unsafe re-arm and
+            // never stop the live service: that previously stranded mirrors.
+            if(running)return START_STICKY;
             // A physical "normal" position has no readback sensor. Do not
             // rearm after software update/reboot/partial return without the
             // driver's explicit reference confirmation in P at 0 km/h.
@@ -193,9 +198,8 @@ public final class MirrorAutomationService extends Service {
                     .apply();
                 stopSelf();return START_NOT_STICKY;
             }
-            // An Activity watchdog can resend ACTION_AUTO during a long pulse
-            // or while already tilted. Never clear POSITION or restart FSM.
-            if(running)return START_STICKY;
+            // First activation after a stopped/failed service is permitted
+            // only with a known, visually acknowledged normal reference.
             String physical=prefs().getString(POSITION,"");
             if(physical.startsWith("INCIERTA")||physical.startsWith("R · inclinados")){
                 prefs().edit().putBoolean(AUTO,false)
