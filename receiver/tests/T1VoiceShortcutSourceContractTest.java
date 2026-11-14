@@ -14,9 +14,22 @@ public final class T1VoiceShortcutSourceContractTest {
             "Internal activity remains private");
         ok(manifest.contains("android:name=\".VoiceAssistantShortcut\"") &&
            manifest.contains("android:targetActivity=\".T1VoiceShortcutActivity\"") &&
-           manifest.contains("android:label=\"DriveLab · Asistente de voz\"") &&
-           manifest.contains("<category android:name=\"android.intent.category.LAUNCHER\" />"),
-            "External launcher can choose dedicated universal assistant icon");
+           manifest.contains("android:label=\"DriveLab · Asistente de voz\""),
+            "Retain explicit voice shortcut component without a duplicate drawer icon");
+        String app=manifest.substring(manifest.indexOf("<application"));
+        String launcherCategory="android.intent.category.LAUNCHER";
+        int launcherCount=app.split(launcherCategory,-1).length-1;
+        ok(launcherCount==1,
+            "Exactly ONE app drawer icon: ReceiverActivity, never voice alias");
+        int mainIndex=app.indexOf("<activity android:name=\".ReceiverActivity\"");
+        int aliasIndex=app.indexOf("<activity-alias android:name=\".VoiceAssistantShortcut\"");
+        ok(mainIndex>=0 && aliasIndex>mainIndex &&
+           app.substring(mainIndex,aliasIndex).contains(launcherCategory) &&
+           !app.substring(aliasIndex,app.indexOf("</application>")).contains(launcherCategory),
+            "Voice alias must NOT claim MAIN LAUNCHER");
+        ok(voice.contains("startActivity(new Intent(this,ReceiverActivity.class)") ||
+           voice.contains("new Intent(this,ReceiverActivity.class)"),
+            "Voice screen can open the Receiver main screen directly");
         ok(voice.contains("T1VoiceIntentPolicy.routeDestination(phrase)") &&
            voice.contains("T1VoiceMath.calculate(phrase)") &&
            voice.contains("T1VoiceWeather.now(") &&
