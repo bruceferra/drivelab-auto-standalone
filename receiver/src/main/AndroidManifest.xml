@@ -104,6 +104,21 @@
         <activity android:name=".T1PremiumCockpitActivity" android:exported="false" />
         <activity android:name=".T1OptimizedModeActivity" android:exported="false" />
         <activity android:name=".T1VoiceRouteActivity" android:exported="false" />
+        <!-- A second, launchable assistant icon lets T1Launcher (or another
+             steering-key dispatcher) open the universal voice router directly.
+             Keep the Activity private: the exported alias only starts it, and
+             the one-shot RECORD_AUDIO permission remains required. Do not
+             intercept the OEM steering key or change its current Waze action. -->
+        <activity-alias android:name=".VoiceAssistantShortcut"
+            android:targetActivity=".T1VoiceRouteActivity"
+            android:exported="true"
+            android:enabled="true"
+            android:label="DriveLab · Asistente de voz">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity-alias>
         <activity android:name=".T1WhatIfActivity" android:exported="false" />
         <!-- Isolated historical/read-only T1 fuel dashboard; no OEM writes. -->
         <activity android:name=".T1TankDashboardActivity" android:exported="false" />
