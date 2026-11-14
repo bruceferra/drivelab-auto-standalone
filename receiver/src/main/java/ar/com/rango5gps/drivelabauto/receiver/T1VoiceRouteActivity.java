@@ -208,6 +208,22 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
             "DriveLab clasificará el texto antes de abrir Waze u otra respuesta.",
             14,T1JetourTheme.WHITE);
         status.setTextIsSelectable(true);
+        // Recovery entry if T1Launcher shows only one icon per package and
+        // selected the VoiceAssistantShortcut alias rather than Receiver HOME.
+        // This starts our main UI without uninstalling, clearing or resetting data.
+        button(root,"ABRIR DRIVELAB AUTO · PANTALLA PRINCIPAL",
+            T1JetourTheme.GREEN_BUTTON,()->{
+                try{
+                    Intent main=new Intent(this,ReceiverActivity.class);
+                    main.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|
+                        Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                    startActivity(main);
+                    finish();
+                }catch(RuntimeException error){
+                    status.setText("No pude abrir Receiver: "+
+                        error.getClass().getSimpleName());
+                }
+            });
         button(root,"VOLVER",T1JetourTheme.PANEL,this::finish);
         setContentView(sc);
         // A T1Launcher-selected shortcut starts the external Google
