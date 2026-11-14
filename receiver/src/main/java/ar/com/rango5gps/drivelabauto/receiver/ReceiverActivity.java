@@ -46,7 +46,13 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
         render();
     }
     @Override protected void onResume(){
-        super.onResume();visible=true;quickControls.onResume();render();
+        super.onResume();
+        if(getIntent().getBooleanExtra("drivelab_open_after_boot",false)){
+            prefs().edit().putString("boot_status",
+                "DriveLab abrió su pantalla tras el arranque de Android").apply();
+            getIntent().removeExtra("drivelab_open_after_boot");
+        }
+        visible=true;quickControls.onResume();render();
         pairUiHandler.removeCallbacks(pairUiRefresh);
         pairUiHandler.postDelayed(pairUiRefresh,450);
         Updater.onResume(this,this::report);
