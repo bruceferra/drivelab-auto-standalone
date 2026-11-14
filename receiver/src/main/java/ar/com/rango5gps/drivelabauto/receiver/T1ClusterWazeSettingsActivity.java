@@ -69,12 +69,16 @@ public final class T1ClusterWazeSettingsActivity extends Activity {
         label(body,"Podés elegir Waze, Google Maps u otra app instalada. "+
             "Los destinos recibidos desde Xiaomi o voz seguirán abriendo "+
             "Waze, independientemente de la app elegida para el arranque.",13);
+        button(body,"TAMAÑO / POSICIÓN / DIVISIÓN Y MICRÓFONO OEM",
+            ()->startActivity(new Intent(this,
+                T1ClusterLayoutSettingsActivity.class)));
         button(body,"ELEGIR APLICACIÓN DEL CLÚSTER",this::chooseApp);
         button(body,"PROBAR APLICACIÓN ELEGIDA · EN P",this::testSelectedApp);
         button(body,on?"3 · DESACTIVAR CLÚSTER DRIVELAB":
             "3 · ACTIVAR DESTINOS WAZE AL CLÚSTER",()->{
             if(on){
                 p.edit().putBoolean(T1ClusterWazeRouter.ENABLED,false)
+                    .putBoolean(T1ClusterLayoutPolicy.ACTIVE,false)
                     .putBoolean(T1ClusterWazeRouter.AUTO_BOOT,false)
                     .putString(T1ClusterWazeRouter.STATUS,
                         "Desactivado. Destinos vuelven a Waze normal de DriveLab.")

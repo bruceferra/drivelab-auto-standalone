@@ -54,7 +54,10 @@ final class T1OemHardKeyBridge {
                 data.enforceInterface(CALLBACK_TOKEN);
                 int key=data.readInt(),action=data.readInt(),extra=data.readInt();
                 if(reply!=null)reply.writeNoException();
-                if(key>=1000&&key<=1003)
+                // T1Launcher-T1N134.apk DEX: VozVolante$callback$1
+                // explicitly matches physical microphone key=1010,
+                // action=100. 1000..1003 are wheel/OK/BACK.
+                if((key>=1000&&key<=1003)||key==1010)
                     main.post(()->{
                         if(requested&&registered)
                             receiver.onHardKey(key,action,extra);

@@ -115,6 +115,7 @@ final class T1ClusterWazeRouter {
             .putInt(DISPLAY_WIDTH,d.getMode().getPhysicalWidth())
             .putInt(DISPLAY_HEIGHT,d.getMode().getPhysicalHeight())
             .putBoolean(ENABLED,false)
+            .putBoolean(T1ClusterLayoutPolicy.ACTIVE,false)
             .putBoolean(AUTO_BOOT,false)
             .putString(STATUS,"Display elegido: "+describe(d)+
                 ". Primero probá Waze detenido, después activá clúster.")
@@ -147,6 +148,7 @@ final class T1ClusterWazeRouter {
         prefs(c).edit()
             .putString(APP_PACKAGE,packageName)
             .putString(APP_LABEL,label)
+            .putBoolean(T1ClusterLayoutPolicy.ACTIVE,false)
             // Never silently replace what auto-launches on the next boot.
             .putBoolean(AUTO_BOOT,false)
             .putString(STATUS,"Aplicación elegida: "+label+
@@ -217,9 +219,15 @@ final class T1ClusterWazeRouter {
         return launchOnDisplay(c,launch,manualTest,fromBoot,"Waze",true);
     }
     static boolean routeDestination(Context c,Intent waze){
-        String result=launchWaze(c,waze,false,false);
+        // Preserve proven full-screen Display 1 path unless the driver has
+        // explicitly confirmed experimental freeform window placement.
+        String shaped=enabled(c)?
+            T1ClusterLayoutPolicy.routeWazeIfActive(c,waze):null;
+        String result=shaped==null?
+            launchWaze(c,waze,false,false):shaped;
         status(c,result);
-        return result.startsWith("Waze SOLICITADO");
+        return result.startsWith("Waze SOLICITADO")||
+            result.startsWith("APP SOLICITADA EN VENTANA:");
     }
     static boolean openManualTest(Context c){
         Intent waze=c.getPackageManager().getLaunchIntentForPackage(WAZE);
@@ -240,6 +248,8 @@ final class T1ClusterWazeRouter {
         }
         // Start whichever launcher app the owner selected; incoming
         // navigations from Xiaomi remain explicit Waze intents.
-        status(c,launchSelectedApp(c,false,true));
+        if(T1ClusterLayoutPolicy.active(c))
+            status(c,T1ClusterLayoutPolicy.boot(c));
+        else status(c,launchSelectedApp(c,false,true));
     }
 }
