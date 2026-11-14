@@ -52,6 +52,9 @@ public final class T1MirrorUncertainRecoverySourceContractTest {
         check(quick.contains("position.startsWith(\"INCIERTA\")")&&
             quick.contains("confirmá la referencia"),
             "Advanced mode must never claim AUTO rearmed while uncertain");
+        check(svc.contains("if(!down && !(gear==4 || (gear==1 && speed<=0.5)))")&&
+            !svc.contains("gear==4 && speed>5.0"),
+            "D over 5 kmh is the initial trigger, not a per-pulse guard: slower D must finish restore");
         check(policy.contains("RETURN_P_DWELL_MS=30000")&&
             policy.contains("RETURN_THRESHOLD_KMH=5.0"),
             "Preserve user's P over 30 sec / D over 5 kmh only policy");
