@@ -53,6 +53,10 @@ public final class T1ClusterWazeSettingsActivity extends Activity {
             "\nWaze al encender: "+(boot?"ACTIVO":"APAGADO")+
             "\nResultado: "+p.getString(T1ClusterWazeRouter.STATUS,
                 "Sin prueba; ningún display elegido"),14);
+        label(body,"Pantallas secundarias públicas detectadas: "+
+            T1ClusterWazeRouter.candidates(this).size()+
+            ". Si elegís una, se desactivará la ruta anterior hasta "+
+            "que pruebes Waze y vuelvas a activar el nuevo display.",13);
         button(body,"1 · DETECTAR / ELEGIR PANTALLA DEL CLÚSTER",
             this::chooseDisplay);
         button(body,"2 · PROBAR WAZE EN EL DISPLAY ELEGIDO · EN P",
@@ -142,10 +146,11 @@ public final class T1ClusterWazeSettingsActivity extends Activity {
         String[] labels=new String[displays.size()];
         for(int i=0;i<displays.size();i++)
             labels[i]=T1ClusterWazeRouter.describe(displays.get(i));
+        // Android AlertDialog cannot present setMessage() AND setItems():
+        // the message occupies the same content view as the list and hides it.
+        // Keep instructions on the parent screen; list candidates here.
         new AlertDialog.Builder(this)
-            .setTitle("ELEGIR DISPLAY DEL TABLERO")
-            .setMessage("La elección desactiva la ruta automática anterior "+
-                "hasta que vuelvas a probar y activar el nuevo display.")
+            .setTitle("ELEGIR DISPLAY · "+displays.size()+" DISPONIBLE(S)")
             .setItems(labels,(d,which)->{
                 T1ClusterWazeRouter.choose(this,displays.get(which));
                 render();
