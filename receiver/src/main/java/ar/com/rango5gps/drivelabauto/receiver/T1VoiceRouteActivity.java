@@ -541,6 +541,12 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         Intent i=new Intent(Intent.ACTION_VIEW,
             Uri.parse("waze://?q="+Uri.encode(place)+"&navigate=yes"))
             .setPackage("com.waze");
+        if(T1ClusterWazeRouter.enabled(this)){
+            boolean requested=T1ClusterWazeRouter.routeDestination(this,i);
+            status.setText(T1ClusterWazeRouter.prefs(this).getString(
+                T1ClusterWazeRouter.STATUS,"Sin resultado de clúster"));
+            return; // never open center Waze as a surprise fallback
+        }
         try{
             startActivity(i);
             status.setText("Waze solicitado: "+place+

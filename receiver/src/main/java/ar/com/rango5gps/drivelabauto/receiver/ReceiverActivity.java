@@ -112,6 +112,8 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
             "ACTIVAR APERTURA AUTOMÁTICA DRIVELAB",this::toggleOwnBoot);
         // Immersive full screen is always enabled in this T1.
         // HolaJetour was removed by the installed Launcher. No bar toggles.
+        button(body,"WAZE EN CLÚSTER · AUTÓNOMO (SIN VENTANA FLOTANTE)",()->
+            startActivity(new Intent(this,T1ClusterWazeSettingsActivity.class)));
         button(body,"VEHÍCULO · VENTANILLAS / ENERGÍA / CODE",()->
             startActivity(new Intent(this,ReceiverVehicleActivity.class)));
         button(body,"PENDIENTES · ASISTENTE DE VALIDACIÓN T1",()->
@@ -381,6 +383,12 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
         Intent open=new Intent(Intent.ACTION_VIEW,
             Uri.parse("waze://?ll="+coordinates+"&navigate=yes"));
         open.setPackage("com.waze");
+        if(T1ClusterWazeRouter.enabled(this)){
+            T1ClusterWazeRouter.routeDestination(this,open);
+            report(T1ClusterWazeRouter.prefs(this).getString(
+                T1ClusterWazeRouter.STATUS,"Clúster sin resultado"));
+            return;
+        }
         try{startActivity(open);}catch(Exception error){report("Waze no se pudo iniciar");}
     }
     private void pickBootApp(){

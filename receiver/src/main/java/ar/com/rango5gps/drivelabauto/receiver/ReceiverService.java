@@ -85,7 +85,10 @@ public final class ReceiverService extends Service {
             navigationThread=new Thread(this::listenNav,"Receiver-Navigation");
             pairingThread=new Thread(this::listenPair,"Receiver-Pairing");
             navigationThread.start();pairingThread.start();
-            if(intent!=null&&intent.getBooleanExtra(FROM_BOOT,false))scheduleBootApp();
+            if(intent!=null&&intent.getBooleanExtra(FROM_BOOT,false)){
+                scheduleBootApp();
+                scheduleNativeClusterWaze();
+            }
         }
         if(arm){
             pending=null;
@@ -179,26 +182,41 @@ public final class ReceiverService extends Service {
         Intent launch=new Intent(Intent.ACTION_VIEW,target).setPackage("com.waze");
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         boolean attempted=false;
+        boolean cluster=T1ClusterWazeRouter.enabled(this);
         if(prefs().getBoolean("open_waze",true)&&
             (ReceiverActivity.isVisible()||Settings.canDrawOverlays(this))){
-            try{startActivity(launch);attempted=true;}
-            catch(RuntimeException error){
-                prefs().edit().putString("last_open","WAZE BLOQUEADO: "+
-                    error.getClass().getSimpleName()).apply();
+            if(cluster){
+                // Never fall back to opening Waze on Display 0 when the
+                // user selected a secondary display. Report refusal instead.
+                attempted=T1ClusterWazeRouter.routeDestination(this,launch);
+            }else{
+                try{startActivity(launch);attempted=true;}
+                catch(RuntimeException error){
+                    prefs().edit().putString("last_open","WAZE BLOQUEADO: "+
+                        error.getClass().getSimpleName()).apply();
+                }
             }
         }
-        // Always retain user-tappable notification if Android/OEM disallows launch.
-        PendingIntent tap=PendingIntent.getActivity(this,9002,launch,
+        // Explicit cluster mode: notification opens DriveLab for diagnostics,
+        // NOT Waze on center display. Legacy default path remains unchanged.
+        PendingIntent tap=PendingIntent.getActivity(this,9002,
+            cluster?new Intent(this,ReceiverActivity.class):launch,
             PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
         Notification notif=new Notification.Builder(this,ROUTES)
             .setSmallIcon(android.R.drawable.ic_menu_directions)
             .setContentTitle("Nuevo destino del Xiaomi")
-            .setContentText("Tocá para abrir en Waze si no apareció en el clúster")
+            .setContentText(cluster?
+                "Waze solicitado al clúster: tocá si necesitás diagnóstico":
+                "Tocá para abrir en Waze si no apareció en el clúster")
             .setAutoCancel(true).setContentIntent(tap).build();
         getSystemService(NotificationManager.class).notify(9002,notif);
         prefs().edit().putInt("received",prefs().getInt("received",0)+1)
-            .putString("last_open",attempted?"Waze solicitado en T1 / clúster":
-                "Ruta recibida; Waze requiere permiso o notificación").apply();
+            .putString("last_open",cluster?
+                T1ClusterWazeRouter.prefs(this).getString(
+                    T1ClusterWazeRouter.STATUS,
+                    "Clúster activado; sin confirmación de apertura"):
+                attempted?"Waze solicitado en T1 / clúster":
+                    "Ruta recibida; Waze requiere permiso o notificación").apply();
         return attempted;
     }
     private void listenPair(){
@@ -298,6 +316,17 @@ public final class ReceiverService extends Service {
         pending=null;
         out.writeInt(BridgeCrypto.PAIR_MAGIC);out.writeByte(12);
         BridgeCrypto.write(out,BridgeCrypto.encrypt(session.secret,"ack",BridgeCrypto.nonce(proof)));
+    }
+    /** First boot: wait for Jetour to create its physical displays.
+     * Never add floating center-screen windows or overwrite OEM HOME.
+     * Android may still reject background launches; report real error.
+     */
+    private void scheduleNativeClusterWaze(){
+        if(!T1ClusterWazeRouter.autoBoot(this))return;
+        new Handler(Looper.getMainLooper()).postDelayed(()->{
+            if(!running||!T1ClusterWazeRouter.autoBoot(this))return;
+            T1ClusterWazeRouter.onReceiverBoot(this);
+        },20000L);
     }
     private void scheduleBootApp(){
         if(!prefs().getBoolean("launch_app_on_boot",false))return;

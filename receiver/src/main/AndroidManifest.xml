@@ -95,6 +95,7 @@
                 <data android:scheme="https" android:host="google.com" android:pathPrefix="/maps" />
             </intent-filter>
         </activity>
+        <activity android:name=".T1ClusterWazeSettingsActivity" android:exported="false" />
         <activity android:name=".ReceiverVehicleActivity" android:exported="false" />
         <activity android:name=".T1SteeringKeysActivity" android:exported="false" />
         <activity android:name=".T1WheelSettingsActivity" android:exported="false" />

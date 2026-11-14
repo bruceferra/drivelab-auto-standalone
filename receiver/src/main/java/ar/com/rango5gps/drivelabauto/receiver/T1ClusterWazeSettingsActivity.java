@@ -1,0 +1,189 @@
+package ar.com.rango5gps.drivelabauto.receiver;
+
+import android.app.Activity;
+import android.app.AlertDialog;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.os.Bundle;
+import android.view.Display;
+import android.widget.Button;
+import android.widget.LinearLayout;
+import android.widget.ScrollView;
+import android.widget.TextView;
+import java.util.List;
+
+/** Explicit, reversible setup; no invisible window or cloned launcher UI. */
+public final class T1ClusterWazeSettingsActivity extends Activity {
+    private void label(LinearLayout parent,String text,int size){
+        TextView t=new TextView(this);
+        t.setText(text);t.setTextSize(size);
+        t.setPadding(12,12,12,12);t.setTextIsSelectable(true);
+        parent.addView(t);
+    }
+    private void button(LinearLayout parent,String text,Runnable run){
+        Button b=new Button(this);b.setText(text);b.setAllCaps(false);
+        b.setOnClickListener(v->run.run());parent.addView(b);
+    }
+    @Override protected void onCreate(Bundle state){
+        super.onCreate(state);render();
+    }
+    @Override protected void onResume(){
+        super.onResume();render();
+    }
+    private void render(){
+        ScrollView scroll=new ScrollView(this);
+        LinearLayout body=new LinearLayout(this);
+        body.setOrientation(LinearLayout.VERTICAL);
+        body.setPadding(16,16,16,24);
+        scroll.addView(body);
+        SharedPreferences p=T1ClusterWazeRouter.prefs(this);
+        boolean selected=T1ClusterWazeRouter.selectionExists(this);
+        boolean on=T1ClusterWazeRouter.enabled(this);
+        boolean boot=T1ClusterWazeRouter.autoBoot(this);
+        label(body,"WAZE EN CLÚSTER · DRIVELAB",22);
+        label(body,"Implementación independiente. No usa ventana flotante, "+
+            "MediaProjection ni el Cluster de T1Launcher. "+
+            "No lo apagues hasta confirmar Waze en el tablero y probar los "+
+            "botones del volante.",14);
+        label(body,"Android multidisplay: "+
+            (T1ClusterWazeRouter.multiDisplay(this)?"SOPORTADO":"NO INFORMADO")+
+            "\nDisplay elegido: "+p.getInt(T1ClusterWazeRouter.DISPLAY_ID,-1)+
+            " · "+p.getString(T1ClusterWazeRouter.DISPLAY_NAME,"NINGUNO")+
+            "\nDestino a clúster: "+(on?"ACTIVO":"APAGADO")+
+            "\nWaze al encender: "+(boot?"ACTIVO":"APAGADO")+
+            "\nResultado: "+p.getString(T1ClusterWazeRouter.STATUS,
+                "Sin prueba; ningún display elegido"),14);
+        button(body,"1 · DETECTAR / ELEGIR PANTALLA DEL CLÚSTER",
+            this::chooseDisplay);
+        button(body,"2 · PROBAR WAZE EN EL DISPLAY ELEGIDO · EN P",
+            this::testWaze);
+        button(body,on?"3 · DESACTIVAR CLÚSTER DRIVELAB":
+            "3 · ACTIVAR DESTINOS WAZE AL CLÚSTER",()->{
+            if(on){
+                p.edit().putBoolean(T1ClusterWazeRouter.ENABLED,false)
+                    .putBoolean(T1ClusterWazeRouter.AUTO_BOOT,false)
+                    .putString(T1ClusterWazeRouter.STATUS,
+                        "Desactivado. Destinos vuelven a Waze normal de DriveLab.")
+                    .apply();render();return;
+            }
+            if(!selected||T1ClusterWazeRouter.selected(this)==null||
+                    !T1ClusterWazeRouter.multiDisplay(this)){
+                T1ClusterWazeRouter.status(this,
+                    "Primero elegí un display secundario público válido.");
+                render();return;
+            }
+            new AlertDialog.Builder(this)
+                .setTitle("WAZE DIRECTO AL CLÚSTER")
+                .setMessage("Activar solamente después de comprobar con la "+
+                    "camioneta detenida que Waze se muestra en el tablero. "+
+                    "Android puede bloquear o ignorar esta ruta. No sustituye "+
+                    "los controles del volante ni el HOME de T1Launcher.")
+                .setNegativeButton("CANCELAR",null)
+                .setPositiveButton("ACTIVAR", (d,w)->{
+                    p.edit().putBoolean(T1ClusterWazeRouter.ENABLED,true)
+                        .putString(T1ClusterWazeRouter.STATUS,
+                            "Destinos del Xiaomi se solicitarán en display "+
+                            "secundario. Si falla se mostrará diagnóstico.")
+                        .apply();render();
+                }).show();
+        });
+        button(body,boot?"4 · DESACTIVAR WAZE AL ENCENDER":
+            "4 · AUTOABRIR WAZE EN CLÚSTER AL ENCENDER",()->{
+            if(boot){
+                p.edit().putBoolean(T1ClusterWazeRouter.AUTO_BOOT,false)
+                    .apply();render();return;
+            }
+            if(!on){
+                T1ClusterWazeRouter.status(this,
+                    "Primero activá destinos al clúster y probá que se vea Waze.");
+                render();return;
+            }
+            new AlertDialog.Builder(this)
+                .setTitle("ARRANQUE AUTOMÁTICO WAZE")
+                .setMessage("DriveLab Receiver iniciará en segundo plano y "+
+                    "solicitará abrir Waze SOLO en el display seleccionado "+
+                    "después del encendido real. Se necesita autorización "+
+                    "Android para arranque en segundo plano. No se cierra "+
+                    "T1Launcher ni se reemplaza el HOME del vehículo.")
+                .setNegativeButton("CANCELAR",null)
+                .setPositiveButton("ACTIVAR", (d,w)->{
+                    p.edit().putBoolean(T1ClusterWazeRouter.AUTO_BOOT,true)
+                        .apply();
+                    getSharedPreferences(ReceiverService.PREFS,MODE_PRIVATE)
+                        .edit().putBoolean("auto_boot",true).apply();
+                    try{
+                        startForegroundService(new Intent(this,
+                            ReceiverService.class)
+                            .setAction(ReceiverService.ACTION_START));
+                    }catch(RuntimeException error){
+                        T1ClusterWazeRouter.status(this,
+                            "No pudo arrancar Receiver: "+
+                            error.getClass().getSimpleName());
+                    }
+                    render();
+                }).show();
+        });
+        label(body,"La prueba directa solo se permite en P y a 0 km/h "+
+            "confirmados por las lecturas OEM. El display puede ser 2, 5 "+
+            "u otro según el arranque de esta T1. No se elige por su número "+
+            "de manera automática. Si Android lo rechaza, DriveLab NO abre "+
+            "Waze sobre la pantalla principal como reemplazo.",12);
+        button(body,"ACTUALIZAR PANTALLAS Y ESTADO",this::render);
+        button(body,"VOLVER A DRIVELAB",this::finish);
+        setContentView(scroll);
+    }
+    private void chooseDisplay(){
+        List<Display> displays=T1ClusterWazeRouter.candidates(this);
+        if(displays.isEmpty()){
+            T1ClusterWazeRouter.status(this,"Android no expone ningún "+
+                "display secundario público. No se abre el clúster OEM.");
+            render();return;
+        }
+        String[] labels=new String[displays.size()];
+        for(int i=0;i<displays.size();i++)
+            labels[i]=T1ClusterWazeRouter.describe(displays.get(i));
+        new AlertDialog.Builder(this)
+            .setTitle("ELEGIR DISPLAY DEL TABLERO")
+            .setMessage("La elección desactiva la ruta automática anterior "+
+                "hasta que vuelvas a probar y activar el nuevo display.")
+            .setItems(labels,(d,which)->{
+                T1ClusterWazeRouter.choose(this,displays.get(which));
+                render();
+            }).setNegativeButton("CANCELAR",null).show();
+    }
+    private void testWaze(){
+        if(T1ClusterWazeRouter.selected(this)==null){
+            T1ClusterWazeRouter.status(this,
+                "Primero seleccioná un display secundario válido.");
+            render();return;
+        }
+        T1ClusterWazeRouter.status(this,"Comprobando P y 0 km/h sin mover vehículo…");
+        render();
+        new Thread(()->{
+            MirrorAutomationOem oem=null;
+            String error=null;
+            try{
+                oem=new MirrorAutomationOem(this);
+                int gear=oem.gear();
+                double kmh=oem.speedKmh();
+                if(gear!=1||!Double.isFinite(kmh)||kmh<0||kmh>0.5)
+                    error="Prueba bloqueada. Se requiere P y velocidad "+
+                        "0 km/h verificadas por OEM (1033 / 2148 / 1089).";
+            }catch(Exception e){
+                error="No se puede confirmar P/0 con OEM: "+
+                    e.getClass().getSimpleName();
+            }finally{
+                if(oem!=null)oem.close();
+            }
+            String result=error;
+            runOnUiThread(()->{
+                if(isFinishing())return;
+                if(result!=null){
+                    T1ClusterWazeRouter.status(this,result);render();return;
+                }
+                T1ClusterWazeRouter.openManualTest(this);
+                render();
+            });
+        },"DriveLab-Cluster-P0-Check").start();
+    }
+}
