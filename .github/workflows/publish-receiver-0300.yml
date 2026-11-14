@@ -171,6 +171,12 @@ jobs:
             receiver/tests/T1ClusterWindowAndMicSourceContractTest.java
           java -cp /tmp/t1-window-publish ar.com.rango5gps.drivelabauto.receiver.T1ClusterLayoutMathTest
           java -cp /tmp/t1-window-publish ar.com.rango5gps.drivelabauto.receiver.T1ClusterWindowAndMicSourceContractTest
+          # Verify the exactly extracted mic 1010 callback is present
+          # alongside legacy wheel 1000..1003 before signing.
+          grep -Fq '(key>=1000&&key<=1003)||key==1010' \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OemHardKeyBridge.java
+          grep -Fq 'KEY_MIC=1010' \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OemMicrophoneService.java
           gradle --no-daemon :receiver:assembleRelease
           apk=receiver/build/outputs/apk/release/receiver-release.apk
           test -s "$apk"
