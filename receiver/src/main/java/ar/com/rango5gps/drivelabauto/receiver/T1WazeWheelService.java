@@ -63,7 +63,7 @@ public final class T1WazeWheelService extends AccessibilityService {
     private WindowManager windows;
     private int selected=0;
     private String selectedLabel="",seenPackage="";
-    private boolean alternateList;
+    private boolean alternateList,mapMenuArmed;
     private long lastButtonAt;
     private T1OemHardKeyBridge oemBridge;
     private final Handler main=new Handler(Looper.getMainLooper());
@@ -284,6 +284,7 @@ public final class T1WazeWheelService extends AccessibilityService {
         // Absolutely no key logging or interception in unrelated apps.
         AccessibilityNodeInfo root=wazeRoot();
         if(root==null){
+            mapMenuArmed=false;
             hideHint();
             return false;
         }
@@ -353,13 +354,34 @@ public final class T1WazeWheelService extends AccessibilityService {
             }
             return clickSelected("OK");
         }
-        // Map view: pressing the physical OK button, or a separately
-        // calibrated RUTAS shortcut, tries ONLY the publicly-visible,
-        // accessibility-labelled Waze routes control. No fabricated URI.
+        // A wheel turn focuses REAL labelled buttons. OK can click one only
+        // AFTER such an explicit selection: no random initial actions.
+        if((forward||backward)&&collectMapChoices(root)){
+            lastButtonAt=SystemClock.elapsedRealtime();
+            selected=Math.floorMod(selected+(forward?1:-1),choices.size());
+            selectedLabel=choices.get(selected).label;
+            mapMenuArmed=true;
+            highlight();
+            return true;
+        }
+        if(cancel&&mapMenuArmed){
+            mapMenuArmed=false;
+            selectedLabel="";
+            hideHint();
+            status("Waze: selección cancelada sin tocar pantalla");
+            return true;
+        }
+        if(confirm&&mapMenuArmed&&collectMapChoices(root)){
+            mapMenuArmed=false;
+            lastButtonAt=SystemClock.elapsedRealtime();
+            return clickSelected("BOTÓN DE WAZE · OK");
+        }
+        // Previous behaviour: OK with no highlighted map button attempts
+        // only the labelled "Rutas" accessibility control.
         if(confirm||routeShortcut){
             AccessibilityNodeInfo routesButton=findRoutesButton(root,0,new int[]{0});
             if(routesButton==null){
-                status("RUTAS: Waze no expone el ícono de rutas accesible. "+
+                status("RUTAS: Waze no expone el botón de rutas accesible. "+
                     "No se hizo ningún toque.");
                 hideHint();
                 return false;
@@ -370,26 +392,8 @@ public final class T1WazeWheelService extends AccessibilityService {
             lastButtonAt=SystemClock.elapsedRealtime();
             status("ABRIR RUTAS: "+label+" → "+
                 (opened?"clic enviado":"rechazado por Waze"));
-            hideHint();selectedLabel="";
+            hideHint();selectedLabel="";mapMenuArmed=false;
             return opened;
-        }
-        // Third priority: Waze's accessible buttons on the cluster display.
-        // Explicit focus and driver OK required; no guessed screen coordinates.
-        if(collectMapChoices(root)){
-            lastButtonAt=SystemClock.elapsedRealtime();
-            if(cancel){
-                hideHint();
-                selectedLabel="";
-                return performGlobalAction(GLOBAL_ACTION_BACK);
-            }
-            if(routeShortcut)return false;
-            if(forward||backward){
-                selected=Math.floorMod(selected+(forward?1:-1),choices.size());
-                selectedLabel=choices.get(selected).label;
-                highlight();
-                return true;
-            }
-            return clickSelected("BOTÓN DE WAZE · OK");
         }
         return false;
     }
@@ -464,7 +468,7 @@ public final class T1WazeWheelService extends AccessibilityService {
         Collections.sort(choices,Comparator
             .comparingInt((Candidate c)->c.bounds.top)
             .thenComparingInt(c->c.bounds.left));
-        alternateList=true;
+        alternateList=true;mapMenuArmed=false;
         if(!selectedLabel.isEmpty()){
             for(int i=0;i<choices.size();i++)
                 if(selectedLabel.equals(choices.get(i).label)){
@@ -541,7 +545,7 @@ public final class T1WazeWheelService extends AccessibilityService {
     }
     private boolean collectPromptChoices(AccessibilityNodeInfo root){
         choices.clear();
-        alternateList=false;
+        alternateList=false;mapMenuArmed=false;
         visit(root,0,new int[]{0});
         Collections.sort(choices,Comparator
             .comparingInt((Candidate c)->c.bounds.top)
