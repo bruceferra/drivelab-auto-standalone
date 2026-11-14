@@ -48,6 +48,12 @@ public final class T1ClusterWazeSourceContractTest {
             !router.contains("su -c")&&
             !router.contains("adb shell"),
             "No overlay/MediaProjection or OEM controls");
+        String chooser=setup.substring(setup.indexOf("    private void chooseDisplay(){"),
+            setup.indexOf("    private void testWaze(){"));
+        ok(chooser.contains(".setItems(labels,") &&
+            !chooser.contains(".setMessage(") &&
+            setup.contains("Pantallas secundarias públicas detectadas: "),
+            "Display selector must show real list; Android AlertDialog setMessage hides setItems");
         ok(setup.contains("T1ClusterWazeRouter.choose(")&&
             setup.contains("oem.gear()")&&
             setup.contains("oem.speedKmh()")&&
