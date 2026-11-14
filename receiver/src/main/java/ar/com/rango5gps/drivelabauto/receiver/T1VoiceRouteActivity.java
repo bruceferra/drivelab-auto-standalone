@@ -136,14 +136,14 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         label(root,"🎤  ASISTENTE DE VOZ · JETOUR T1",22,T1JetourTheme.CYAN);
         chosen=label(root,"",14,T1JetourTheme.GREEN);
         showSelected();
-        label(root,"El asistente de voz del sistema ya inicia la escucha en "+ 
-            "esta T1. Su función depende de Android/Gemini: no confirma "+
-            "que todas las preguntas generales sean respondidas. "+
-            "Reconocimiento INTERNO es diagnóstico independiente para "+
-            "cálculos y clasificación hacia Waze.",14,T1JetourTheme.MUTED);
+        label(root,"Reconocimiento Google de esta T1: entiende destinos y "+
+            "preguntas y devuelve el TEXTO a DriveLab. Navegación explícita "+
+            "→ Waze; cuentas y clima → respuesta hablada; actualidad y fútbol "+
+            "→ fuentes en línea. Gemini del sistema queda como opción "+
+            "separada para preguntas libres.",14,T1JetourTheme.MUTED);
 
-        button(root,"🎤 HABLAR · VOZ DEL SISTEMA (UN TOQUE)",
-            T1JetourTheme.GREEN_BUTTON,this::openSystemVoice);
+        button(root,"🎤 HABLAR · GOOGLE (DETECTAR DESTINO O PREGUNTA)",
+            T1JetourTheme.GREEN_BUTTON,this::listenExternal);
         button(root,"RECONOCIMIENTO INTERNO · DIAGNÓSTICO",
             T1JetourTheme.PANEL_HI,this::listen);
         spoken=new EditText(this);
@@ -201,19 +201,20 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         chatgptChoice=button(root,"USAR CHATGPT PARA LAS CONSULTAS",
             T1JetourTheme.PANEL,()->chooseAi(CHATGPT));
         showSelected();
-        button(root,"MICRÓFONO EXTERNO · ALTERNATIVA DE RECONOCIMIENTO",
+        button(root,"MICRÓFONO GOOGLE · REPETIR RECONOCIMIENTO",
             T1JetourTheme.PANEL,this::listenExternal);
 
-        status=label(root,"Elegí HABLAR para abrir el asistente del sistema. "+
-            "El reconocedor interno es opcional y no se iniciará solo.",
+        status=label(root,"Elegí HABLAR para reconocimiento Google. "+
+            "DriveLab clasificará el texto antes de abrir Waze u otra respuesta.",
             14,T1JetourTheme.WHITE);
         status.setTextIsSelectable(true);
         button(root,"VOLVER",T1JetourTheme.PANEL,this::finish);
         setContentView(sc);
-        // Explicit launcher shortcut = one voice command, no second tap.
-        // Ordinary in-app screen is idle: no auto-started/stuck recognizer.
+        // A T1Launcher-selected shortcut starts the external Google
+        // recognition interface that DOES return spoken text to DriveLab.
+        // Do not intercept the OEM physical button already mapped to Waze.
         if(state==null&&ACTION_SHORTCUT_SYSTEM_VOICE.equals(getIntent().getAction()))
-            root.post(this::openSystemVoice);
+            root.post(this::listenExternal);
     }
 
     private Intent speechIntent(){
@@ -406,12 +407,18 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
             },"T1-Voice-News-RSS").start();
             return;
         }
-        // Free-form AI answers still need a documented online API provider.
-        // A shared-text Android Intent does not guarantee automatic replies.
-        status.setText("PREGUNTA GENERAL · "+name(selectedAi())+
-            ". El asistente externo puede exigir otro toque; "+
-            "DriveLab todavía no tiene un servicio de IA conversacional completo.");
-        shareWithAi(selectedAi(),phrase.trim());
+        // Unknown free-form questions have no documented direct Gemini
+        // response API. NEVER send ACTION_SEND automatically here: on this
+        // T1 it opens Gemini FULLSCREEN, obscuring the cockpit.
+        // The Android system voice overlay works, but it cannot receive
+        // the previously recognized text; the user must say it again.
+        status.setText("PREGUNTA LIBRE · No hay respuesta directa en DriveLab. "+
+            "Voy a abrir el Gemini pequeño del sistema. "+
+            "Repetí la pregunta; no puedo transferirle el audio reconocido.");
+        openSystemVoice();
+        status.setText("PREGUNTA LIBRE · Gemini de voz del sistema solicitado "+
+            "(sin abrir la aplicación completa). Repetí la pregunta: "+
+            phrase.trim());
     }
     /** Respond within DriveLab without forcing another microphone touch.
      * Output depends on Android TTS engine and its audio route.
