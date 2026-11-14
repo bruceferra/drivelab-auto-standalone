@@ -39,6 +39,8 @@ jobs:
           printf %s "$RECEIVER_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/receiver.p12"
           chmod 600 "$RUNNER_TEMP/receiver.p12"
           echo "RECEIVER_KEYSTORE=$RUNNER_TEMP/receiver.p12" >> "$GITHUB_ENV"
+      # Mirror uncertainty regression now checks source strings independently of UI concatenation.
+      # Return pulses in D continue safely even if speed crosses back below 5 km/h.
       - name: Validate source and sign Receiver 0.2.90
         run: |
           set -euo pipefail
