@@ -104,13 +104,14 @@
         <activity android:name=".T1PremiumCockpitActivity" android:exported="false" />
         <activity android:name=".T1OptimizedModeActivity" android:exported="false" />
         <activity android:name=".T1VoiceRouteActivity" android:exported="false" />
-        <!-- A second, launchable assistant icon lets T1Launcher (or another
-             steering-key dispatcher) open the universal voice router directly.
-             Keep the Activity private: the exported alias only starts it, and
-             the one-shot RECORD_AUDIO permission remains required. Do not
-             intercept the OEM steering key or change its current Waze action. -->
+        <activity android:name=".T1VoiceShortcutActivity"
+            android:exported="false" android:theme="@android:style/Theme.NoDisplay" />
+        <!-- Preserve the shortcut component name already visible in T1Launcher,
+             but route it through a one-touch launcher trampoline. Its activity
+             invokes the already-tested Android ACTION_VOICE_COMMAND directly.
+             Does NOT intercept OEM steering key assignments or receive voice. -->
         <activity-alias android:name=".VoiceAssistantShortcut"
-            android:targetActivity=".T1VoiceRouteActivity"
+            android:targetActivity=".T1VoiceShortcutActivity"
             android:exported="true"
             android:enabled="true"
             android:label="DriveLab · Asistente de voz">
