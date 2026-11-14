@@ -39,11 +39,14 @@ jobs:
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1VoiceMath.java \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1VoiceIntentPolicy.java \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1VoiceNewsTopic.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1VoiceSmallTalk.java \
             receiver/tests/T1VoiceMathTest.java \
+            receiver/tests/T1VoiceSmallTalkTest.java \
             receiver/tests/T1VoiceNewsTopicTest.java \
             receiver/tests/T1VoiceIntentWeatherTest.java \
             receiver/tests/T1VoiceIntentPolicyTest.java
           java -cp /tmp/t1-voice-route ar.com.rango5gps.drivelabauto.receiver.T1VoiceMathTest
+          java -cp /tmp/t1-voice-route ar.com.rango5gps.drivelabauto.receiver.T1VoiceSmallTalkTest
           java -cp /tmp/t1-voice-route ar.com.rango5gps.drivelabauto.receiver.T1VoiceNewsTopicTest
           java -cp /tmp/t1-voice-route ar.com.rango5gps.drivelabauto.receiver.T1VoiceIntentWeatherTest
           java -cp /tmp/t1-voice-route ar.com.rango5gps.drivelabauto.receiver.T1VoiceIntentPolicyTest
