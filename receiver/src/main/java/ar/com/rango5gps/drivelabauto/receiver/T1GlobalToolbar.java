@@ -370,10 +370,11 @@ final class T1GlobalToolbar {
         SharedPreferences p=owner.getSharedPreferences(
             MirrorAutomationService.PREFS,Context.MODE_PRIVATE);
         boolean auto=p.getBoolean(MirrorAutomationService.AUTO,false);
+        boolean safetyHold=p.getBoolean(MirrorAutomationService.SAFETY_HOLD,true);
         boolean service=p.getBoolean(MirrorAutomationService.SERVICE_ACTIVE,false);
         long age=System.currentTimeMillis()-p.getLong(
             MirrorAutomationService.LAST_POLL,0L);
-        boolean healthy=auto&&service&&age>=0&&age<=8000;
+        boolean healthy=auto&&!safetyHold&&service&&age>=0&&age<=8000;
         String pose=p.getString(MirrorAutomationService.POSITION,"");
         // Tilted during a healthy live AUTO run is EXPECTED; uncertainty
         // matters when the service is gone and physical return was not seen.
@@ -411,7 +412,9 @@ final class T1GlobalToolbar {
         // No redundant confirmation dialog. Keep uncertainty guard: a prior
         // interrupted actuator motion still requires physical inspection.
         String pose=p.getString(MirrorAutomationService.POSITION,"");
-        if(pose.startsWith("INCIERTA")||pose.startsWith("R · inclinados")){
+        if(p.getBoolean(MirrorAutomationService.SAFETY_HOLD,true)||
+                pose.startsWith("INCIERTA")||
+                pose.startsWith("R · inclinados")){
             showMirrorRecovery();
             return;
         }
@@ -435,7 +438,7 @@ final class T1GlobalToolbar {
             MirrorAutomationService.PREFS,Context.MODE_PRIVATE);
         String pose=p.getString(MirrorAutomationService.POSITION,"SIN MEDICIÓN");
         new AlertDialog.Builder(owner)
-            .setTitle("ESPEJOS · REFERENCIA NO CONFIRMADA")
+            .setTitle("ESPEJOS · AUTO SUSPENDIDO · REVISAR POSICIÓN")
             .setMessage("Estado registrado: "+pose+
                 "\n\nLa app perdió la referencia de los pulsos, no detectó "+
                 "el ángulo real. Los espejos PUEDEN estar bajos. "+
@@ -473,6 +476,9 @@ final class T1GlobalToolbar {
         boolean live=p.getBoolean(MirrorAutomationService.SERVICE_ACTIVE,false)
             &&age>=0&&age<=8000;
         diagnostic.setText("MODO: "+(on?"AUTO":"MANUAL")+
+            " · REARME AUTOMÁTICO: "+
+                (p.getBoolean(MirrorAutomationService.SAFETY_HOLD,true)?
+                    "BLOQUEADO HASTA CONFIRMACIÓN EN P":"PERMITIDO SOLO A PEDIDO")+
             " · SERVICIO: "+(live?"ACTIVO":"SIN LATIDO RECIENTE")+
             "\nÚLTIMA MARCHA: "+p.getInt(MirrorAutomationService.LAST_GEAR,-1)+
             " · VELOCIDAD: "+p.getString(MirrorAutomationService.LAST_SPEED,"SIN DATO")+
