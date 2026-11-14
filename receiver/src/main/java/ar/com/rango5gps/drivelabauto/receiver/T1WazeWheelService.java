@@ -117,6 +117,8 @@ public final class T1WazeWheelService extends AccessibilityService {
             (p.getBoolean(OEM_BINDER_ENABLED,false)?
                 "HABILITADO POR USUARIO":"APAGADO")+
             " · "+p.getString(OEM_BINDER_STATUS,"sin enlace iniciado")+
+            "\nWaze en clúster: "+p.getString("waze_display",
+                "todavía no detectado")+
             "\nÚltima señal OEM: "+p.getString(OEM_LAST,"ninguna")+
             "\nÚltima ventana durante captura: "+
             p.getString(WINDOW,"sin datos")+
@@ -198,8 +200,14 @@ public final class T1WazeWheelService extends AccessibilityService {
                 for(AccessibilityWindowInfo win:ws){
                     if(win==null)continue;
                     AccessibilityNodeInfo root=win.getRoot();
-                    if(root!=null&&WAZE.contentEquals(root.getPackageName())&&
-                            root.isVisibleToUser())return root;
+                    if(root!=null&&WAZE.equals(
+                            String.valueOf(root.getPackageName()))&&
+                            root.isVisibleToUser()){
+                        prefs().edit().putString("waze_display",
+                            "Display "+across.keyAt(d)+" · Waze accesible")
+                            .apply();
+                        return root;
+                    }
                 }
             }
         }catch(Exception e){
@@ -208,8 +216,15 @@ public final class T1WazeWheelService extends AccessibilityService {
                 .apply();
         }
         AccessibilityNodeInfo current=getRootInActiveWindow();
-        if(current!=null&&WAZE.contentEquals(current.getPackageName()))
+        if(current!=null&&WAZE.equals(
+                String.valueOf(current.getPackageName()))){
+            prefs().edit().putString("waze_display",
+                "Display activo · Waze accesible").apply();
             return current;
+        }
+        if(prefs().getBoolean(OEM_BINDER_ENABLED,false))
+            prefs().edit().putString("waze_display",
+                "Waze no visible para Accesibilidad en ninguna pantalla").apply();
         return null;
     }
     private void refreshOemBridge(){
