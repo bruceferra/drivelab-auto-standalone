@@ -178,9 +178,7 @@ final class T1TripMapReplay {
         // Representative = weighted-distance midpoint of that local group.
         // This avoids thousands of SQLite opens on an Android 11 head unit.
         int stride=Math.max(1,(legs.size()+MAX_BUCKETS-1)/MAX_BUCKETS);
-        double[][] metres=new double[3][4];
-        double[][] shared=new double[3][3],agree=new double[3][3];
-        double allThree=0;
+        T1TripMapPercentages stats=new T1TripMapPercentages();
         int buckets=0;
         for(int start=0;start<legs.size();start+=stride){
             if(Thread.currentThread().isInterrupted())
@@ -204,15 +202,7 @@ final class T1TripMapReplay {
                     T1ShadowRoadMap.db(app,T1ShadowRoadMap.Source.IGN),
                     loc,"IGN"))
             };
-            for(int i=0;i<3;i++)metres[i][kinds[i]]+=length;
-            if(kinds[0]!=UNKNOWN&&kinds[0]==kinds[1]&&
-               kinds[1]==kinds[2])allThree+=length;
-            for(int i=0;i<3;i++)for(int j=i+1;j<3;j++){
-                if(kinds[i]!=UNKNOWN&&kinds[j]!=UNKNOWN){
-                    shared[i][j]+=length;
-                    if(kinds[i]==kinds[j])agree[i][j]+=length;
-                }
-            }
+            stats.add(length,kinds);
             buckets++;
             if(progress!=null&&(buckets==1||buckets%25==0||
                     stop==legs.size()))
@@ -237,22 +227,24 @@ final class T1TripMapReplay {
             report.append(SOURCES[i]).append(" · DISTRIBUCIÓN POR KILÓMETROS\n");
             for(int c=0;c<4;c++)
                 report.append("  ").append(NAMES[c]).append(": ")
-                    .append(num(metres[i][c]/1000)).append(" km · ")
-                    .append(pct(metres[i][c],gpsMeters)).append("\n");
+                    .append(num(stats.categoryMeters[i][c]/1000)).append(" km · ")
+                    .append(pct(stats.categoryMeters[i][c],gpsMeters)).append("\n");
             report.append("  Cobertura identificada: ")
-                .append(pct(gpsMeters-metres[i][UNKNOWN],gpsMeters))
+                .append(pct(gpsMeters-stats.categoryMeters[i][UNKNOWN],gpsMeters))
                 .append("\n\n");
         }
         report.append("COINCIDENCIA SOBRE EL MISMO RECORRIDO\n");
         for(int i=0;i<3;i++)for(int j=i+1;j<3;j++){
             report.append(SOURCES[i]).append(" vs ").append(SOURCES[j])
-                .append(": ").append(pct(agree[i][j],shared[i][j]))
+                .append(": ").append(pct(stats.agreementMeters[i][j],
+                    stats.sharedMeters[i][j]))
                 .append(" cuando ambos clasifican (")
-                .append(num(shared[i][j]/1000)).append(" km comparables)")
+                .append(num(stats.sharedMeters[i][j]/1000))
+                .append(" km comparables)")
                 .append("\n");
         }
-        report.append("Los tres coinciden: ").append(num(allThree/1000))
-            .append(" km · ").append(pct(allThree,gpsMeters))
+        report.append("Los tres coinciden: ").append(num(stats.threeAgreeMeters/1000))
+            .append(" km · ").append(pct(stats.threeAgreeMeters,gpsMeters))
             .append(" del GPS comparable.\n\n")
             .append("Los porcentajes incluyen DESCONOCIDA y suman 100% por fuente.")
             .append("\nLa distancia GPS comparable puede diferir del odómetro OEM.")
