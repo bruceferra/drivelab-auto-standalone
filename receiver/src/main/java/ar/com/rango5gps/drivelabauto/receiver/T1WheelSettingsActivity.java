@@ -107,6 +107,47 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
             boolean active=!p.getBoolean(T1WazeWheelService.ENABLED,false);
             p.edit().putBoolean(T1WazeWheelService.ENABLED,active).apply();
         });
+        text(body,"NUEVO · PUENTE OEM DEL VOLANTE AL CLÚSTER. "+
+            "El APK original T1Launcher T1N134 recibe códigos 1000–1003 "+
+            "desde IHardKeyCallback (Binder), NO como KeyEvent Android. "+
+            "DriveLab busca los botones accesibles de Waze en PANTALLA 2, "+
+            "y solicita conexión al mismo servicio OEM SOLO si activás "+
+            "esta opción y Waze está visible. Google Maps queda intacto.",13);
+        button(body,"CONECTAR / DESCONECTAR RUEDITA OEM → WAZE",()->{
+            SharedPreferences p=prefs();
+            boolean active=p.getBoolean(T1WazeWheelService.OEM_BINDER_ENABLED,false);
+            if(active){
+                p.edit().putBoolean(T1WazeWheelService.OEM_BINDER_ENABLED,false)
+                    .putString(T1WazeWheelService.OEM_BINDER_STATUS,
+                        "Desactivando enlace; no se usará en Google Maps")
+                    .apply();
+                report.setText("PUENTE OEM DESACTIVADO. La conexión se "+
+                    "cierra en el próximo ciclo del servicio.");
+                return;
+            }
+            new android.app.AlertDialog.Builder(this)
+                .setTitle("VOLANTE OEM → WAZE · PRUEBA EN P")
+                .setMessage("T1Launcher usa un servicio Binder del fabricante. "+
+                    "Podemos conectarlo directamente para Waze en el clúster "+
+                    "y reconocer giro 1000/1001, ATRÁS 1002 y OK 1003. "+
+                    "\n\nIMPORTANTE: algunas ROM admiten UN solo receptor "+
+                    "de teclas. Podría interrumpir temporalmente las "+
+                    "funciones de volante de T1Launcher mientras Waze "+
+                    "esté visible. Desactivá desde esta pantalla si sucede. "+
+                    "\n\nNo se activará al inicio ni en Google Maps. "+
+                    "Probalo únicamente con el auto detenido en P.")
+                .setNegativeButton("CANCELAR",null)
+                .setPositiveButton("ACTIVAR SOLO EN WAZE",(dialog,which)->{
+                    p.edit().putBoolean(T1WazeWheelService.ENABLED,true)
+                        .putBoolean(T1WazeWheelService.OEM_BINDER_ENABLED,true)
+                        .putString(T1WazeWheelService.OEM_BINDER_STATUS,
+                            "Solicitado; esperando Waze y servicio Accesibilidad")
+                        .apply();
+                    report.setText("Puente solicitado. Abrí Waze en "+
+                        "pantalla 2; al regresar consultá el ESTADO. "+
+                        "Si el OEM rechaza la conexión aparecerá el motivo.");
+                }).show();
+        });
         text(body,"APRENDIZAJE SIN SALIR DE DRIVELAB: "+
             "puede capturar el evento la pantalla o el servicio "+
             "'DriveLab · Waze y volante'. Ver abajo los códigos; "+
