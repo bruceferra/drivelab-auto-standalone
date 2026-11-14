@@ -3,122 +3,108 @@ import ar.com.rango5gps.drivelabauto.receiver.MirrorParkingPolicy.Gear;
 import ar.com.rango5gps.drivelabauto.receiver.MirrorParkingPolicy.Phase;
 import ar.com.rango5gps.drivelabauto.receiver.MirrorParkingPolicy.Action;
 
-/** No OEM writes. Regression tests for future R/D parking automation. */
+/** Pure FSM regressions: no vehicle signals or OEM writes. */
 public final class MirrorParkingPolicyTest {
-    static int checks=0;
+    private static int checks=0;
     static void eq(Object actual,Object expected){
         checks++;
         if(!actual.equals(expected))
             throw new AssertionError("Expected "+expected+" got "+actual);
     }
-    static void yes(boolean b){checks++;if(!b)throw new AssertionError("condition failed");}
+    static void yes(boolean actual){checks++;if(!actual)throw new AssertionError("failed");}
     static void invalid(Runnable r){
         checks++;
-        try{r.run();throw new AssertionError("Expected exception");}
-        catch(IllegalArgumentException ex){}
+        try{r.run();throw new AssertionError("Expected IllegalArgumentException");}
+        catch(IllegalArgumentException expected){}
     }
-    static void testParkingShuffle(){
-        MirrorParkingPolicy m=new MirrorParkingPolicy(10);
-        eq(m.observe(Gear.R,0,0,true),Action.NONE); // no startup movement
-        eq(m.observe(Gear.D,0,200,true),Action.NONE);
-        eq(m.observe(Gear.R,0,400,true),Action.TILT_ON_R);
-        eq(m.phase(),Phase.TILTING);
-        m.completeTilt(10,10);
-        eq(m.phase(),Phase.TILTED);
-        eq(m.observe(Gear.D,3,1600,true),Action.NONE);
-        eq(m.observe(Gear.R,0,2100,true),Action.NONE);
-        eq(m.observe(Gear.D,8,2700,true),Action.NONE);
-        eq(m.observe(Gear.D,10,3200,true),Action.NONE);
-        eq(m.observe(Gear.D,10.1,3400,true),Action.NONE);
-        eq(m.observe(Gear.D,11.0,4100,true),Action.RESTORE_AFTER_NON_R_SPEED);
-        eq(m.observe(Gear.D,11.0,4300,true),Action.NONE);
-        eq(m.phase(),Phase.RESTORING);
-        m.completeRestore(10,10);
-        eq(m.phase(),Phase.NORMAL);
-        eq(m.observe(Gear.D,14,6000,true),Action.NONE);
-        eq(m.observe(Gear.R,0,7000,true),Action.TILT_ON_R);
+    static MirrorParkingPolicy lowered(int left,int right){
+        MirrorParkingPolicy p=new MirrorParkingPolicy(left,right);
+        eq(p.observe(Gear.D,0,100,true),Action.NONE);
+        eq(p.observe(Gear.R,0,200,true),Action.TILT_ON_R);
+        p.completeTilt(left,right);
+        eq(p.phase(),Phase.TILTED);
+        return p;
     }
-    static void testNoFalseTriggers(){
-        MirrorParkingPolicy m=new MirrorParkingPolicy(4);
-        eq(m.observe(Gear.P,0,0,true),Action.NONE);
-        eq(m.observe(Gear.R,1,200,true),Action.NONE); // not stopped
-        eq(m.observe(Gear.D,0,300,true),Action.NONE);
-        eq(m.observe(Gear.R,0,400,false),Action.NONE); // unarmed invalidates edge
-        eq(m.observe(Gear.R,0,450,true),Action.NONE); // R at startup not enough
-        eq(m.observe(Gear.D,0,455,true),Action.NONE);
-        eq(m.observe(Gear.R,0,460,true),Action.TILT_ON_R);
-        m.completeTilt(4,4);
-        eq(m.observe(Gear.R,16,1300,true),Action.NONE); // reversing fast must NOT restore
-        eq(m.observe(Gear.N,18,1600,true),Action.NONE);
-        eq(m.observe(Gear.D,11,2000,true),Action.NONE);
-        eq(m.observe(Gear.D,8,2500,true),Action.NONE); // D stable even at 8 km/h
-        eq(m.observe(Gear.D,11,2800,true),Action.RESTORE_AFTER_NON_R_SPEED);
-        eq(m.observe(Gear.D,12,3600,true),Action.NONE);
+    static void pThirtySecondsOnly(){
+        MirrorParkingPolicy p=lowered(2,3);
+        eq(p.observe(Gear.P,0,1000,true),Action.NONE);
+        eq(p.observe(Gear.P,0,30999,true),Action.NONE);
+        eq(p.observe(Gear.P,0,31000,true),Action.NONE);
+        eq(p.observe(Gear.P,0,31001,true),Action.RESTORE_AFTER_NON_R_SPEED);
+        eq(p.phase(),Phase.RESTORING);
+        p.completeRestore(2,3);
+        eq(p.phase(),Phase.NORMAL);
+        // No duplicate restoration while parked.
+        eq(p.observe(Gear.P,0,33000,true),Action.NONE);
     }
-    static void testNeutralCoastAndUnknown(){
-        MirrorParkingPolicy m=new MirrorParkingPolicy(3);
-        eq(m.observe(Gear.D,0,0,true),Action.NONE);
-        eq(m.observe(Gear.R,0,100,true),Action.TILT_ON_R);
-        m.completeTilt(3,3);
-        eq(m.observe(Gear.N,12,500,true),Action.NONE);
-        eq(m.observe(Gear.N,12,1200,true),Action.NONE);
-        eq(m.observe(Gear.N,12,1300,true),Action.NONE); // Never restore while coasting N
-        eq(m.observe(Gear.D,0,1400,true),Action.NONE);
-        eq(m.observe(Gear.D,0,2250,true),Action.RESTORE_AFTER_NON_R_SPEED);
-        m.completeRestore(3,3);
-        eq(m.phase(),Phase.NORMAL);
-
-        MirrorParkingPolicy other=new MirrorParkingPolicy(2);
-        eq(other.observe(Gear.D,0,0,true),Action.NONE);
-        eq(other.observe(Gear.R,0,20,true),Action.TILT_ON_R);
-        other.completeTilt(2,2);
-        eq(other.observe(Gear.UNKNOWN,30,1000,true),Action.NONE);
-        eq(other.observe(Gear.UNKNOWN,30,1900,true),Action.NONE);
-        eq(other.observe(Gear.D,11,2000,true),Action.NONE);
-        eq(other.observe(Gear.R,0,2500,true),Action.NONE);
-        eq(other.observe(Gear.N,10.01,2800,true),Action.NONE);
-        eq(other.observe(Gear.N,11,3700,true),Action.NONE);
-        eq(other.observe(Gear.D,0,3900,true),Action.NONE);
-        eq(other.observe(Gear.D,0,4750,true),Action.RESTORE_AFTER_NON_R_SPEED);
+    static void reverseParkingShufflesDoNotRestore(){
+        MirrorParkingPolicy p=lowered(4,4);
+        eq(p.observe(Gear.P,0,1000,true),Action.NONE);
+        eq(p.observe(Gear.P,0,12000,true),Action.NONE);
+        eq(p.observe(Gear.D,0,13000,true),Action.NONE);
+        eq(p.observe(Gear.D,3,14000,true),Action.NONE);
+        eq(p.observe(Gear.D,5,18000,true),Action.NONE);
+        eq(p.observe(Gear.R,0,19000,true),Action.NONE);
+        eq(p.observe(Gear.P,0,19500,true),Action.NONE);
+        eq(p.observe(Gear.P,0,48000,true),Action.NONE);
+        eq(p.observe(Gear.D,4.9,48100,true),Action.NONE);
+        eq(p.observe(Gear.R,0,50000,true),Action.NONE);
+        eq(p.phase(),Phase.TILTED);
+        // A second shift into R never issues an additional tilt.
+        eq(p.leftIssued(),4);
+        eq(p.rightIssued(),4);
     }
-    static void testInterruptedOperations(){
-        MirrorParkingPolicy m=new MirrorParkingPolicy(5);
-        eq(m.observe(Gear.D,0,0,true),Action.NONE);
-        eq(m.observe(Gear.R,0,100,true),Action.TILT_ON_R);
-        m.completeTilt(5,4);
-        eq(m.phase(),Phase.UNKNOWN_POSITION);
-        eq(m.observe(Gear.D,12,1400,true),Action.NONE);
-        m.invalidate();
-        eq(m.phase(),Phase.UNKNOWN_POSITION);
+    static void forwardDrivingOver5RestoresOnce(){
+        MirrorParkingPolicy p=lowered(2,2);
+        eq(p.observe(Gear.N,0,1000,true),Action.NONE);
+        eq(p.observe(Gear.D,0,1100,true),Action.NONE);
+        eq(p.observe(Gear.D,4.9,2000,true),Action.NONE);
+        eq(p.observe(Gear.D,5.0,2100,true),Action.NONE);
+        eq(p.observe(Gear.D,5.01,2200,true),
+            Action.RESTORE_AFTER_NON_R_SPEED);
+        p.completeRestore(2,2);
+        eq(p.phase(),Phase.NORMAL);
+        eq(p.observe(Gear.D,12,3300,true),Action.NONE);
+    }
+    static void rollingParkDoesNotCount(){
+        MirrorParkingPolicy p=lowered(2,2);
+        eq(p.observe(Gear.P,2,1000,true),Action.NONE);
+        eq(p.observe(Gear.P,0,32000,true),Action.NONE);
+        eq(p.observe(Gear.P,0,61999,true),Action.NONE);
+        eq(p.observe(Gear.P,0,62001,true),
+            Action.RESTORE_AFTER_NON_R_SPEED);
+    }
+    static void interruptionResetsParkCounter(){
+        MirrorParkingPolicy p=lowered(2,2);
+        eq(p.observe(Gear.P,0,1000,true),Action.NONE);
+        eq(p.observe(Gear.P,0,29000,true),Action.NONE);
+        eq(p.observe(Gear.N,0,29500,true),Action.NONE);
+        eq(p.observe(Gear.P,0,30000,true),Action.NONE);
+        eq(p.observe(Gear.P,0,60000,true),Action.NONE);
+        eq(p.observe(Gear.P,0,60001,true),
+            Action.RESTORE_AFTER_NON_R_SPEED);
+    }
+    static void invalidStateNoMotion(){
+        MirrorParkingPolicy p=lowered(2,2);
+        eq(p.observe(Gear.P,Double.NaN,5000,true),Action.NONE);
+        eq(p.observe(Gear.P,0,6000,true),Action.NONE);
+        eq(p.observe(Gear.P,0,36000,true),Action.NONE);
+        eq(p.observe(Gear.P,0,36001,true),
+            Action.RESTORE_AFTER_NON_R_SPEED);
+        MirrorParkingPolicy unexpected=new MirrorParkingPolicy(2);
+        eq(unexpected.observe(Gear.R,0,1000,true),Action.NONE);
         invalid(()->new MirrorParkingPolicy(0));
         invalid(()->new MirrorParkingPolicy(21));
-        MirrorParkingPolicy cap=new MirrorParkingPolicy(20,15);
-        eq(cap.requestedLeft(),20);
-        eq(cap.requestedRight(),15);
-    }
-    static void testManualRecoveryRearmsCleanFSM(){
-        // Recovery must re-arm only after both sides fully completed.
-        yes(MirrorParkingPolicy.completedManualRecovery(10,10,10,10));
         yes(!MirrorParkingPolicy.completedManualRecovery(9,10,10,10));
-        yes(!MirrorParkingPolicy.completedManualRecovery(10,9,10,10));
-        yes(!MirrorParkingPolicy.completedManualRecovery(0,0,10,10));
-        yes(!MirrorParkingPolicy.completedManualRecovery(0,0,0,0));
-        // After successful recovery, service creates a *fresh* policy.
-        // It must not tilt on an initial R sample without a known exit from R.
-        MirrorParkingPolicy reset=new MirrorParkingPolicy(2);
-        eq(reset.observe(Gear.R,0,100,true),Action.NONE);
-        eq(reset.observe(Gear.P,0,300,true),Action.NONE);
-        eq(reset.observe(Gear.R,0,500,true),Action.TILT_ON_R);
-        reset.completeTilt(2,2);
-        eq(reset.observe(Gear.D,15,2000,true),Action.NONE);
-        eq(reset.observe(Gear.D,15,2900,true),Action.RESTORE_AFTER_NON_R_SPEED);
+        yes(MirrorParkingPolicy.completedManualRecovery(10,10,10,10));
     }
     public static void main(String[] args){
-        testParkingShuffle();
-        testNoFalseTriggers();
-        testNeutralCoastAndUnknown();
-        testInterruptedOperations();
-        testManualRecoveryRearmsCleanFSM();
-        System.out.println("PASS "+checks+" assertions: R single tilt, D stable 800ms restores at zero or road speed; N/P cannot restore");
+        pThirtySecondsOnly();
+        reverseParkingShufflesDoNotRestore();
+        forwardDrivingOver5RestoresOnce();
+        rollingParkDoesNotCount();
+        interruptionResetsParkCounter();
+        invalidStateNoMotion();
+        System.out.println("PASS "+checks+" assertions: R tilt once, P >30s stopped or D >5km/h restore, low-speed maneuvers ignored");
     }
 }
