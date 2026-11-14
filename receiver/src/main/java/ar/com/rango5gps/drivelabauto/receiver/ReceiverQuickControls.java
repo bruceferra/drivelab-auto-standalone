@@ -303,6 +303,18 @@ final class ReceiverQuickControls {
         else message("Alarma 2074: cambio manual ON/OFF solicitado…");
     }
     private void setMirrorMode(boolean auto){
+        if(auto){
+            String position=mirrorPrefs().getString(
+                MirrorAutomationService.POSITION,"");
+            if(position.startsWith("INCIERTA")||
+                    position.startsWith("R · inclinados")){
+                message("AUTO no iniciado: los espejos pueden seguir bajos. "+
+                    "Ajustalos con el mando original y confirmá la "+
+                    "referencia desde la barra REVERSA, detenido en P.");
+                refresh();
+                return;
+            }
+        }
         try{
             Intent intent=new Intent(activity,MirrorAutomationService.class)
                 .setAction(auto?MirrorAutomationService.ACTION_AUTO:
