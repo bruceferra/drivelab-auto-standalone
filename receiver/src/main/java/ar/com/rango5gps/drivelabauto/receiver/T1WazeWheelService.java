@@ -31,10 +31,11 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * User-enabled accessibility experiment for safe Waze prompt choices.
- * Does NOT register with OEM steering Binder or send global key injection.
- * On Android 11 it sees ONLY Android KeyEvent dispatches allowed by the ROM.
- * Never clicks coordinates. Never performs unattended confirmations.
+ * Opt-in Waze-only steering accessibility on any T1 display.
+ * OEM Binder provides hard keys; labelled Waze nodes provide actual buttons.
+ * As fallback, explicit labelled prompt selection permits a short tap ONLY
+ * at that node's accessibility bounds on that same Waze display.
+ * No vehicle writes, no global input injection, no unattended acceptance.
  */
 public final class T1WazeWheelService extends AccessibilityService {
     static final String PREFS="t1_waze_wheel_v1";
