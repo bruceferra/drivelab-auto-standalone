@@ -39,23 +39,46 @@ jobs:
             -o "$RUNNER_TEMP/maps/overture.geojsonseq"
           test -s "$RUNNER_TEMP/maps/overture.geojsonseq"
           wc -lc "$RUNNER_TEMP/maps/overture.geojsonseq"
-      - name: Download original official IGN PBA Red Vial 2026 shapefile
-        run: |
-          set -euo pipefail
-          python3 tools/download_ign_pba.py --out "$RUNNER_TEMP/maps/ign-official.zip"
-          mkdir -p "$RUNNER_TEMP/maps/ign_source"
-          unzip -q "$RUNNER_TEMP/maps/ign-official.zip" -d "$RUNNER_TEMP/maps/ign_source"
-          find "$RUNNER_TEMP/maps/ign_source" -iname '*.shp' -print
-          test "$(find "$RUNNER_TEMP/maps/ign_source" -iname '*.shp' | wc -l)" -ge 1
-      - name: Reproject official IGN road shapefile WGS84 geojsonseq
+      - name: Get IGN official provincial roads, with WFS source fallback
         shell: bash
         run: |
           set -euo pipefail
-          shp=$(find "$RUNNER_TEMP/maps/ign_source" -type f -iname '*.shp' | head -1)
-          test -n "$shp"
-          ogr2ogr -f GeoJSONSeq "$RUNNER_TEMP/maps/ign.geojsonseq" \
-            "$shp" -t_srs EPSG:4326
+          mkdir -p "$RUNNER_TEMP/maps/ign_source"
+          # 1: Buenos Aires official catalog ZIP (may be temporarily offline)
+          if timeout 65 python3 tools/download_ign_pba.py --out "$RUNNER_TEMP/maps/ign-official.zip"; then
+            unzip -q "$RUNNER_TEMP/maps/ign-official.zip" -d "$RUNNER_TEMP/maps/ign_source"
+            shp=$(find "$RUNNER_TEMP/maps/ign_source" -type f -iname '*.shp' | head -1)
+            test -n "$shp"
+            ogr2ogr -f GeoJSONSeq "$RUNNER_TEMP/maps/ign.geojsonseq" "$shp" -t_srs EPSG:4326
+            echo "Source: official Datos Abiertos PBA Red Vial (IGN)"
+          else
+            echo "::warning::Official PBA CKAN timed out: trying published IGN GeoServer WFS and INDEC IGN mirror."
+            success=0
+            for service in \
+              "https://wms.ign.gob.ar/geoserver/ows?service=WFS&version=1.1.0&request=GetCapabilities" \
+              "https://geonode.indec.gob.ar/geoserver/ows?service=WFS&version=1.0.0&request=GetCapabilities"; do
+              echo "Inspect published WFS layers: $service"
+              if timeout 80 ogrinfo -ro "WFS:$service" > "$RUNNER_TEMP/maps/ign-layers.txt" 2>&1; then
+                layer=$(grep -i 'red_vial_provincial' "$RUNNER_TEMP/maps/ign-layers.txt" | head -1 | sed -E 's/^[[:space:]]*[0-9]+: ([^ ]+).*/\1/' || true)
+                if test -n "$layer"; then
+                  echo "Found official IGN-derived layer $layer"
+                  rm -f "$RUNNER_TEMP/maps/ign.geojsonseq"
+                  if timeout 360 ogr2ogr -f GeoJSONSeq "$RUNNER_TEMP/maps/ign.geojsonseq" \
+                    "WFS:$service" "$layer" -spat -64.9 -42.1 -56.0 -33.0 \
+                    -t_srs EPSG:4326 -skipfailures; then
+                    if test -s "$RUNNER_TEMP/maps/ign.geojsonseq"; then
+                      echo "Source: public IGN WFS/INDEC mirror, validated geometry"; success=1;break
+                    fi
+                  fi
+                fi
+              else
+                tail -c 500 "$RUNNER_TEMP/maps/ign-layers.txt" || true
+              fi
+            done
+            test "$success" = 1 || { echo "::error::Cannot fetch genuine IGN source; no fake fallback"; exit 1; }
+          fi
           test -s "$RUNNER_TEMP/maps/ign.geojsonseq"
+          wc -lc "$RUNNER_TEMP/maps/ign.geojsonseq"
       - name: Build both genuine independent SQLite databases + SHA256 manifests
         shell: bash
         run: |
