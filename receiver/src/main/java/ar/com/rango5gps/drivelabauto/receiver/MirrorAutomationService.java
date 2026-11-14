@@ -61,10 +61,14 @@ public final class MirrorAutomationService extends Service {
         // during the current process, including screen changes.
         // Never automatically re-arm after an interrupted movement.
         // Do not rearm a possibly interrupted mirror movement.
-        if(p.getString(POSITION,"").startsWith("INCIERTA")){
-            p.edit().putString(STATUS,
-                "ESPEJOS AUTO SOLICITADO, PAUSADO POR POSICIÓN INCIERTA; "+
-                "revisar físicamente y rearmar manualmente").apply();
+        String physical=p.getString(POSITION,"");
+        if(physical.startsWith("INCIERTA")||physical.startsWith("R · inclinados")){
+            // A restarted process has no reliable pulse/angle history.
+            // Never create a fresh NORMAL FSM while mirrors may be down.
+            p.edit().putBoolean(AUTO,false)
+                .putString(POSITION,"INCIERTA · espejos posiblemente bajos tras reinicio")
+                .putString(STATUS,"REARME BLOQUEADO: revisá y ajustá los espejos "+
+                    "con el control original, antes de volver a AUTO").apply();
             return;
         }
         p.edit().putString(STATUS,"ESPEJOS AUTO · iniciando servicio de fondo")
@@ -109,6 +113,17 @@ public final class MirrorAutomationService extends Service {
             return START_NOT_STICKY;
         }
         if(ACTION_AUTO.equals(action)){
+            // An Activity watchdog can resend ACTION_AUTO during a long pulse
+            // or while already tilted. Never clear POSITION or restart FSM.
+            if(running)return START_STICKY;
+            String physical=prefs().getString(POSITION,"");
+            if(physical.startsWith("INCIERTA")||physical.startsWith("R · inclinados")){
+                prefs().edit().putBoolean(AUTO,false)
+                    .putString(POSITION,"INCIERTA · retorno no confirmado")
+                    .putString(STATUS,"AUTO BLOQUEADO: espejos posiblemente bajos; "+
+                        "restaurar manualmente y confirmar referencia normal").apply();
+                stopSelf();return START_NOT_STICKY;
+            }
             prefs().edit().putBoolean(AUTO,true)
                 .putString(POSITION,"AUTO armado · referencia de ángulo NO medida")
                 .putString(STATUS,"AUTO armado · esperando transición nueva a R").apply();
@@ -232,12 +247,16 @@ public final class MirrorAutomationService extends Service {
                                 String.format(java.util.Locale.US,
                                     "AUTO esperando retorno · marcha %s "+
                                     "· velocidad %.1f (%s; 2148=%.1f / 1089=%.1f) "+
-                                    "· retorno habilitado en D estable 800ms",
+                                    "· retorna en P detenido 1200ms o D estable 800ms",
                                     gear,speed,speedRead.source,
                                     speedRead.raw2148,speedRead.raw1089)).apply();
                         }
                         if(action==MirrorParkingPolicy.Action.TILT_ON_R){
-                            prefs().edit().putString(STATUS,
+                            // Mark uncertain BEFORE first actuator command.
+                            // Process death mid-movement must never look normal.
+                            prefs().edit().putString(POSITION,
+                                "INCIERTA · bajada en curso")
+                                .putString(STATUS,
                                 "AUTO · bajando espejos al entrar en R")
                                 .putString(LAST_TRANSITION,
                                     "R detectada · iniciada bajada: "+
@@ -254,10 +273,14 @@ public final class MirrorAutomationService extends Service {
                                 throw new IllegalStateException("Bajada incompleta");
                             movementStarted=false;
                         }else if(action==MirrorParkingPolicy.Action.RESTORE_AFTER_NON_R_SPEED){
-                            prefs().edit().putString(STATUS,
-                                "AUTO · recuperando posición D con marcha estable")
+                            // Allow stationary P, as well as verified stable D.
+                            String startGear=gear==MirrorParkingPolicy.Gear.P?"P":"D";
+                            prefs().edit().putString(POSITION,
+                                "INCIERTA · retorno en curso")
+                                .putString(STATUS,
+                                "AUTO · recuperando espejos en "+startGear)
                                 .putString(LAST_TRANSITION,
-                                    "D estable · retorno iniciado: "+
+                                    startGear+" estable · retorno iniciado: "+
                                     System.currentTimeMillis()).apply();
                             movementStarted=true;
                             int[] n=runPulses(oem,false,policy.leftIssued(),
@@ -265,7 +288,7 @@ public final class MirrorAutomationService extends Service {
                             policy.completeRestore(n[0],n[1]);
                             prefs().edit().putString(POSITION,
                                 policy.phase()==MirrorParkingPolicy.Phase.NORMAL?
-                                "D · retorno relativo terminado":
+                                startGear+" · retorno relativo terminado":
                                 "INCIERTA · retorno interrumpido").apply();
                             if(policy.phase()!=MirrorParkingPolicy.Phase.NORMAL)
                                 throw new IllegalStateException("Retorno incompleto");
@@ -341,9 +364,9 @@ public final class MirrorAutomationService extends Service {
                 if(automatic){
                     if(down && (gear!=2 || speed>8))
                         throw new IllegalStateException("Salió de R / velocidad alta durante bajada");
-                    if(!down && gear!=4)
+                    if(!down && gear!=4 && !(gear==1 && speed<=0.5))
                         throw new IllegalStateException(
-                            "Retorno automático interrumpido: dejó marcha D");
+                            "Retorno interrumpido: requiere D o P detenido");
                     // For the upward return to normal rear visibility, do
                     // NOT gate on a speed threshold or require the driver to
                     // brake. The OEM speed remains validated at each step.
