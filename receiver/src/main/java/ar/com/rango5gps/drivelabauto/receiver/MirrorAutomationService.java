@@ -414,16 +414,18 @@ public final class MirrorAutomationService extends Service {
                 if(automatic){
                     if(down && (gear!=2 || speed>8))
                         throw new IllegalStateException("Salió de R / velocidad alta durante bajada");
-                    // Keep each physical actuator write inside the policy's
-                    // selected safe mode. Stop immediately if gear/speed leaves
-                    // the established restore condition.
-                    if(!down && !(gear==4 && speed>5.0) &&
-                            !(gear==1 && speed<=0.5))
+                    // The >5 km/h D threshold is a TRIGGER in the policy,
+                    // not a condition that must stay true for every pulse.
+                    // A driver slowing down from 6 to 4 km/h MUST NOT leave
+                    // the return halfway up (real-world uncertain-pose bug).
+                    // Once triggered, allow finishing in D at ANY valid speed
+                    // or in P only while still stopped. R/N/unknown cancels.
+                    if(!down && !(gear==4 || (gear==1 && speed<=0.5)))
                         throw new IllegalStateException(
-                            "Retorno interrumpido: solo P detenido o D >5 km/h");
-                    // For the upward return to normal rear visibility, do
-                    // NOT gate on a speed threshold or require the driver to
-                    // brake. The OEM speed remains validated at each step.
+                            "Retorno interrumpido: marcha cambió fuera de D/P detenido");
+                    if(!down && (!Double.isFinite(speed)||speed<0||speed>200))
+                        throw new IllegalStateException(
+                            "Retorno interrumpido: velocidad OEM inválida");
                 }else if(speed>0.5){
                     throw new IllegalStateException("Vehículo dejó de estar detenido");
                 }
