@@ -216,7 +216,7 @@ final class ReceiverQuickControls {
         rightPlus=button(d,"DER +",TEAL,()->adjust(MirrorAutomationService.RIGHT,1));
 
         LinearLayout e=row(extra);
-        button(e,"RECUPERAR ESPEJOS · 10 PASOS ARRIBA",ORANGE,this::restoreMirrors);
+        button(e,"RECUPERAR ESPEJOS · PULSOS REGISTRADOS",ORANGE,this::restoreMirrors);
 
         config=new TextView(activity);config.setTextSize(14);
         config.setTextColor(T1JetourTheme.MUTED);
@@ -253,6 +253,8 @@ final class ReceiverQuickControls {
         if(rightPlus!=null)rightPlus.setText("DER + ("+r+")");
         boolean serviceActive=m.getBoolean(MirrorAutomationService.SERVICE_ACTIVE,false);
         config.setText("Espejos: "+(on?"AUTO":"MANUAL")+
+            " · pendientes IZQ "+m.getInt(MirrorAutomationService.PENDING_LEFT,0)+
+            " / DER "+m.getInt(MirrorAutomationService.PENDING_RIGHT,0)+
             " · servicio de fondo: "+(serviceActive?"ACTIVO":
                 (on?"SIN SERVICIO · revisar estado":"detenido"))+
             "  · pasos por lado: IZQ "+l+" / DER "+r+
@@ -310,7 +312,11 @@ final class ReceiverQuickControls {
         if(auto){
             String position=mirrorPrefs().getString(
                 MirrorAutomationService.POSITION,"");
-            if(position.startsWith("INCIERTA")||
+            if(mirrorPrefs().getBoolean(
+                    MirrorAutomationService.SAFETY_HOLD,true)||
+                    mirrorPrefs().getInt(MirrorAutomationService.PENDING_LEFT,0)>0||
+                    mirrorPrefs().getInt(MirrorAutomationService.PENDING_RIGHT,0)>0||
+                    position.startsWith("INCIERTA")||
                     position.startsWith("R · inclinados")){
                 message("AUTO no iniciado: los espejos pueden seguir bajos. "+
                     "Ajustalos con el mando original y confirmá la "+
@@ -336,8 +342,8 @@ final class ReceiverQuickControls {
             activity.startForegroundService(new Intent(activity,
                 MirrorAutomationService.class)
                 .setAction(MirrorAutomationService.ACTION_RECOVER));
-            message("Recuperación manual solicitada: 10 pasos arriba por lado. "+
-                "Solo detenido; posición final no medida. Verificar visualmente.");
+            message("Recuperación solicitada: solo los pulsos pendientes "+
+                "registrados de cada espejo, en P y detenido.");
             refresh();
         }catch(Exception ex){message("Recuperación: "+ex.getMessage());}
     }
