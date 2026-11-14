@@ -2,6 +2,10 @@ package ar.com.rango5gps.drivelabauto.receiver;
 
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.AccessibilityServiceInfo;
+import android.accessibilityservice.GestureDescription;
+import android.graphics.Path;
+import android.hardware.display.DisplayManager;
+import android.view.Display;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.graphics.Color;
@@ -40,7 +44,9 @@ public final class T1WazeWheelService extends AccessibilityService {
         SERVICE_AT="service_connected_at",WINDOW="last_capture_window",
         OEM_BINDER_ENABLED="oem_binder_enabled",
         OEM_BINDER_STATUS="oem_binder_status",
-        OEM_LAST="oem_last_key";
+        OEM_LAST="oem_last_key",
+        SCAN_REQUEST="scan_requested_at",SCAN_RESULT="scan_result",
+        SCAN_FINISHED="scan_finished_at";
     private static final long LEARN_MS=45000L;
     static final String NEXT="wheel_next",PREV="wheel_prev",
         OK="wheel_ok",BACK="wheel_back",ROUTES="wheel_routes";
@@ -60,27 +66,36 @@ public final class T1WazeWheelService extends AccessibilityService {
     };
     private final ArrayList<Candidate> choices=new ArrayList<>();
     private TextView hint;
-    private WindowManager windows;
+    private WindowManager windows,hintWindowManager;
+    private int wazeDisplayId=-1,hintDisplayId=-1;
     private int selected=0;
     private String selectedLabel="",seenPackage="";
-    private boolean alternateList,mapMenuArmed;
+    private boolean alternateList,mapMenuArmed,promptArmed;
     private long lastButtonAt;
     private T1OemHardKeyBridge oemBridge;
     private final Handler main=new Handler(Looper.getMainLooper());
-    private long lastOemKeyAt;
+    private long lastOemKeyAt,lastScanAt;
     private int lastOemCode=-1;
     private final Runnable oemHeartbeat=new Runnable(){
         @Override public void run(){
             refreshOemBridge();
-            main.postDelayed(this,2500L);
+            scanRequestedWindow();
+            main.postDelayed(this,1800L);
         }
     };
     private static final class Candidate{
         final AccessibilityNodeInfo node;
         final String label;
         final Rect bounds;
+        final int displayId;
+        final boolean gestureAllowed;
         Candidate(AccessibilityNodeInfo n,String label){
+            this(n,label,-1,false);
+        }
+        Candidate(AccessibilityNodeInfo n,String label,int displayId,
+                  boolean gestureAllowed){
             this.node=n;this.label=label;
+            this.displayId=displayId;this.gestureAllowed=gestureAllowed;
             bounds=new Rect();n.getBoundsInScreen(bounds);
         }
     }
@@ -120,6 +135,8 @@ public final class T1WazeWheelService extends AccessibilityService {
             "\nWaze en clúster: "+p.getString("waze_display",
                 "todavía no detectado")+
             "\nÚltima señal OEM: "+p.getString(OEM_LAST,"ninguna")+
+            "\nBOTONES WAZE (última inspección):\n"+
+                p.getString(SCAN_RESULT,"Tocá INSPECCIONAR CONTROLES WAZE.")+
             "\nÚltima ventana durante captura: "+
             p.getString(WINDOW,"sin datos")+
             "\nSIGUIENTE="+p.getInt(NEXT,KeyEvent.KEYCODE_DPAD_RIGHT)+
@@ -203,8 +220,9 @@ public final class T1WazeWheelService extends AccessibilityService {
                     if(root!=null&&WAZE.equals(
                             String.valueOf(root.getPackageName()))&&
                             root.isVisibleToUser()){
+                        wazeDisplayId=across.keyAt(d);
                         prefs().edit().putString("waze_display",
-                            "Display "+across.keyAt(d)+" · Waze accesible")
+                            "Display "+wazeDisplayId+" · Waze accesible")
                             .apply();
                         return root;
                     }
@@ -218,10 +236,12 @@ public final class T1WazeWheelService extends AccessibilityService {
         AccessibilityNodeInfo current=getRootInActiveWindow();
         if(current!=null&&WAZE.equals(
                 String.valueOf(current.getPackageName()))){
+            wazeDisplayId=Display.DEFAULT_DISPLAY;
             prefs().edit().putString("waze_display",
                 "Display activo · Waze accesible").apply();
             return current;
         }
+        wazeDisplayId=-1;
         if(prefs().getBoolean(OEM_BINDER_ENABLED,false))
             prefs().edit().putString("waze_display",
                 "Waze no visible para Accesibilidad en ninguna pantalla").apply();
@@ -299,7 +319,7 @@ public final class T1WazeWheelService extends AccessibilityService {
         // Absolutely no key logging or interception in unrelated apps.
         AccessibilityNodeInfo root=wazeRoot();
         if(root==null){
-            mapMenuArmed=false;
+            mapMenuArmed=false;promptArmed=false;
             hideHint();
             return false;
         }
@@ -343,32 +363,46 @@ public final class T1WazeWheelService extends AccessibilityService {
             }
             return clickSelected("RUTA ALTERNATIVA · OK");
         }
-        // Second priority: genuine confirmation/cancel prompts on Waze.
+        // Waze continuation pop-up ("¿Aún vas al Obelisco?",
+        // "Continuar viaje", "No, gracias") often contains labelled TEXT
+        // children without ACTION_CLICK. Support explicitly selected labels
+        // on the actual Waze display, with guarded per-display gesture fallback.
         if(collectPromptChoices(root)){
-            lastButtonAt=SystemClock.elapsedRealtime();
             if(routeShortcut)return false;
             if(forward||backward){
+                lastButtonAt=SystemClock.elapsedRealtime();
                 selected=Math.floorMod(selected+(forward?1:-1),choices.size());
                 selectedLabel=choices.get(selected).label;
+                promptArmed=true;
                 highlight();
                 return true;
             }
             if(cancel){
                 for(int i=0;i<choices.size();i++){
-                    String norm=normalize(choices.get(i).label);
-                    if(norm.equals("cancelar")||norm.equals("cancel")||
-                        norm.equals("no")||norm.equals("volver")||
-                        norm.equals("descartar")){
+                    if(T1WazePromptPolicy.dismiss(choices.get(i).label)){
+                        lastButtonAt=SystemClock.elapsedRealtime();
                         selected=i;selectedLabel=choices.get(i).label;
-                        return clickSelected("ATRÁS");
+                        promptArmed=false;
+                        return clickSelected("CANCELAR MENSAJE WAZE");
                     }
                 }
-                hideHint();
-                status("ATRÁS: diálogo Waze detectado sin cancelar etiquetado");
-                return performGlobalAction(GLOBAL_ACTION_BACK);
+                promptArmed=false;hideHint();
+                status("ATRÁS: mensaje sin botón de cancelar identificado");
+                return false;
             }
-            return clickSelected("OK");
+            if(confirm&&!promptArmed){
+                status("MENSAJE WAZE: girá la rueda para elegir una "+
+                    "opción y recién después pulsá OK.");
+                return false;
+            }
+            if(confirm){
+                lastButtonAt=SystemClock.elapsedRealtime();
+                promptArmed=false;
+                return clickSelected("MENSAJE WAZE · OK");
+            }
+            return false;
         }
+        promptArmed=false;
         // A wheel turn focuses REAL labelled buttons. OK can click one only
         // AFTER such an explicit selection: no random initial actions.
         if((forward||backward)&&collectMapChoices(root)){
