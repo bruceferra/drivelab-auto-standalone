@@ -25,15 +25,25 @@ public final class T1VoiceShortcutSourceContractTest {
             "Voice router distinguishes navigation, math, weather and live topics");
         String shortcut=Files.readString(Path.of(
             "receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1VoiceShortcutActivity.java"));
-        ok(shortcut.contains("T1VoiceRouteActivity.ACTION_SHORTCUT_SYSTEM_VOICE") &&
-           voice.contains("root.post(this::openSystemVoice)") &&
-           voice.contains("ACTION_SHORTCUT_SYSTEM_VOICE.equals(getIntent().getAction())"),
-            "Shortcut must launch the native voice session on first tap");
-        ok(voice.contains("HABLAR · VOZ DEL SISTEMA (UN TOQUE)") &&
+        ok(shortcut.contains("T1VoiceRouteActivity.ACTION_SHORTCUT_GOOGLE_RECOGNITION") &&
+           voice.contains("root.post(this::listenExternal)") &&
+           voice.contains("ACTION_SHORTCUT_GOOGLE_RECOGNITION.equals(getIntent().getAction())"),
+            "Shortcut must open Google external recognizer on first tap");
+        ok(voice.contains("HABLAR · GOOGLE (DETECTAR DESTINO O PREGUNTA)") &&
            voice.contains("RECONOCIMIENTO INTERNO · DIAGNÓSTICO") &&
            voice.contains("voiceHandler.postDelayed(recognitionTimeout,6500L)") &&
            !voice.contains("if(state==null)root.post(this::listen)"),
-            "Never auto-start a hanging Android recognizer; 1 tap uses working system voice");
+            "Never auto-start a hanging Android recognizer; 1 tap opens Google external recognizer");
+        ok(voice.contains("dispatch(said,true)") &&
+           voice.contains("dispatch(phrase,false)") &&
+           voice.contains("if(fromVoice)") &&
+           voice.contains("navigate(target);") &&
+           voice.contains("confirmDestination(target);"),
+            "Explicit spoken navigation goes directly to Waze; typed navigation still confirms");
+        ok(!voice.contains("shareWithAi(selectedAi(),phrase.trim());") &&
+           !voice.contains("openSystemVoice();\n        status.setText(\"PREGUNTA LIBRE") &&
+           voice.contains("say(\"CONSULTA LIBRE"),
+            "Unknown spoken requests must not launch fullscreen Gemini");
         ok(!voice.contains("transact(15"),
             "Voice entry never sends vehicle commands");
         System.out.println("PASS safe external launcher shortcut for T1 universal voice");
