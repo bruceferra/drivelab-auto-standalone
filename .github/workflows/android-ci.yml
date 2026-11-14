@@ -38,6 +38,17 @@ jobs:
             common/src/main/java/ar/com/rango5gps/drivelabauto/common/MapLinks.java \
             common/tests/MapLinksTest.java
           java -cp /tmp/bridge-test MapLinksTest
+      - name: T1 APK-derived microphone and split-window regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-native-layout
+          javac -encoding UTF-8 -d /tmp/t1-native-layout \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ClusterLayoutMath.java \
+            receiver/tests/T1ClusterLayoutMathTest.java \
+            receiver/tests/T1ClusterWindowAndMicSourceContractTest.java
+          java -cp /tmp/t1-native-layout ar.com.rango5gps.drivelabauto.receiver.T1ClusterLayoutMathTest
+          java -cp /tmp/t1-native-layout ar.com.rango5gps.drivelabauto.receiver.T1ClusterWindowAndMicSourceContractTest
       - name: T1 independent Waze cluster routing static contract
         shell: bash
         run: |
