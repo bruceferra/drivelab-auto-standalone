@@ -8,6 +8,10 @@ import android.graphics.Color;
 import android.graphics.PixelFormat;
 import android.graphics.Rect;
 import android.os.SystemClock;
+import android.os.Handler;
+import android.os.Looper;
+import android.util.SparseArray;
+import android.view.accessibility.AccessibilityWindowInfo;
 import android.util.Log;
 import android.view.Gravity;
 import android.view.KeyEvent;
@@ -33,7 +37,10 @@ public final class T1WazeWheelService extends AccessibilityService {
     static final String ENABLED="enabled",PENDING="capture_pending",
         PENDING_TIME="capture_started",LAST="last_key",
         LAST_STATUS="status",LAST_TIME="last_time",
-        SERVICE_AT="service_connected_at",WINDOW="last_capture_window";
+        SERVICE_AT="service_connected_at",WINDOW="last_capture_window",
+        OEM_BINDER_ENABLED="oem_binder_enabled",
+        OEM_BINDER_STATUS="oem_binder_status",
+        OEM_LAST="oem_last_key";
     private static final long LEARN_MS=45000L;
     static final String NEXT="wheel_next",PREV="wheel_prev",
         OK="wheel_ok",BACK="wheel_back",ROUTES="wheel_routes";
@@ -58,6 +65,16 @@ public final class T1WazeWheelService extends AccessibilityService {
     private String selectedLabel="",seenPackage="";
     private boolean alternateList;
     private long lastButtonAt;
+    private T1OemHardKeyBridge oemBridge;
+    private final Handler main=new Handler(Looper.getMainLooper());
+    private long lastOemKeyAt;
+    private int lastOemCode=-1;
+    private final Runnable oemHeartbeat=new Runnable(){
+        @Override public void run(){
+            refreshOemBridge();
+            main.postDelayed(this,2500L);
+        }
+    };
     private static final class Candidate{
         final AccessibilityNodeInfo node;
         final String label;
@@ -96,6 +113,11 @@ public final class T1WazeWheelService extends AccessibilityService {
         }
         return state+"\n"+
             p.getString(LAST_STATUS,"Sin teclas capturadas")+
+            "\nPUENTE OEM WAZE: "+
+            (p.getBoolean(OEM_BINDER_ENABLED,false)?
+                "HABILITADO POR USUARIO":"APAGADO")+
+            " · "+p.getString(OEM_BINDER_STATUS,"sin enlace iniciado")+
+            "\nÚltima señal OEM: "+p.getString(OEM_LAST,"ninguna")+
             "\nÚltima ventana durante captura: "+
             p.getString(WINDOW,"sin datos")+
             "\nSIGUIENTE="+p.getInt(NEXT,KeyEvent.KEYCODE_DPAD_RIGHT)+
@@ -150,7 +172,77 @@ public final class T1WazeWheelService extends AccessibilityService {
             .putString(LAST_STATUS,
                 "Servicio de accesibilidad conectado; listo para APRENDER")
             .apply();
-        Log.i("DriveLabWheel","AccessibilityService connected; key filter requested");
+        oemBridge=new T1OemHardKeyBridge(this,new T1OemHardKeyBridge.Receiver(){
+            @Override public void onHardKey(int code,int action,int extra){
+                handleOemKey(code,action,extra);
+            }
+            @Override public void onStatus(String message){
+                prefs().edit().putString(OEM_BINDER_STATUS,message).apply();
+                Log.i("DriveLabWheel",message);
+            }
+        });
+        main.removeCallbacks(oemHeartbeat);
+        main.post(oemHeartbeat);
+        Log.i("DriveLabWheel","AccessibilityService connected; OEM bridge is opt-in");
+    }
+    /** Waze can run on Display 2 while another app stays focused on Display 0.
+     * T1Launcher itself uses getWindowsOnAllDisplays: do not limit this service
+     * to getRootInActiveWindow() or main screen package.
+     */
+    private AccessibilityNodeInfo wazeRoot(){
+        try{
+            SparseArray<List<AccessibilityWindowInfo>> across=getWindowsOnAllDisplays();
+            if(across!=null)for(int d=0;d<across.size();d++){
+                List<AccessibilityWindowInfo> ws=across.valueAt(d);
+                if(ws==null)continue;
+                for(AccessibilityWindowInfo win:ws){
+                    if(win==null)continue;
+                    AccessibilityNodeInfo root=win.getRoot();
+                    if(root!=null&&WAZE.contentEquals(root.getPackageName())&&
+                            root.isVisibleToUser())return root;
+                }
+            }
+        }catch(Exception e){
+            prefs().edit().putString(OEM_BINDER_STATUS,
+                "No se pudo consultar pantalla 2: "+e.getClass().getSimpleName())
+                .apply();
+        }
+        AccessibilityNodeInfo current=getRootInActiveWindow();
+        if(current!=null&&WAZE.contentEquals(current.getPackageName()))
+            return current;
+        return null;
+    }
+    private void refreshOemBridge(){
+        if(oemBridge==null)return;
+        boolean enabled=prefs().getBoolean(OEM_BINDER_ENABLED,false);
+        if(enabled&&wazeRoot()!=null)oemBridge.start();
+        else oemBridge.stop();
+    }
+    /** Vendor hard-key callback IDs confirmed in the owner's T1N134 APK.
+     * 1000,1001 wheel rotation; 1002 BACK; 1003 OK.
+     * OEM states 100/101 may represent down/up: debounce same physical key,
+     * avoiding duplicate confirmations. Other IDs, especially voice, ignored.
+     */
+    private void handleOemKey(int code,int action,int extra){
+        if(!prefs().getBoolean(OEM_BINDER_ENABLED,false)||
+                oemBridge==null||!oemBridge.registered())return;
+        if(action!=100&&action!=101)return;
+        long now=SystemClock.elapsedRealtime();
+        prefs().edit().putString(OEM_LAST,
+            code+" · estado "+action+" · tercer dato "+extra).apply();
+        if(code==lastOemCode&&now-lastOemKeyAt<225)return;
+        lastOemCode=code;lastOemKeyAt=now;
+        int mapped;
+        switch(code){
+            case 1000:mapped=KeyEvent.KEYCODE_DPAD_RIGHT;break;
+            case 1001:mapped=KeyEvent.KEYCODE_DPAD_LEFT;break;
+            case 1002:mapped=KeyEvent.KEYCODE_BACK;break;
+            case 1003:mapped=KeyEvent.KEYCODE_DPAD_CENTER;break;
+            default:return;
+        }
+        // Reuse the SAME Waze-only accessibility selection policy as ordinary
+        // Android keys; never fabricate clicks on Google Maps or OEM windows.
+        onKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN,mapped));
     }
     @Override public boolean onKeyEvent(KeyEvent event){
         if(event==null||event.getAction()!=KeyEvent.ACTION_DOWN||
@@ -190,9 +282,8 @@ public final class T1WazeWheelService extends AccessibilityService {
         }
         // Normal Waze controls remain strictly restricted to com.waze.
         // Absolutely no key logging or interception in unrelated apps.
-        AccessibilityNodeInfo root=getRootInActiveWindow();
-        String pkg=root==null?"":String.valueOf(root.getPackageName());
-        if(!WAZE.equals(pkg)){
+        AccessibilityNodeInfo root=wazeRoot();
+        if(root==null){
             hideHint();
             return false;
         }
@@ -282,7 +373,24 @@ public final class T1WazeWheelService extends AccessibilityService {
             hideHint();selectedLabel="";
             return opened;
         }
-        // In the map view, generic wheel turn / back still belongs to Waze.
+        // Third priority: Waze's accessible buttons on the cluster display.
+        // Explicit focus and driver OK required; no guessed screen coordinates.
+        if(collectMapChoices(root)){
+            lastButtonAt=SystemClock.elapsedRealtime();
+            if(cancel){
+                hideHint();
+                selectedLabel="";
+                return performGlobalAction(GLOBAL_ACTION_BACK);
+            }
+            if(routeShortcut)return false;
+            if(forward||backward){
+                selected=Math.floorMod(selected+(forward?1:-1),choices.size());
+                selectedLabel=choices.get(selected).label;
+                highlight();
+                return true;
+            }
+            return clickSelected("BOTÓN DE WAZE · OK");
+        }
         return false;
     }
     /** Exact accessible button match, no screen coordinates or guessed tap. */
@@ -363,6 +471,41 @@ public final class T1WazeWheelService extends AccessibilityService {
                     selected=i;return true;
                 }
         }
+        selected=Math.max(0,Math.min(selected,choices.size()-1));
+        selectedLabel=choices.get(selected).label;
+        return true;
+    }
+    /** General Waze map controls accessible on Display 2. Exclude unlabelled
+     * custom Canvas elements and inaccessible controls. The visible label
+     * is required before physical wheel navigation can act on it.
+     */
+    private void visitMapChoices(AccessibilityNodeInfo node,int depth,int[] count){
+        if(node==null||depth>16||count[0]++>420||!node.isVisibleToUser())return;
+        String label=labelOf(node);
+        String norm=normalize(label);
+        if(node.isClickable()&&!norm.isEmpty()&&
+            norm.length()<=95&&!norm.equals("mapa")&&!norm.equals("map")&&
+            !norm.equals("waze")){
+            Rect r=new Rect();
+            node.getBoundsInScreen(r);
+            if(r.width()>28&&r.height()>22)
+                choices.add(new Candidate(node,label));
+        }
+        for(int i=0;i<node.getChildCount()&&count[0]<420;i++)
+            visitMapChoices(node.getChild(i),depth+1,count);
+    }
+    private boolean collectMapChoices(AccessibilityNodeInfo root){
+        choices.clear();alternateList=false;
+        visitMapChoices(root,0,new int[]{0});
+        if(choices.isEmpty())return false;
+        Collections.sort(choices,Comparator
+            .comparingInt((Candidate c)->c.bounds.top)
+            .thenComparingInt(c->c.bounds.left));
+        if(!selectedLabel.isEmpty())
+            for(int i=0;i<choices.size();i++)
+                if(selectedLabel.equals(choices.get(i).label)){
+                    selected=i;return true;
+                }
         selected=Math.max(0,Math.min(selected,choices.size()-1));
         selectedLabel=choices.get(selected).label;
         return true;
@@ -461,12 +604,23 @@ public final class T1WazeWheelService extends AccessibilityService {
         hint=null;
     }
     @Override public void onAccessibilityEvent(AccessibilityEvent event){
-        if(event!=null&&event.getPackageName()!=null){
-            String pkg=String.valueOf(event.getPackageName());
-            if(!WAZE.equals(pkg)&&!pkg.equals(getPackageName()))
-                hideHint();
+        if(event==null)return;
+        // Waze can be visible ONLY on the cluster display. A different
+        // foreground package does NOT prove that projected Waze disappeared.
+        if(event.getEventType()==AccessibilityEvent.TYPE_WINDOWS_CHANGED||
+           event.getEventType()==AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED){
+            refreshOemBridge();
+            if(wazeRoot()==null)hideHint();
         }
     }
-    @Override public void onInterrupt(){hideHint();}
-    @Override public void onDestroy(){hideHint();super.onDestroy();}
+    @Override public void onInterrupt(){
+        hideHint();
+        if(oemBridge!=null)oemBridge.stop();
+    }
+    @Override public void onDestroy(){
+        hideHint();
+        main.removeCallbacks(oemHeartbeat);
+        if(oemBridge!=null)oemBridge.stop();
+        super.onDestroy();
+    }
 }
