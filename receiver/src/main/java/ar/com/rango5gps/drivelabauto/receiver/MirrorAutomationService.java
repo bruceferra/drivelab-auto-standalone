@@ -47,7 +47,12 @@ public final class MirrorAutomationService extends Service {
     public static final String ACTION_CONFIRM_NORMAL="t1.mirror.CONFIRM_NORMAL";
     private static final String CHANNEL="t1_mirror_parking";
     private static final int NOTIF_ID=7526;
-    private static final long POLL_MS=250L, PULSE_MS=500L, PAUSE_MS=180L;
+    // One quick wheel-notch-like OEM press per step; ALWAYS release 2068/2069
+    // to zero before the next press. Old 500ms ON + 180ms gap was ~27s for
+    // 20 pulses on each side and acted more like a long hold than quick ticks.
+    // These are experimental conservative values pending physical validation:
+    // 120ms asserted, 40ms neutral, never parallel writes to both mirrors.
+    private static final long POLL_MS=250L, PULSE_MS=120L, PAUSE_MS=40L;
     private volatile boolean running,stop;
     private volatile int pendingManual; // 1=down, 2=up, 3=manual 10-up recovery
     private Thread worker;
