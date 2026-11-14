@@ -36,8 +36,8 @@ import java.util.Locale;
  */
 public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
     private static final int VOICE_REQUEST=7042, AUDIO_PERMISSION=7043;
-    static final String ACTION_SHORTCUT_SYSTEM_VOICE=
-        "ar.com.rango5gps.drivelabauto.receiver.SYSTEM_VOICE_SHORTCUT";
+    static final String ACTION_SHORTCUT_GOOGLE_RECOGNITION=
+        "ar.com.rango5gps.drivelabauto.receiver.GOOGLE_RECOGNITION_SHORTCUT";
     private static final String GEMINI="com.google.android.apps.bard";
     private static final String CHATGPT="com.openai.chatgpt";
     private static final String PREF="t1_voice_router_v1";
@@ -213,7 +213,7 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         // A T1Launcher-selected shortcut starts the external Google
         // recognition interface that DOES return spoken text to DriveLab.
         // Do not intercept the OEM physical button already mapped to Waze.
-        if(state==null&&ACTION_SHORTCUT_SYSTEM_VOICE.equals(getIntent().getAction()))
+        if(state==null&&ACTION_SHORTCUT_GOOGLE_RECOGNITION.equals(getIntent().getAction()))
             root.post(this::listenExternal);
     }
 
