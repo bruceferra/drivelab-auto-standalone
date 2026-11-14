@@ -3,6 +3,16 @@ package ar.com.rango5gps.drivelabauto.sender;
 import android.app.*;
 import android.os.*;
 import android.content.*;
+import android.Manifest;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothManager;
+import android.content.pm.PackageManager;
+import android.media.AudioDeviceInfo;
+import android.media.AudioManager;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import android.net.Uri;
 import android.graphics.Color;
 import android.view.*;
@@ -16,6 +26,7 @@ import com.google.mlkit.vision.barcode.common.Barcode;
 /** User-facing Sender controls only: no vehicle telemetry or OEM access. */
 public final class SenderActivity extends Activity {
     private static final int NAVY=0xFF111821,TEAL=0xFF108A80;
+    private static final int REQUEST_BT_CONNECT=2195;
     private String status="";
     private ScrollView currentScroll;
     private long lastAutoCheckElapsed=0;
@@ -70,6 +81,29 @@ public final class SenderActivity extends Activity {
         button(body,"Vincular manualmente · 6 dígitos (respaldo)",this::pair);
         button(body,"Probar envío real a La Plata",this::test);
         button(body,"Pegar enlace de Google Maps / WhatsApp",this::paste);
+        title(body,"AUDIO DE LA T1 · ACTIVAR SIN SPOTIFY",18);
+        android.content.SharedPreferences audio=SenderAudioBootstrap.prefs(this);
+        String selected=audio.getString(SenderAudioBootstrap.LABEL,"Sin vehículo elegido");
+        boolean enabled=SenderAudioBootstrap.configured(this);
+        title(body,"Bluetooth emparejado: "+selected+
+            "\nPrueba automática: "+(enabled?"ACTIVA (solo la T1)":"NO CONFIGURADA")+
+            "\nÚltima prueba: "+audio.getString(SenderAudioBootstrap.STATUS,"Sin prueba"),13);
+        title(body,"La primera vez elegí el Bluetooth REAL de la T1. "+
+            "Cuando el Xiaomi detecte su conexión A2DP, Sender intentará "+
+            "una reproducción suave de 1,4 segundos, sin abrir Spotify. "+
+            "La radio puede requerir que la fuente Bluetooth esté elegida. "+
+            "El resultado físico aún debe probarse.",13);
+        button(body,"1 · ELEGIR T1 EMPAREJADA · ACTIVAR AUTO",
+            this::chooseCarAudio);
+        button(body,"2 · PROBAR AHORA · SIN ABRIR SPOTIFY",
+            this::testCarAudio);
+        if(enabled)button(body,"DESACTIVAR INICIO DE AUDIO T1",
+            ()->{
+                audio.edit().putBoolean(SenderAudioBootstrap.ENABLED,false)
+                    .putString(SenderAudioBootstrap.STATUS,
+                        "Inicio automático desactivado por usuario").apply();
+                render();
+            });
         button(body,"ACTUALIZAR SENDER · INSTALACIÓN DIRECTA",()->Updater.check(this,"sender",this::info));
         if(!status.isEmpty())title(body,"Actualizador / estado: "+status,14);
         button(body,"Desvincular Receiver",()->new AlertDialog.Builder(this)
@@ -178,4 +212,96 @@ public final class SenderActivity extends Activity {
         send.setAction(Intent.ACTION_SEND);send.setType("text/plain");
         send.putExtra(Intent.EXTRA_TEXT,raw.toString());startActivity(send);
     }
+    private boolean hasBtPermission(){
+        return SenderAudioBootstrap.permission(this);
+    }
+    private void chooseCarAudio(){
+        if(!hasBtPermission()){
+            requestPermissions(new String[]{Manifest.permission.BLUETOOTH_CONNECT},
+                REQUEST_BT_CONNECT);
+            return;
+        }
+        final BluetoothAdapter adapter;
+        try{
+            BluetoothManager manager=(BluetoothManager)
+                getSystemService(BLUETOOTH_SERVICE);
+            adapter=manager==null?null:manager.getAdapter();
+            if(adapter==null||!adapter.isEnabled()){
+                info("Activá Bluetooth del Xiaomi para elegir la T1");
+                return;
+            }
+        }catch(SecurityException ex){
+            info("Android no autorizó consultar Bluetooth");return;
+        }
+        final ArrayList<BluetoothDevice> devices=new ArrayList<>();
+        final ArrayList<String> labels=new ArrayList<>();
+        try{
+            // Paired devices only; no BLUETOOTH_SCAN, no location.
+            for(BluetoothDevice device:adapter.getBondedDevices()){
+                String name=device.getName();
+                if(name==null||name.trim().isEmpty())name="Dispositivo sin nombre";
+                String mac=device.getAddress();
+                if(mac==null||mac.length()<5)continue;
+                devices.add(device);
+                labels.add(name+" ("+mac.substring(mac.length()-5)+")");
+            }
+        }catch(SecurityException error){
+            info("Falta autorizar Dispositivos cercanos");return;
+        }
+        if(devices.isEmpty()){
+            info("No hay dispositivos Bluetooth emparejados: "+
+                "primero vinculá la Jetour en Ajustes Bluetooth");return;
+        }
+        new AlertDialog.Builder(this).setTitle("ELEGIR SOLO LA JETOUR T1")
+            .setMessage("Seleccioná el dispositivo Bluetooth del auto, "+
+                "no auriculares, otra radio ni el Wi-Fi Receiver.")
+            .setItems(labels.toArray(new String[0]),(dialog,which)->{
+                BluetoothDevice chosen=devices.get(which);
+                try{
+                    SenderAudioBootstrap.prefs(this).edit()
+                        .putString(SenderAudioBootstrap.ADDRESS,
+                            chosen.getAddress())
+                        .putString(SenderAudioBootstrap.LABEL,
+                            labels.get(which))
+                        .putBoolean(SenderAudioBootstrap.ENABLED,true)
+                        .putLong(SenderAudioBootstrap.ATTEMPT_MS,0L)
+                        .putString(SenderAudioBootstrap.STATUS,
+                            "T1 elegida. Esperando próxima conexión A2DP. "+
+                            "Se puede probar ahora, con el auto detenido.")
+                        .apply();
+                    render();
+                }catch(SecurityException error){
+                    info("Android impidió guardar selección Bluetooth");
+                }
+            })
+            .setNegativeButton("CANCELAR",null).show();
+    }
+    private void testCarAudio(){
+        if(!hasBtPermission()){
+            info("Primero autorizá Dispositivos cercanos y elegí la T1");
+            return;
+        }
+        if(!SenderAudioBootstrap.configured(this)){
+            info("Primero elegí el Bluetooth de la Jetour T1");
+            return;
+        }
+        info("Buscando salida A2DP del Xiaomi, sin abrir Spotify…");
+        new Thread(()->{
+            SenderAudioBootstrap.prime(getApplicationContext(),false);
+            String result=SenderAudioBootstrap.prefs(this)
+                .getString(SenderAudioBootstrap.STATUS,"Resultado no disponible");
+            runOnUiThread(()->info(result));
+        },"Sender-T1-Audio-Test").start();
+    }
+    @Override public void onRequestPermissionsResult(int requestCode,
+        String[] permissions,int[] grantResults){
+        super.onRequestPermissionsResult(requestCode,permissions,grantResults);
+        if(requestCode!=REQUEST_BT_CONNECT)return;
+        if(grantResults.length>0&&grantResults[0]==
+                PackageManager.PERMISSION_GRANTED)
+            chooseCarAudio();
+        else info("Sin permiso de dispositivos cercanos no se puede "+
+            "identificar la T1; no se iniciará audio automático.");
+    }
+
 }

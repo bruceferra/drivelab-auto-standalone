@@ -1,0 +1,132 @@
+name: Signed T1 audio fix - Sender 0.2.17 plus Receiver 0.2.96
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-t1-audio-sender0217-receiver0296.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: signed-drivelabauto-publication
+  cancel-in-progress: false
+jobs:
+  release-audio:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      SENDER_STORE_PASSWORD: ${{ secrets.SENDER_STORE_PASSWORD }}
+      SENDER_KEY_ALIAS: ${{ secrets.SENDER_KEY_ALIAS }}
+      SENDER_KEY_PASSWORD: ${{ secrets.SENDER_KEY_PASSWORD }}
+      RECEIVER_STORE_PASSWORD: ${{ secrets.RECEIVER_STORE_PASSWORD }}
+      RECEIVER_KEY_ALIAS: ${{ secrets.RECEIVER_KEY_ALIAS }}
+      RECEIVER_KEY_PASSWORD: ${{ secrets.RECEIVER_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Android SDK and existing Sender / Receiver certificates
+        env:
+          SENDER_KEYSTORE_B64: ${{ secrets.SENDER_KEYSTORE_B64 }}
+          RECEIVER_KEYSTORE_B64: ${{ secrets.RECEIVER_KEYSTORE_B64 }}
+        run: |
+          set -euo pipefail
+          tool=$(command -v sdkmanager || find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)
+          "$tool" 'platforms;android-35' 'build-tools;35.0.0'
+          test -n "$SENDER_KEYSTORE_B64" && test -n "$RECEIVER_KEYSTORE_B64"
+          test -n "$SENDER_STORE_PASSWORD" && test -n "$SENDER_KEY_ALIAS" && test -n "$SENDER_KEY_PASSWORD"
+          test -n "$RECEIVER_STORE_PASSWORD" && test -n "$RECEIVER_KEY_ALIAS" && test -n "$RECEIVER_KEY_PASSWORD"
+          printf %s "$SENDER_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/sender.p12"
+          printf %s "$RECEIVER_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/receiver.p12"
+          chmod 600 "$RUNNER_TEMP/sender.p12" "$RUNNER_TEMP/receiver.p12"
+          echo "SENDER_KEYSTORE=$RUNNER_TEMP/sender.p12" >> "$GITHUB_ENV"
+          echo "RECEIVER_KEYSTORE=$RUNNER_TEMP/receiver.p12" >> "$GITHUB_ENV"
+      - name: Safety contract, signed APKs and SHA-256 OTA manifests
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = bruceferra/drivelab-auto-standalone
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.95
+          ! gh release view v0.2.96 >/dev/null 2>&1
+          gh release view v0.2.17 >/dev/null
+          ! gh release view v0.2.17 --json assets --jq '.assets[].name' | grep -Fxq 'DriveLab-Auto-Sender-v0.2.17.apk'
+          mkdir -p /tmp/prior-sender /tmp/prior-receiver /tmp/audio-contract output
+          gh release download v0.2.16 --pattern 'DriveLab-Auto-Sender-v0.2.16.apk' --dir /tmp/prior-sender
+          gh release download v0.2.95 --pattern 'DriveLab-Auto-Receiver-v0.2.95.apk' --dir /tmp/prior-receiver
+          javac -encoding UTF-8 -d /tmp/audio-contract sender/tests/SenderAudioBootstrapSourceContractTest.java
+          java -cp /tmp/audio-contract ar.com.rango5gps.drivelabauto.sender.SenderAudioBootstrapSourceContractTest
+          javac -encoding UTF-8 -d /tmp/audio-contract receiver/tests/T1VoiceShortcutSourceContractTest.java
+          java -cp /tmp/audio-contract ar.com.rango5gps.drivelabauto.receiver.T1VoiceShortcutSourceContractTest
+          gradle --no-daemon :sender:assembleRelease :receiver:assembleRelease
+          sig="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          sender=sender/build/outputs/apk/release/sender-release.apk
+          receiver=receiver/build/outputs/apk/release/receiver-release.apk
+          test -s "$sender" && test -s "$receiver"
+          "$sig" verify --print-certs "$sender"
+          "$sig" verify --print-certs "$receiver"
+          prevs=/tmp/prior-sender/DriveLab-Auto-Sender-v0.2.16.apk
+          prevr=/tmp/prior-receiver/DriveLab-Auto-Receiver-v0.2.95.apk
+          "$sig" verify --print-certs "$prevs"
+          "$sig" verify --print-certs "$prevr"
+          old_sender_cert=$("$sig" verify --print-certs "$prevs" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          new_sender_cert=$("$sig" verify --print-certs "$sender" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          old_receiver_cert=$("$sig" verify --print-certs "$prevr" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          new_receiver_cert=$("$sig" verify --print-certs "$receiver" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          test -n "$old_sender_cert" && test "$old_sender_cert" = "$new_sender_cert"
+          test -n "$old_receiver_cert" && test "$old_receiver_cert" = "$new_receiver_cert"
+          sender_badge=$("$aapt" dump badging "$sender" | head -1)
+          receiver_badge=$("$aapt" dump badging "$receiver" | head -1)
+          echo "$sender_badge" | grep -F "package: name='ar.com.rango5gps.drivelabauto.sender'"
+          echo "$sender_badge" | grep -F "versionCode='18'"
+          echo "$sender_badge" | grep -F "versionName='0.2.17'"
+          echo "$receiver_badge" | grep -F "package: name='ar.com.rango5gps.drivelabauto.receiver'"
+          echo "$receiver_badge" | grep -F "versionCode='97'"
+          echo "$receiver_badge" | grep -F "versionName='0.2.96'"
+          "$aapt" dump permissions "$sender" | grep -F 'android.permission.BLUETOOTH_CONNECT'
+          "$aapt" dump xmltree "$sender" AndroidManifest.xml | grep -F 'SenderAudioBootstrapReceiver'
+          "$aapt" dump xmltree "$receiver" AndroidManifest.xml | grep -F 'android.intent.action.TTS_SERVICE'
+          cp "$sender" output/DriveLab-Auto-Sender-v0.2.17.apk
+          cp "$receiver" output/DriveLab-Auto-Receiver-v0.2.96.apk
+          export SENDER_SHA=$(sha256sum output/DriveLab-Auto-Sender-v0.2.17.apk | awk '{print $1}')
+          export RECEIVER_SHA=$(sha256sum output/DriveLab-Auto-Receiver-v0.2.96.apk | awk '{print $1}')
+          python3 - <<'PY'
+          import os,json
+          base="https://github.com/bruceferra/drivelab-auto-standalone/releases/download/"
+          specs=[("sender","0.2.17",18,os.environ["SENDER_SHA"]),
+                 ("receiver","0.2.96",97,os.environ["RECEIVER_SHA"])]
+          for app,version,code,hashv in specs:
+              tag="v"+version
+              title=app.capitalize()
+              m={"packageName":"ar.com.rango5gps.drivelabauto."+app,
+                 "versionName":version,"versionCode":code,
+                 "sha256":hashv,
+                 "apkUrl":base+tag+"/DriveLab-Auto-"+title+"-"+tag+".apk"}
+              assert len(hashv)==64
+              with open("output/"+app+".json","w") as f:json.dump(m,f,indent=2)
+          PY
+          sha256sum output/*.apk > output/audio.sha256
+      - name: Publish Sender under historical tag, Receiver as latest OTA
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.95
+          # Existing v0.2.17 is a historical Receiver release: do not edit
+          # its old assets, title, notes, latest flag or manifests.
+          gh release upload v0.2.17 output/DriveLab-Auto-Sender-v0.2.17.apk
+          gh release view v0.2.17 --json assets --jq '.assets[].name' | grep -Fx 'DriveLab-Auto-Sender-v0.2.17.apk'
+          gh release create v0.2.96 \
+            output/DriveLab-Auto-Receiver-v0.2.96.apk \
+            output/receiver.json output/sender.json output/audio.sha256 \
+            --target "$GITHUB_SHA" --latest \
+            --title 'DriveLab Auto Receiver 0.2.96 + Sender 0.2.17 · prueba audio T1' \
+            --notes 'PRUEBA EXPERIMENTAL DE AUDIO. Sender 0.2.17: con permiso Dispositivos cercanos y elección manual del Bluetooth T1, al conectarse A2DP envía una sola pista suave de 1,4 s con MediaSession/AVRCP, cooldown 60 s, sin Spotify ni acceso a mensajes. No garantiza eliminar Not assigned hasta ensayo físico. Receiver 0.2.96: visibilidad TTS_SERVICE en Android 11 y respuesta hablada por salida multimedia; muestra motor/diagnóstico y elimina botón inútil que abre Gemini. No cambia Waze, espejos, aire AUTO ni firmware del auto. Sender y Receiver conservan firmas anteriores y updater SHA-256.'
+          mkdir -p verify
+          gh release download v0.2.96 --pattern 'receiver.json' --dir verify
+          gh release download v0.2.96 --pattern 'sender.json' --dir verify
+          cmp output/receiver.json verify/receiver.json
+          cmp output/sender.json verify/sender.json
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.96

@@ -59,7 +59,13 @@ public final class T1VoiceShortcutSourceContractTest {
            !voice.contains("openSystemVoice();\n        status.setText(\"PREGUNTA LIBRE") &&
            voice.contains("say(\"CONSULTA LIBRE"),
             "Unknown spoken requests must not launch fullscreen Gemini");
-        ok(voice.contains("USAGE_ASSISTANCE_NAVIGATION_GUIDANCE") &&
+        ok(manifest.contains("android.intent.action.TTS_SERVICE"),
+            "Android 11+ must see TextToSpeech engine packages");
+        ok(voice.contains("completeSpeechInitialization(int result)") &&
+           voice.contains("voiceHandler.post(()->completeSpeechInitialization(result))") &&
+           !voice.contains("ABRIR GEMINI (AUTO DETENIDO)"),
+            "TTS init is serialized and a dead Gemini launch button is removed");
+        ok(voice.contains("USAGE_MEDIA") &&
            voice.contains("AudioFocusRequest.Builder(") &&
            voice.contains("speaker.setAudioAttributes(speechAudioAttributes())") &&
            voice.contains("UtteranceProgressListener") &&
@@ -68,7 +74,7 @@ public final class T1VoiceShortcutSourceContractTest {
            voice.contains("voiceHandler.postDelayed(this::readQueuedSpeech,180L)") &&
            voice.contains("AUDIO: ") &&
            voice.contains("🔊 PROBAR / REPETIR AUDIO"),
-            "Audio answer must defer recognizer focus, acquire navigation focus, release on TTS completion and expose test control");
+            "Audio answer must defer recognizer focus, acquire multimedia focus, release on TTS completion and expose test control");
         ok(!voice.contains("transact(15"),
             "Voice entry never sends vehicle commands");
         System.out.println("PASS safe external launcher shortcut for T1 universal voice");

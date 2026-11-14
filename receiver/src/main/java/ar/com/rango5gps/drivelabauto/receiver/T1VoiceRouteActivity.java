@@ -98,7 +98,6 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
     }
     @Override protected void onCreate(Bundle state){
         super.onCreate(state);
-        initSpeechOutput();
         ScrollView sc=new ScrollView(this);
         sc.setFillViewport(true);
         sc.setBackground(T1JetourTheme.backdrop());
@@ -131,12 +130,10 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
                     readQueuedSpeech();
                 }
             });
-        label(root,"PREGUNTAS GENERALES · GEMINI",17,T1JetourTheme.CYAN);
-        label(root,"Para conversar sobre cualquier tema, abrí Gemini "+
-            "directamente. Gemini tiene su propio micrófono; no es el "+
-            "reconocedor de DriveLab.",13,T1JetourTheme.MUTED);
-        button(root,"ABRIR GEMINI (AUTO DETENIDO)",
-            T1JetourTheme.PANEL_HI,()->openAssistant(GEMINI,true));
+        label(root,"CONSULTAS · RESPUESTA EN DRIVELAB",15,T1JetourTheme.CYAN);
+        label(root,"Destinos, clima, noticias y cuentas se contestan acá. "+
+            "Para preguntas libres sin integración, se informa la limitación "+
+            "sin abrir otra aplicación.",13,T1JetourTheme.MUTED);
         button(root,"VOLVER A DRIVELAB",T1JetourTheme.PANEL,()->{
             Intent main=new Intent(this,ReceiverActivity.class);
             main.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|
@@ -146,6 +143,8 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         });
         button(root,"CERRAR",T1JetourTheme.PANEL,this::finish);
         setContentView(sc);
+        // TTS init after the status field exists, to report engine failures.
+        initSpeechOutput();
         // The physical microphone remains owned by T1Launcher Cluster;
         // the optional configured shortcut uses the same external recognizer.
         if(state==null&&ACTION_SHORTCUT_GOOGLE_RECOGNITION.equals(getIntent().getAction()))
@@ -376,7 +375,7 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
      */
     private AudioAttributes speechAudioAttributes(){
         return new AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
+            .setUsage(AudioAttributes.USAGE_MEDIA)
             .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
             .build();
     }
@@ -437,49 +436,65 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
     }
     private void initSpeechOutput(){
         try{
-            speaker=new TextToSpeech(this,result->{
-                if(result!=TextToSpeech.SUCCESS||speaker==null){
-                    ttsReady=false;
-                    showAudio("motor de voz TTS no disponible");
-                    return;
-                }
-                int language=speaker.setLanguage(new Locale("es","AR"));
-                if(language==TextToSpeech.LANG_MISSING_DATA||
-                   language==TextToSpeech.LANG_NOT_SUPPORTED)
-                    language=speaker.setLanguage(new Locale("es"));
-                if(language==TextToSpeech.LANG_MISSING_DATA||
-                   language==TextToSpeech.LANG_NOT_SUPPORTED)
-                    showAudio("no hay voz en español instalada en Android");
-                else showAudio("motor de voz listo; esperando consulta");
-                int audio=speaker.setAudioAttributes(speechAudioAttributes());
-                if(audio==TextToSpeech.ERROR)
-                    showAudio("la ROM rechazó configurar audio de navegación");
-                speaker.setOnUtteranceProgressListener(
-                    new UtteranceProgressListener(){
-                        @Override public void onStart(String id){
-                            runOnUiThread(()->{
-                                if(id.equals(activeSpeechId))
-                                    showAudio("emitiendo voz por Android…");
-                            });
-                        }
-                        @Override public void onDone(String id){
-                            finishUtterance(id,null);
-                        }
-                        @Override public void onError(String id){
-                            finishUtterance(id,"síntesis TTS");
-                        }
-                        @Override public void onError(String id,int code){
-                            finishUtterance(id,"TTS código "+code);
-                        }
-                    });
-                ttsReady=true;
-                if(answerToSpeak!=null)readQueuedSpeech();
-            });
+            // OnInit may race with assignment of speaker; marshal the
+            // callback to main queue after construction completes.
+            speaker=new TextToSpeech(this,result->
+                voiceHandler.post(()->completeSpeechInitialization(result)));
         }catch(RuntimeException ex){
             ttsReady=false;
-            showAudio("no se pudo iniciar la voz Android: "+
-                ex.getClass().getSimpleName());
+            showAudio("error iniciando TTS: "+ex.getClass().getSimpleName());
         }
+    }
+    private void completeSpeechInitialization(int result){
+        if(isFinishing()||isDestroyed())return;
+        if(result!=TextToSpeech.SUCCESS||speaker==null){
+            ttsReady=false;
+            showAudio("motor de voz TTS no disponible (init="+result+"). "+
+                "Comprobar voz instalada en Android de la T1.");
+            return;
+        }
+        String engineInfo="motor="+speaker.getDefaultEngine();
+        try{engineInfo+=" · visibles="+speaker.getEngines().size();}
+        catch(RuntimeException ignored){}
+        int language;
+        try{
+            language=speaker.setLanguage(new Locale("es","AR"));
+            if(language==TextToSpeech.LANG_MISSING_DATA||
+                language==TextToSpeech.LANG_NOT_SUPPORTED)
+                language=speaker.setLanguage(new Locale("es"));
+        }catch(RuntimeException ex){
+            ttsReady=false;
+            showAudio("error idioma TTS · "+engineInfo);
+            return;
+        }
+        if(language==TextToSpeech.LANG_MISSING_DATA||
+           language==TextToSpeech.LANG_NOT_SUPPORTED){
+            ttsReady=false;
+            showAudio("falta voz española en Android · "+engineInfo);
+            return;
+        }
+        int audio=speaker.setAudioAttributes(speechAudioAttributes());
+        showAudio((audio==TextToSpeech.ERROR?
+            "ROM rechazó ruta multimedia · ":"TTS multimedia preparado · ")+engineInfo);
+        speaker.setOnUtteranceProgressListener(new UtteranceProgressListener(){
+            @Override public void onStart(String id){
+                runOnUiThread(()->{
+                    if(id.equals(activeSpeechId))
+                        showAudio("sintetizando por canal multimedia…");
+                });
+            }
+            @Override public void onDone(String id){
+                finishUtterance(id,null);
+            }
+            @Override public void onError(String id){
+                finishUtterance(id,"síntesis TTS");
+            }
+            @Override public void onError(String id,int code){
+                finishUtterance(id,"TTS código "+code);
+            }
+        });
+        ttsReady=true;
+        if(answerToSpeak!=null)readQueuedSpeech();
     }
     private void readQueuedSpeech(){
         if(answerToSpeak==null||isFinishing()||isDestroyed())return;
@@ -492,7 +507,8 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
             return;
         }
         if(!ttsReady||speaker==null){
-            showAudio("esperando motor de voz; resultado escrito disponible");
+            showAudio("motor TTS aún no operativo; verificar voz "+
+                "instalada en Ajustes de la T1. Texto disponible.");
             return;
         }
         String answer=answerToSpeak;
