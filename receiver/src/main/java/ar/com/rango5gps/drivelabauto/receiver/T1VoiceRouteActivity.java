@@ -11,6 +11,10 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.media.AudioAttributes;
+import android.media.AudioFocusRequest;
+import android.media.AudioManager;
+import android.speech.tts.UtteranceProgressListener;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -43,9 +47,13 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
     private static final String PREF="t1_voice_router_v1";
     private static final String KEY_AI="default_ai";
     private static final int BG=T1JetourTheme.NIGHT;
-    private EditText spoken;
-    private TextView status,chosen;
-    private Button geminiChoice,chatgptChoice,selectedAction;
+    private TextView status,heard,audioStatus;
+    private String lastAudible,activeSpeechId;
+    private boolean screenResumed,speechFocusHeld;
+    private long speechReadyAt;
+    private int speechSequence;
+    private AudioManager audioManager;
+    private AudioFocusRequest speechFocusRequest;
     private SpeechRecognizer recognizer;
     private boolean listening,openingAssistant;
     private final Handler voiceHandler=new Handler(Looper.getMainLooper());
@@ -85,51 +93,11 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         parent.addView(b,lp);
         return b;
     }
-    private SharedPreferences prefs(){
-        return getSharedPreferences(PREF,MODE_PRIVATE);
-    }
-    private String selectedAi(){
-        String value=prefs().getString(KEY_AI,GEMINI);
-        return CHATGPT.equals(value)?CHATGPT:GEMINI;
-    }
     private String name(String packageId){
         return CHATGPT.equals(packageId)?"ChatGPT":"Gemini";
     }
-    private void chooseAi(String packageId){
-        prefs().edit().putString(KEY_AI,packageId).apply();
-        showSelected();
-        status.setText(name(packageId)+" será la IA predeterminada para preguntas " +
-            "que no sean navegación. No cambia el asistente OEM del vehículo.");
-    }
-    private void showSelected(){
-        String active=name(selectedAi());
-        if(chosen!=null)
-            chosen.setText("IA ACTIVA: "+active+
-                " (preguntas reconocidas)  |  NAVEGACIÓN → WAZE");
-        if(geminiChoice!=null){
-            geminiChoice.setText(GEMINI.equals(selectedAi())?
-                "✓ GEMINI · ELEGIDO":"USAR GEMINI PARA CONSULTAS");
-            T1JetourTheme.button(geminiChoice,GEMINI.equals(selectedAi())?
-                T1JetourTheme.GREEN_BUTTON:T1JetourTheme.PANEL);
-        }
-        if(chatgptChoice!=null){
-            chatgptChoice.setText(CHATGPT.equals(selectedAi())?
-                "✓ CHATGPT · ELEGIDO":"USAR CHATGPT PARA CONSULTAS");
-            T1JetourTheme.button(chatgptChoice,CHATGPT.equals(selectedAi())?
-                T1JetourTheme.GREEN_BUTTON:T1JetourTheme.PANEL);
-        }
-        if(selectedAction!=null)
-            selectedAction.setText("CONSULTAR "+active.toUpperCase()+
-                " · TEXTO RECONOCIDO / ESCRITO");
-    }
     @Override protected void onCreate(Bundle state){
         super.onCreate(state);
-        // One-time preference selection requested for this vehicle:
-        // navigation remains Waze; occasional free-form questions use Gemini.
-        // Preserve later manual changes in Advanced settings.
-        if(!prefs().getBoolean("gemini_simple_initialized_v1",false))
-            prefs().edit().putString(KEY_AI,GEMINI)
-                .putBoolean("gemini_simple_initialized_v1",true).apply();
         initSpeechOutput();
         ScrollView sc=new ScrollView(this);
         sc.setFillViewport(true);
@@ -139,112 +107,47 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         root.setGravity(Gravity.TOP);
         root.setPadding(19,9,19,18);
         sc.addView(root);
-        label(root,"🎤  ASISTENTE DE VOZ · JETOUR T1",22,T1JetourTheme.CYAN);
-        chosen=label(root,"",14,T1JetourTheme.GREEN);
-        showSelected();
-        label(root,"PRIMERO WAZE · Decí «llevame a...» para navegar. "+
-            "También responde clima, noticias y cuentas. Para preguntas "+
-            "generales, abrí Gemini cuando estés detenido.",14,T1JetourTheme.MUTED);
-
-        button(root,"🎤 HABLAR · GOOGLE (DETECTAR DESTINO O PREGUNTA)",
+        label(root,"🎤  VOZ · WAZE Y CONSULTAS",22,T1JetourTheme.CYAN);
+        label(root,"Un solo micrófono: decí «llevame a Ezeiza», "+
+            "«400 más 200», «qué clima hay» o «qué noticias tenés hoy».",
+            15,T1JetourTheme.WHITE);
+        button(root,"🎤 HABLAR · WAZE, CLIMA, NOTICIAS Y CUENTAS",
             T1JetourTheme.GREEN_BUTTON,this::listenExternal);
-        button(root,"GEMINI · CONSULTA OCASIONAL (DETENIDO)",
-            T1JetourTheme.PANEL_HI,()->openAssistant(GEMINI,true));
-        status=label(root,"Waze para destinos. Clima y titulares desde DriveLab. "+
-            "Preguntas libres: abrir Gemini (requiere disponibilidad en la T1).",
-            14,T1JetourTheme.WHITE);
+        heard=label(root,"ESCUCHÉ: todavía nada",13,T1JetourTheme.MUTED);
+        status=label(root,"Tocá HABLAR: Google reconoce la frase y DriveLab "+
+            "muestra acá la respuesta. El sonido depende del audio de la T1.",
+            15,T1JetourTheme.WHITE);
         status.setTextIsSelectable(true);
-        LinearLayout advanced=new LinearLayout(this);
-        advanced.setOrientation(LinearLayout.VERTICAL);
-        advanced.setVisibility(android.view.View.GONE);
-        button(root,"MOSTRAR OPCIONES AVANZADAS",T1JetourTheme.PANEL,
-            ()->{
-                boolean visible=advanced.getVisibility()==android.view.View.VISIBLE;
-                advanced.setVisibility(visible?
-                    android.view.View.GONE:android.view.View.VISIBLE);
-            });
-        root.addView(advanced);
-        button(advanced,"RECONOCIMIENTO INTERNO · DIAGNÓSTICO",
-            T1JetourTheme.PANEL_HI,this::listen);
-        spoken=new EditText(this);
-        spoken.setSingleLine(false);
-        spoken.setMinLines(2);
-        spoken.setHint("Consulta, orden o destino reconocido");
-        T1JetourTheme.number(spoken);
-        advanced.addView(spoken,new LinearLayout.LayoutParams(-1,-2));
-        button(advanced,"EJECUTAR LO ESCRITO / RECONOCIDO",T1JetourTheme.PANEL_HI,
-            ()->dispatch(spoken.getText().toString()));
-        button(advanced,"WAZE · NAVEGAR A DESTINO ESCRITO",0xFF426E73,
-            ()->{
-                String line=spoken.getText().toString().trim();
-                String route=T1VoiceIntentPolicy.routeDestination(line);
-                if(route!=null)line=route;
-                if(line.length()<3){
-                    status.setText("Ingresá un destino válido.");return;
-                }
-                confirmDestination(line);
-            });
-
-        label(advanced,"ASISTENTE NATIVO · EXPERIMENTAL",17,T1JetourTheme.CYAN);
-        button(advanced,"🎙 PROBAR VOZ DEL SISTEMA (SIN ABRIR APP COMPLETA)",
-            T1JetourTheme.GREEN_BUTTON,this::openSystemVoice);
-        label(advanced,"Este botón solicita la sesión de voz configurada por "+
-            "Android en la Jetour. Si la ROM no ofrece un asistente de voz, "+
-            "DriveLab no puede forzar Gemini Live ni el Gemini de Android Auto. "+
-            "La IA elegida abajo se aplica a consultas reconocidas por DriveLab, "+
-            "NO al asistente predeterminado de Android.",12,T1JetourTheme.MUTED);
-        label(advanced,"PROBAR APPS INSTALADAS · PANTALLA COMPLETA",
-            17,T1JetourTheme.CYAN);
-        button(advanced,"GEMINI · ABRIR ASISTENTE / VOZ (PRUEBA)",
-            T1JetourTheme.GREEN_BUTTON,()->openAssistant(GEMINI,true));
-        button(advanced,"CHATGPT · ABRIR ASISTENTE / VOZ (PRUEBA)",
-            T1JetourTheme.PANEL_HI,()->openAssistant(CHATGPT,true));
-        selectedAction=button(advanced,"CONSULTAR IA ELEGIDA",
-            T1JetourTheme.PANEL,
-            ()->{
-                String question=spoken.getText().toString().trim();
-                if(question.isEmpty()){
-                    status.setText("Primero ingresá una consulta.");return;
-                }
-                shareWithAi(selectedAi(),question);
-            });
-        label(advanced,"Cada app controla su propia sesión de audio. En Gemini " +
-            "se intenta la entrada de asistente Android; si la ROM no la " +
-            "expone, se abre la app normal. ChatGPT puede requerir tocar " +
-            "su micrófono. Esto no es Gemini integrado en Android Auto.",
-            12,T1JetourTheme.MUTED);
-
-        label(advanced,"IA PREDETERMINADA PARA PREGUNTAS RECONOCIDAS",
-            16,T1JetourTheme.CYAN);
-        geminiChoice=button(advanced,"USAR GEMINI PARA LAS CONSULTAS",
-            T1JetourTheme.PANEL,()->chooseAi(GEMINI));
-        chatgptChoice=button(advanced,"USAR CHATGPT PARA LAS CONSULTAS",
-            T1JetourTheme.PANEL,()->chooseAi(CHATGPT));
-        showSelected();
-        button(advanced,"MICRÓFONO GOOGLE · REPETIR RECONOCIMIENTO",
-            T1JetourTheme.PANEL,this::listenExternal);
-
-        // Recovery entry if T1Launcher shows only one icon per package and
-        // selected the VoiceAssistantShortcut alias rather than Receiver HOME.
-        // This starts our main UI without uninstalling, clearing or resetting data.
-        button(root,"ABRIR DRIVELAB AUTO · PANTALLA PRINCIPAL",
-            T1JetourTheme.GREEN_BUTTON,()->{
-                try{
-                    Intent main=new Intent(this,ReceiverActivity.class);
-                    main.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|
-                        Intent.FLAG_ACTIVITY_SINGLE_TOP);
-                    startActivity(main);
-                    finish();
-                }catch(RuntimeException error){
-                    status.setText("No pude abrir Receiver: "+
-                        error.getClass().getSimpleName());
+        audioStatus=label(root,"AUDIO: comprobando voz de Android…",
+            13,T1JetourTheme.MUTED);
+        button(root,"🔊 PROBAR / REPETIR AUDIO",
+            T1JetourTheme.PANEL_HI,()->{
+                if(lastAudible==null||lastAudible.isEmpty())
+                    say("PRUEBA DE AUDIO · voz de DriveLab",
+                        "Hola, soy DriveLab. Si me escuchás, "+
+                        "la salida de voz de la camioneta funciona.");
+                else{
+                    answerToSpeak=lastAudible;
+                    readQueuedSpeech();
                 }
             });
-        button(root,"VOLVER",T1JetourTheme.PANEL,this::finish);
+        label(root,"PREGUNTAS GENERALES · GEMINI",17,T1JetourTheme.CYAN);
+        label(root,"Para conversar sobre cualquier tema, abrí Gemini "+
+            "directamente. Gemini tiene su propio micrófono; no es el "+
+            "reconocedor de DriveLab.",13,T1JetourTheme.MUTED);
+        button(root,"ABRIR GEMINI (AUTO DETENIDO)",
+            T1JetourTheme.PANEL_HI,()->openAssistant(GEMINI,true));
+        button(root,"VOLVER A DRIVELAB",T1JetourTheme.PANEL,()->{
+            Intent main=new Intent(this,ReceiverActivity.class);
+            main.addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|
+                Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            startActivity(main);
+            finish();
+        });
+        button(root,"CERRAR",T1JetourTheme.PANEL,this::finish);
         setContentView(sc);
-        // A T1Launcher-selected shortcut starts the external Google
-        // recognition interface that DOES return spoken text to DriveLab.
-        // Do not intercept the OEM physical button already mapped to Waze.
+        // The physical microphone remains owned by T1Launcher Cluster;
+        // the optional configured shortcut uses the same external recognizer.
         if(state==null&&ACTION_SHORTCUT_GOOGLE_RECOGNITION.equals(getIntent().getAction()))
             root.post(this::listenExternal);
     }
@@ -360,6 +263,9 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         if(result!=Activity.RESULT_OK||data==null){
             status.setText("La escucha fue cancelada o no reconoció voz.");return;
         }
+        // Let the external Google recognition overlay release the car audio
+        // channel before we request focus for our spoken answer.
+        speechReadyAt=android.os.SystemClock.uptimeMillis()+550L;
         recognize(data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS));
     }
     private void recognize(ArrayList<String> results){
@@ -369,13 +275,9 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
             status.setText("No se reconoció el mensaje. Reintentá.");return;
         }
         String said=results.get(0).trim();
-        spoken.setText(said);spoken.setSelection(spoken.length());
+        if(heard!=null)heard.setText("ESCUCHÉ: "+said);
         // A full voice request is deliberate: no second confirmation.
         dispatch(said,true);
-    }
-    private void dispatch(String phrase){
-        // Typed/manual routes retain the confirmation dialog.
-        dispatch(phrase,false);
     }
     private void dispatch(String phrase,boolean fromVoice){
         if(phrase==null||phrase.trim().length()<2){
@@ -398,6 +300,11 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         String math=T1VoiceMath.calculate(phrase);
         if(math!=null){
             say("CÁLCULO LOCAL · "+math,math);
+            return;
+        }
+        String greeting=T1VoiceSmallTalk.answer(phrase);
+        if(greeting!=null){
+            say("SALUDO · "+greeting,greeting);
             return;
         }
         if(T1VoiceIntentPolicy.isWeatherQuery(phrase)){
@@ -463,28 +370,144 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
                 "Podés consultar el clima, resultados deportivos, noticias "+
                 "y hacer cuentas, o usar la voz del sistema para Gemini.");
     }
-    /** Respond within DriveLab without forcing another microphone touch.
-     * Output depends on Android TTS engine and its audio route.
+    /** Android TTS with explicit, transient navigation speech audio focus.
+     * TTS success does NOT prove OEM loudspeakers are selected, so report
+     * preparation/failure separately from what the driver actually hears.
      */
+    private AudioAttributes speechAudioAttributes(){
+        return new AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+            .build();
+    }
+    private void showAudio(String message){
+        if(audioStatus!=null)audioStatus.setText("AUDIO: "+message);
+    }
+    private void releaseSpeechFocus(){
+        if(audioManager!=null&&speechFocusRequest!=null&&speechFocusHeld){
+            try{audioManager.abandonAudioFocusRequest(speechFocusRequest);}
+            catch(RuntimeException ignored){}
+        }
+        speechFocusHeld=false;
+    }
+    private boolean requestSpeechFocus(){
+        try{
+            audioManager=(AudioManager)getSystemService(Context.AUDIO_SERVICE);
+            if(audioManager==null){
+                showAudio("el sistema no ofrece AudioManager; salida incierta");
+                return false;
+            }
+            if(speechFocusRequest==null)
+                speechFocusRequest=new AudioFocusRequest.Builder(
+                    AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+                    .setAudioAttributes(speechAudioAttributes())
+                    .setOnAudioFocusChangeListener(change->{
+                        if(change==AudioManager.AUDIOFOCUS_LOSS)
+                            runOnUiThread(()->{
+                                if(speaker!=null)speaker.stop();
+                                releaseSpeechFocus();
+                                showAudio("interrumpido por otra fuente del vehículo");
+                            });
+                    }).build();
+            int result=audioManager.requestAudioFocus(speechFocusRequest);
+            speechFocusHeld=result==AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
+            if(!speechFocusHeld)
+                showAudio("sin foco de reproducción; revisar fuente/volumen de la T1");
+            return speechFocusHeld;
+        }catch(RuntimeException ex){
+            showAudio("no se pudo solicitar audio: "+
+                ex.getClass().getSimpleName());
+            return false;
+        }
+    }
+    private void finishUtterance(String id,String error){
+        runOnUiThread(()->{
+            if(!id.equals(activeSpeechId))return;
+            releaseSpeechFocus();
+            if(error==null)
+                showAudio("Android finalizó la voz; verificar parlantes si no se oyó");
+            else{
+                showAudio("falló reproducción: "+error+
+                    " · revisar motor TTS, fuente y volumen multimedia");
+                if(status!=null)status.append(
+                    "\n🔈 No se pudo reproducir la respuesta; "+
+                    "podés verla escrita y probar el audio.");
+            }
+        });
+    }
     private void initSpeechOutput(){
         try{
-            speaker=new TextToSpeech(this, result->{
-                if(result!=TextToSpeech.SUCCESS)return;
-                if(speaker==null)return;
-                speaker.setLanguage(new Locale("es","AR"));
+            speaker=new TextToSpeech(this,result->{
+                if(result!=TextToSpeech.SUCCESS||speaker==null){
+                    ttsReady=false;
+                    showAudio("motor de voz TTS no disponible");
+                    return;
+                }
+                int language=speaker.setLanguage(new Locale("es","AR"));
+                if(language==TextToSpeech.LANG_MISSING_DATA||
+                   language==TextToSpeech.LANG_NOT_SUPPORTED)
+                    language=speaker.setLanguage(new Locale("es"));
+                if(language==TextToSpeech.LANG_MISSING_DATA||
+                   language==TextToSpeech.LANG_NOT_SUPPORTED)
+                    showAudio("no hay voz en español instalada en Android");
+                else showAudio("motor de voz listo; esperando consulta");
+                int audio=speaker.setAudioAttributes(speechAudioAttributes());
+                if(audio==TextToSpeech.ERROR)
+                    showAudio("la ROM rechazó configurar audio de navegación");
+                speaker.setOnUtteranceProgressListener(
+                    new UtteranceProgressListener(){
+                        @Override public void onStart(String id){
+                            runOnUiThread(()->{
+                                if(id.equals(activeSpeechId))
+                                    showAudio("emitiendo voz por Android…");
+                            });
+                        }
+                        @Override public void onDone(String id){
+                            finishUtterance(id,null);
+                        }
+                        @Override public void onError(String id){
+                            finishUtterance(id,"síntesis TTS");
+                        }
+                        @Override public void onError(String id,int code){
+                            finishUtterance(id,"TTS código "+code);
+                        }
+                    });
                 ttsReady=true;
                 if(answerToSpeak!=null)readQueuedSpeech();
             });
-        }catch(Exception ignored){ttsReady=false;}
+        }catch(RuntimeException ex){
+            ttsReady=false;
+            showAudio("no se pudo iniciar la voz Android: "+
+                ex.getClass().getSimpleName());
+        }
     }
     private void readQueuedSpeech(){
-        if(!ttsReady||speaker==null||answerToSpeak==null)return;
+        if(answerToSpeak==null||isFinishing()||isDestroyed())return;
+        // Activity results arrive before onResume. The recognition overlay
+        // can still own audio focus; let it close before the spoken answer.
+        if(!screenResumed)return;
+        long wait=speechReadyAt-android.os.SystemClock.uptimeMillis();
+        if(wait>0){
+            voiceHandler.postDelayed(this::readQueuedSpeech,wait);
+            return;
+        }
+        if(!ttsReady||speaker==null){
+            showAudio("esperando motor de voz; resultado escrito disponible");
+            return;
+        }
         String answer=answerToSpeak;
         answerToSpeak=null;
-        speaker.speak(answer,TextToSpeech.QUEUE_FLUSH,null,"drivelab_voice_response");
+        releaseSpeechFocus();
+        requestSpeechFocus();
+        String id="drivelab_voice_response_"+(++speechSequence);
+        activeSpeechId=id;
+        int sent=speaker.speak(answer,TextToSpeech.QUEUE_FLUSH,null,id);
+        if(sent==TextToSpeech.ERROR)
+            finishUtterance(id,"Android rechazó speak()");
     }
     private void say(String line,String audible){
-        status.setText(line);
+        if(status!=null)status.setText(line);
+        lastAudible=audible;
         answerToSpeak=audible;
         readQueuedSpeech();
     }
@@ -602,7 +625,14 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
             "Copié tu consulta al portapapeles. No abrí la app completa "+
             "automáticamente: tocá su botón de prueba solo si estás detenido.");
     }
+    @Override protected void onResume(){
+        super.onResume();
+        screenResumed=true;
+        if(answerToSpeak!=null)
+            voiceHandler.postDelayed(this::readQueuedSpeech,180L);
+    }
     @Override protected void onPause(){
+        screenResumed=false;
         voiceHandler.removeCallbacks(recognitionTimeout);
         listening=false;recognitionReady=false;
         if(recognizer!=null){
@@ -613,6 +643,8 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         super.onPause();
     }
     @Override protected void onDestroy(){
+        voiceHandler.removeCallbacksAndMessages(null);
+        releaseSpeechFocus();
         if(speaker!=null){
             speaker.stop();
             speaker.shutdown();

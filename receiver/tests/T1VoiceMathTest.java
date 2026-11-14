@@ -7,6 +7,10 @@ public final class T1VoiceMathTest {
     }
     public static void main(String[] args){
         expect("doscientos más ochenta y ocho","El resultado es 288.");
+        expect("400 más 200","El resultado es 600.");
+        expect("cuatrocientos más doscientos","El resultado es 600.");
+        expect("haceme una cuenta de 400 más 200","El resultado es 600.");
+        expect("¿Qué es 400 más 200?","El resultado es 600.");
         expect("¿Cuánto es 200 más 88?","El resultado es 288.");
         expect("treinta y siete por doce","El resultado es 444.");
         expect("275 dividido por 5","El resultado es 55.");

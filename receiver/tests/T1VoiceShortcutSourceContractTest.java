@@ -42,21 +42,33 @@ public final class T1VoiceShortcutSourceContractTest {
            voice.contains("root.post(this::listenExternal)") &&
            voice.contains("ACTION_SHORTCUT_GOOGLE_RECOGNITION.equals(getIntent().getAction())"),
             "Shortcut must open Google external recognizer on first tap");
-        ok(voice.contains("HABLAR · GOOGLE (DETECTAR DESTINO O PREGUNTA)") &&
-           voice.contains("RECONOCIMIENTO INTERNO · DIAGNÓSTICO") &&
-           voice.contains("voiceHandler.postDelayed(recognitionTimeout,6500L)") &&
-           !voice.contains("if(state==null)root.post(this::listen)"),
-            "Never auto-start a hanging Android recognizer; 1 tap opens Google external recognizer");
+        ok(voice.contains("🎤 HABLAR · WAZE, CLIMA, NOTICIAS Y CUENTAS") &&
+           voice.contains("root.post(this::listenExternal)") &&
+           voice.contains("if(heard!=null)heard.setText(") &&
+           voice.contains("lastAudible=audible;") &&
+           !voice.contains("MICRÓFONO GOOGLE · REPETIR RECONOCIMIENTO") &&
+           !voice.contains("USAR CHATGPT PARA LAS CONSULTAS") &&
+           !voice.contains("USAR GEMINI PARA LAS CONSULTAS"),
+            "One visible voice entry with transcript/answer and no misleading AI switch");
         ok(voice.contains("dispatch(said,true)") &&
-           voice.contains("dispatch(phrase,false)") &&
            voice.contains("if(fromVoice)") &&
            voice.contains("navigate(target);") &&
            voice.contains("confirmDestination(target);"),
-            "Explicit spoken navigation goes directly to Waze; typed navigation still confirms");
+            "Spoken navigation still goes directly to Waze without changing maps");
         ok(!voice.contains("shareWithAi(selectedAi(),phrase.trim());") &&
            !voice.contains("openSystemVoice();\n        status.setText(\"PREGUNTA LIBRE") &&
            voice.contains("say(\"CONSULTA LIBRE"),
             "Unknown spoken requests must not launch fullscreen Gemini");
+        ok(voice.contains("USAGE_ASSISTANCE_NAVIGATION_GUIDANCE") &&
+           voice.contains("AudioFocusRequest.Builder(") &&
+           voice.contains("speaker.setAudioAttributes(speechAudioAttributes())") &&
+           voice.contains("UtteranceProgressListener") &&
+           voice.contains("releaseSpeechFocus();") &&
+           voice.contains("speechReadyAt=android.os.SystemClock.uptimeMillis()+550L") &&
+           voice.contains("voiceHandler.postDelayed(this::readQueuedSpeech,180L)") &&
+           voice.contains("AUDIO: ") &&
+           voice.contains("🔊 PROBAR / REPETIR AUDIO"),
+            "Audio answer must defer recognizer focus, acquire navigation focus, release on TTS completion and expose test control");
         ok(!voice.contains("transact(15"),
             "Voice entry never sends vehicle commands");
         System.out.println("PASS safe external launcher shortcut for T1 universal voice");
