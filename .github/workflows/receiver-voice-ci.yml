@@ -47,6 +47,8 @@ jobs:
           java -cp /tmp/t1-voice-route ar.com.rango5gps.drivelabauto.receiver.T1VoiceNewsTopicTest
           java -cp /tmp/t1-voice-route ar.com.rango5gps.drivelabauto.receiver.T1VoiceIntentWeatherTest
           java -cp /tmp/t1-voice-route ar.com.rango5gps.drivelabauto.receiver.T1VoiceIntentPolicyTest
+          javac -encoding UTF-8 -d /tmp/t1-voice-route receiver/tests/T1VoiceShortcutSourceContractTest.java
+          java -cp /tmp/t1-voice-route ar.com.rango5gps.drivelabauto.receiver.T1VoiceShortcutSourceContractTest
       - name: Compile Receiver with integrated microphone
         run: gradle --no-daemon :receiver:assembleDebug
       - name: Verify voice integration is packaged and safe
