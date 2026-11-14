@@ -115,6 +115,7 @@ final class T1ClusterWazeRouter {
             .putInt(DISPLAY_WIDTH,d.getMode().getPhysicalWidth())
             .putInt(DISPLAY_HEIGHT,d.getMode().getPhysicalHeight())
             .putBoolean(ENABLED,false)
+            .putBoolean(T1ClusterLayoutPolicy.ACTIVE,false)
             .putBoolean(AUTO_BOOT,false)
             .putString(STATUS,"Display elegido: "+describe(d)+
                 ". Primero probá Waze detenido, después activá clúster.")
@@ -147,6 +148,7 @@ final class T1ClusterWazeRouter {
         prefs(c).edit()
             .putString(APP_PACKAGE,packageName)
             .putString(APP_LABEL,label)
+            .putBoolean(T1ClusterLayoutPolicy.ACTIVE,false)
             // Never silently replace what auto-launches on the next boot.
             .putBoolean(AUTO_BOOT,false)
             .putString(STATUS,"Aplicación elegida: "+label+
