@@ -23,7 +23,8 @@ public final class RecirculationGuardService extends Service {
     public static final String PREFS="t1_recirc_control";
     public static final String MODE="mode",MODE_AUTO="AUTO",MODE_INTERIOR="INTERIOR";
     public static final String STATUS="status",LAST_VALUE="last_1004",LAST_EVENT="last_2101",
-        PAUSED="paused",MONITORING="monitoring",LAST_POLL="last_poll";
+        PAUSED="paused",MONITORING="monitoring",LAST_POLL="last_poll",
+        LAST_CONFIRMED="last_1004_confirmed";
     public static final String ACTION_INTERIOR="t1.recirc.INTERIOR";
     public static final String ACTION_AUTO="t1.recirc.AUTO";
     public static final String ACTION_RESTORE="t1.recirc.RESTORE";
@@ -34,6 +35,21 @@ public final class RecirculationGuardService extends Service {
     private Thread worker;
     private final ArrayDeque<Long> recentWrites=new ArrayDeque<>();
     private SharedPreferences pref(){return getSharedPreferences(PREFS,MODE_PRIVATE);}
+    /** Old releases latched PAUSED forever after four read/IPC errors.
+     * Migrate ONLY that exact communication error. A safety pause caused by
+     * repeated OEM reversions must still require a driver action.
+     */
+    static void recoverLegacyReadError(android.content.Context context){
+        SharedPreferences p=context.getSharedPreferences(PREFS,MODE_PRIVATE);
+        if(p.getBoolean(PAUSED,false)&&p.getString(STATUS,"").startsWith(
+                "PAUSADO: 4 errores OEM consecutivos.")){
+            p.edit().putBoolean(PAUSED,false).putInt(LAST_VALUE,-1)
+                .putLong(LAST_CONFIRMED,0)
+                .putString(STATUS,
+                    "AIRE INTERIOR · reconectando tras fallas de lectura OEM")
+                .apply();
+        }
+    }
     /**
      * Automatic cabin-air preference requested by the vehicle owner:
      * on a fresh DriveLab main-screen launch, select interior air and
@@ -42,6 +58,7 @@ public final class RecirculationGuardService extends Service {
      * The driver can still choose AIRE AUTO for the current session.
      */
     static void activateOnAppOpen(android.content.Context context){
+        recoverLegacyReadError(context);
         SharedPreferences p=context.getSharedPreferences(PREFS,MODE_PRIVATE);
         boolean safetyPaused=p.getBoolean(PAUSED,false);
         p.edit().putString(MODE,MODE_INTERIOR)
@@ -63,6 +80,7 @@ public final class RecirculationGuardService extends Service {
     /** Resume watchdog when changing Receiver screens or returning from Waze.
      * An OEM safety PAUSED state is NEVER cleared automatically. */
     static void ensureRunning(android.content.Context context){
+        recoverLegacyReadError(context);
         SharedPreferences p=context.getSharedPreferences(PREFS,MODE_PRIVATE);
         if(!MODE_INTERIOR.equals(p.getString(MODE,MODE_AUTO))||
             p.getBoolean(PAUSED,false))return;
@@ -94,7 +112,9 @@ public final class RecirculationGuardService extends Service {
             pref().edit().putString(MODE,MODE_INTERIOR).putBoolean(PAUSED,false)
                 .putString(STATUS,"SIEMPRE SIN AIRE EXTERIOR · verificando 1004").apply();
         }else if(ACTION_RESTORE.equals(action)){
-            // Boot / package replace / app reopening: NEVER clear PAUSED.
+            // Read failures recover automatically; verified OEM override
+            // safety pauses are retained across reboot/app reopening.
+            recoverLegacyReadError(this);
             if(!MODE_INTERIOR.equals(pref().getString(MODE,MODE_AUTO))||
                 pref().getBoolean(PAUSED,false)){
                 stopSelf();return START_NOT_STICKY;
@@ -108,7 +128,8 @@ public final class RecirculationGuardService extends Service {
         running=true;stop=false;
         foreground();
         pref().edit().putBoolean(MONITORING,true)
-            .putLong(LAST_POLL,System.currentTimeMillis()).apply();
+            .putLong(LAST_POLL,System.currentTimeMillis())
+            .putLong(LAST_CONFIRMED,0L).putInt(LAST_VALUE,-1).apply();
         worker=new Thread(this::monitor,"T1-HVAC-Recirculation");
         worker.start();
         return START_STICKY;
@@ -127,7 +148,7 @@ public final class RecirculationGuardService extends Service {
             .setContentIntent(open).setOngoing(true).build());
     }
     private void monitor(){
-        int failures=0;String finalStatus=null;
+        int failures=0;
         try{
             while(!stop && MODE_INTERIOR.equals(pref().getString(MODE,MODE_AUTO))){
                 if(pref().getBoolean(PAUSED,false))break;
@@ -138,7 +159,10 @@ public final class RecirculationGuardService extends Service {
                         throw new IllegalStateException("1004 no reconocido: "+state);
                     int event=-1;
                     try{event=vehicle.read(2101);}catch(Exception ignored){}
-                    pref().edit().putInt(LAST_VALUE,state).putInt(LAST_EVENT,event).apply();
+                    pref().edit().putInt(LAST_VALUE,state)
+                        .putInt(LAST_EVENT,event)
+                        .putLong(LAST_CONFIRMED,state==1?
+                            System.currentTimeMillis():0L).apply();
                     failures=0;
                     if(RecirculationPolicy.needsActivation(state)){
                         long now=SystemClock.elapsedRealtime();
@@ -158,6 +182,8 @@ public final class RecirculationGuardService extends Service {
                         if(stop)break;
                         int after=vehicle.read(1004);
                         pref().edit().putInt(LAST_VALUE,after)
+                            .putLong(LAST_CONFIRMED,after==1?
+                                System.currentTimeMillis():0L)
                             .putString(STATUS,after==1?
                                 "AIRE INTERIOR · 1004=1 confirmado":
                                 "1004=1 enviado; OEM no confirmó el cambio").apply();
@@ -167,22 +193,27 @@ public final class RecirculationGuardService extends Service {
                     }
                 }catch(Exception ex){
                     failures++;
-                    pref().edit().putString(STATUS,"OEM 1004 sin lectura: "+
-                        ex.getClass().getSimpleName()).apply();
-                    if(failures>=4){
-                        pref().edit().putBoolean(PAUSED,true)
-                            .putString(STATUS,"PAUSADO: 4 errores OEM consecutivos. "+
-                                "El aire exterior puede entrar; revisá el vehículo").apply();
-                        break;
-                    }
+                    // Unknown is NOT confirmed recirculation. OEM Binder may
+                    // not yet be ready immediately after vehicle boot.
+                    // Keep user preference AUTO, wait, retry without prompting.
+                    // Do NOT write 1004 until a valid OEM read succeeds.
+                    pref().edit().putInt(LAST_VALUE,-1)
+                        .putLong(LAST_CONFIRMED,0)
+                        .putString(STATUS,"AIRE AUTO · reconectando OEM 1004 ("+
+                            failures+" lecturas fallidas · "+
+                            ex.getClass().getSimpleName()+"). "+
+                            "Estado de recirculación SIN CONFIRMAR").apply();
                 }
-                try{Thread.sleep(3000);}catch(InterruptedException interrupted){
+                long delay=failures<4?3000L:
+                    Math.min(60000L,10000L*(failures-2));
+                try{Thread.sleep(delay);}catch(InterruptedException interrupted){
                     if(stop)break;
                 }
             }
         }finally{
             running=false;
-            pref().edit().putBoolean(MONITORING,false).apply();
+            pref().edit().putBoolean(MONITORING,false)
+                .putLong(LAST_CONFIRMED,0).apply();
             stopForeground(STOP_FOREGROUND_REMOVE);
             stopSelf();
         }
