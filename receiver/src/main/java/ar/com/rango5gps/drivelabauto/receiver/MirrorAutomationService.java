@@ -32,7 +32,8 @@ public final class MirrorAutomationService extends Service {
         RIGHT="steps_right",POSITION="position",LAST_GEAR="last_gear",LAST_SPEED="last_speed",
         SERVICE_ACTIVE="service_active",LAST_RECONNECT="last_reconnect",
         LAST_POLL="auto_last_poll_ms",
-        LAST_ERROR="last_error",LAST_TRANSITION="last_transition";
+        LAST_ERROR="last_error",LAST_TRANSITION="last_transition",
+        SAFETY_HOLD="safety_hold_until_manual_inspection";
     public static final String ACTION_AUTO="t1.mirror.AUTO";
     public static final String ACTION_MANUAL="t1.mirror.MANUAL";
     public static final String ACTION_DOWN="t1.mirror.MANUAL_DOWN";
@@ -51,45 +52,53 @@ public final class MirrorAutomationService extends Service {
 
     @Override public IBinder onBind(Intent ignored){return null;}
     private SharedPreferences prefs(){return getSharedPreferences(PREFS,MODE_PRIVATE);}
-    /** User-selected default for this Jetour: enable on a fresh Receiver open.
-     * Never claim to know the physical mirror angle after a process restart.
-     * An already-healthy foreground service is left untouched. */
+    /** Fail-safe after real returns stayed uncertain on the T1.
+     * NEVER auto-enable just because an Activity opens: it used to do so,
+     * even when the owner previously disabled automatic reverse.
+     * A service whose heartbeat died may have lost the tilt/return ledger.
+     * Only explicit ACTION_AUTO after OEM P/0 verified manual confirmation
+     * can start a fresh cycle.
+     */
     static void activateOnAppOpen(Context context){
         SharedPreferences p=context.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
+        boolean auto=p.getBoolean(AUTO,false);
+        boolean safetyHold=p.getBoolean(SAFETY_HOLD,true);
         long age=System.currentTimeMillis()-p.getLong(LAST_POLL,0L);
-        if(p.getBoolean(AUTO,false)&&p.getBoolean(SERVICE_ACTIVE,false)&&
-            age>=0&&age<=3000)return;
-        // Owner preference: AUTO R defaults ON at every fresh Receiver
-        // process start (same lifecycle as cabin air). MANUAL remains respected
-        // during the current process, including screen changes.
-        // Never automatically re-arm after an interrupted movement.
-        // Do not rearm a possibly interrupted mirror movement.
-        String physical=p.getString(POSITION,"");
-        if(physical.startsWith("INCIERTA")||physical.startsWith("R · inclinados")){
-            // A restarted process has no reliable pulse/angle history.
-            // Never create a fresh NORMAL FSM while mirrors may be down.
-            p.edit().putBoolean(AUTO,false)
-                .putString(STATUS,"AUTO PAUSADO: espejos pueden seguir bajos. "+
-                    "Ajustalos con el mando original, detenido en P, "+
-                    "y confirmá la referencia desde REVERSA en la barra.").apply();
+        String pose=p.getString(POSITION,"");
+        if(!auto){
+            // Do not restore the old "default on at app start" behavior.
             return;
         }
-        p.edit().putString(STATUS,"ESPEJOS AUTO · iniciando servicio de fondo")
-            .apply();
-        try{
-            context.startForegroundService(new Intent(context,
-                MirrorAutomationService.class).setAction(ACTION_AUTO));
-        }catch(RuntimeException ex){
-            p.edit().putString(STATUS,"No se pudo iniciar espejos AUTO: "+
-                ex.getClass().getSimpleName()).apply();
+        if(safetyHold || pose.startsWith("INCIERTA") ||
+           pose.startsWith("R · inclinados")){
+            p.edit().putBoolean(AUTO,false)
+                .putBoolean(SAFETY_HOLD,true)
+                .putString(STATUS,"REVERSA AUTO SUSPENDIDA: los espejos "+
+                    "pueden estar bajos. Ajustalos con controles originales "+
+                    "detenido en P y confirmá la referencia desde REVERSA.")
+                .apply();
+            return;
         }
+        // Preserve an explicit, live, healthy opt-in without restarting the
+        // finite-state machine and losing the recorded return pulses.
+        if(p.getBoolean(SERVICE_ACTIVE,false) && age>=0 && age<=3000)
+            return;
+        // An interrupted process has no reliable issued-pulse history,
+        // even if the last recorded state was "NORMAL".
+        p.edit().putBoolean(AUTO,false)
+            .putBoolean(SAFETY_HOLD,true)
+            .putString(POSITION,"INCIERTA · reinicio sin historial de pulsos")
+            .putString(STATUS,"AUTO SUSPENDIDA: servicio reiniciado "+
+                "sin historial físico verificable. Comprobá los espejos "+
+                "detenido en P y confirmá la referencia manual.")
+            .apply();
     }
     /** Recovery watchdog; only for an already armed preference.
      * Never re-arms after a manual fold or an uncertain actuator result. */
     static void ensureRunning(Context context){
         SharedPreferences p=context.getSharedPreferences(PREFS,MODE_PRIVATE);
-        if(!p.getBoolean(AUTO,false)||p.getString(POSITION,"")
-            .startsWith("INCIERTA"))return;
+        if(!p.getBoolean(AUTO,false)||p.getBoolean(SAFETY_HOLD,true)||
+            p.getString(POSITION,"").startsWith("INCIERTA"))return;
         long age=System.currentTimeMillis()-p.getLong(LAST_POLL,0L);
         if(p.getBoolean(SERVICE_ACTIVE,false)&&age>=0&&age<=3000)return;
         activateOnAppOpen(context);
@@ -130,6 +139,7 @@ public final class MirrorAutomationService extends Service {
                         throw new IllegalStateException(
                             "Se requiere marcha P y 0 km/h confirmados por OEM");
                     prefs().edit().putBoolean(AUTO,false)
+                        .putBoolean(SAFETY_HOLD,false)
                         .putString(POSITION,
                             "NORMAL · referencia visual confirmada por conductor")
                         .putString(STATUS,
@@ -161,6 +171,17 @@ public final class MirrorAutomationService extends Service {
             return START_NOT_STICKY;
         }
         if(ACTION_AUTO.equals(action)){
+            // A physical "normal" position has no readback sensor. Do not
+            // rearm after software update/reboot/partial return without the
+            // driver's explicit reference confirmation in P at 0 km/h.
+            if(prefs().getBoolean(SAFETY_HOLD,true)){
+                prefs().edit().putBoolean(AUTO,false)
+                    .putString(STATUS,"AUTO BLOQUEADA: primero revisá la "+
+                        "posición de ambos espejos con los mandos originales "+
+                        "en P y confirmá la referencia.")
+                    .apply();
+                stopSelf();return START_NOT_STICKY;
+            }
             // An Activity watchdog can resend ACTION_AUTO during a long pulse
             // or while already tilted. Never clear POSITION or restart FSM.
             if(running)return START_STICKY;
@@ -370,6 +391,7 @@ public final class MirrorAutomationService extends Service {
                     if(prefs().getBoolean(AUTO,false)){
                         // Never automatically retry a possibly partial movement.
                         prefs().edit().putBoolean(AUTO,false)
+                            .putBoolean(SAFETY_HOLD,true)
                             .putString(POSITION,"INCIERTA · calibrar manualmente")
                             .putString(LAST_ERROR,"AUTO DETENIDO · "+reason+
                                 " · "+System.currentTimeMillis())
@@ -453,8 +475,11 @@ public final class MirrorAutomationService extends Service {
         stop=true;if(worker!=null)worker.interrupt();
         if(prefs().getBoolean(AUTO,false))
             prefs().edit().putBoolean(AUTO,false)
+                .putBoolean(SAFETY_HOLD,true)
                 .putBoolean(SERVICE_ACTIVE,false)
-                .putString(STATUS,"AUTO detenido por Android; rearmar desde la app").apply();
+                .putString(POSITION,"INCIERTA · servicio detenido sin confirmación física")
+                .putString(STATUS,"AUTO suspendido por Android. Revisar espejos "+
+                    "con mandos originales en P; no se rearmará al iniciar.").apply();
         super.onDestroy();
     }
 }
