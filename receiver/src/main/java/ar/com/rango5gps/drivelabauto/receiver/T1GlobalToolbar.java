@@ -229,14 +229,22 @@ final class T1GlobalToolbar {
         boolean paused=air.getBoolean(RecirculationGuardService.PAUSED,false);
         boolean running=air.getBoolean(RecirculationGuardService.MONITORING,false);
         long age=System.currentTimeMillis()-air.getLong(RecirculationGuardService.LAST_POLL,0);
+        long verifiedAge=System.currentTimeMillis()-
+            air.getLong(RecirculationGuardService.LAST_CONFIRMED,0);
+        boolean verified=interior&&!paused&&running&&age>=0&&age<12000&&
+            verifiedAge>=0&&verifiedAge<12000&&
+            air.getInt(RecirculationGuardService.LAST_VALUE,-1)==1;
         if(interior&&paused){
-            airButton.setText("AIRE AUTO · PAUSADO");
+            airButton.setText("AIRE AUTO · PAUSA OEM");
             T1JetourTheme.button(airButton,T1JetourTheme.AMBER_BUTTON);
-        }else if(interior&&running&&age>=0&&age<12000){
+        }else if(verified){
             airButton.setText("AIRE INTERIOR AUTO ✓");
             T1JetourTheme.button(airButton,T1JetourTheme.GREEN_BUTTON);
+        }else if(interior){
+            airButton.setText("AIRE AUTO · RECONECTANDO");
+            T1JetourTheme.button(airButton,T1JetourTheme.AMBER_BUTTON);
         }else{
-            airButton.setText(interior?"AIRE AUTO · REVISAR":"AIRE INTERIOR AUTO");
+            airButton.setText("AIRE INTERIOR AUTO");
             T1JetourTheme.button(airButton,T1JetourTheme.PANEL_HI);
         }
     }
@@ -272,12 +280,9 @@ final class T1GlobalToolbar {
         boolean paused=air.getBoolean(RecirculationGuardService.PAUSED,false);
         String state=air.getString(RecirculationGuardService.STATUS,"Sin lectura OEM");
         if(!paused){
-            new AlertDialog.Builder(owner).setTitle("RECIRCULACIÓN AUTOMÁTICA")
-                .setMessage("DriveLab supervisa 1004 cada 3 segundos en segundo "+
-                    "plano e intenta restaurar aire interior si la ECU habilita "+
-                    "aire exterior. Estado: "+state+
-                    "\n\nNo sustituye los controles de desempañado OEM.")
-                .setPositiveButton("CERRAR",null).show();
+            // Normal operation or transient OEM read failure never prompts.
+            // No extra confirmation required after every vehicle boot.
+            note(state);
             return;
         }
         new AlertDialog.Builder(owner).setTitle("AIRE INTERIOR PAUSADO POR SEGURIDAD")
