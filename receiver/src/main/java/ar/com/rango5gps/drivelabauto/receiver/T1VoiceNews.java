@@ -85,7 +85,10 @@ final class T1VoiceNews {
                     "necesitamos una fuente deportiva de partidos. ");
             else if(topic.equals("Donald Trump"))
                 answer.append("Estos son titulares recientes sobre Donald Trump. ");
-            else answer.append("Estas son noticias recientes de Argentina. ");
+            else if(topic.equals("Argentina noticias"))
+                answer.append("Estas son noticias recientes de Argentina. ");
+            else answer.append("Estos son titulares recientes sobre "+
+                topic+". ");
             for(int j=0;j<newest.size();j++){
                 answer.append(j+1).append(": ").append(newest.get(j)).append(". ");
             }
