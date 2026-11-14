@@ -87,9 +87,13 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
             "sus eventos OEM. Probá únicamente estacionado.",13);
         report=text(body,"LEYENDO DIAGNÓSTICO DEL VOLANTE…",16);
         button(body,"VER ESTADO DEL SERVICIO ANDROID",()->{
-            report.setText(T1WazeWheelService.describe(this)+
-                "\n\nSi figura SIN INICIO REGISTRADO o no hay KeyEvent, "+
-                "verificá Accesibilidad por WebADB.");
+            report.setText(T1WazeWheelService.describe(this));
+        });
+        button(body,"INSPECCIONAR CONTROLES DE WAZE · CLÚSTER",()->{
+            T1WazeWheelService.requestScan(this);
+            report.setText("Inspección solicitada al servicio de Accesibilidad. "+
+                "Con Waze visible en el clúster, aquí aparecerán los controles "+
+                "reconocidos. No toca botones ni modifica rutas.");
         });
         button(body,"ABRIR AJUSTES DE ACCESIBILIDAD (SI EXISTEN)",()->{
             Intent intent=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
@@ -148,6 +152,11 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
                         "Si el OEM rechaza la conexión aparecerá el motivo.");
                 }).show();
         });
+        text(body,"La rueda OEM ya tiene sus cuatro códigos aprendidos "+
+            "automáticamente (1000 / 1001 / 1002 / 1003). "+
+            "No es necesario tocar APRENDER TECLA para Waze. "+
+            "Desactivá VOLANTE → MAPA en T1Launcher durante la prueba "+
+            "para evitar selecciones simultáneas.",13);
         text(body,"APRENDIZAJE SIN SALIR DE DRIVELAB: "+
             "puede capturar el evento la pantalla o el servicio "+
             "'DriveLab · Waze y volante'. Ver abajo los códigos; "+
