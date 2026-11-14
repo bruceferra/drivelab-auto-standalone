@@ -113,20 +113,15 @@
             <intent-filter><action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" /></intent-filter>
         </activity>
-        <!-- Preserve the shortcut component name already visible in T1Launcher,
-             but route it through a one-touch launcher trampoline. Its activity
-             invokes the already-tested Android ACTION_VOICE_COMMAND directly.
-             Does NOT intercept OEM steering key assignments or receive voice. -->
+        <!-- Retain this explicit component for any already configured voice
+             shortcut, but do NOT publish a second LAUNCHER icon: T1Launcher
+             may collapse multiple icons from the same APK and hide Receiver.
+             Voice remains available from Receiver's own menu. -->
         <activity-alias android:name=".VoiceAssistantShortcut"
             android:targetActivity=".T1VoiceShortcutActivity"
             android:exported="true"
             android:enabled="true"
-            android:label="DriveLab · Asistente de voz">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity-alias>
+            android:label="DriveLab · Asistente de voz" />
         <activity android:name=".T1WhatIfActivity" android:exported="false" />
         <!-- Isolated historical/read-only T1 fuel dashboard; no OEM writes. -->
         <activity android:name=".T1TankDashboardActivity" android:exported="false" />
