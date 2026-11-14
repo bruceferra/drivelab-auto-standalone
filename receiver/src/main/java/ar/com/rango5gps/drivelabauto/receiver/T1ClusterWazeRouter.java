@@ -30,6 +30,8 @@ final class T1ClusterWazeRouter {
     static final String DISPLAY_NAME="display_name";
     static final String DISPLAY_WIDTH="display_width";
     static final String DISPLAY_HEIGHT="display_height";
+    static final String APP_PACKAGE="app_package";
+    static final String APP_LABEL="app_label";
     static final String STATUS="status";
     static final String LAST_REQUEST_MS="last_request_ms";
     private static final String WAZE="com.waze";
@@ -118,45 +120,101 @@ final class T1ClusterWazeRouter {
                 ". Primero probá Waze detenido, después activá clúster.")
             .apply();
     }
-    static String launchWaze(Context c,Intent intent,
-                             boolean manualTest,boolean fromBoot){
-        if(!manualTest&&!enabled(c)){
+    /** Selected launchable app for the cluster. Defaults to the known-working
+     * Waze. This preference does NOT change where the Sender/voice routes go:
+     * explicit navigations always open Waze, even if another app is on screen.
+     */
+    static String selectedAppPackage(Context c){
+        return prefs(c).getString(APP_PACKAGE,WAZE);
+    }
+    static String selectedAppLabel(Context c){
+        return prefs(c).getString(APP_LABEL,"Waze");
+    }
+    static boolean isSelectablePackage(Context c,String packageName){
+        if(packageName==null||packageName.isEmpty()||
+            packageName.equals(c.getPackageName())||
+            packageName.equals("com.t1launcher")||
+            packageName.equals("com.android.settings")||
+            packageName.equals("com.android.systemui")||
+            packageName.startsWith("com.autolink."))return false;
+        // Only visible launchable applications: no implicit intents, component
+        // injection, overlays, OEM modules or arbitrary package commands.
+        return c.getPackageManager().getLaunchIntentForPackage(packageName)!=null;
+    }
+    static void chooseApp(Context c,String packageName,String label){
+        if(!isSelectablePackage(c,packageName))
+            throw new IllegalArgumentException("No es una app pública iniciable");
+        prefs(c).edit()
+            .putString(APP_PACKAGE,packageName)
+            .putString(APP_LABEL,label)
+            // Never silently replace what auto-launches on the next boot.
+            .putBoolean(AUTO_BOOT,false)
+            .putString(STATUS,"Aplicación elegida: "+label+
+                ". Probala en P y 0 km/h antes de reactivar el arranque.")
+            .apply();
+    }
+    private static String launchOnDisplay(Context c,Intent launch,
+                                          boolean manualTest,boolean fromBoot,
+                                          String label,boolean waze){
+        if(!manualTest&&!enabled(c))
             return "Clúster independiente desactivado";
-        }
-        if(!WAZE.equals(intent.getPackage())){
-            return "Rechazado: solo está autorizado Waze";
-        }
-        if(!multiDisplay(c)){
+        if(!multiDisplay(c))
             return "Android no habilita actividades en pantallas secundarias";
-        }
         Display d=selected(c);
-        if(d==null){
+        if(d==null)
             return "Display secundario cambió/no está visible. "+
-                "Reconfigurá en CLÚSTER; no abriré Waze sobre la pantalla central.";
-        }
+                "Reconfigurá en CLÚSTER; no abriré apps sobre la pantalla central.";
         if(fromBoot&&!Settings.canDrawOverlays(c)&&
-            !ReceiverActivity.isVisible()){
-            return "Android bloquea abrir Waze en segundo plano: "+
+           !ReceiverActivity.isVisible())
+            return "Android bloquea abrir una app en segundo plano: "+
                 "falta permiso «Mostrar sobre otras apps».";
-        }
-        Intent launch=new Intent(intent);
-        launch.setPackage(WAZE);
-        launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|
+        Intent intent=new Intent(launch);
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|
             Intent.FLAG_ACTIVITY_SINGLE_TOP);
         try{
             ActivityOptions options=ActivityOptions.makeBasic()
                 .setLaunchDisplayId(d.getDisplayId());
-            // Android may reject a private/restricted cluster even if visible.
-            c.startActivity(launch,options.toBundle());
+            c.startActivity(intent,options.toBundle());
             prefs(c).edit().putLong(LAST_REQUEST_MS,
                 System.currentTimeMillis()).apply();
-            return "Waze SOLICITADO para "+describe(d)+
+            return (waze?"Waze SOLICITADO":"APP SOLICITADA: "+label)+
+                " para "+describe(d)+
                 ". Verificá físicamente el clúster; no es confirmación visual.";
         }catch(RuntimeException e){
-            return "Android/Jetour rechazó abrir Waze en "+
+            return "Android/Jetour rechazó abrir "+label+" en "+
                 describe(d)+": "+e.getClass().getSimpleName()+
                 ". No se abrió ventana de respaldo en pantalla central.";
         }
+    }
+    /** Deliberate app launch for a stopped vehicle, or the user-enabled
+     * auto-boot option. Never called for an incoming navigation intent.
+     */
+    static String launchSelectedApp(Context c,boolean manualTest,
+                                    boolean fromBoot){
+        String pkg=selectedAppPackage(c);
+        if(!isSelectablePackage(c,pkg))
+            return "Aplicación elegida no disponible: "+pkg+
+                ". Elegí otra en CLÚSTER.";
+        Intent app=c.getPackageManager().getLaunchIntentForPackage(pkg);
+        if(app==null)
+            return "La app no expone una pantalla de inicio: "+pkg;
+        app.setPackage(pkg);
+        return launchOnDisplay(c,app,manualTest,fromBoot,
+            selectedAppLabel(c),WAZE.equals(pkg));
+    }
+    static boolean openSelectedAppTest(Context c){
+        String result=launchSelectedApp(c,true,false);
+        status(c,result);
+        return result.startsWith("Waze SOLICITADO")||
+            result.startsWith("APP SOLICITADA:");
+    }
+    static String launchWaze(Context c,Intent intent,
+                             boolean manualTest,boolean fromBoot){
+        if(!WAZE.equals(intent.getPackage()))
+            return "Rechazado: solo está autorizado Waze para destinos";
+        Intent launch=new Intent(intent);
+        launch.setPackage(WAZE);
+        return launchOnDisplay(c,launch,manualTest,fromBoot,"Waze",true);
     }
     static boolean routeDestination(Context c,Intent waze){
         String result=launchWaze(c,waze,false,false);
@@ -180,11 +238,8 @@ final class T1ClusterWazeRouter {
                 "Se preservan la pantalla central y el launcher OEM.");
             return;
         }
-        Intent waze=c.getPackageManager().getLaunchIntentForPackage(WAZE);
-        if(waze==null){
-            status(c,"Arranque: Waze no disponible en Jetour");
-            return;
-        }
-        status(c,launchWaze(c,waze,false,true));
+        // Start whichever launcher app the owner selected; incoming
+        // navigations from Xiaomi remain explicit Waze intents.
+        status(c,launchSelectedApp(c,false,true));
     }
 }
