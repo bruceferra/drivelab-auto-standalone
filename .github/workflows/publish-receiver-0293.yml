@@ -1,0 +1,164 @@
+name: Signed Receiver 0.2.93 - background trip replay, Waze popup and HVAC auto restore
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-receiver-0293.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: signed-drivelabauto-publication
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    env:
+      RECEIVER_STORE_PASSWORD: ${{ secrets.RECEIVER_STORE_PASSWORD }}
+      RECEIVER_KEY_ALIAS: ${{ secrets.RECEIVER_KEY_ALIAS }}
+      RECEIVER_KEY_PASSWORD: ${{ secrets.RECEIVER_KEY_PASSWORD }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Android SDK and signing identity
+        env:
+          RECEIVER_KEYSTORE_B64: ${{ secrets.RECEIVER_KEYSTORE_B64 }}
+        run: |
+          set -euo pipefail
+          tool=$(command -v sdkmanager || find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)
+          "$tool" 'platforms;android-35' 'build-tools;35.0.0'
+          test -n "$RECEIVER_KEYSTORE_B64" && test -n "$RECEIVER_STORE_PASSWORD"
+          test -n "$RECEIVER_KEY_ALIAS" && test -n "$RECEIVER_KEY_PASSWORD"
+          printf %s "$RECEIVER_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/receiver.p12"
+          chmod 600 "$RUNNER_TEMP/receiver.p12"
+          echo "RECEIVER_KEYSTORE=$RUNNER_TEMP/receiver.p12" >> "$GITHUB_ENV"
+      # UI string-contract checks handle Java concatenation in both diagnostic and action captions.
+      # Mirror uncertainty regression now checks source strings independently of UI concatenation.
+      # Return pulses in D continue safely even if speed crosses back below 5 km/h.
+      - name: Validate source and sign Receiver 0.2.93
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'bruceferra/drivelab-auto-standalone'
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.92
+          ! gh release view v0.2.93 >/dev/null 2>&1
+          mkdir -p /tmp/old output /tmp/mirror-tests
+          gh release download v0.2.92 --pattern 'DriveLab-Auto-Receiver-v0.2.92.apk' --dir /tmp/old
+          gh release download v0.2.92 --pattern 'sender.json' --dir /tmp/old
+          cp /tmp/old/sender.json output/sender.json
+          python3 - <<'PY'
+          import json
+          m=json.load(open('output/sender.json'))
+          assert m['packageName']=='ar.com.rango5gps.drivelabauto.sender'
+          assert m['versionCode']==17 and m['versionName']=='0.2.16'
+          PY
+          javac -encoding UTF-8 -d /tmp/mirror-tests receiver/tests/MirrorControlsVisibilitySourceContractTest.java
+          java -cp /tmp/mirror-tests ar.com.rango5gps.drivelabauto.receiver.MirrorControlsVisibilitySourceContractTest
+          javac -encoding UTF-8 -d /tmp/mirror-tests \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripMath.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1StableAutonomy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PhevTotalRange.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1Fuel500mWindow.java \
+            receiver/tests/T1StableAutonomyTest.java \
+            receiver/tests/T1PhevTotalRangeTest.java \
+            receiver/tests/T1Fuel500mWindowTest.java \
+            receiver/tests/T1StableAutonomySourceContractTest.java
+          java -cp /tmp/mirror-tests ar.com.rango5gps.drivelabauto.receiver.T1StableAutonomyTest
+          java -cp /tmp/mirror-tests ar.com.rango5gps.drivelabauto.receiver.T1PhevTotalRangeTest
+          java -cp /tmp/mirror-tests ar.com.rango5gps.drivelabauto.receiver.T1Fuel500mWindowTest
+          java -cp /tmp/mirror-tests ar.com.rango5gps.drivelabauto.receiver.T1StableAutonomySourceContractTest
+          # Validate all bundled changes before the signed APK is published.
+          javac -encoding UTF-8 -d /tmp/mirror-tests \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModePolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocRegenWritePolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1SocTargetCodec.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TopRowEnergyStatus.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1VoiceMath.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1VoiceIntentPolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1VoiceNewsTopic.java \
+            receiver/tests/T1TopRowEnergyStatusTest.java \
+            receiver/tests/T1ShadowMapsSourceContractTest.java \
+            receiver/tests/T1VoiceMathTest.java \
+            receiver/tests/T1VoiceNewsTopicTest.java \
+            receiver/tests/T1VoiceIntentWeatherTest.java \
+            receiver/tests/T1VoiceIntentPolicyTest.java
+          java -cp /tmp/mirror-tests ar.com.rango5gps.drivelabauto.receiver.T1TopRowEnergyStatusTest
+          java -cp /tmp/mirror-tests ar.com.rango5gps.drivelabauto.receiver.T1ShadowMapsSourceContractTest
+          java -cp /tmp/mirror-tests ar.com.rango5gps.drivelabauto.receiver.T1VoiceMathTest
+          java -cp /tmp/mirror-tests ar.com.rango5gps.drivelabauto.receiver.T1VoiceNewsTopicTest
+          java -cp /tmp/mirror-tests ar.com.rango5gps.drivelabauto.receiver.T1VoiceIntentWeatherTest
+          java -cp /tmp/mirror-tests ar.com.rango5gps.drivelabauto.receiver.T1VoiceIntentPolicyTest
+          javac -encoding UTF-8 -d /tmp/mirror-tests receiver/tests/T1VoiceShortcutSourceContractTest.java
+          java -cp /tmp/mirror-tests ar.com.rango5gps.drivelabauto.receiver.T1VoiceShortcutSourceContractTest
+          javac -encoding UTF-8 -d /tmp/mirror-tests receiver/tests/T1MirrorUncertainRecoverySourceContractTest.java
+          java -cp /tmp/mirror-tests ar.com.rango5gps.drivelabauto.receiver.T1MirrorUncertainRecoverySourceContractTest
+          javac -encoding UTF-8 -d /tmp/mirror-tests receiver/tests/T1BootOpenSourceContractTest.java
+          java -cp /tmp/mirror-tests ar.com.rango5gps.drivelabauto.receiver.T1BootOpenSourceContractTest
+          javac -encoding UTF-8 -d /tmp/mirror-tests \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/MirrorParkingPolicy.java \
+            receiver/tests/MirrorParkingPolicyTest.java
+          java -cp /tmp/mirror-tests MirrorParkingPolicyTest
+          # Historical trip replayer: pure kilometer-weighted category tests.
+          javac -encoding UTF-8 -d /tmp/mirror-tests \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripMapPercentages.java \
+            receiver/tests/T1TripMapPercentagesTest.java
+          java -cp /tmp/mirror-tests ar.com.rango5gps.drivelabauto.receiver.T1TripMapPercentagesTest
+          javac -encoding UTF-8 -d /tmp/mirror-tests receiver/tests/T1TripMapReplaySourceContractTest.java
+          java -cp /tmp/mirror-tests ar.com.rango5gps.drivelabauto.receiver.T1TripMapReplaySourceContractTest
+          # T1 owner-provided launcher APK: verified OEM HardKey Binder + Waze display 2.
+          javac -encoding UTF-8 -d /tmp/mirror-tests receiver/tests/T1WheelCalibrationSourceContractTest.java
+          java -cp /tmp/mirror-tests ar.com.rango5gps.drivelabauto.receiver.T1WheelCalibrationSourceContractTest
+          javac -encoding UTF-8 -d /tmp/mirror-tests receiver/tests/T1WheelOemBinderSourceContractTest.java
+          java -cp /tmp/mirror-tests ar.com.rango5gps.drivelabauto.receiver.T1WheelOemBinderSourceContractTest
+          # On-display Waze real prompts and safe trip/HVAC background contracts.
+          javac -encoding UTF-8 -d /tmp/mirror-tests \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1WazePromptPolicy.java \
+            receiver/tests/T1WazePromptPolicyTest.java
+          java -cp /tmp/mirror-tests ar.com.rango5gps.drivelabauto.receiver.T1WazePromptPolicyTest
+          javac -encoding UTF-8 -d /tmp/mirror-tests receiver/tests/T1ReplayAndHvacBackgroundSourceContractTest.java
+          java -cp /tmp/mirror-tests ar.com.rango5gps.drivelabauto.receiver.T1ReplayAndHvacBackgroundSourceContractTest
+          python3 -m py_compile tools/build_shadow_maps.py
+          gradle --no-daemon :receiver:assembleRelease
+          apk=receiver/build/outputs/apk/release/receiver-release.apk
+          test -s "$apk"
+          sig="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          "$sig" verify --print-certs "$apk"
+          "$sig" verify --print-certs /tmp/old/DriveLab-Auto-Receiver-v0.2.92.apk
+          oldcert=$("$sig" verify --print-certs /tmp/old/DriveLab-Auto-Receiver-v0.2.92.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          newcert=$("$sig" verify --print-certs "$apk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          test -n "$oldcert" && test "$oldcert" = "$newcert"
+          badge=$("$aapt" dump badging "$apk" | head -1)
+          echo "$badge" | grep -F "package: name='ar.com.rango5gps.drivelabauto.receiver'"
+          echo "$badge" | grep -F "versionCode='94'"
+          echo "$badge" | grep -F "versionName='0.2.93'"
+          name=DriveLab-Auto-Receiver-v0.2.93.apk
+          cp "$apk" "output/$name"
+          export RECEIVER_SHA=$(sha256sum "output/$name" | awk '{print $1}')
+          python3 - <<'PY'
+          import os,json
+          m={'packageName':'ar.com.rango5gps.drivelabauto.receiver',
+             'versionName':'0.2.93','versionCode':94,
+             'sha256':os.environ['RECEIVER_SHA'],
+             'apkUrl':'https://github.com/bruceferra/drivelab-auto-standalone/releases/download/v0.2.93/DriveLab-Auto-Receiver-v0.2.93.apk'}
+          assert len(m['sha256'])==64
+          with open('output/receiver.json','w') as f:json.dump(m,f,indent=2)
+          PY
+          sha256sum "output/$name" > output/receiver.sha256
+      - name: Publish verified OTA (Sender unchanged)
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.92
+          gh release create v0.2.93 output/DriveLab-Auto-Receiver-v0.2.93.apk output/receiver.json output/sender.json output/receiver.sha256 --target "$GITHUB_SHA" --latest --title 'DriveLab Auto Receiver 0.2.93 - 3 mapas en segundo plano, Waze Display 5 y aire AUTO' --notes 'Receiver v0.2.93 code94. VIAJES: ANALIZAR VIAJE GRABADO ejecuta 3 mapas en servicio foreground propio, permite cambiar de solapa o app sin reiniciar, persiste avance y el resultado en el Receiver y muestra notificacion; una sola tarea a la vez. Se preserva CSV original, sin exportar coordenadas. WAZE: la ruedita OEM 1000/1001, OK 1003, ATRAS 1002 ya funcionan como fuente Binder verificada; Display 5 del cluster localizado por Accesibilidad. Identifica mensajes como ¿Aún vas al Obelisco?, Continuar viaje, No gracias o No grabar y permite recorrer y confirmar opciones; si la UI solo presenta etiquetas, prueba un gesto corto en la posicion real del botón reportada por Accesibilidad y en el Display ID exacto, NUNCA por coordenadas fijas ni sin eleccion. Resaltado en la pantalla Waze real, nuevo boton INSPECCIONAR CONTROLES DE WAZE sin tocar nada. Elimina ATRAS global que podia cerrar ventanas OEM. Requiere servicio accesibilidad y puente OEM activado, con VOLANTE MAPA T1Launcher apagado para evitar doble control durante prueba. No se garantiza que Waze publique todos sus botones hasta prueba fisica. AIRE AUTO: 4 errores OEM de lectura ya no fuerzan PAUSADO persistente; se migran pausas previas de esa causa exacta y el servicio vuelve a leer con backoff sin pedir confirmacion; GREEN solo con recirculacion OEM 1004=1 confirmada reciente y el servicio funcionando. Si OEM no responde aparece RECONECTANDO (amber), nunca verde falso. Las reversiones repetidas de 1004 por el climatizador mantienen proteccion y pausa de seguridad. No cambia modos EV/HEV, espejos o control original T1. Sender 0.2.16 sin cambios. Compilacion firmada, QA Android; funciones Waze y aire pendientes de validacion real en T1 estacionada.'
+          mkdir -p verify
+          gh release download v0.2.93 --pattern receiver.json --dir verify
+          gh release download v0.2.93 --pattern sender.json --dir verify
+          cmp output/receiver.json verify/receiver.json
+          cmp output/sender.json verify/sender.json
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.2.93
