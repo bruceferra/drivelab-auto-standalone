@@ -159,6 +159,10 @@ public final class ReceiverVehicleActivity extends T1ImmersiveActivity {
     private void section(LinearLayout parent,String name){
         label(parent,name,19);
     }
+    private void openPriorityDiagnostic(String taskId){
+        startActivity(new android.content.Intent(this,T1ValidationWizardActivity.class)
+            .putExtra("focus_task",taskId));
+    }
     private void render(){
         final int restoreY=currentScroll==null?0:currentScroll.getScrollY();
         ScrollView scroll=new ScrollView(this);
@@ -231,6 +235,16 @@ public final class ReceiverVehicleActivity extends T1ImmersiveActivity {
             if(wiperParkingView!=null)wiperParkingView.setText(wiperParkingStatus);
         });
         wiperParkingView=status(body,wiperParkingStatus);
+        label(body,"PRUEBAS PRIORITARIAS · capturas A/B con mandos originales, " +
+            "sin calibración ni órdenes nuevas al vehículo.",12);
+        button(body,"1 · PROBAR RADAR DELANTERO",()->
+            openPriorityDiagnostic("pdc_front_distance"));
+        button(body,"2 · PROBAR RADAR TRASERO",()->
+            openPriorityDiagnostic("pdc_rear_distance"));
+        button(body,"3 · PROBAR LIMPIA AUTO",()->
+            openPriorityDiagnostic("wiper_auto"));
+        button(body,"4 · PROBAR LUZ DE PORTÓN",()->
+            openPriorityDiagnostic("lights_tailgate"));
         label(body,"La velocidad de barrido MANUAL no está identificada: "+
             "2126 es sensibilidad automática. 2107 no garantiza ajuste "+
             "solo del radar trasero. No modificar avisos de seguridad "+

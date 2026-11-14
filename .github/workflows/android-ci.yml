@@ -133,7 +133,7 @@ jobs:
           grep -Fq 'setContentView(scroll);' "$cockpit"
           grep -Fq 'T1WazeWheelService' receiver/src/main/AndroidManifest.xml
           grep -Fq 'collectAlternativeRoutes(root)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1WazeWheelService.java
-          grep -Fq 'if(gear==Gear.D)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/MirrorParkingPolicy.java
+          grep -Fq 'if(gear==Gear.D && speedKmh>RETURN_THRESHOLD_KMH)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/MirrorParkingPolicy.java
           grep -Fq 'historyEcoStatus.setTextIsSelectable(false);' "$cockpit"
           grep -Fq 'historyEcoStatus.setFocusable(false);' "$cockpit"
           grep -Fq 'scroll.setDescendantFocusability(' "$cockpit"
