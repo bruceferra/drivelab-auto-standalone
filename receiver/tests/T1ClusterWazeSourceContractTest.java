@@ -62,6 +62,35 @@ public final class T1ClusterWazeSourceContractTest {
             setup.contains("putBoolean(T1ClusterWazeRouter.AUTO_BOOT,true)")&&
             setup.contains("putBoolean(\"auto_boot\",true)"),
             "User chooses the display and permits boot; manual test verified P/0");
+        ok(manifest.contains("com.google.android.apps.maps")&&
+            manifest.contains("android.intent.category.LAUNCHER")&&
+            !manifest.contains("android.permission.QUERY_ALL_PACKAGES"),
+            "App chooser must see Maps/launchable apps without broad package access");
+        ok(router.contains("selectedAppPackage(Context c)")&&
+            router.contains("getString(APP_PACKAGE,WAZE)")&&
+            router.contains("isSelectablePackage(Context c,String packageName)")&&
+            router.contains("getLaunchIntentForPackage(packageName)")&&
+            router.contains("packageName.equals(\"com.t1launcher\")")&&
+            router.contains("packageName.startsWith(\"com.autolink.\")")&&
+            router.contains("putBoolean(AUTO_BOOT,false)")&&
+            router.contains("launchSelectedApp(c,false,true)")&&
+            router.contains("openSelectedAppTest(Context c)"),
+            "Only explicit user-selected public apps, with auto boot reset on change");
+        ok(setup.contains("ELEGIR APLICACIÓN DEL CLÚSTER")&&
+            setup.contains("PROBAR APLICACIÓN ELEGIDA · EN P")&&
+            setup.contains("getLaunchIntentForPackage")==false&&
+            setup.contains("pm.queryIntentActivities(launcher,0)")&&
+            setup.contains("runParkedTest(boolean selectedApp)")&&
+            setup.contains("openSelectedAppTest(this)")&&
+            setup.contains("openManualTest(this)")&&
+            setup.contains("gear!=1")&&setup.contains("kmh>0.5"),
+            "Manual app switch and Waze must both pass stopped-vehicle check");
+        ok(router.contains("WAZE.equals(intent.getPackage())")&&
+            router.contains("return launchOnDisplay(c,launch,manualTest,fromBoot,\"Waze\",true)")&&
+            receiver.contains("routeDestination(this,launch)")&&
+            voice.contains("routeDestination(this,i)")&&
+            share.contains("routeDestination(this,navigation)"),
+            "Incoming destinations remain Waze regardless of selected boot app");
         ok(receiver.contains("scheduleNativeClusterWaze()")&&
             receiver.contains("T1ClusterWazeRouter.onReceiverBoot(this)")&&
             receiver.contains("T1ClusterWazeRouter.routeDestination(this,launch)")&&
