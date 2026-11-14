@@ -17,6 +17,8 @@ final class T1VoiceNewsTopic {
             if(place.length()>=3&&!place.matches("(?i).*(?:mi casa|mi trabajo|mi calle).*"))
                 return Character.toUpperCase(place.charAt(0))+place.substring(1);
         }
+        if(s.equals("noticias de hoy")||s.equals("noticias sobre hoy"))
+            return "Argentina noticias";
         if(s.matches("^noticias (?:de|sobre) [a-z ]{3,48}$")){
             String subject=s.replaceFirst("^noticias (?:de|sobre) ","").trim();
             return Character.toUpperCase(subject.charAt(0))+subject.substring(1);
