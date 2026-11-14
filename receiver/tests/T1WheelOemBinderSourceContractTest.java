@@ -5,7 +5,7 @@ import java.nio.file.Path;
 /** Static safety regression for T1 OEM hard-key interoperability.
  * Owner provided T1Launcher T1N134 (SHA-256 6765a8...) had:
  * IHardKeyService transaction 1/2 with IBinder callback;
- * IHardKeyCallback transaction 3, three ints; key 1000..1003.
+ * IHardKeyCallback transaction 3, three ints; wheel 1000..1003, mic 1010/action100.
  * This test does NOT claim that the vendor service accepts a second client.
  */
 public final class T1WheelOemBinderSourceContractTest {
@@ -30,12 +30,18 @@ public final class T1WheelOemBinderSourceContractTest {
             bridge.contains("REGISTER=1,UNREGISTER=2,EVENT=3"),
             "Use exact T1N134 observed OEM hard-key Binder ABI");
         check(bridge.contains("data.readInt(),action=data.readInt(),extra=data.readInt()")&&
-            bridge.contains("if(key>=1000&&key<=1003)")&&
+            bridge.contains("(key>=1000&&key<=1003)||key==1010")&&
             bridge.contains("data.writeInterfaceToken(SERVER_TOKEN)")&&
             bridge.contains("data.writeStrongBinder(callback)")&&
             bridge.contains("call(UNREGISTER)")&&
             bridge.contains("unbindService(connection)"),
-            "Subscribe only four map keys and unregister/release Binder on exit");
+            "Subscribe verified four wheel keys + microphone 1010, release Binder on exit");
+        String mic=source("T1OemMicrophoneService.java");
+        check(mic.contains("KEY_MIC=1010")&&
+            mic.contains("if(action!=100||!started)return;")&&
+            mic.contains("T1VoiceRouteActivity.ACTION_SHORTCUT_GOOGLE_RECOGNITION")&&
+            mic.contains("T1WazeWheelService.OEM_BINDER_ENABLED"),
+            "Only genuine 1010/action100 starts voice and vendor Binder is not shared silently");
         check(bridge.contains("void start()")&&bridge.contains("void stop()")&&
             !bridge.contains("BOOT_COMPLETED")&&
             !bridge.contains("transact(3,")&&
@@ -75,6 +81,6 @@ public final class T1WheelOemBinderSourceContractTest {
             xml.contains("android:canRetrieveWindowContent=\"true\"")&&
             manifest.contains("<package android:name=\"com.autolink.hardkeyservice\" />"),
             "Enable multi-display Waze accessibility and Android 11 visibility of OEM binder service");
-        System.out.println("PASS OEM wheel Binder ABI, explicit opt-in, Waze display 2 and safe no-blind-click controls");
+        System.out.println("PASS OEM wheel+mic ABI, exclusive opt-in and Waze safe no-blind-click controls");
     }
 }
