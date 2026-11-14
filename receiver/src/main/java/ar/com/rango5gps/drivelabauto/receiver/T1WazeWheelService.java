@@ -95,9 +95,15 @@ public final class T1WazeWheelService extends AccessibilityService {
         }
         Candidate(AccessibilityNodeInfo n,String label,int displayId,
                   boolean gestureAllowed){
+            this(n,label,displayId,gestureAllowed,null);
+        }
+        Candidate(AccessibilityNodeInfo n,String label,int displayId,
+                  boolean gestureAllowed,Rect preciseBounds){
             this.node=n;this.label=label;
             this.displayId=displayId;this.gestureAllowed=gestureAllowed;
-            bounds=new Rect();n.getBoundsInScreen(bounds);
+            bounds=new Rect();
+            if(preciseBounds!=null)bounds.set(preciseBounds);
+            else n.getBoundsInScreen(bounds);
         }
     }
     private SharedPreferences prefs(){
@@ -717,7 +723,7 @@ public final class T1WazeWheelService extends AccessibilityService {
                         duplicate=true;
                 if(!duplicate)choices.add(new Candidate(
                     clickable!=null?clickable:root,label,wazeDisplayId,
-                    clickable==null));
+                    true,r));
             }
         }
         for(int i=0;i<root.getChildCount()&&count[0]<650;i++)
@@ -725,7 +731,7 @@ public final class T1WazeWheelService extends AccessibilityService {
     }
     private boolean collectPromptChoices(AccessibilityNodeInfo root){
         choices.clear();
-        alternateList=false;mapMenuArmed=false;
+        alternateList=false;
         boolean[] question={false};
         visit(root,0,new int[]{0},question);
         Collections.sort(choices,Comparator
@@ -741,6 +747,7 @@ public final class T1WazeWheelService extends AccessibilityService {
         // Require either explicit continuation-question text or BOTH
         // continue and dismiss buttons as on the actual T1 Waze dialog.
         if(!(question[0]||(continueTrip&&dismiss)))return false;
+        mapMenuArmed=false;
         if(!selectedLabel.isEmpty()){
             for(int i=0;i<choices.size();i++)
                 if(selectedLabel.equals(choices.get(i).label)){
