@@ -166,7 +166,44 @@ public final class T1ClusterWazeSettingsActivity extends Activity {
                 render();
             }).setNegativeButton("CANCELAR",null).show();
     }
-    private void testWaze(){
+    /** Installed public launcher activities only; no OEM modules. */
+    private void chooseApp(){
+        PackageManager pm=getPackageManager();
+        Intent launcher=new Intent(Intent.ACTION_MAIN)
+            .addCategory(Intent.CATEGORY_LAUNCHER);
+        TreeMap<String,String> choices=new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        List<ResolveInfo> activities=pm.queryIntentActivities(launcher,0);
+        for(ResolveInfo ri:activities){
+            if(ri.activityInfo==null)continue;
+            String pkg=ri.activityInfo.packageName;
+            if(!T1ClusterWazeRouter.isSelectablePackage(this,pkg))continue;
+            CharSequence label=ri.loadLabel(pm);
+            String name=label==null||label.length()==0?pkg:label.toString();
+            choices.put(name+" · "+pkg,pkg);
+        }
+        for(String pkg:new String[]{"com.waze","com.google.android.apps.maps"}){
+            if(!T1ClusterWazeRouter.isSelectablePackage(this,pkg))continue;
+            if(!choices.containsValue(pkg))
+                choices.put((pkg.equals("com.waze")?"Waze":"Google Maps")+
+                    " · "+pkg,pkg);
+        }
+        if(choices.isEmpty()){
+            T1ClusterWazeRouter.status(this,"Android no muestra apps iniciables.");
+            render();return;
+        }
+        String[] labels=choices.keySet().toArray(new String[0]);
+        String[] pkgs=choices.values().toArray(new String[0]);
+        // No setMessage: it hides setItems on Jetour Android 11.
+        new AlertDialog.Builder(this)
+            .setTitle("ELEGIR APP · "+labels.length+" DISPONIBLES")
+            .setItems(labels,(dialog,which)->{
+                T1ClusterWazeRouter.chooseApp(this,pkgs[which],labels[which]);
+                render();
+            }).setNegativeButton("CANCELAR",null).show();
+    }
+    private void testWaze(){runParkedTest(false);}
+    private void testSelectedApp(){runParkedTest(true);}
+    private void runParkedTest(boolean selectedApp){
         if(T1ClusterWazeRouter.selected(this)==null){
             T1ClusterWazeRouter.status(this,
                 "Primero seleccioná un display secundario válido.");
@@ -196,7 +233,10 @@ public final class T1ClusterWazeSettingsActivity extends Activity {
                 if(result!=null){
                     T1ClusterWazeRouter.status(this,result);render();return;
                 }
-                T1ClusterWazeRouter.openManualTest(this);
+                if(selectedApp)
+                    T1ClusterWazeRouter.openSelectedAppTest(this);
+                else
+                    T1ClusterWazeRouter.openManualTest(this);
                 render();
             });
         },"DriveLab-Cluster-P0-Check").start();
