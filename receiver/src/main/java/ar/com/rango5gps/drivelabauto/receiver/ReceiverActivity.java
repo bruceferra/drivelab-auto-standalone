@@ -383,6 +383,12 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
         Intent open=new Intent(Intent.ACTION_VIEW,
             Uri.parse("waze://?ll="+coordinates+"&navigate=yes"));
         open.setPackage("com.waze");
+        if(T1ClusterWazeRouter.enabled(this)){
+            T1ClusterWazeRouter.routeDestination(this,open);
+            report(T1ClusterWazeRouter.prefs(this).getString(
+                T1ClusterWazeRouter.STATUS,"Clúster sin resultado"));
+            return;
+        }
         try{startActivity(open);}catch(Exception error){report("Waze no se pudo iniciar");}
     }
     private void pickBootApp(){
