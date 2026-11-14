@@ -69,6 +69,12 @@ public final class T1MirrorUncertainRecoverySourceContractTest {
             ui.contains("PULSOS SIN COMPENSAR"),
             "Shift from R into P must preserve completed per-side pulse ledger "+
             "and expose a direct recovery path");
+        check(svc.contains("PULSE_MS=120L, PAUSE_MS=40L")&&
+            svc.contains("oem.write(id,down?2:1)")&&
+            svc.contains("oem.write(id,0)")&&
+            svc.contains("SystemClock.sleep(PAUSE_MS)")&&
+            !svc.contains("PULSE_MS=500L, PAUSE_MS=180L"),
+            "20 individual quick commands must release to neutral between presses, not a long hold");
         check(policy.contains("RETURN_P_DWELL_MS=30000")&&
             policy.contains("RETURN_THRESHOLD_KMH=5.0"),
             "Preserve user's P over 30 sec / D over 5 kmh only policy");
