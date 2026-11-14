@@ -24,6 +24,8 @@ final class T1ClusterLayoutPolicy {
     static final String MODE_WINDOW="WINDOW";
     static final String MODE_SPLIT="SPLIT";
     static final String ACTIVE="layout_active";
+    static final String TEST_AT="layout_test_at";
+    static final String TEST_MODE="layout_test_mode";
     static final String SPLIT_PERCENT="layout_split_pct";
     static final String WIDTH="layout_width_pct";
     static final String HEIGHT="layout_height_pct";
@@ -56,6 +58,7 @@ final class T1ClusterLayoutPolicy {
            !MODE_SPLIT.equals(desired))return;
         prefs(c).edit().putString(MODE,desired)
             .putBoolean(ACTIVE,false)
+            .remove(TEST_AT).remove(TEST_MODE)
             .putBoolean(T1ClusterWazeRouter.AUTO_BOOT,false)
             .apply();
     }
@@ -63,6 +66,7 @@ final class T1ClusterLayoutPolicy {
         prefs(c).edit().putInt(key,
             T1ClusterLayoutMath.bounded(value,min,max))
             .putBoolean(ACTIVE,false)
+            .remove(TEST_AT).remove(TEST_MODE)
             .putBoolean(T1ClusterWazeRouter.AUTO_BOOT,false).apply();
     }
     static void secondApp(Context c,String pkg,String label){
@@ -71,6 +75,7 @@ final class T1ClusterLayoutPolicy {
         prefs(c).edit().putString(SECOND_APP,pkg)
             .putString(SECOND_LABEL,label)
             .putBoolean(ACTIVE,false)
+            .remove(TEST_AT).remove(TEST_MODE)
             .putBoolean(T1ClusterWazeRouter.AUTO_BOOT,false).apply();
     }
     static String secondPackage(Context c){
@@ -140,19 +145,29 @@ final class T1ClusterLayoutPolicy {
         app.setPackage(first);
         if(MODE_FULL.equals(mode(c)))
             return T1ClusterWazeRouter.launchSelectedApp(c,true,false);
+        String second=secondPackage(c);
+        Intent other=null;
+        if(MODE_SPLIT.equals(mode(c))){
+            if(second.equals(first))return "Elegí dos apps diferentes para dividir";
+            other=c.getPackageManager().getLaunchIntentForPackage(second);
+            if(other==null)return "Segunda app no disponible: "+second;
+            other.setPackage(second);
+        }
         String left=start(c,display,app,geometry(c,display,false),
             T1ClusterWazeRouter.selectedAppLabel(c));
         if(!left.startsWith("APP SOLICITADA"))return left;
-        if(!MODE_SPLIT.equals(mode(c)))return left;
-        String second=secondPackage(c);
-        if(second.equals(first))return "Elegí dos apps diferentes para dividir";
-        Intent other=c.getPackageManager().getLaunchIntentForPackage(second);
-        if(other==null)return "Segunda app no disponible: "+second;
-        other.setPackage(second);
-        String right=start(c,display,other,geometry(c,display,true),
-            secondLabel(c));
-        return left+"\n"+right+
-            "\nLa solicitud no demuestra que se vean simultáneamente.";
+        if(MODE_SPLIT.equals(mode(c))){
+            String right=start(c,display,other,geometry(c,display,true),
+                secondLabel(c));
+            if(!right.startsWith("APP SOLICITADA"))return left+"\n"+right;
+            prefs(c).edit().putLong(TEST_AT,System.currentTimeMillis())
+                .putString(TEST_MODE,mode(c)).apply();
+            return left+"\n"+right+
+                "\nDos solicitudes enviadas. Confirmá visualmente antes de activar.";
+        }
+        prefs(c).edit().putLong(TEST_AT,System.currentTimeMillis())
+            .putString(TEST_MODE,mode(c)).apply();
+        return left+"\nVentana solicitada. Confirmá visualmente antes de activar.";
     }
     /** A previously verified user-defined layout on next ignition. */
     static String boot(Context c){
@@ -169,6 +184,9 @@ final class T1ClusterLayoutPolicy {
         }
         if(T1ClusterWazeRouter.selected(c)==null||
            !T1ClusterWazeRouter.enabled(c))return false;
+        long time=prefs(c).getLong(TEST_AT,0L);
+        if(time<=0||System.currentTimeMillis()-time>600000L||
+            !mode(c).equals(prefs(c).getString(TEST_MODE,"")))return false;
         prefs(c).edit().putBoolean(ACTIVE,true).apply();
         return true;
     }
