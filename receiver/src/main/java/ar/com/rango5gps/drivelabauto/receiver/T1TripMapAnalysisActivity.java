@@ -4,6 +4,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.graphics.Color;
 import android.os.Bundle;
+import android.os.Handler;
+import android.os.Looper;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -12,14 +14,23 @@ import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Comparator;
-import java.util.concurrent.atomic.AtomicBoolean;
+import android.content.SharedPreferences;
 
 /** Select a recorded JOURNEY or whole-day TRIP; replay its actual GPS CSV
  * through 3 installed offline maps on a worker, never through vehicle OEM.
  * No map source influences driving modes, no raw GPS is exported.
  */
 public final class T1TripMapAnalysisActivity extends T1ImmersiveActivity {
-    private final AtomicBoolean busy=new AtomicBoolean(false);
+    private final Handler ui=new Handler(Looper.getMainLooper());
+    private boolean visible;
+    private String lastDisplayedKey="";
+    private final Runnable refresher=new Runnable(){
+        @Override public void run(){
+            if(!visible)return;
+            refreshReplay();
+            ui.postDelayed(this,900L);
+        }
+    };
     private LinearLayout items;
     private TextView status,report;
     @Override protected int overlayClearBackgroundColor(){
@@ -64,6 +75,10 @@ public final class T1TripMapAnalysisActivity extends T1ImmersiveActivity {
         items=new LinearLayout(this);
         items.setOrientation(LinearLayout.VERTICAL);
         root.addView(items);
+        root.addView(label("Podés cambiar de solapa y volver: el análisis "+
+            "sigue ejecutándose en segundo plano y conserva su progreso. "+
+            "No vuelvas a tocar el mismo viaje mientras figure EN CURSO.",
+            13,T1JetourTheme.CYAN));
         root.addView(label("RESULTADO · PORCENTAJES BASADOS EN DISTANCIA GPS",
             16,T1JetourTheme.CYAN));
         root.addView(report);
@@ -135,35 +150,69 @@ public final class T1TripMapAnalysisActivity extends T1ImmersiveActivity {
         },"T1-Trip-Map-List").start();
     }
     private void analyze(String id,long start,long end){
-        if(!busy.compareAndSet(false,true)){
-            status.setText("Ya hay un análisis en curso; no se inició otro.");
+        T1TripMapReplayService.reconcile(this);
+        if(T1TripMapReplayService.isWorking()){
+            refreshReplay();
+            status.setText("YA HAY UN ANÁLISIS EN CURSO. "+
+                "No se reinició ni se duplicó. "+
+                T1TripMapReplayService.snapshot(this)
+                .getString(T1TripMapReplayService.PROGRESS,""));
             return;
         }
-        status.setText("Leyendo viaje "+id+" en segundo plano…");
-        report.setText("Calculando distancias GPS y clasificación de vías…");
-        new Thread(()->{
-            String result;
-            try{
-                T1TripMapReplay.Report summary=T1TripMapReplay.analyze(
-                    getApplicationContext(),id,start,end,progress->
-                        runOnUiThread(()->{
-                            if(!isFinishing()&&!isDestroyed())
-                                status.setText(progress);
-                        }));
-                result=summary.text;
-            }catch(Exception failure){
-                result="NO SE PUDO ANALIZAR "+id+": "+
-                    failure.getClass().getSimpleName()+" · "+
-                    (failure.getMessage()==null?"sin detalle":failure.getMessage())+
-                    "\nLos viajes originales siguen intactos.";
-            }finally{busy.set(false);}
-            final String complete=result;
-            runOnUiThread(()->{
-                if(isFinishing()||isDestroyed())return;
-                status.setText("Análisis de "+id+" finalizado. "+
-                    "Los registros originales no se modificaron.");
-                report.setText(complete);
-            });
-        },"T1-Triple-Map-History-Replay").start();
+        Intent request=new Intent(this,T1TripMapReplayService.class);
+        request.setAction(T1TripMapReplayService.ACTION_START);
+        request.putExtra(T1TripMapReplayService.EXTRA_ID,id);
+        request.putExtra(T1TripMapReplayService.EXTRA_FROM,start);
+        request.putExtra(T1TripMapReplayService.EXTRA_UNTIL,end);
+        try{
+            startForegroundService(request);
+            status.setText("ANÁLISIS SOLICITADO · "+id+
+                "\nPodés navegar por DriveLab: seguirá en segundo plano.");
+            report.setText("Consultando mapas locales…");
+        }catch(RuntimeException ex){
+            status.setText("No se pudo iniciar segundo plano: "+
+                ex.getClass().getSimpleName()+". "+
+                (ex.getMessage()==null?"":ex.getMessage()));
+        }
     }
+    private void refreshReplay(){
+        T1TripMapReplayService.reconcile(this);
+        SharedPreferences p=T1TripMapReplayService.snapshot(this);
+        String state=p.getString(T1TripMapReplayService.STATE,"");
+        if(state.isEmpty())return;
+        String id=p.getString(T1TripMapReplayService.ID,"");
+        String progress=p.getString(T1TripMapReplayService.PROGRESS,"");
+        String stateLine=T1TripMapReplayService.RUNNING.equals(state)?
+            "EN CURSO · SIN REINICIAR":T1TripMapReplayService.DONE.equals(state)?
+            "COMPLETADO":T1TripMapReplayService.INTERRUPTED.equals(state)?
+            "INTERRUMPIDO":"NO COMPLETADO";
+        String line=stateLine+" · "+id+"\n"+progress+
+            (T1TripMapReplayService.RUNNING.equals(state)?
+                "\nPodés salir de esta pantalla; el procesamiento continúa.":"");
+        if(!line.equals(status.getText().toString()))
+            status.setText(line);
+        String result=p.getString(T1TripMapReplayService.RESULT,"");
+        String key=state+"|"+id+"|"+p.getLong(
+            T1TripMapReplayService.FROM,0)+"|"+p.getLong(
+            T1TripMapReplayService.UNTIL,0)+"|"+result.length();
+        if(!key.equals(lastDisplayedKey)){
+            lastDisplayedKey=key;
+            if(!result.isEmpty())report.setText(result);
+            else if(T1TripMapReplayService.RUNNING.equals(state))
+                report.setText("Analizando GPS y tres mapas en segundo plano…");
+            else if(!progress.isEmpty())report.setText(progress);
+        }
+    }
+    @Override protected void onResume(){
+        super.onResume();
+        visible=true;
+        ui.removeCallbacks(refresher);
+        ui.post(refresher);
+    }
+    @Override protected void onPause(){
+        visible=false;
+        ui.removeCallbacks(refresher);
+        super.onPause();
+    }
+
 }
