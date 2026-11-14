@@ -59,6 +59,16 @@ public final class T1VoiceShortcutSourceContractTest {
            !voice.contains("openSystemVoice();\n        status.setText(\"PREGUNTA LIBRE") &&
            voice.contains("say(\"CONSULTA LIBRE"),
             "Unknown spoken requests must not launch fullscreen Gemini");
+        ok(voice.contains("USAGE_ASSISTANCE_NAVIGATION_GUIDANCE") &&
+           voice.contains("AudioFocusRequest.Builder(") &&
+           voice.contains("speaker.setAudioAttributes(speechAudioAttributes())") &&
+           voice.contains("UtteranceProgressListener") &&
+           voice.contains("releaseSpeechFocus();") &&
+           voice.contains("speechReadyAt=android.os.SystemClock.uptimeMillis()+550L") &&
+           voice.contains("voiceHandler.postDelayed(this::readQueuedSpeech,180L)") &&
+           voice.contains("AUDIO: ") &&
+           voice.contains("🔊 PROBAR / REPETIR AUDIO"),
+            "Audio answer must defer recognizer focus, acquire navigation focus, release on TTS completion and expose test control");
         ok(!voice.contains("transact(15"),
             "Voice entry never sends vehicle commands");
         System.out.println("PASS safe external launcher shortcut for T1 universal voice");
