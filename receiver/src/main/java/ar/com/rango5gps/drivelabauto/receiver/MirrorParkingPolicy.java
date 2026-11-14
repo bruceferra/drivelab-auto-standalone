@@ -10,9 +10,9 @@ package ar.com.rango5gps.drivelabauto.receiver;
  *
  * Mirrors are relative to the driver's personally adjusted D pose.
  * One R maneuver tilts once; R/non-R shuffling at parking speed does nothing.
- * Restore requires confirmed D continuously for 800 ms, even if stationary.
- * Speed is checked for plausibility; returning to the normal driving view
- * must not wait for acceleration or braking. N/P never trigger restore.
+ * Restore also works in P after 1200 ms fully stopped, not only D 800 ms.
+ * Speed is checked for plausibility and PARK must be stopped; returning to normal view
+ * must not wait for acceleration or braking. N never triggers restore.
  * No automatic homing against hard stops.
  */
 public final class MirrorParkingPolicy {
@@ -22,12 +22,14 @@ public final class MirrorParkingPolicy {
     // Legacy threshold is deliberately no longer used to gate D restoration.
     public static final double RETURN_THRESHOLD_KMH=10.0;
     public static final long RETURN_DWELL_MS=800;
+    public static final long RETURN_P_DWELL_MS=1200;
     public static final int MAX_PULSES_PER_SIDE=20;
 
     private final int requestedLeft,requestedRight;
     private Phase phase=Phase.NORMAL;
     private Gear previousGear=Gear.UNKNOWN;
-    private long forwardSince=-1;
+    private long restoreSince=-1;
+    private Gear restoreGear=Gear.UNKNOWN;
     private int leftIssued=0,rightIssued=0;
 
     public MirrorParkingPolicy(int steps){this(steps,steps);}
@@ -53,7 +55,7 @@ public final class MirrorParkingPolicy {
         if(gear==null)gear=Gear.UNKNOWN;
         if(!armed || !Double.isFinite(speedKmh) || speedKmh<0 ||
                 speedKmh>250 || elapsedMs<0){
-            forwardSince=-1;
+            restoreSince=-1;restoreGear=Gear.UNKNOWN;
             previousGear=Gear.UNKNOWN; // rearm only after fresh, valid gear samples
             return Action.NONE;
         }
@@ -69,14 +71,25 @@ public final class MirrorParkingPolicy {
             return Action.NONE;
         }
         if(phase==Phase.TILTED){
-            if(gear==Gear.D){
-                if(forwardSince<0)forwardSince=elapsedMs;
-                if(elapsedMs-forwardSince>=RETURN_DWELL_MS){
+            // The vehicle can remain parked indefinitely after an R maneuver;
+            // restoring only in D leaves mirrors tilted during long P parking.
+            // Stable D is valid at any plausible speed; stable P only at 0 km/h.
+            boolean canRestore=gear==Gear.D||
+                (gear==Gear.P&&speedKmh<=0.5);
+            if(canRestore){
+                if(restoreGear!=gear||restoreSince<0){
+                    restoreGear=gear;
+                    restoreSince=elapsedMs;
+                }
+                long dwell=gear==Gear.P?RETURN_P_DWELL_MS:RETURN_DWELL_MS;
+                if(elapsedMs-restoreSince>=dwell){
                     phase=Phase.RESTORING;
-                    forwardSince=-1;
+                    restoreSince=-1;restoreGear=Gear.UNKNOWN;
                     return Action.RESTORE_AFTER_NON_R_SPEED;
                 }
-            }else forwardSince=-1;
+            }else{
+                restoreSince=-1;restoreGear=Gear.UNKNOWN;
+            }
         }
         return Action.NONE;
     }
@@ -117,6 +130,6 @@ public final class MirrorParkingPolicy {
     /** Any interrupted or uncontrolled movement invalidates reference. */
     public void invalidate(){
         phase=Phase.UNKNOWN_POSITION;
-        forwardSince=-1;
+        restoreSince=-1;restoreGear=Gear.UNKNOWN;
     }
 }
