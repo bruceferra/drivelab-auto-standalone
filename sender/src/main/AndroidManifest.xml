@@ -1,6 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Explicitly selected already-paired car: no discovery or scanning. -->
+    <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <!-- Required since Android 14 for RouteDispatchService foregroundServiceType=dataSync. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
@@ -19,6 +22,15 @@
             android:authorities="${applicationId}.updatefiles"
             android:exported="false"
             android:grantUriPermissions="true" />
+        <!-- Exempt Bluetooth profile broadcast; only an explicitly paired
+             and user-enabled T1 receives one short media audio bootstrap.
+             No persistent background player and no Spotify launch. -->
+        <receiver android:name=".SenderAudioBootstrapReceiver"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="android.bluetooth.a2dp.profile.action.CONNECTION_STATE_CHANGED" />
+            </intent-filter>
+        </receiver>
         <activity android:name=".SenderActivity" android:exported="true">
             <intent-filter><action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" /></intent-filter>
