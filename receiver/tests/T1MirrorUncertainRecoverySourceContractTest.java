@@ -50,7 +50,8 @@ public final class T1MirrorUncertainRecoverySourceContractTest {
             ui.contains("REVERSA AUTO ✓"),
             "Driver confirmation explains OEM adjustment, leaves AUTO off, keeps green live-only");
         check(quick.contains("position.startsWith(\"INCIERTA\")")&&
-            quick.contains("confirmá la referencia"),
+            quick.contains("confirmá la ")&&
+            quick.contains("referencia desde la barra"),
             "Advanced mode must never claim AUTO rearmed while uncertain");
         check(svc.contains("if(!down && !(gear==4 || (gear==1 && speed<=0.5)))")&&
             !svc.contains("gear==4 && speed>5.0"),
