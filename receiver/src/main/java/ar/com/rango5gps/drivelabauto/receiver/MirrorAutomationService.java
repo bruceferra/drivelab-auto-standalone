@@ -15,8 +15,8 @@ import android.os.SystemClock;
  * Opt-in automatic reverse tilt. Dedicated OEM foreground service, independent
  * from navigation, windows, AVAS, HVAC and trip logger.
  *
- * Auto: one transition to R at <=0.5 km/h => tilt; R/non-R parking shuffle
- * does not repeat. Stable D for 800ms => restore once, without waiting to stop.
+ * Auto: one transition to R at <=0.5 km/h => tilt; low-speed R/P/D shuffle
+ * does not repeat/restore. Restore ONLY at stationary P >30s or D >5km/h.
  * Manual down/up can run in P/R/N/D only while vehicle stopped and
  * DISARM auto. A successful explicit 10-UP recovery resets the policy and
  * REARMS AUTO for the next fresh R transition, without assuming measured angle.
@@ -247,7 +247,7 @@ public final class MirrorAutomationService extends Service {
                                 String.format(java.util.Locale.US,
                                     "AUTO esperando retorno · marcha %s "+
                                     "· velocidad %.1f (%s; 2148=%.1f / 1089=%.1f) "+
-                                    "· retorna en P detenido 1200ms o D estable 800ms",
+                                    "· vuelve SOLO en P detenido >30s o D >5km/h",
                                     gear,speed,speedRead.source,
                                     speedRead.raw2148,speedRead.raw1089)).apply();
                         }
@@ -273,7 +273,7 @@ public final class MirrorAutomationService extends Service {
                                 throw new IllegalStateException("Bajada incompleta");
                             movementStarted=false;
                         }else if(action==MirrorParkingPolicy.Action.RESTORE_AFTER_NON_R_SPEED){
-                            // Allow stationary P, as well as verified stable D.
+                            // Policy requires >30s in P while stopped OR D >5km/h.
                             String startGear=gear==MirrorParkingPolicy.Gear.P?"P":"D";
                             prefs().edit().putString(POSITION,
                                 "INCIERTA · retorno en curso")
@@ -364,9 +364,13 @@ public final class MirrorAutomationService extends Service {
                 if(automatic){
                     if(down && (gear!=2 || speed>8))
                         throw new IllegalStateException("Salió de R / velocidad alta durante bajada");
-                    if(!down && gear!=4 && !(gear==1 && speed<=0.5))
+                    // Keep each physical actuator write inside the policy's
+                    // selected safe mode. Stop immediately if gear/speed leaves
+                    // the established restore condition.
+                    if(!down && !(gear==4 && speed>5.0) &&
+                            !(gear==1 && speed<=0.5))
                         throw new IllegalStateException(
-                            "Retorno interrumpido: requiere D o P detenido");
+                            "Retorno interrumpido: solo P detenido o D >5 km/h");
                     // For the upward return to normal rear visibility, do
                     // NOT gate on a speed threshold or require the driver to
                     // brake. The OEM speed remains validated at each step.
