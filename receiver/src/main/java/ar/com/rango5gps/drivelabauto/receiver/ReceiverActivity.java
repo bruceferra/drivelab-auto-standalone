@@ -93,6 +93,17 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
         }catch(Exception ignored){}
         label(body,"v"+installedVersion+
             " · pantalla inmersiva + área libre Hola Jetour",13);
+        // Direct owner control: open Receiver automatically after actual
+        // Android boot. T1Launcher remains HOME; we never replace its launcher.
+        boolean ownBoot=p.getBoolean("launch_app_on_boot",false)&&
+            getPackageName().equals(p.getString("launch_package",""));
+        boolean overlayAllowed=Settings.canDrawOverlays(this);
+        label(body,"INICIO AL ENCENDER · "+(ownBoot?
+            (overlayAllowed?"CONFIGURADO":"FALTA PERMISO ANDROID"):
+            "DESACTIVADO")+
+            "\n"+p.getString("boot_status","Aún sin prueba de arranque"),13);
+        button(body,ownBoot?"DESACTIVAR APERTURA AUTOMÁTICA DRIVELAB":
+            "ACTIVAR APERTURA AUTOMÁTICA DRIVELAB",this::toggleOwnBoot);
         // Immersive full screen is always enabled in this T1.
         // HolaJetour was removed by the installed Launcher. No bar toggles.
         button(body,"VEHÍCULO · VENTANILLAS / ENERGÍA / CODE",()->
@@ -306,18 +317,58 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
                     .putString("pair_status","AUTORIZADA · confirmá ahora en el Xiaomi").apply();render();
             }).show();
     }
+    /** Persist a single, explicit owner selection, without claiming HOME.
+     * RECEIVER's existing BootReceiver + foreground service handle cold boot.
+     * Android/Jetour may still block presenting an Activity from background.
+     */
+    private void toggleOwnBoot(){
+        SharedPreferences p=prefs();
+        boolean own=p.getBoolean("launch_app_on_boot",false)&&
+            getPackageName().equals(p.getString("launch_package",""));
+        if(own){
+            p.edit().putBoolean("launch_app_on_boot",false)
+                .putString("boot_status","Apertura de DriveLab desactivada por usuario")
+                .apply();
+            report("Apertura de DriveLab al encender: DESACTIVADA. "+
+                "Los servicios que ya uses mantienen su propia preferencia.");
+            return;
+        }
+        p.edit().putBoolean("auto_boot",true)
+            .putBoolean("launch_app_on_boot",true)
+            .putString("launch_package",getPackageName())
+            .putString("launch_label","DriveLab Auto Receiver")
+            .putString("boot_status","Configurado; pendiente de comprobar próximo "+
+                "arranque real de Android").apply();
+        start(ReceiverService.ACTION_START);
+        if(!Settings.canDrawOverlays(this)){
+            report("Configurado, pero falta permitir 'Mostrar sobre otras apps'.");
+            requestBackground();
+        }else{
+            report("Inicio automático configurado. En el próximo arranque "+
+                "real de Android se solicitará abrir DriveLab; T1Launcher "+
+                "seguirá siendo HOME.");
+        }
+    }
     private void requestBackground(){
         new AlertDialog.Builder(this)
-            .setTitle("Abrir Waze sin dejar Receiver visible")
-            .setMessage("Para Android 11, concedé a DriveLab Auto Receiver el permiso "+
-                "'Mostrar sobre otras apps'. El receptor no dibuja ninguna ventana "+
-                "flotante ni lee la pantalla; usa el permiso solo para solicitar "+
-                "abrir Waze cuando está en segundo plano. El fabricante puede restringirlo.")
+            .setTitle("Permiso para abrir DriveLab al encender y Waze")
+            .setMessage("Android 11 puede restringir que una app abra otra "+
+                "pantalla desde segundo plano. Permití 'Mostrar sobre otras "+
+                "apps' para DriveLab Auto Receiver. Esta app no dibuja "+
+                "una ventana flotante ni lee la pantalla; el permiso permite "+
+                "solicitar la apertura. El sistema Jetour aún puede bloquearla.")
             .setNegativeButton("CANCELAR",null)
             .setPositiveButton("ABRIR AJUSTES",(d,w)->{
-                try{startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION));}
-                catch(Exception error){report("Abrí Ajustes → Apps → DriveLab Auto Receiver → "+
-                    "Mostrar sobre otras apps");}
+                try{
+                    startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:"+getPackageName())));
+                }catch(Exception error){
+                    try{startActivity(new Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION));}
+                    catch(Exception ignored){
+                        report("Abrí Ajustes → Apps → DriveLab Auto Receiver → "+
+                            "Mostrar sobre otras apps");
+                    }
+                }
             }).show();
     }
     private void direct(String coordinates){
