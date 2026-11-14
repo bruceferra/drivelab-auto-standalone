@@ -135,8 +135,7 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         setContentView(sc);
         // The physical microphone remains owned by T1Launcher Cluster;
         // the optional configured shortcut uses the same external recognizer.
-        if(state==null&&ACTION_SHORTCUT_GOOGLE_RECOGNITION.equals(
-                getIntent().getAction()))
+        if(state==null&&ACTION_SHORTCUT_GOOGLE_RECOGNITION.equals(getIntent().getAction()))
             root.post(this::listenExternal);
     }
 
