@@ -1236,6 +1236,11 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         compactButton(simulatorRow,"SIMULAR HEV SMART / SOC FORZADO",BLUE,
             this::openWhatIf);
         heading(secondary,"HISTORIAL · VIAJES Y JORNADAS");
+        LinearLayout tripleMapHistoryAction=row();
+        secondary.addView(tripleMapHistoryAction);
+        compactButton(tripleMapHistoryAction,
+            "ANALIZAR VIAJE · CIUDAD / RUTA / AUTOPISTA · 3 MAPAS",
+            TEAL,()->startActivity(new Intent(this,T1TripMapAnalysisActivity.class)));
         historyNow=text("Todavía no hay trayectos cerrados.",14,MUTED,false);
         historyNow.setBackground(bg(CARD,18));historyNow.setPadding(16,14,16,14);
         secondary.addView(historyNow);
