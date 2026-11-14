@@ -78,6 +78,7 @@ public final class T1ClusterWazeSettingsActivity extends Activity {
             "3 · ACTIVAR DESTINOS WAZE AL CLÚSTER",()->{
             if(on){
                 p.edit().putBoolean(T1ClusterWazeRouter.ENABLED,false)
+                    .putBoolean(T1ClusterLayoutPolicy.ACTIVE,false)
                     .putBoolean(T1ClusterWazeRouter.AUTO_BOOT,false)
                     .putString(T1ClusterWazeRouter.STATUS,
                         "Desactivado. Destinos vuelven a Waze normal de DriveLab.")
