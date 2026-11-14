@@ -58,6 +58,11 @@
             android:foregroundServiceType="location" />
         <service android:name=".T1TripRecorderService" android:exported="false"
             android:foregroundServiceType="location|dataSync" />
+        <!-- Historical three-map GPS replay: user-triggered FGS survives tab switches.
+             No boot restart and no vehicle OEM writes. -->
+        <service android:name=".T1TripMapReplayService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync" />
         <!-- User-started only; bounded PHEV/SOC/wiper/radar and 500m callback probe.
              Foreground service survives navigating to stock T1 screen or Maps. -->
         <service android:name=".T1PhevModeCaptureService" android:exported="false"
