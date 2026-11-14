@@ -338,16 +338,29 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         }
         String said=results.get(0).trim();
         spoken.setText(said);spoken.setSelection(spoken.length());
-        dispatch(said);
+        // A full voice request is deliberate: no second confirmation.
+        dispatch(said,true);
     }
     private void dispatch(String phrase){
+        // Typed/manual routes retain the confirmation dialog.
+        dispatch(phrase,false);
+    }
+    private void dispatch(String phrase,boolean fromVoice){
         if(phrase==null||phrase.trim().length()<2){
             status.setText("Primero decí o escribí tu consulta.");return;
         }
         String target=T1VoiceIntentPolicy.routeDestination(phrase);
         if(target!=null){
-            status.setText("NAVEGACIÓN DETECTADA → Waze · "+target);
-            confirmDestination(target);
+            status.setText("NAVEGACIÓN DETECTADA → Waze/clúster · "+target);
+            if(fromVoice){
+                // The explicit "ir a"/"navegar a" utterance is itself
+                // authorization. Waze still resolves the actual location.
+                // Never treat arbitrary questions/numbers as destinations.
+                navigate(target);
+            }else{
+                // Keep an explicit confirm for typed test/manual actions.
+                confirmDestination(target);
+            }
             return;
         }
         String math=T1VoiceMath.calculate(phrase);
@@ -407,18 +420,16 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
             },"T1-Voice-News-RSS").start();
             return;
         }
-        // Unknown free-form questions have no documented direct Gemini
-        // response API. NEVER send ACTION_SEND automatically here: on this
-        // T1 it opens Gemini FULLSCREEN, obscuring the cockpit.
-        // The Android system voice overlay works, but it cannot receive
-        // the previously recognized text; the user must say it again.
-        status.setText("PREGUNTA LIBRE · No hay respuesta directa en DriveLab. "+
-            "Voy a abrir el Gemini pequeño del sistema. "+
-            "Repetí la pregunta; no puedo transferirle el audio reconocido.");
-        openSystemVoice();
-        status.setText("PREGUNTA LIBRE · Gemini de voz del sistema solicitado "+
-            "(sin abrir la aplicación completa). Repetí la pregunta: "+
-            phrase.trim());
+        // No generic Gemini answer API is connected. Starting Gemini with
+        // ACTION_SEND opens fullscreen; ACTION_VOICE_COMMAND would require
+        // repeating this recognized question in a different session.
+        // Never switch apps automatically while driving or fabricate facts.
+        say("CONSULTA LIBRE · Servicio de IA conversacional aún no conectado. "+
+                "La consulta quedó reconocida: "+phrase.trim(),
+            "Entendí tu pregunta, pero todavía no tengo un asistente "+
+                "conversacional conectado para responderla directamente. "+
+                "Podés consultar el clima, resultados deportivos, noticias "+
+                "y hacer cuentas, o usar la voz del sistema para Gemini.");
     }
     /** Respond within DriveLab without forcing another microphone touch.
      * Output depends on Android TTS engine and its audio route.
