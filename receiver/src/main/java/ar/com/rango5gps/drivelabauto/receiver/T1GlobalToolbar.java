@@ -370,13 +370,19 @@ final class T1GlobalToolbar {
         long age=System.currentTimeMillis()-p.getLong(
             MirrorAutomationService.LAST_POLL,0L);
         boolean healthy=auto&&service&&age>=0&&age<=8000;
-        mirrorAutoButton.setText(healthy?"REVERSA AUTO ✓":
+        String pose=p.getString(MirrorAutomationService.POSITION,"");
+        boolean unknown=pose.startsWith("INCIERTA")||
+            pose.startsWith("R · inclinados");
+        mirrorAutoButton.setText(unknown?"ESPEJOS · REVISAR POSICIÓN":
+            healthy?"REVERSA AUTO ✓":
             auto?"REVERSA AUTO · REVISAR":"REVERSA MANUAL");
-        T1JetourTheme.button(mirrorAutoButton,healthy?
+        T1JetourTheme.button(mirrorAutoButton,unknown?
+            T1JetourTheme.AMBER_BUTTON:healthy?
             T1JetourTheme.GREEN_BUTTON:auto?
             T1JetourTheme.AMBER_BUTTON:T1JetourTheme.PANEL_HI);
-        mirrorAutoButton.setContentDescription(auto?
-            (healthy?"Espejos reversa AUTO activo. Tocar para desactivar":
+        mirrorAutoButton.setContentDescription(unknown?
+            "Posición física no comprobada; tocar para ver recuperación segura":
+            auto?(healthy?"Espejos reversa AUTO activo. Tocar para desactivar":
                 "Espejos reversa AUTO solicitado, servicio sin confirmar. Tocar para desactivar"):
             "Espejos reversa MANUAL. Tocar para activar AUTO R");
     }
@@ -398,11 +404,9 @@ final class T1GlobalToolbar {
         // The driver has explicitly requested AUTO R by touching the toggle.
         // No redundant confirmation dialog. Keep uncertainty guard: a prior
         // interrupted actuator motion still requires physical inspection.
-        if(p.getString(MirrorAutomationService.POSITION,"")
-                .startsWith("INCIERTA")){
-            note("ESPEJOS · POSICIÓN INCIERTA. Revisá los espejos "+
-                "antes de rearmar; no se moverán automáticamente.");
-            refreshMirrorAuto();
+        String pose=p.getString(MirrorAutomationService.POSITION,"");
+        if(pose.startsWith("INCIERTA")||pose.startsWith("R · inclinados")){
+            showMirrorRecovery();
             return;
         }
         try{
@@ -415,6 +419,40 @@ final class T1GlobalToolbar {
             note("Espejos: AUTO no iniciado · "+
                 ex.getClass().getSimpleName());
         }
+    }
+    /** No angle sensor: the only safe way out of a lost relative-motion
+     * ledger is for the driver to set the actual pose using OEM controls.
+     * The app then verifies P + 0 km/h but never moves the mirrors here.
+     */
+    private void showMirrorRecovery(){
+        SharedPreferences p=owner.getSharedPreferences(
+            MirrorAutomationService.PREFS,Context.MODE_PRIVATE);
+        String pose=p.getString(MirrorAutomationService.POSITION,"SIN MEDICIÓN");
+        new AlertDialog.Builder(owner)
+            .setTitle("ESPEJOS · REFERENCIA NO CONFIRMADA")
+            .setMessage("Estado registrado: "+pose+
+                "\n\nLa app perdió la referencia de los pulsos, no detectó "+
+                "el ángulo real. Los espejos PUEDEN estar bajos. "+
+                "\n\n1. Detené la T1 en P. "+
+                "\n2. Subí ambos espejos a la posición normal con los "+
+                "mandos ORIGINALES del auto. "+
+                "\n3. SOLO cuando los veas bien, tocá CONFIRMAR. "+
+                "\n\nDriveLab verificará P y 0 km/h, sin enviar movimientos. "+
+                "El modo AUTO seguirá apagado hasta que lo actives.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("YA ESTÁN NORMALES · CONFIRMAR",(d,w)->{
+                try{
+                    owner.startForegroundService(new Intent(owner,
+                        MirrorAutomationService.class)
+                        .setAction(MirrorAutomationService.ACTION_CONFIRM_NORMAL));
+                    note("Verificando marcha P y 0 km/h para registrar "+
+                        "la referencia manual. Sin mover espejos.");
+                    main.postDelayed(this::refreshMirrorAuto,800);
+                }catch(Exception ex){
+                    note("No se pudo confirmar referencia · "+
+                        ex.getClass().getSimpleName());
+                }
+            }).show();
     }
     private void configureReverseMirrors(){
         SharedPreferences p=owner.getSharedPreferences(
