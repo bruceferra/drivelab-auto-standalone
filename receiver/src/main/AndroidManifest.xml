@@ -21,6 +21,8 @@
         <!-- Android 11 visibility for explicit, user-opted-in OEM hardkey bind. -->
         <package android:name="com.autolink.hardkeyservice" />
         <package android:name="com.waze" />
+        <!-- Selected app may be Google Maps on the secondary display. -->
+        <package android:name="com.google.android.apps.maps" />
         <package android:name="com.google.android.apps.bard" />
         <package android:name="com.openai.chatgpt" />
         <!-- Required by Android 11+ target package visibility to initialize
