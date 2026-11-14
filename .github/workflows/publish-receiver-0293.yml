@@ -116,7 +116,7 @@ jobs:
           java -cp /tmp/mirror-tests ar.com.rango5gps.drivelabauto.receiver.T1WheelCalibrationSourceContractTest
           javac -encoding UTF-8 -d /tmp/mirror-tests receiver/tests/T1WheelOemBinderSourceContractTest.java
           java -cp /tmp/mirror-tests ar.com.rango5gps.drivelabauto.receiver.T1WheelOemBinderSourceContractTest
-          # Binder QA updated for explicit ACTION_CLICK + Display5-confirmed short tap.
+          # Display5 QA now protects against global BACK and permits diagnostic text.
           # On-display Waze real prompts and safe trip/HVAC background contracts.
           javac -encoding UTF-8 -d /tmp/mirror-tests \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1WazePromptPolicy.java \
