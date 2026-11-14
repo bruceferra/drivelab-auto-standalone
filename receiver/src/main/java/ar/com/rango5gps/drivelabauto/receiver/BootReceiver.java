@@ -25,6 +25,19 @@ public final class BootReceiver extends BroadcastReceiver {
                         error.getClass().getSimpleName()).apply();
             }
         }
+        // T1N134 verified key 1010, activated only after user opt-in.
+        if(T1OemMicrophoneService.prefs(context).getBoolean(
+                T1OemMicrophoneService.ENABLED,false)){
+            try{
+                context.startForegroundService(
+                    new Intent(context,T1OemMicrophoneService.class)
+                        .setAction(T1OemMicrophoneService.ACTION_START));
+            }catch(RuntimeException error){
+                T1OemMicrophoneService.status(context,
+                    "Android bloqueó iniciar el micrófono OEM: "+
+                    error.getClass().getSimpleName());
+            }
+        }
         // Same user opt-in as Driver Uber's ContinuousTripBootReceiver.
         // Restart the EXISTING Trip/Customer after vehicle boot or APK update,
         // never create a new session and never close the user's passenger.
