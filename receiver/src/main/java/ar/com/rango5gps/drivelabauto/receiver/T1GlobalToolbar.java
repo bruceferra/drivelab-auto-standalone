@@ -280,23 +280,22 @@ final class T1GlobalToolbar {
         boolean paused=air.getBoolean(RecirculationGuardService.PAUSED,false);
         String state=air.getString(RecirculationGuardService.STATUS,"Sin lectura OEM");
         if(!paused){
-            // Normal operation or transient OEM read failure never prompts.
-            // No extra confirmation required after every vehicle boot.
+            // No prompt: show actual OEM state or reconnect cause.
             note(state);
             return;
         }
-        new AlertDialog.Builder(owner).setTitle("AIRE INTERIOR PAUSADO POR SEGURIDAD")
-            .setMessage(state+"\n\nRevisá primero si el desempañado necesita "+
-                "aire exterior. Solo reactivá manualmente cuando sea seguro.")
-            .setNegativeButton("CANCELAR",null)
-            .setPositiveButton("REACTIVAR AIRE INTERIOR",(d,w)->{
-                try{
-                    owner.startForegroundService(new Intent(owner,
-                        RecirculationGuardService.class)
-                        .setAction(RecirculationGuardService.ACTION_INTERIOR));
-                    note("Reactivación de aire solicitada; confirmando OEM…");
-                }catch(Exception ex){note("Aire: "+ex.getClass().getSimpleName());}
-            }).show();
+        // Driver's deliberate tap is an explicit re-arm; avoid repeating the
+        // confirmation modal on every ignition. OEM repeated-reversion
+        // protection remains in RecirculationGuardService.
+        try{
+            owner.startForegroundService(new Intent(owner,
+                RecirculationGuardService.class)
+                .setAction(RecirculationGuardService.ACTION_INTERIOR));
+            note("Reintento manual solicitado · "+state+
+                " · Recirculación sin confirmar hasta leer 1004=1. "+
+                "El desempañado OEM tiene prioridad.");
+        }catch(Exception ex){note("Aire sin reactivar: "+
+            ex.getClass().getSimpleName());}
     }
     private void readDisplayMode(){
         new Thread(()->{
