@@ -43,10 +43,10 @@ public final class MirrorControlsVisibilitySourceContractTest {
               base.contains("MirrorAutomationService.activateOnAppOpen(this)"),
               "mirror safety check and cabin interior initialization remain accessible");
         check(service.contains("static void activateOnAppOpen(Context context)") &&
-              service.contains("if(!auto){") &&
+              service.contains("if(!auto)return;") &&
               service.contains("if(safetyHold || pose.startsWith") &&
               service.contains(".putBoolean(SAFETY_HOLD,true)") &&
-              service.contains("if(prefs().getBoolean(SAFETY_HOLD,true))") &&
+              service.contains("if(prefs().getBoolean(SAFETY_HOLD,true)||") &&
               !service.substring(service.indexOf("static void activateOnAppOpen(Context context)"),
                 service.indexOf("/** Recovery watchdog;")).contains("context.startForegroundService"),
               "Mirror AUTO must remain off across app launches until physical confirmation");
