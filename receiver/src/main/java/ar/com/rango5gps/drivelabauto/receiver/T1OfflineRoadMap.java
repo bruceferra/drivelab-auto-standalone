@@ -247,13 +247,31 @@ final class T1OfflineRoadMap {
      */
     static T1OsmRoadAdvisor.Result roadAtDataset(
             File roadDb,android.location.Location here,String source){
+        return roadAtDatasetInternal(roadDb,here,source,false);
+    }
+    /** Historical comparison only; the original GPS timestamp must not be
+     * rejected merely because the vehicle drove that road yesterday.
+     * Live production calls ALWAYS enforce their usual fresh-GPS gate.
+     * This never alters optimizer decisions nor writes car properties. */
+    static T1OsmRoadAdvisor.Result roadAtHistoricalDataset(
+            File roadDb,android.location.Location here,String source){
+        return roadAtDatasetInternal(roadDb,here,source,true);
+    }
+    static T1OsmRoadAdvisor.Result roadAtHistorical(
+            Context context,android.location.Location point){
+        if(!installed(context))return unknown("OSM · BASE NO INSTALADA");
+        return roadAtHistoricalDataset(dataset(context),point,"OSM");
+    }
+    private static T1OsmRoadAdvisor.Result roadAtDatasetInternal(
+            File roadDb,android.location.Location here,String source,
+            boolean historical){
         if(roadDb==null||!roadDb.isFile())
             return unknown(source+" · mapa NO INSTALADO");
         if(here==null||!here.hasAccuracy()||here.getAccuracy()>65||
-                android.os.SystemClock.elapsedRealtimeNanos()-
-                here.getElapsedRealtimeNanos()>60000000000L)
-            return unknown("Falta GPS reciente o precisión suficiente para "+
-                "clasificar vía usando el mapa offline.");
+                (!historical&&(android.os.SystemClock.elapsedRealtimeNanos()-
+                here.getElapsedRealtimeNanos()>60000000000L)))
+            return unknown("Falta GPS preciso"+(historical?"":
+                " y reciente")+" para clasificar la vía offline.");
         double lat=here.getLatitude(),lon=here.getLongitude();
         if(!Double.isFinite(lat)||!Double.isFinite(lon)||
                 Math.abs(lat)>90||Math.abs(lon)>180)
