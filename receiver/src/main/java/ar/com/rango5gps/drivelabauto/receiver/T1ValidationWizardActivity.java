@@ -83,6 +83,17 @@ public final class T1ValidationWizardActivity extends T1ImmersiveActivity {
             "El estado de una puerta no prueba control eléctrico del plafón.",
             "COCKPIT · ZONAS / DIAGNÓSTICOS · LUCES TRASERAS/BAÚL",
             "cockpit","cabin"),
+        new Task("lights_tailgate","ILUMINACIÓN",
+            "Luz interior del portón · apertura OEM",
+            "Con el vehículo inmóvil en P, cerrá el portón y apagá la " +
+            "luz del baúl desde su mando original si corresponde. Tomá " +
+            "CAPTURA A. Abrí el portón normalmente, sin mover el auto, " +
+            "y tomá CAPTURA B. No uses mandos experimentales para las luces.",
+            "Comparar estado de portón con luz de cabina. Saber si " +
+            "el portón está abierto no implica que DriveLab pueda " +
+            "encender su lámpara: falta la ruta del BCM y su permiso.",
+            "COCKPIT · LUCES TRASERAS/BAÚL · SOLO LECTURA",
+            "cockpit","cabin"),
         new Task("lights_seats","ILUMINACIÓN","Luces individuales · segunda fila",
             "En P, apagá las luces de lectura traseras y tomá CAPTURA A. " +
             "Encendé SOLO una luz original y tomá CAPTURA B. Repetí para " +
@@ -145,12 +156,36 @@ public final class T1ValidationWizardActivity extends T1ImmersiveActivity {
             "clasificación de autopista, confirmación 1043 y ausencia " +
             "de oscilaciones. Se mantienen controles originales.",
             "COCKPIT · MODO OPTIMIZADO / DIAGNÓSTICO","cockpit",""),
-        new Task("pdc","SENSORES","Radar de estacionamiento / PDC",
-            "En P, con el vehículo inmóvil y ningún objeto moviéndose " +
-            "cerca, hacé CAPTURA A. Activá/desactivá únicamente el menú " +
-            "original de radar y hacé CAPTURA B. No conduzcas para ensayar.",
-            "Compará 2049, 2107 y PDC crudo. No asignar centímetros " +
-            "a valores sin calibración y no alterar alertas de seguridad.",
+        new Task("pdc","SENSORES","Radar OEM · activación general (sin ajustar)",
+            "Con la T1 inmóvil en P y el freno aplicado, poné el radar " +
+            "original en OFF y tomá CAPTURA A. Activá el radar desde el " +
+            "botón OEM y tomá CAPTURA B. No cambies la marcha ni muevas el auto.",
+            "2049 pasó 0→1 en una prueba anterior, pero controla radar " +
+            "general, no únicamente el trasero. 2107 es candidato de tramo " +
+            "de aviso: ningún umbral fue validado. Nunca escribirlo.",
+            "VEHÍCULO · LIMPIAPARABRISAS / RADAR","vehicle","wiper"),
+        new Task("pdc_front_distance","SENSORES",
+            "Radar delantero · respuesta a objeto fijo",
+            "En un lugar despejado, vehículo inmóvil en P, freno aplicado " +
+            "y radar OEM encendido, tomá CAPTURA A sin un objeto cercano. " +
+            "Con el auto inmovilizado, colocá un objeto inerte fijo delante, " +
+            "retirá a todas las personas del área y tomá CAPTURA B sin mover " +
+            "el vehículo. Si en P no detecta, registrá SIN SEÑAL; no avances.",
+            "Comparar PDC DELANTERO 557862926 y zonas 557843300–303. " +
+            "El 175→50 observado antes es un valor crudo, no centímetros. " +
+            "Anotá también si hubo sonido y distancia física medida aparte.",
+            "VEHÍCULO · LIMPIAPARABRISAS / RADAR","vehicle","wiper"),
+        new Task("pdc_rear_distance","SENSORES",
+            "Radar trasero · respuesta a objeto fijo",
+            "En un lugar despejado, vehículo inmóvil en P, freno aplicado " +
+            "y radar OEM encendido, tomá CAPTURA A sin obstáculo. Con el " +
+            "vehículo inmovilizado colocá un objeto fijo detrás, dejá el " +
+            "área libre de personas y tomá CAPTURA B SIN mover la T1. " +
+            "Si P no activa sensores traseros, anotá SIN SEÑAL; este ensayo " +
+            "no requiere seleccionar R ni aproximar el vehículo al objeto.",
+            "Comparar PDC TRASERO 557862927 y zonas 557843296–299. " +
+            "Los antiguos 62/335 no son distancias calibradas. Anotá " +
+            "si la alerta acústica se encendió y si el radar OEM estaba ON.",
             "VEHÍCULO · LIMPIAPARABRISAS / RADAR","vehicle","wiper"),
         new Task("mirrors","CARROCERÍA","Espejos · marcha R / restauración",
             "Probá por separado los mandos manuales en P que ya funcionan. " +
@@ -213,6 +248,11 @@ public final class T1ValidationWizardActivity extends T1ImmersiveActivity {
         seats=new T1RearSeatLightsProbe(this);
         selected=Math.max(0,Math.min(TASKS.length-1,
             prefs.getInt("selected",0)));
+        // Explicit deep link from Vehicle panel; status/evidence remain keyed by task ID.
+        String focus=getIntent()==null?null:getIntent().getStringExtra("focus_task");
+        if(focus!=null)
+            for(int i=0;i<TASKS.length;i++)
+                if(focus.equals(TASKS[i].id)){selected=i;break;}
         render();
     }
     private String state(Task task){
@@ -641,6 +681,14 @@ public final class T1ValidationWizardActivity extends T1ImmersiveActivity {
                     key.startsWith("289410817")||
                     key.startsWith("557844233")||
                     key.startsWith("557856517");
+            case "pdc_front_distance":
+                return key.startsWith("2049")||
+                    key.startsWith("PDC DELANTERO")||
+                    key.startsWith("DELANTERO ZONA");
+            case "pdc_rear_distance":
+                return key.startsWith("2049")||
+                    key.startsWith("PDC TRASERO")||
+                    key.contains("TRASERO");
             case "pdc":return key.startsWith("2049")||
                 key.startsWith("2107")||key.startsWith("PDC ")||
                 key.contains("TRASERO")||key.contains("DELANTERO");
