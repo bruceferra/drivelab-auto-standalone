@@ -371,8 +371,10 @@ final class T1GlobalToolbar {
             MirrorAutomationService.LAST_POLL,0L);
         boolean healthy=auto&&service&&age>=0&&age<=8000;
         String pose=p.getString(MirrorAutomationService.POSITION,"");
-        boolean unknown=pose.startsWith("INCIERTA")||
-            pose.startsWith("R · inclinados");
+        // Tilted during a healthy live AUTO run is EXPECTED; uncertainty
+        // matters when the service is gone and physical return was not seen.
+        boolean unknown=(pose.startsWith("INCIERTA")||
+            pose.startsWith("R · inclinados"))&&!healthy;
         mirrorAutoButton.setText(unknown?"ESPEJOS · REVISAR POSICIÓN":
             healthy?"REVERSA AUTO ✓":
             auto?"REVERSA AUTO · REVISAR":"REVERSA MANUAL");
