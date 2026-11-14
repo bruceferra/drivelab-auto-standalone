@@ -151,6 +151,16 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
             root.post(this::listenExternal);
     }
 
+    @Override protected void onNewIntent(Intent intent){
+        super.onNewIntent(intent);
+        setIntent(intent);
+        // Pressing physical OEM mic 1010 again while the voice screen is
+        // already on top must still open a fresh recognition round.
+        if(intent!=null&&ACTION_SHORTCUT_GOOGLE_RECOGNITION.equals(
+                intent.getAction()))
+            voiceHandler.postDelayed(this::listenExternal,250L);
+    }
+
     private Intent speechIntent(){
         Intent i=new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         i.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL,
