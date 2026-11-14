@@ -17,7 +17,7 @@ public final class T1WheelCalibrationSourceContractTest {
         String ui=Files.readString(base.resolve("T1WheelSettingsActivity.java"));
         int learning=service.indexOf("String pending=p.getString(PENDING,\"\");",
             service.indexOf("@Override public boolean onKeyEvent"));
-        int wazeCheck=service.indexOf("if(!WAZE.equals(pkg))",learning);
+        int wazeCheck=service.indexOf("AccessibilityNodeInfo root=wazeRoot()",learning);
         check(learning>0&&wazeCheck>learning,
             "45s explicit learning MUST precede the Waze foreground-only filter");
         check(service.substring(learning,wazeCheck).contains(
@@ -25,8 +25,10 @@ public final class T1WheelCalibrationSourceContractTest {
             "learning must NEVER consume wheel key or hijack Zoom");
         check(service.contains("observeActivityKey(Context c,KeyEvent event)"),
             "foreground activity must have second read-only input path");
-        check(service.contains("if(!WAZE.equals(pkg))"),
-            "normal route control must stay restricted to Waze");
+        check(service.contains("AccessibilityNodeInfo root=wazeRoot();")&&
+              service.contains("if(root==null){")&&
+              service.contains("getWindowsOnAllDisplays()"),
+            "normal route control must stay restricted to Waze across displays");
         check(ui.contains("dispatchKeyEvent(KeyEvent event)")&&
               ui.contains("T1WazeWheelService.observeActivityKey(this,event);")&&
               ui.contains("return super.dispatchKeyEvent(event);"),
