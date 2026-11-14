@@ -11,6 +11,10 @@ import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.net.Uri;
+import android.media.AudioAttributes;
+import android.media.AudioFocusRequest;
+import android.media.AudioManager;
+import android.speech.tts.UtteranceProgressListener;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -43,8 +47,13 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
     private static final String PREF="t1_voice_router_v1";
     private static final String KEY_AI="default_ai";
     private static final int BG=T1JetourTheme.NIGHT;
-    private TextView status,heard;
-    private String lastAudible;
+    private TextView status,heard,audioStatus;
+    private String lastAudible,activeSpeechId;
+    private boolean screenResumed,speechFocusHeld;
+    private long speechReadyAt;
+    private int speechSequence;
+    private AudioManager audioManager;
+    private AudioFocusRequest speechFocusRequest;
     private SpeechRecognizer recognizer;
     private boolean listening,openingAssistant;
     private final Handler voiceHandler=new Handler(Looper.getMainLooper());
@@ -109,10 +118,14 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
             "muestra acá la respuesta. El sonido depende del audio de la T1.",
             15,T1JetourTheme.WHITE);
         status.setTextIsSelectable(true);
-        button(root,"🔊 VOLVER A ESCUCHAR RESPUESTA",
+        audioStatus=label(root,"AUDIO: comprobando voz de Android…",
+            13,T1JetourTheme.MUTED);
+        button(root,"🔊 PROBAR / REPETIR AUDIO",
             T1JetourTheme.PANEL_HI,()->{
                 if(lastAudible==null||lastAudible.isEmpty())
-                    status.setText("Todavía no hay respuesta para repetir.");
+                    say("PRUEBA DE AUDIO · voz de DriveLab",
+                        "Hola, soy DriveLab. Si me escuchás, "+
+                        "la salida de voz de la camioneta funciona.");
                 else{
                     answerToSpeak=lastAudible;
                     readQueuedSpeech();
@@ -250,6 +263,9 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         if(result!=Activity.RESULT_OK||data==null){
             status.setText("La escucha fue cancelada o no reconoció voz.");return;
         }
+        // Let the external Google recognition overlay release the car audio
+        // channel before we request focus for our spoken answer.
+        speechReadyAt=android.os.SystemClock.uptimeMillis()+550L;
         recognize(data.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS));
     }
     private void recognize(ArrayList<String> results){
@@ -354,37 +370,143 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
                 "Podés consultar el clima, resultados deportivos, noticias "+
                 "y hacer cuentas, o usar la voz del sistema para Gemini.");
     }
-    /** Respond within DriveLab without forcing another microphone touch.
-     * Output depends on Android TTS engine and its audio route.
+    /** Android TTS with explicit, transient navigation speech audio focus.
+     * TTS success does NOT prove OEM loudspeakers are selected, so report
+     * preparation/failure separately from what the driver actually hears.
      */
+    private AudioAttributes speechAudioAttributes(){
+        return new AudioAttributes.Builder()
+            .setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+            .build();
+    }
+    private void showAudio(String message){
+        if(audioStatus!=null)audioStatus.setText("AUDIO: "+message);
+    }
+    private void releaseSpeechFocus(){
+        if(audioManager!=null&&speechFocusRequest!=null&&speechFocusHeld){
+            try{audioManager.abandonAudioFocusRequest(speechFocusRequest);}
+            catch(RuntimeException ignored){}
+        }
+        speechFocusHeld=false;
+    }
+    private boolean requestSpeechFocus(){
+        try{
+            audioManager=(AudioManager)getSystemService(Context.AUDIO_SERVICE);
+            if(audioManager==null){
+                showAudio("el sistema no ofrece AudioManager; salida incierta");
+                return false;
+            }
+            if(speechFocusRequest==null)
+                speechFocusRequest=new AudioFocusRequest.Builder(
+                    AudioManager.AUDIOFOCUS_GAIN_TRANSIENT_MAY_DUCK)
+                    .setAudioAttributes(speechAudioAttributes())
+                    .setOnAudioFocusChangeListener(change->{
+                        if(change==AudioManager.AUDIOFOCUS_LOSS)
+                            runOnUiThread(()->{
+                                if(speaker!=null)speaker.stop();
+                                releaseSpeechFocus();
+                                showAudio("interrumpido por otra fuente del vehículo");
+                            });
+                    }).build();
+            int result=audioManager.requestAudioFocus(speechFocusRequest);
+            speechFocusHeld=result==AudioManager.AUDIOFOCUS_REQUEST_GRANTED;
+            if(!speechFocusHeld)
+                showAudio("sin foco de reproducción; revisar fuente/volumen de la T1");
+            return speechFocusHeld;
+        }catch(RuntimeException ex){
+            showAudio("no se pudo solicitar audio: "+
+                ex.getClass().getSimpleName());
+            return false;
+        }
+    }
+    private void finishUtterance(String id,String error){
+        runOnUiThread(()->{
+            if(!id.equals(activeSpeechId))return;
+            releaseSpeechFocus();
+            if(error==null)
+                showAudio("Android finalizó la voz; verificar parlantes si no se oyó");
+            else{
+                showAudio("falló reproducción: "+error+
+                    " · revisar motor TTS, fuente y volumen multimedia");
+                if(status!=null)status.append(
+                    "\n🔈 No se pudo reproducir la respuesta; "+
+                    "podés verla escrita y probar el audio.");
+            }
+        });
+    }
     private void initSpeechOutput(){
         try{
-            speaker=new TextToSpeech(this, result->{
-                if(result!=TextToSpeech.SUCCESS)return;
-                if(speaker==null)return;
-                speaker.setLanguage(new Locale("es","AR"));
+            speaker=new TextToSpeech(this,result->{
+                if(result!=TextToSpeech.SUCCESS||speaker==null){
+                    ttsReady=false;
+                    showAudio("motor de voz TTS no disponible");
+                    return;
+                }
+                int language=speaker.setLanguage(new Locale("es","AR"));
+                if(language==TextToSpeech.LANG_MISSING_DATA||
+                   language==TextToSpeech.LANG_NOT_SUPPORTED)
+                    language=speaker.setLanguage(new Locale("es"));
+                if(language==TextToSpeech.LANG_MISSING_DATA||
+                   language==TextToSpeech.LANG_NOT_SUPPORTED)
+                    showAudio("no hay voz en español instalada en Android");
+                else showAudio("motor de voz listo; esperando consulta");
+                int audio=speaker.setAudioAttributes(speechAudioAttributes());
+                if(audio==TextToSpeech.ERROR)
+                    showAudio("la ROM rechazó configurar audio de navegación");
+                speaker.setOnUtteranceProgressListener(
+                    new UtteranceProgressListener(){
+                        @Override public void onStart(String id){
+                            runOnUiThread(()->{
+                                if(id.equals(activeSpeechId))
+                                    showAudio("emitiendo voz por Android…");
+                            });
+                        }
+                        @Override public void onDone(String id){
+                            finishUtterance(id,null);
+                        }
+                        @Override public void onError(String id){
+                            finishUtterance(id,"síntesis TTS");
+                        }
+                        @Override public void onError(String id,int code){
+                            finishUtterance(id,"TTS código "+code);
+                        }
+                    });
                 ttsReady=true;
                 if(answerToSpeak!=null)readQueuedSpeech();
             });
-        }catch(Exception ignored){ttsReady=false;}
+        }catch(RuntimeException ex){
+            ttsReady=false;
+            showAudio("no se pudo iniciar la voz Android: "+
+                ex.getClass().getSimpleName());
+        }
     }
     private void readQueuedSpeech(){
-        if(answerToSpeak==null)return;
+        if(answerToSpeak==null||isFinishing()||isDestroyed())return;
+        // Activity results arrive before onResume. The recognition overlay
+        // can still own audio focus; let it close before the spoken answer.
+        if(!screenResumed)return;
+        long wait=speechReadyAt-android.os.SystemClock.uptimeMillis();
+        if(wait>0){
+            voiceHandler.postDelayed(this::readQueuedSpeech,wait);
+            return;
+        }
         if(!ttsReady||speaker==null){
-            if(status!=null)status.append("\n🔈 Voz Android no disponible; "+
-                "la respuesta sigue visible en pantalla.");
+            showAudio("esperando motor de voz; resultado escrito disponible");
             return;
         }
         String answer=answerToSpeak;
         answerToSpeak=null;
-        int sent=speaker.speak(answer,TextToSpeech.QUEUE_FLUSH,null,
-            "drivelab_voice_response");
-        if(sent==TextToSpeech.ERROR&&status!=null)
-            status.append("\n🔈 Android rechazó reproducir la voz. "+
-                "Revisá volumen multimedia y salida de audio.");
+        releaseSpeechFocus();
+        requestSpeechFocus();
+        String id="drivelab_voice_response_"+(++speechSequence);
+        activeSpeechId=id;
+        int sent=speaker.speak(answer,TextToSpeech.QUEUE_FLUSH,null,id);
+        if(sent==TextToSpeech.ERROR)
+            finishUtterance(id,"Android rechazó speak()");
     }
     private void say(String line,String audible){
-        status.setText(line);
+        if(status!=null)status.setText(line);
         lastAudible=audible;
         answerToSpeak=audible;
         readQueuedSpeech();
@@ -503,7 +625,14 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
             "Copié tu consulta al portapapeles. No abrí la app completa "+
             "automáticamente: tocá su botón de prueba solo si estás detenido.");
     }
+    @Override protected void onResume(){
+        super.onResume();
+        screenResumed=true;
+        if(answerToSpeak!=null)
+            voiceHandler.postDelayed(this::readQueuedSpeech,180L);
+    }
     @Override protected void onPause(){
+        screenResumed=false;
         voiceHandler.removeCallbacks(recognitionTimeout);
         listening=false;recognitionReady=false;
         if(recognizer!=null){
@@ -514,6 +643,8 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         super.onPause();
     }
     @Override protected void onDestroy(){
+        voiceHandler.removeCallbacksAndMessages(null);
+        releaseSpeechFocus();
         if(speaker!=null){
             speaker.stop();
             speaker.shutdown();
