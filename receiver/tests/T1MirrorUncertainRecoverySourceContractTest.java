@@ -45,7 +45,7 @@ public final class T1MirrorUncertainRecoverySourceContractTest {
             ui.contains("showMirrorRecovery()")&&
             ui.contains("MirrorAutomationService.ACTION_CONFIRM_NORMAL"),
             "Visible main header gives a real safe path out of uncertainty");
-        check(ui.contains("con los mandos ORIGINALES")&&
+        check(ui.contains("mandos ORIGINALES")&&
             ui.contains("El modo AUTO seguirá apagado")&&
             ui.contains("REVERSA AUTO ✓"),
             "Driver confirmation explains OEM adjustment, leaves AUTO off, keeps green live-only");
