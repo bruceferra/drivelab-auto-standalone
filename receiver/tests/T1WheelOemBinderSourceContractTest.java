@@ -57,7 +57,10 @@ public final class T1WheelOemBinderSourceContractTest {
             "T1N134 wheel rotate/back/OK codes mapped correctly without reacting to other signals");
         check(svc.contains("if(confirm&&mapMenuArmed&&collectMapChoices(root))")&&
             svc.contains("mapMenuArmed=true;")&&
-            svc.contains("performAction(AccessibilityNodeInfo.ACTION_CLICK)")&&
+            svc.contains("chosen.node.performAction(")&&
+            svc.contains("AccessibilityNodeInfo.ACTION_CLICK")&&
+            svc.contains("if(chosen.displayId!=wazeDisplayId)")==false&&
+            svc.contains("chosen.displayId!=wazeDisplayId")&&
             !svc.contains("injectInputEvent(")&&
             !svc.contains("getevent -"),
             "Never click an arbitrary first map control or inject synthetic system input");
