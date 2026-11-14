@@ -307,13 +307,35 @@ public final class ReceiverService extends Service {
             if(pkg.isEmpty()||!Settings.canDrawOverlays(this)){
                 prefs().edit().putString("boot_status","App de inicio sin permiso o sin selección").apply();return;
             }
-            Intent launch=getPackageManager().getLaunchIntentForPackage(pkg);
-            if(launch==null){prefs().edit().putString("boot_status","App elegida no disponible").apply();return;}
-            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            try{startActivity(launch);prefs().edit().putString("boot_status",
-                "Apertura solicitada: "+pkg).apply();}
-            catch(RuntimeException error){prefs().edit().putString("boot_status",
-                "Android bloqueó abrir la app seleccionada").apply();}
+            if(getPackageName().equals(pkg)&&ReceiverActivity.isVisible()){
+                prefs().edit().putString("boot_status",
+                    "DriveLab ya estaba visible tras encender; no se duplicó").apply();
+                return;
+            }
+            // Our own main UI has an explicit component so the OS does not
+            // mistake it for the independent voice-launcher alias.
+            Intent launch=getPackageName().equals(pkg)?
+                new Intent(this,ReceiverActivity.class):
+                getPackageManager().getLaunchIntentForPackage(pkg);
+            if(launch==null){
+                prefs().edit().putString("boot_status",
+                    "App elegida no disponible").apply();return;
+            }
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|
+                Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            if(getPackageName().equals(pkg))
+                launch.putExtra("drivelab_open_after_boot",true);
+            try{
+                startActivity(launch);
+                prefs().edit().putString("boot_status",
+                    "Apertura solicitada a Android: "+pkg+
+                    " (confirmación visual pendiente)").apply();
+            }catch(RuntimeException error){
+                prefs().edit().putString("boot_status",
+                    "Android/Jetour bloqueó abrir la pantalla: "+
+                    error.getClass().getSimpleName()+
+                    ". Tocá la notificación de DriveLab para entrar.").apply();
+            }
         },12000);
     }
     private void shutdown(){
