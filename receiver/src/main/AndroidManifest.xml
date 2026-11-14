@@ -46,6 +46,9 @@
             android:grantUriPermissions="true" />
         <receiver android:name=".ReceiverInstallResultReceiver"
             android:exported="false" />
+        <!-- Physical microphone key from APK: OEM 1010/100, opt-in only. -->
+        <service android:name=".T1OemMicrophoneService"
+            android:exported="false" />
         <service android:name=".ReceiverService" android:exported="false"
             android:foregroundServiceType="dataSync" />
         <!-- User-triggered, 35-second OEM 1033 read-only sampler; independent of navigation. -->
@@ -98,6 +101,8 @@
             </intent-filter>
         </activity>
         <activity android:name=".T1ClusterWazeSettingsActivity" android:exported="false" />
+        <activity android:name=".T1ClusterLayoutSettingsActivity"
+            android:exported="false" />
         <activity android:name=".ReceiverVehicleActivity" android:exported="false" />
         <activity android:name=".T1SteeringKeysActivity" android:exported="false" />
         <activity android:name=".T1WheelSettingsActivity" android:exported="false" />
