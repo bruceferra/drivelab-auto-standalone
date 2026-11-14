@@ -18,6 +18,8 @@
         <package android:name="com.autolink.app.vehicleservice" />
         <package android:name="com.autolink.carservice" />
         <package android:name="com.autolink.clusterinteraction" />
+        <!-- Android 11 visibility for explicit, user-opted-in OEM hardkey bind. -->
+        <package android:name="com.autolink.hardkeyservice" />
         <package android:name="com.waze" />
         <package android:name="com.google.android.apps.bard" />
         <package android:name="com.openai.chatgpt" />
