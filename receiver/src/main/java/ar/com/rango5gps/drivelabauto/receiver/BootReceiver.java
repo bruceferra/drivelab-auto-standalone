@@ -60,6 +60,7 @@ public final class BootReceiver extends BroadcastReceiver {
         // PAUSED state is NOT cleared on reboot or package replacement.
         // Mirror control still requires safe known physical reference before
         // its intentional automatic movements.
+        RecirculationGuardService.recoverLegacyReadError(context);
         android.content.SharedPreferences hvac=context.getSharedPreferences(
             RecirculationGuardService.PREFS,Context.MODE_PRIVATE);
         if(RecirculationGuardService.MODE_INTERIOR.equals(hvac.getString(
