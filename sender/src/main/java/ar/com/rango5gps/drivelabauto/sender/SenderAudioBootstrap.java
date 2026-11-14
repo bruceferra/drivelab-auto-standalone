@@ -2,6 +2,10 @@ package ar.com.rango5gps.drivelabauto.sender;
 
 import android.Manifest;
 import android.bluetooth.BluetoothDevice;
+import android.bluetooth.BluetoothAdapter;
+import android.bluetooth.BluetoothA2dp;
+import android.bluetooth.BluetoothManager;
+import android.bluetooth.BluetoothProfile;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -16,7 +20,9 @@ import android.media.session.MediaSession;
 import android.media.session.PlaybackState;
 import android.os.Build;
 import android.os.SystemClock;
-import java.util.Locale;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * Opt-in, once-per-T1-A2DP-connection media wakeup experiment.
@@ -88,12 +94,22 @@ final class SenderAudioBootstrap {
             report(c,"Omitido: otra reproducción multimedia ya está activa");
             return;
         }
+        // A manual test may happen with the device already connected.
+        // Android hides route MAC on some devices: verify the exact connected
+        // A2DP profile first instead of accidentally playing to headphones.
+        boolean deviceVerified=fromVerifiedConnection ||
+            exactConnectedA2dp(c,p.getString(ADDRESS,""));
+        if(!deviceVerified){
+            report(c,"La T1 elegida no está conectada en perfil A2DP. "+
+                "Comprobá que Audio multimedia esté activo en Bluetooth.");
+            return;
+        }
         boolean ready=false;
         // BT profile connection broadcast can arrive before the Android
         // media route is ready. Total bounded well below goAsync 10s budget.
         for(int attempt=0;attempt<5;attempt++){
             if(routeMatches(am,p.getString(ADDRESS,""),
-                    fromVerifiedConnection)){ready=true;break;}
+                    deviceVerified)){ready=true;break;}
             SystemClock.sleep(450L);
         }
         if(!ready){
@@ -178,6 +194,48 @@ final class SenderAudioBootstrap {
             }
         }
     }
+    /** Strictly verify the chosen MAC in A2DP, not merely BT phone link.
+     * Bluetooth's profile proxy is asynchronous; this runs off the UI thread.
+     */
+    private static boolean exactConnectedA2dp(Context context,String mac){
+        if(mac==null||mac.isEmpty()||!permission(context))return false;
+        BluetoothManager manager=(BluetoothManager)
+            context.getSystemService(Context.BLUETOOTH_SERVICE);
+        BluetoothAdapter adapter=manager==null?null:manager.getAdapter();
+        if(adapter==null)return false;
+        CountDownLatch latch=new CountDownLatch(1);
+        AtomicBoolean match=new AtomicBoolean(false);
+        BluetoothProfile.ServiceListener listener=
+            new BluetoothProfile.ServiceListener(){
+                @Override public void onServiceConnected(int profile,
+                                                         BluetoothProfile proxy){
+                    try{
+                        if(profile==BluetoothProfile.A2DP){
+                            for(BluetoothDevice device:proxy.getConnectedDevices())
+                                if(mac.equalsIgnoreCase(device.getAddress()))
+                                    match.set(true);
+                        }
+                    }catch(SecurityException ignored){}
+                    finally{
+                        try{adapter.closeProfileProxy(profile,proxy);}
+                        catch(RuntimeException ignored){}
+                        latch.countDown();
+                    }
+                }
+                @Override public void onServiceDisconnected(int profile){
+                    latch.countDown();
+                }
+            };
+        try{
+            if(!adapter.getProfileProxy(context,listener,BluetoothProfile.A2DP))
+                return false;
+            latch.await(1800L,TimeUnit.MILLISECONDS);
+            return match.get();
+        }catch(SecurityException | InterruptedException ex){
+            return false;
+        }
+    }
+
     /** No output to unknown A2DP headphones; a user-triggered test requires
      * the actual device address, broadcasts already identify its device. */
     private static boolean routeMatches(AudioManager am,String mac,
