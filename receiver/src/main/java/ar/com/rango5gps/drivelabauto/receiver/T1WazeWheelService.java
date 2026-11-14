@@ -353,10 +353,14 @@ public final class T1WazeWheelService extends AccessibilityService {
         if(collectAlternativeRoutes(root)){
             lastButtonAt=SystemClock.elapsedRealtime();
             if(cancel){
+                // GLOBAL_ACTION_BACK targets the system's active display, which
+                // can be the T1Launcher/OEM window rather than Waze Display 5.
+                // Never close arbitrary OEM windows to dismiss Waze alternatives.
                 hideHint();
                 selectedLabel="";
-                status("Waze: volver de rutas alternativas");
-                return performGlobalAction(GLOBAL_ACTION_BACK);
+                status("Waze: ATRÁS en alternativas no pulsa regresar "+
+                    "sin botón Waze específico; ventanas OEM intactas");
+                return false;
             }
             if(routeShortcut){
                 highlight();
