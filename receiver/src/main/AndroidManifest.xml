@@ -103,6 +103,7 @@
         <!-- Optional premium cockpit, never a default HOME nor OEM control surface. -->
         <activity android:name=".T1PremiumCockpitActivity" android:exported="false" />
         <activity android:name=".T1OptimizedModeActivity" android:exported="false" />
+        <activity android:name=".T1TripMapAnalysisActivity" android:exported="false" />
         <activity android:name=".T1VoiceRouteActivity" android:exported="false" />
         <activity android:name=".T1VoiceShortcutActivity"
             android:exported="false" android:theme="@android:style/Theme.NoDisplay" />
