@@ -42,7 +42,7 @@ final class T1ClusterAdbResize {
             String result;
             boolean ok=false;
             try{
-                String out=T1LocalAdbClient.shell(c,"am stack list");
+                String out=taskList(c);
                 ok=out!=null&&!out.trim().isEmpty()&&
                     !errorOutput(out);
                 result=ok?"ADB LOCAL CONECTADO: tareas legibles. "+
@@ -143,10 +143,17 @@ final class T1ClusterAdbResize {
     }
     private static String taskList(Context c)throws Exception{
         String result=T1LocalAdbClient.shell(c,"am stack list");
-        if(errorOutput(result))throw new IllegalStateException(
-            "Android rechazó listar tareas: "+result.substring(
-                0,Math.min(140,result.length())));
-        return result;
+        if(result!=null&&!result.trim().isEmpty()&&!errorOutput(result))
+            return result;
+        // Android 11 vendors may remove/deprecate "am stack list".
+        // Read-only fallback, never infer a task id without display.
+        String alternative=T1LocalAdbClient.shell(c,
+            "dumpsys activity activities");
+        if(alternative==null||alternative.trim().isEmpty()||
+           errorOutput(alternative))
+            throw new IllegalStateException(
+                "Android no permite enumerar tareas con ADB");
+        return alternative;
     }
     private static T1AdbTaskParser.Task find(Context c,String list,
                                               int display,String pkg)
