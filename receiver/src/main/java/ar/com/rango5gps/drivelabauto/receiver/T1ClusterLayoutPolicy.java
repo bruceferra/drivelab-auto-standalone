@@ -91,7 +91,7 @@ final class T1ClusterLayoutPolicy {
         int width=d.getMode().getPhysicalWidth();
         int height=d.getMode().getPhysicalHeight();
         if(MODE_SPLIT.equals(mode(c))){
-            int ratio=number(c,SPLIT_PERCENT,60,30,70);
+            int ratio=number(c,SPLIT_PERCENT,50,30,70);
             return asRect(right?
                 T1ClusterLayoutMath.right(width,height,ratio):
                 T1ClusterLayoutMath.left(width,height,ratio));
