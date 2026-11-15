@@ -73,6 +73,29 @@ public final class T1WazeWheelService extends AccessibilityService {
     private String selectedLabel="",seenPackage="";
     private boolean alternateList,mapMenuArmed,promptArmed;
     private long lastButtonAt;
+    // Same Android process: the verified 1010 microphone service owns ONE
+    // vendor Binder callback, and forwards 1000..1003 here. Never register
+    // two OEM callbacks concurrently while microphone mode is enabled.
+    private static volatile T1WazeWheelService connectedInstance;
+    static void releaseForSharedMicrophone(){
+        T1WazeWheelService service=connectedInstance;
+        if(service!=null&&service.oemBridge!=null)service.oemBridge.stop();
+    }
+    static void dispatchFromSharedMicrophone(Context app,int code,
+                                             int action,int extra){
+        if(code<1000||code>1003)return;
+        SharedPreferences p=app.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
+        if(!p.getBoolean(OEM_BINDER_ENABLED,false)||
+           !p.getBoolean(ENABLED,false))return;
+        T1WazeWheelService active=connectedInstance;
+        if(active==null){
+            p.edit().putString(OEM_BINDER_STATUS,
+                "Botón OEM "+code+" recibido; habilitá Accesibilidad "+
+                "DriveLab · Waze y volante para controlarlo").apply();
+            return;
+        }
+        active.handleOemKey(code,action,extra);
+    }
     private T1OemHardKeyBridge oemBridge;
     private final Handler main=new Handler(Looper.getMainLooper());
     private long lastOemKeyAt,lastScanAt;
@@ -184,6 +207,7 @@ public final class T1WazeWheelService extends AccessibilityService {
     }
     @Override protected void onServiceConnected(){
         super.onServiceConnected();
+        connectedInstance=this;
         AccessibilityServiceInfo info=getServiceInfo();
         if(info!=null){
             info.flags|=AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
@@ -256,6 +280,16 @@ public final class T1WazeWheelService extends AccessibilityService {
     }
     private void refreshOemBridge(){
         if(oemBridge==null)return;
+        boolean shared=T1OemMicrophoneService.prefs(this).getBoolean(
+            T1OemMicrophoneService.ENABLED,false);
+        if(shared){
+            // Foreground microphone service is the sole OEM Binder owner.
+            oemBridge.stop();
+            prefs().edit().putString(OEM_BINDER_STATUS,
+                "OEM compartido: micrófono 1010 recibe el Binder; "+
+                "ruedita 1000–1003 por este mismo receptor").apply();
+            return;
+        }
         boolean enabled=prefs().getBoolean(OEM_BINDER_ENABLED,false);
         if(enabled&&wazeRoot()!=null)oemBridge.start();
         else oemBridge.stop();
@@ -266,9 +300,12 @@ public final class T1WazeWheelService extends AccessibilityService {
      * avoiding duplicate confirmations. Other IDs, especially voice, ignored.
      */
     private void handleOemKey(int code,int action,int extra){
-        if(!prefs().getBoolean(OEM_BINDER_ENABLED,false)||
-                oemBridge==null||!oemBridge.registered())return;
-        if(action!=100&&action!=101)return;
+        if(!prefs().getBoolean(OEM_BINDER_ENABLED,false))return;
+        boolean shared=T1OemMicrophoneService.prefs(this).getBoolean(
+            T1OemMicrophoneService.ENABLED,false);
+        if(!shared&&(oemBridge==null||!oemBridge.registered()))return;
+        // APK reports press=100 and release=101; process once per press.
+        if(action!=100)return;
         long now=SystemClock.elapsedRealtime();
         prefs().edit().putString(OEM_LAST,
             code+" · estado "+action+" · tercer dato "+extra).apply();
@@ -833,6 +870,7 @@ public final class T1WazeWheelService extends AccessibilityService {
         if(oemBridge!=null)oemBridge.stop();
     }
     @Override public void onDestroy(){
+        if(connectedInstance==this)connectedInstance=null;
         hideHint();
         main.removeCallbacks(oemHeartbeat);
         if(oemBridge!=null)oemBridge.stop();
