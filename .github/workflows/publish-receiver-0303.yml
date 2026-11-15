@@ -56,7 +56,7 @@ jobs:
           import json
           m=json.load(open('output/sender.json'))
           assert m['packageName']=='ar.com.rango5gps.drivelabauto.sender'
-          assert m['versionCode']==18 and m['versionName']=='0.2.17'
+          assert m['versionCode']==19 and m['versionName']=='0.2.18'
           PY
           javac -encoding UTF-8 -d /tmp/mirror-tests receiver/tests/MirrorControlsVisibilitySourceContractTest.java
           java -cp /tmp/mirror-tests ar.com.rango5gps.drivelabauto.receiver.MirrorControlsVisibilitySourceContractTest
@@ -219,7 +219,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.2
-          gh release create v0.3.3 output/DriveLab-Auto-Receiver-v0.3.3.apk output/receiver.json output/sender.json output/receiver.sha256 --target "$GITHUB_SHA" --latest --title 'DriveLab Auto Receiver 0.3.3 - Waze y Google Maps 50/50 real por ADB' --notes 'DriveLab Auto Receiver v0.3.3 code104 · DIVISIÓN REAL WAZE / GOOGLE MAPS. Puente ADB local autenticado RSA hacia 127.0.0.1:5555, no root, sin shell libre. El usuario debe habilitar y autorizar TCP con adb tcpip 5555 desde PC conectada a la T1. Divide tareas reales Waze izquierda y Google Maps derecha, 50/50, con slider 30-70, mas10/menos10, restaurar fullscreen y lectura posterior de bounds. Acepta solo task IDs de ambas apps en el display secundario seleccionado; fallo o ambiguedad no activa el modo. Modificaciones solo en P/0 km/h confirmados por OEM. La ROM puede negar resize o superponer ventanas y requiere prueba física; adbd TCP puede abrir puerto WiFi, red confiable y desactivar al acabar. Destinos de voz/Xiaomi siguen Waze. Se preservan mic y rueda v0.3.2, espejos v0.3.1 y Sender v0.2.17. APK firmado con certificado Receiver v0.3.2, OTA SHA256 verificados.'
+          gh release create v0.3.3 output/DriveLab-Auto-Receiver-v0.3.3.apk output/receiver.json output/sender.json output/receiver.sha256 --target "$GITHUB_SHA" --latest --title 'DriveLab Auto Receiver 0.3.3 - Waze y Google Maps 50/50 real por ADB' --notes 'DriveLab Auto Receiver v0.3.3 code104 · DIVISIÓN REAL WAZE / GOOGLE MAPS. Puente ADB local autenticado RSA hacia 127.0.0.1:5555, no root, sin shell libre. El usuario debe habilitar y autorizar TCP con adb tcpip 5555 desde PC conectada a la T1. Divide tareas reales Waze izquierda y Google Maps derecha, 50/50, con slider 30-70, mas10/menos10, restaurar fullscreen y lectura posterior de bounds. Acepta solo task IDs de ambas apps en el display secundario seleccionado; fallo o ambiguedad no activa el modo. Modificaciones solo en P/0 km/h confirmados por OEM. La ROM puede negar resize o superponer ventanas y requiere prueba física; adbd TCP puede abrir puerto WiFi, red confiable y desactivar al acabar. Destinos de voz/Xiaomi siguen Waze. Se preservan mic y rueda v0.3.2, espejos v0.3.1 y Sender v0.2.18. APK firmado con certificado Receiver v0.3.2, OTA SHA256 verificados.'
           mkdir -p verify
           gh release download v0.3.3 --pattern receiver.json --dir verify
           gh release download v0.3.3 --pattern sender.json --dir verify
