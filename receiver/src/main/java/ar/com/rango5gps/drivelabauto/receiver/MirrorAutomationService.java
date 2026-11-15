@@ -53,7 +53,7 @@ public final class MirrorAutomationService extends Service {
     // These are experimental conservative values pending physical validation:
     // 120ms asserted, 40ms neutral, never parallel writes to both mirrors.
     private static final long POLL_MS=250L, PULSE_MS=120L, PAUSE_MS=40L;
-    private volatile boolean running,stop;
+    private volatile boolean running,stop,referenceConfirming;
     private volatile int pendingManual; // 1=down, 2=up, 3=manual 10-up recovery
     private Thread worker;
 
@@ -124,51 +124,89 @@ public final class MirrorAutomationService extends Service {
         }
         String action=intent.getAction();
         if(ACTION_CONFIRM_NORMAL.equals(action)){
-            // This is NOT an automatic repair or an angle measurement. It
-            // only acknowledges the driver's visible manual adjustment, and
-            // fails closed if P and zero speed cannot be read from the OEM.
-            if(running){
+            // The running reverse monitor previously REJECTED confirmation,
+            // leaving an orange INCIERTA even with 0 pending pulses.
+            // Disarm the monitor FIRST, wait for its in-flight pulse to
+            // release, then read OEM P/0 and save the owner's visual ACK.
+            // Never claim NORMAL from the pending ledger alone.
+            if(referenceConfirming){
                 prefs().edit().putString(STATUS,
-                    "CONFIRMACIÓN PENDIENTE · servicio de espejos todavía ocupado. "+
-                    "Desactivá AUTO e intentá de nuevo detenido.").apply();
+                    "CONFIRMANDO REFERENCIA: lectura P/0 en curso").apply();
                 return START_NOT_STICKY;
             }
-            running=true;
+            referenceConfirming=true;
+            Thread prior=running?worker:null;
+            prefs().edit().putBoolean(AUTO,false)
+                .putString(STATUS,"Confirmando posición normal en P. "+
+                    "Esperando que se detenga la reversa automática.")
+                .apply();
+            stop=true;
+            if(prior!=null)prior.interrupt();
             foreground();
-            worker=new Thread(()->{
+            Thread acknowledge=new Thread(()->{
                 MirrorAutomationOem check=null;
                 try{
+                    if(prior!=null){
+                        prior.join(4500L);
+                        if(prior.isAlive())
+                            throw new IllegalStateException(
+                                "Servicio anterior sigue moviendo espejos; "+
+                                "no se puede confirmar");
+                    }
                     check=new MirrorAutomationOem(this);
                     int gear=check.gear();
                     double speed=check.speedKmh();
-                    if(gear!=1||!Double.isFinite(speed)||speed<0||speed>0.5)
+                    if(gear!=1||!Double.isFinite(speed)||
+                       speed<0||speed>0.5)
                         throw new IllegalStateException(
                             "Se requiere marcha P y 0 km/h confirmados por OEM");
-                    prefs().edit().putBoolean(AUTO,false)
+                    // This confirms the user's manual VISUAL reference only.
+                    // After stopping the old monitor, no automatic pulses are
+                    // emitted and no movement of either mirror is requested.
+                    boolean saved=prefs().edit()
+                        .putBoolean(AUTO,false)
                         .putBoolean(SAFETY_HOLD,false)
+                        .putBoolean(SERVICE_ACTIVE,false)
                         .putInt(PENDING_LEFT,0).putInt(PENDING_RIGHT,0)
                         .putBoolean(PULSE_IN_FLIGHT,false)
                         .putString(POSITION,
                             "NORMAL · referencia visual confirmada por conductor")
                         .putString(STATUS,
-                            "Referencia restablecida tras ajuste OEM. "+
-                            "Todavía MANUAL; tocá REVERSA para activar AUTO.")
-                        .remove(LAST_ERROR).apply();
+                            "POSICIÓN NORMAL CONFIRMADA · REVERSA MANUAL. "+
+                            "Sin pulsos pendientes. Tocá REVERSA para AUTO.")
+                        .remove(LAST_ERROR).commit();
+                    if(!saved)
+                        throw new IllegalStateException(
+                            "Android no pudo guardar referencia");
+                }catch(InterruptedException ex){
+                    Thread.currentThread().interrupt();
+                    prefs().edit().putString(STATUS,
+                        "NO SE CONFIRMÓ: interrupción al detener el monitor")
+                        .apply();
                 }catch(Exception ex){
                     String reason=ex.getMessage()==null?
                         ex.getClass().getSimpleName():ex.getMessage();
                     prefs().edit().putBoolean(AUTO,false)
-                        .putString(STATUS,"NO SE CONFIRMÓ LA REFERENCIA: "+reason+
-                            ". Espejos permanecen sin posición validada.").apply();
+                        .putString(STATUS,"NO SE CONFIRMÓ: "+reason+
+                            ". Espejos permanecen sin referencia validada.")
+                        .apply();
                 }finally{
                     if(check!=null)check.close();
+                    referenceConfirming=false;
                     running=false;
                     prefs().edit().putBoolean(SERVICE_ACTIVE,false).apply();
                     stopForeground(STOP_FOREGROUND_REMOVE);
                     stopSelf(startId);
                 }
             },"T1-Mirror-Reference-Acknowledge");
-            worker.start();
+            worker=acknowledge;
+            acknowledge.start();
+            return START_NOT_STICKY;
+        }
+        if(referenceConfirming){
+            prefs().edit().putString(STATUS,
+                "Confirmación de espejos en curso; no se inicia otra orden")
+                .apply();
             return START_NOT_STICKY;
         }
         if(ACTION_STOP.equals(action)||ACTION_MANUAL.equals(action)){
@@ -443,8 +481,13 @@ public final class MirrorAutomationService extends Service {
             if(oem!=null)oem.close();
             running=false;
             prefs().edit().putBoolean(SERVICE_ACTIVE,false).apply();
-            stopForeground(STOP_FOREGROUND_REMOVE);
-            stopSelf();
+            // A reference confirmation may have asked us to terminate.
+            // It owns the foreground service until it has checked OEM P/0
+            // and stored the new NORMAL state; don't destroy it here.
+            if(!referenceConfirming){
+                stopForeground(STOP_FOREGROUND_REMOVE);
+                stopSelf();
+            }
         }
     }
     /** Exactly one logged counter change AFTER releasing each pulse.
