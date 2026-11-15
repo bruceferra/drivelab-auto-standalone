@@ -31,6 +31,7 @@ public final class T1OemMicrophoneService extends Service {
     static final String STATUS="status";
     static final String LAST_EVENT="last_event";
     static final String LAST_VOICE_STATUS="last_voice_status";
+    static final String UNIFIED_WHEEL_CONFIGURED="unified_wheel_configured";
     static final String ACTION_START="drivelab.oem.mic.START";
     static final String ACTION_STOP="drivelab.oem.mic.STOP";
     private static final String CHANNEL="drivelab_t1_oem_mic";
@@ -70,6 +71,18 @@ public final class T1OemMicrophoneService extends Service {
             return START_NOT_STICKY;
         }
         if(!started){
+            // One-time transition from Receiver 0.3.1: mic was enabled
+            // but wheel had been intentionally disabled by the old UI
+            // because two Binder registrations competed. Enable Waze-only
+            // dispatch ONCE; subsequent user wheel OFF remains respected.
+            if(!prefs(this).getBoolean(UNIFIED_WHEEL_CONFIGURED,false)){
+                getSharedPreferences(T1WazeWheelService.PREFS,MODE_PRIVATE)
+                    .edit().putBoolean(T1WazeWheelService.ENABLED,true)
+                    .putBoolean(T1WazeWheelService.OEM_BINDER_ENABLED,true)
+                    .apply();
+                prefs(this).edit()
+                    .putBoolean(UNIFIED_WHEEL_CONFIGURED,true).apply();
+            }
             // ONE OEM callback; old Waze listener stays in Accessibility but
             // receives wheel events forwarded by this same registered Binder.
             T1WazeWheelService.releaseForSharedMicrophone();
