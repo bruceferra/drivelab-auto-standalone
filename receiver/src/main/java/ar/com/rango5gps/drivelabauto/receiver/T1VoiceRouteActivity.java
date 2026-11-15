@@ -144,6 +144,19 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         status.setTextIsSelectable(true);
         audioStatus=label(root,"AUDIO: comprobando voz de Android…",
             13,T1JetourTheme.MUTED);
+        button(root,"⚙️ AJUSTES DE VOZ ANDROID (TTS)",
+            T1JetourTheme.PANEL_HI,this::openTtsConfiguration);
+        button(root,"REINTENTAR MOTOR DE VOZ",
+            T1JetourTheme.PANEL_HI,()->{
+                if(speaker!=null){
+                    try{speaker.stop();speaker.shutdown();}
+                    catch(RuntimeException ignored){}
+                    speaker=null;
+                }
+                ttsReady=false;ttsWaitStarted=0L;
+                showAudio("reintentando inicialización TTS…");
+                initSpeechOutput();
+            });
         button(root,"🔊 PROBAR / REPETIR AUDIO",
             T1JetourTheme.PANEL_HI,()->{
                 if(lastAudible==null||lastAudible.isEmpty())
@@ -341,7 +354,9 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         if(isFinishing()||isDestroyed())return;
         if(results==null||results.isEmpty()||
                 results.get(0)==null||results.get(0).trim().isEmpty()){
-            status.setText("No se reconoció el mensaje. Reintentá.");return;
+            status.setText("No se reconoció el mensaje. Reintentá.");
+            finishQuietAfterError("Micrófono escuchó sin resultados útiles.");
+            return;
         }
         String said=results.get(0).trim();
         if(heard!=null)heard.setText("ESCUCHÉ: "+said);
@@ -517,6 +532,35 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
             }
         });
     }
+    /** Android's TTS engine configuration is a user choice, not a
+     * phantom permission that DriveLab can grant itself. AOSP Settings may
+     * expose this action, while some Jetour ROM builds omit it.
+     */
+    private void openTtsConfiguration(){
+        Intent open=new Intent("com.android.settings.TTS_SETTINGS");
+        try{
+            if(open.resolveActivity(getPackageManager())!=null){
+                startActivity(open);
+                showAudio("Ajustes de voz abiertos: seleccioná motor TTS "+
+                    "e instalá voz española, después tocá REINTENTAR.");
+                return;
+            }
+            Intent install=new Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA);
+            if(install.resolveActivity(getPackageManager())!=null){
+                startActivity(install);
+                showAudio("Instalación de datos de voz solicitada; "+
+                    "reintentá el motor después de completar.");
+                return;
+            }
+            showAudio("Esta ROM no expone Ajustes de voz ni instalador "+
+                "de datos TTS. Debe habilitarse un motor compatible "+
+                "desde Ajustes/Aplicaciones de Android.");
+        }catch(RuntimeException ex){
+            showAudio("Jetour bloqueó ajustes de voz: "+
+                ex.getClass().getSimpleName());
+        }
+    }
+
     private void initSpeechOutput(){
         try{
             // OnInit may race with assignment of speaker; marshal the
