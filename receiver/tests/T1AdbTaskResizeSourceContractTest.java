@@ -35,6 +35,8 @@ public final class T1AdbTaskResizeSourceContractTest {
               resize.contains("command(waze.id,left)")&&
               resize.contains("command(maps.id,right)")&&
               resize.contains("taskList(c)")&&
+              resize.contains("String alternative=T1LocalAdbClient.shell(c,")&&
+              resize.contains("\"dumpsys activity activities\"")&&
               resize.contains("wazeNow.bounds.near(wazeBox,20)")&&
               resize.contains("mapsNow.bounds.near(mapsBox,20)")&&
               resize.contains("if(!parked(c))")&&
@@ -44,6 +46,7 @@ public final class T1AdbTaskResizeSourceContractTest {
               !resize.contains("am task resize 0 "),
               "Resize only verified Waze/Maps task IDs in selected display and parked vehicle");
         check(policy.contains("if(!T1ClusterAdbResize.enabled(c))")&&
+              policy.contains("T1ClusterAdbResize.apply(c,")&&
               policy.contains("MODE_SPLIT.equals(mode(c))?WAZE:")&&
               policy.contains("if(verified==0||verified<time)return false")&&
               policy.contains("T1Adb") == false,
