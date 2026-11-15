@@ -50,7 +50,8 @@ final class T1LocalAdbClient {
         if(!command.equals("am stack list")&&
            !command.equals("dumpsys activity activities")&&
            !command.matches(
-              "am task resize [1-9][0-9]{0,6}( [0-9]{1,5}){4}"))
+              "am task resize [1-9][0-9]{0,6}( [0-9]{1,5}){4}")&&
+           !command.matches("am task remove [1-9][0-9]{0,6}"))
             throw new SecurityException("Comando ADB no permitido");
         try(Socket sock=new Socket()){
             sock.connect(new InetSocketAddress(LOOPBACK,PORT),3000);
