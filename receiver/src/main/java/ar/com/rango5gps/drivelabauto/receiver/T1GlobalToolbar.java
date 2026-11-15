@@ -411,12 +411,15 @@ final class T1GlobalToolbar {
                 .apply();
             refreshCluster();
             T1ClusterAdbResize.closeClusterApps(owner,(message,confirmed)->{
-                if(!foreground)return;
+                // Persist the result even when DriveLab is temporarily
+                // backgrounded during the task removal on Display 1.
                 T1ClusterWazeRouter.prefs(owner).edit()
                     .putBoolean(T1ClusterWazeRouter.CLOSE_PENDING,!confirmed)
                     .putString(T1ClusterWazeRouter.STATUS,message).apply();
-                refreshCluster();
-                note(message);
+                if(foreground){
+                    refreshCluster();
+                    note(message);
+                }
             });
             return;
         }
