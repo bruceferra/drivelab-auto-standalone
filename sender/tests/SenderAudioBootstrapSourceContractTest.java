@@ -51,6 +51,18 @@ public final class SenderAudioBootstrapSourceContractTest {
             activity.contains("getBondedDevices()")&&
             !activity.contains("getRemoteDevice(\"00:"),
             "Require one explicit selection, never invent vehicle Bluetooth address");
+        int pickerStart=activity.indexOf("private void chooseCarAudio(){");
+        int pickerEnd=activity.indexOf("private void testCarAudio(){",pickerStart);
+        must(pickerStart>=0&&pickerEnd>pickerStart,
+            "Bluetooth selection Activity must exist");
+        String picker=activity.substring(pickerStart,pickerEnd);
+        int dialogStart=picker.indexOf(".setTitle(\"ELEGIR T1");
+        int choices=picker.indexOf(".setItems(labels.toArray(",dialogStart);
+        must(dialogStart>=0&&choices>dialogStart&&
+            !picker.substring(dialogStart,choices).contains(".setMessage(")&&
+            picker.contains("ACTION_BLUETOOTH_SETTINGS")&&
+            picker.contains("openBluetoothSettings()"),
+            "Xiaomi AlertDialog must SHOW bonded-device list, not hide it behind setMessage");
         must(!bridge.contains("com.spotify.music")&&
             !bridge.contains("MediaController.TransportControls")&&
             !bridge.contains("setBluetoothA2dpOn("),

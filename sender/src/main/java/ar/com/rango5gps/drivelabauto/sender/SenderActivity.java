@@ -88,6 +88,11 @@ public final class SenderActivity extends Activity {
         title(body,"Bluetooth emparejado: "+selected+
             "\nPrueba automática: "+(enabled?"ACTIVA (solo la T1)":"NO CONFIGURADA")+
             "\nÚltima prueba: "+audio.getString(SenderAudioBootstrap.STATUS,"Sin prueba"),13);
+        title(body,"El selector muestra ÚNICAMENTE dispositivos "+
+            "que ya están emparejados con el Xiaomi. Si la T1 no aparece, "+
+            "abrí Ajustes Bluetooth y emparejala allí; después volvé "+
+            "a seleccionar la T1 en DriveLab. No es la vinculación Wi-Fi "+
+            "del Receiver.",13);
         title(body,"La primera vez elegí el Bluetooth REAL de la T1. "+
             "Cuando el Xiaomi detecte su conexión A2DP, Sender intentará "+
             "una reproducción suave de 1,4 segundos, sin abrir Spotify. "+
@@ -95,6 +100,8 @@ public final class SenderActivity extends Activity {
             "El resultado físico aún debe probarse.",13);
         button(body,"1 · ELEGIR T1 EMPAREJADA · ACTIVAR AUTO",
             this::chooseCarAudio);
+        button(body,"ABRIR AJUSTES BLUETOOTH DEL XIAOMI",
+            this::openBluetoothSettings);
         button(body,"2 · PROBAR AHORA · SIN ABRIR SPOTIFY",
             this::testCarAudio);
         if(enabled)button(body,"DESACTIVAR INICIO DE AUDIO T1",
@@ -249,12 +256,22 @@ public final class SenderActivity extends Activity {
             info("Falta autorizar Dispositivos cercanos");return;
         }
         if(devices.isEmpty()){
-            info("No hay dispositivos Bluetooth emparejados: "+
-                "primero vinculá la Jetour en Ajustes Bluetooth");return;
+            new AlertDialog.Builder(this)
+                .setTitle("NINGÚN BLUETOOTH EMPAREJADO")
+                .setMessage("El selector solo muestra equipos ya vinculados "+
+                    "con Android. Primero emparejá la Jetour T1 desde "+
+                    "Ajustes Bluetooth del Xiaomi y volvé a elegirla.")
+                .setNegativeButton("CANCELAR",null)
+                .setPositiveButton("ABRIR BLUETOOTH",(d,w)->
+                    openBluetoothSettings())
+                .show();
+            return;
         }
-        new AlertDialog.Builder(this).setTitle("ELEGIR SOLO LA JETOUR T1")
-            .setMessage("Seleccioná el dispositivo Bluetooth del auto, "+
-                "no auriculares, otra radio ni el Wi-Fi Receiver.")
+        // DO NOT mix setMessage() and setItems(): Android's AlertDialog
+        // silently hides the selectable device list (only CANCELAR remains).
+        // This caused the exact Xiaomi 17T Pro bug reported in Sender 0.2.17.
+        new AlertDialog.Builder(this)
+            .setTitle("ELEGIR T1 · "+devices.size()+" DISPOSITIVOS")
             .setItems(labels.toArray(new String[0]),(dialog,which)->{
                 BluetoothDevice chosen=devices.get(which);
                 try{
@@ -274,7 +291,20 @@ public final class SenderActivity extends Activity {
                     info("Android impidió guardar selección Bluetooth");
                 }
             })
+            .setNeutralButton("AJUSTES BLUETOOTH",(dialog,which)->
+                openBluetoothSettings())
             .setNegativeButton("CANCELAR",null).show();
+    }
+    /** System pairing UI: app only chooses an already-bonded car, it never
+     * scans or initiates Bluetooth pairing to an unknown address. */
+    private void openBluetoothSettings(){
+        try{
+            startActivity(new Intent(
+                android.provider.Settings.ACTION_BLUETOOTH_SETTINGS));
+        }catch(RuntimeException error){
+            info("Android no pudo abrir Ajustes Bluetooth: "+
+                error.getClass().getSimpleName());
+        }
     }
     private void testCarAudio(){
         if(!hasBtPermission()){
