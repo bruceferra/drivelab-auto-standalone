@@ -41,6 +41,13 @@ public final class T1UnifiedWheelQuietVoiceSourceContractTest {
             wheel.contains("WAZE.equals(")&&
             wheel.contains("getWindowsOnAllDisplays()"),
             "Waze-only screen controls must share mic binding, never double subscribe");
+        require(wheel.contains("zoomVisibleWazeMap(root,forward)")&&
+            wheel.contains("wazeDisplayId!=display.getDisplayId()")&&
+            wheel.contains("setDisplayId(wazeDisplayId)")&&
+            wheel.contains("fingerA,0,240L")&&
+            wheel.contains("fingerB,0,240L")&&
+            wheel.contains("getBoolean(ZOOM_MAP,true)"),
+            "OEM wheel map zoom only targets the visible Waze window on selected display");
         require(mic.contains("UNIFIED_WHEEL_CONFIGURED")&&
             layout.contains("UNIFIED_WHEEL_CONFIGURED")&&
             layout.contains("putBoolean(T1WazeWheelService.ENABLED,true)")&&
