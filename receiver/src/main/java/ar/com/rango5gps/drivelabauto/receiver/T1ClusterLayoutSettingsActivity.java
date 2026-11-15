@@ -173,7 +173,7 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
         if(preview==null)return;
         String mode=T1ClusterLayoutPolicy.mode(this);
         int ratio=T1ClusterLayoutPolicy.number(this,
-            T1ClusterLayoutPolicy.SPLIT_PERCENT,60,30,70);
+            T1ClusterLayoutPolicy.SPLIT_PERCENT,50,30,70);
         int w=T1ClusterLayoutPolicy.number(this,
             T1ClusterLayoutPolicy.WIDTH,70,30,100);
         int h=T1ClusterLayoutPolicy.number(this,
