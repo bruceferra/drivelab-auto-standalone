@@ -343,10 +343,16 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
                         originalSplit==T1ClusterLayoutPolicy.number(this,
                             T1ClusterLayoutPolicy.SPLIT_PERCENT,50,30,70);
                     if(ok&&same&&!full){
-                        cfg().edit().putLong(T1ClusterLayoutPolicy.TEST_AT,
-                            System.currentTimeMillis())
-                            .putString(T1ClusterLayoutPolicy.TEST_MODE,
-                                originalMode).apply();
+                        // Same timestamp as the measured ADB bounds.
+                        // Setting TEST_AT later than VERIFIED_AT would make
+                        // enableAfterTest() reject every successful 50/50.
+                        long verifiedAt=cfg().getLong(
+                            T1ClusterAdbResize.VERIFIED_AT,0L);
+                        if(verifiedAt>0L)
+                            cfg().edit().putLong(
+                                T1ClusterLayoutPolicy.TEST_AT,verifiedAt)
+                                .putString(T1ClusterLayoutPolicy.TEST_MODE,
+                                    originalMode).apply();
                     }
                     T1ClusterWazeRouter.status(this,message);
                     render();
