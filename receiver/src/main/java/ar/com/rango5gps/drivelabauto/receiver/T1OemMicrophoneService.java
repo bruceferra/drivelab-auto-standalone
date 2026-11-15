@@ -30,6 +30,7 @@ public final class T1OemMicrophoneService extends Service {
     static final String ENABLED="enabled";
     static final String STATUS="status";
     static final String LAST_EVENT="last_event";
+    static final String LAST_VOICE_STATUS="last_voice_status";
     static final String ACTION_START="drivelab.oem.mic.START";
     static final String ACTION_STOP="drivelab.oem.mic.STOP";
     private static final String CHANNEL="drivelab_t1_oem_mic";
@@ -69,17 +70,9 @@ public final class T1OemMicrophoneService extends Service {
             return START_NOT_STICKY;
         }
         if(!started){
-            // The same callback registration may be exclusive on this ROM.
-            // Do not compete with DriveLab's own Waze wheel OEM callback.
-            boolean wheel=getSharedPreferences(T1WazeWheelService.PREFS,
-                MODE_PRIVATE).getBoolean(
-                    T1WazeWheelService.OEM_BINDER_ENABLED,false);
-            if(wheel){
-                status(this,"BLOQUEADO: desactivá primero el puente OEM de "+
-                    "la ruedita Waze; el Binder podría admitir un solo receptor.");
-                stopSelf();
-                return START_NOT_STICKY;
-            }
+            // ONE OEM callback; old Waze listener stays in Accessibility but
+            // receives wheel events forwarded by this same registered Binder.
+            T1WazeWheelService.releaseForSharedMicrophone();
             startForeground(NOTIFICATION_ID,notification());
             started=true;
             bridge.start();
@@ -99,6 +92,11 @@ public final class T1OemMicrophoneService extends Service {
     private void handleHardKey(int code,int action,int extra){
         // The original APK invokes voice only for 1010 + action 100.
         // 101 is release; 1000-1003 stay reserved for wheel/OK/BACK.
+        if(code>=1000&&code<=1003){
+            T1WazeWheelService.dispatchFromSharedMicrophone(
+                this,code,action,extra);
+            return;
+        }
         if(code!=KEY_MIC)return;
         prefs(this).edit().putString(LAST_EVENT,
             "key="+code+" action="+action+" extra="+extra).apply();
@@ -107,7 +105,7 @@ public final class T1OemMicrophoneService extends Service {
         if(now-lastKeyAt<1200L)return;
         lastKeyAt=now;
         Intent open=new Intent(this,T1VoiceRouteActivity.class)
-            .setAction(T1VoiceRouteActivity.ACTION_SHORTCUT_GOOGLE_RECOGNITION)
+            .setAction(T1VoiceRouteActivity.ACTION_OEM_QUIET_RECOGNITION)
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|
                 Intent.FLAG_ACTIVITY_SINGLE_TOP|
                 Intent.FLAG_ACTIVITY_CLEAR_TOP);
@@ -122,8 +120,8 @@ public final class T1OemMicrophoneService extends Service {
                 return;
             }
             startActivity(open);
-            status(this,"MICRÓFONO 1010/100: reconocimiento Google "+
-                "solicitado; verificar escucha en la pantalla.");
+            status(this,"MICRÓFONO 1010/100: reconocimiento interno "+
+                "solicitado, sin abrir reconocedor externo Google.");
         }catch(RuntimeException ex){
             status(this,"Micrófono recibido, pero Android rechazó abrir "+
                 "el reconocedor: "+ex.getClass().getSimpleName());
@@ -136,7 +134,7 @@ public final class T1OemMicrophoneService extends Service {
         Notification alert=new Notification.Builder(this,CHANNEL)
             .setSmallIcon(android.R.drawable.ic_btn_speak_now)
             .setContentTitle("Micrófono DriveLab reconocido")
-            .setContentText("Tocá para abrir reconocimiento si Android lo bloqueó")
+            .setContentText("Tocá para iniciar voz DriveLab si Android bloqueó el inicio")
             .setAutoCancel(true).setContentIntent(tap).build();
         getSystemService(NotificationManager.class).notify(7803,alert);
     }
