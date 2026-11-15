@@ -133,6 +133,90 @@ final class T1ClusterAdbResize {
             }
         },"T1-ADB-restore-Waze-fullscreen").start();
     }
+    /** Return the physical cluster to its underneath OEM content by
+     * CLOSING ONLY those Waze/Maps tasks positively identified on the
+     * previously selected secondary display. This does NOT run HOME or
+     * kill any process, and it cannot guarantee the OEM paints a particular
+     * screen until the owner visually checks it.
+     * Called after cluster routing is disabled; no new trips are launched.
+     */
+    static void closeClusterApps(Context c,Done done){
+        Context app=c.getApplicationContext();
+        if(!enabled(app)){
+            deliver(app,"CIERRE PENDIENTE: puente ADB local sin activar. "+
+                "DriveLab dejó de enviar Waze al clúster, pero no puede "+
+                "cerrar las tareas de otra aplicación sin autorización ADB. "+
+                "Habilitá ADB o cerrá el módulo desde el sistema OEM.",
+                false,done);
+            return;
+        }
+        new Thread(()->{
+            String result;
+            boolean success=false;
+            try{
+                if(!parked(app))
+                    throw new IllegalStateException(
+                        "Cierre de ventanas solo con T1 detenida en P/0");
+                Display display=T1ClusterWazeRouter.selected(app);
+                if(display==null||display.getDisplayId()<=0)
+                    throw new IllegalStateException(
+                        "Display de clúster seleccionado no disponible");
+                int id=display.getDisplayId();
+                String list=taskList(app);
+                List<T1AdbTaskParser.Task> tasks=
+                    T1AdbTaskParser.scan(list);
+                if(tasks.isEmpty())
+                    throw new IllegalStateException(
+                        "ADB no expone IDs y display de las tareas; "+
+                        "sin cierre a ciegas");
+                for(String pkg:new String[]{WAZE,MAPS}){
+                    int count=0;
+                    for(T1AdbTaskParser.Task t:tasks)
+                        if(t.display==id&&t.app.equals(pkg))count++;
+                    if(count>1)
+                        throw new IllegalStateException(
+                            "Múltiples tareas "+pkg+
+                            " en clúster: cierre bloqueado");
+                }
+                int removed=0;
+                for(String pkg:new String[]{WAZE,MAPS}){
+                    // Requery immediately before each change so we never
+                    // act on an old ID reused by an OEM task.
+                    String now=taskList(app);
+                    T1AdbTaskParser.Task task=
+                        T1AdbTaskParser.unique(now,id,pkg);
+                    if(task==null)continue;
+                    if(!parked(app))
+                        throw new IllegalStateException(
+                            "Se abandonó P: cierre interrumpido");
+                    String output=T1LocalAdbClient.shell(app,
+                        "am task remove "+task.id);
+                    if(errorOutput(output))
+                        throw new IllegalStateException(
+                            "Android rechazó cerrar "+pkg+": "+output);
+                    removed++;
+                }
+                Thread.sleep(350L);
+                String after=taskList(app);
+                if(T1AdbTaskParser.unique(after,id,WAZE)!=null||
+                   T1AdbTaskParser.unique(after,id,MAPS)!=null)
+                    throw new IllegalStateException(
+                        "Waze/Maps todavía tienen tareas en Display "+id);
+                success=true;
+                result="TAREAS CERRADAS POR ADB ("+removed+
+                    ") en Display "+id+
+                    ". Comprobá físicamente que se recuperó "+
+                    "el tablero OEM; no se modificó su HOME.";
+            }catch(InterruptedException e){
+                Thread.currentThread().interrupt();
+                result="Cierre interrumpido: revisar tablero físicamente";
+            }catch(Exception e){
+                result="CIERRE NO CONFIRMADO: "+
+                    T1LocalAdbClient.connectivityHint(e);
+            }
+            deliver(app,result,success,done);
+        },"T1-Cluster-ADB-Safe-Close").start();
+    }
     private static boolean errorOutput(String s){
         String l=s.toLowerCase(java.util.Locale.ROOT);
         return l.contains("permission denial")||
