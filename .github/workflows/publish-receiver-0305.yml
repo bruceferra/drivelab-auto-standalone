@@ -2,7 +2,7 @@ name: Signed Receiver 0.3.5 - mirror pulse 140ms 20ms neutral
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/publish-receiver-0304.yml']
+    paths: ['.github/workflows/publish-receiver-0305.yml']
   workflow_dispatch:
 permissions:
   contents: write
