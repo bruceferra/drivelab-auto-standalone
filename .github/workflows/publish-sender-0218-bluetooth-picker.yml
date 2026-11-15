@@ -45,15 +45,23 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = bruceferra/drivelab-auto-standalone
-          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/v0.2.18" --jq '.tag_name' 2>/dev/null || gh release view v0.2.18 --json tagName --jq .tagName)" = v0.2.18
-          ! gh release view v0.2.18 --json assets --jq '.assets[].name' | grep -Fxq 'DriveLab-Auto-Sender-v0.2.18.apk'
+          echo 'Verificando release histórico v0.2.18…'
+          gh release view v0.2.18 --json tagName --jq .tagName
+          test "$(gh release view v0.2.18 --json tagName --jq .tagName)" = "v0.2.18"
+          if gh release view v0.2.18 --json assets --jq '.assets[].name' | grep -Fxq 'DriveLab-Auto-Sender-v0.2.18.apk'; then
+            echo 'Error: ya está publicado Sender 0.2.18; no sobrescribir APK firmada'
+            exit 1
+          fi
+          echo 'Histórico OK; descargando firma Sender previa…'
           mkdir -p /tmp/sender-old /tmp/sender-tests output
           gh release download v0.2.17 --pattern 'DriveLab-Auto-Sender-v0.2.17.apk' --dir /tmp/sender-old
+          echo 'Firma anterior descargada; ejecutando contrato de selector…'
           javac -encoding UTF-8 -d /tmp/sender-tests \
             sender/tests/SenderAudioBootstrapSourceContractTest.java \
             sender/tests/SenderBluetoothPickerSourceContractTest.java
           java -cp /tmp/sender-tests ar.com.rango5gps.drivelabauto.sender.SenderAudioBootstrapSourceContractTest
           java -cp /tmp/sender-tests ar.com.rango5gps.drivelabauto.sender.SenderBluetoothPickerSourceContractTest
+          echo 'Contratos Sender pasados; compilando APK firmada…'
           gradle --no-daemon :sender:assembleRelease
           apk=sender/build/outputs/apk/release/sender-release.apk
           test -s "$apk"
