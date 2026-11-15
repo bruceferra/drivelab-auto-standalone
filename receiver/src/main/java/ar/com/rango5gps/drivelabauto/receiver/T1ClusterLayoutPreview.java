@@ -11,7 +11,7 @@ import android.view.View;
 final class T1ClusterLayoutPreview extends View {
     private final Paint pen=new Paint(Paint.ANTI_ALIAS_FLAG);
     private String mode="FULL";
-    private int split=60,width=70,height=70,x=0,y=0;
+    private int split=50,width=70,height=70,x=0,y=0;
     private String first="Waze",second="Google Maps";
     T1ClusterLayoutPreview(Context c){
         super(c);setMinimumHeight(160);

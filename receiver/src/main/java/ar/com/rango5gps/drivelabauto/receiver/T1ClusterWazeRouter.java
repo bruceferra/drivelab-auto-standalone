@@ -33,6 +33,8 @@ final class T1ClusterWazeRouter {
     static final String APP_PACKAGE="app_package";
     static final String APP_LABEL="app_label";
     static final String STATUS="status";
+    static final String CLOSE_PENDING="cluster_close_pending";
+    static final String VISUAL_OEM_CONFIRMED="cluster_oem_visually_confirmed";
     static final String LAST_REQUEST_MS="last_request_ms";
     private static final String WAZE="com.waze";
     private T1ClusterWazeRouter(){}

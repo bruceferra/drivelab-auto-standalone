@@ -50,10 +50,26 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
             " · "+cfg().getString(T1ClusterWazeRouter.DISPLAY_NAME,"sin elegir")+
             "\nAplicación principal: "+
                 T1ClusterWazeRouter.selectedAppLabel(this),15);
-        text("Estas opciones se basan en el APK T1Launcher T1N134: "+
-            "setLaunchBounds + setLaunchWindowingMode(5). "+
-            "La ROM puede bloquear ventanas libres o ignorar el tamaño. "+
-            "La ruta Waze a pantalla completa sigue siendo la predeterminada.",13);
+        text("T1Launcher T1N134 usa setLaunchBounds para abrir y "+
+            "después ADB «am task resize» para ajustar la tarea REAL. "+
+            "DriveLab ahora verifica los límites de Waze y Google Maps "+
+            "en el Display elegido. Sin puente ADB autorizado se "+
+            "conserva Waze pantalla completa.",13);
+        boolean adb=T1ClusterAdbResize.enabled(this);
+        text("PUENTE ADB LOCAL 127.0.0.1:5555: "+
+            (adb?"ACTIVADO":"DESACTIVADO")+
+            "\n"+cfg().getString(T1ClusterAdbResize.RESULT,
+                "Sin prueba ADB realizada"),13);
+        button(adb?"DESACTIVAR PUENTE ADB LOCAL":
+            "HABILITAR PUENTE ADB LOCAL (SIN ROOT)",
+            this::toggleLocalAdb);
+        button("PROBAR CONEXIÓN ADB LOCAL",this::probeLocalAdb);
+        text("Preparación una sola vez: conectá la T1 por USB a "+
+            "una PC con ADB autorizado; ejecutá «adb tcpip 5555» "+
+            "desde esa PC. Después aceptá en la T1 la clave de "+
+            "depuración de DriveLab. Puede requerirse repetirlo "+
+            "al reiniciar la T1. Usalo solo en una red de confianza "+
+            "y apagá ADB TCP al terminar las pruebas.",12);
         String mode=T1ClusterLayoutPolicy.mode(this);
         boolean applied=T1ClusterLayoutPolicy.active(this);
         text("Modo elegido: "+("FULL".equals(mode)?"PANTALLA COMPLETA":
@@ -79,12 +95,16 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
             slider("Posición vertical",T1ClusterLayoutPolicy.Y,0,0,100,1);
         }
         if(T1ClusterLayoutPolicy.MODE_SPLIT.equals(mode)){
-            slider("Porcentaje ventana izquierda",
-                T1ClusterLayoutPolicy.SPLIT_PERCENT,60,30,70,1);
-            text("Izquierda: "+T1ClusterWazeRouter.selectedAppLabel(this)+
-                " · Derecha: "+T1ClusterLayoutPolicy.secondLabel(this)+
-                ". Para cambiar la app izquierda usá ELEGIR APLICACIÓN "+
-                "DEL CLÚSTER en la pantalla anterior.",14);
+            slider("Porcentaje ventana izquierda · WAZE",
+                T1ClusterLayoutPolicy.SPLIT_PERCENT,50,30,70,1);
+            button("−10 % WAZE · +10 % GOOGLE MAPS",
+                ()->adjustSplit(-10));
+            button("+10 % WAZE · −10 % GOOGLE MAPS",
+                ()->adjustSplit(10));
+            text("Izquierda SIEMPRE Waze (navegación directa) · "+
+                "Derecha: "+T1ClusterLayoutPolicy.secondLabel(this)+
+                ". Los botones +10/−10 ajustan 30–70 %, con prueba "+
+                "inmediata SOLO si la T1 está detenida en P.",14);
             button("ELEGIR APP DERECHA",this::chooseSecondApp);
         }
         button("PROBAR DISEÑO EN DISPLAY · SOLO EN P Y 0 KM/H",
@@ -111,6 +131,12 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
             button("RESTABLECER PANTALLA COMPLETA",()->
                 chooseMode(T1ClusterLayoutPolicy.MODE_FULL));
         }
+        text("Estado ADB tamaño real: "+
+            cfg().getString(T1ClusterAdbResize.RESULT,
+                "No se intentó redimensionar")+
+            "\nÚltima verificación: "+
+            (cfg().getLong(T1ClusterAdbResize.VERIFIED_AT,0L)>0?
+                "hay medición de tareas":"NINGUNA"),13);
         text("Resultado: "+cfg().getString(T1ClusterWazeRouter.STATUS,
             "Ninguna prueba realizada"),13);
         text("MICRÓFONO FÍSICO · PROTOCOLO REAL DEL APK",19);
@@ -147,7 +173,7 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
         if(preview==null)return;
         String mode=T1ClusterLayoutPolicy.mode(this);
         int ratio=T1ClusterLayoutPolicy.number(this,
-            T1ClusterLayoutPolicy.SPLIT_PERCENT,60,30,70);
+            T1ClusterLayoutPolicy.SPLIT_PERCENT,50,30,70);
         int w=T1ClusterLayoutPolicy.number(this,
             T1ClusterLayoutPolicy.WIDTH,70,30,100);
         int h=T1ClusterLayoutPolicy.number(this,
@@ -223,6 +249,56 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
                 render();
             }).setNegativeButton("CANCELAR",null).show();
     }
+    private void toggleLocalAdb(){
+        if(T1ClusterAdbResize.enabled(this)){
+            T1ClusterAdbResize.enable(this,false);
+            render();
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("PUENTE ADB LOCAL · SIN ROOT")
+            .setMessage("Solo conecta con adbd en 127.0.0.1:5555 "+
+                "después de que vos lo habilites desde USB. "+
+                "Android pedirá autorizar la clave de DriveLab. "+
+                "La depuración TCP puede ser accesible desde "+
+                "la misma red Wi-Fi: probalo solamente en una red "+
+                "confiable y apagalo cuando no lo necesites. "+
+                "Solo se permite listar tareas y cambiar sus "+
+                "límites, nunca ejecutar comandos arbitrarios.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("HABILITAR", (dialog,which)->{
+                T1ClusterAdbResize.enable(this,true);
+                render();
+            }).show();
+    }
+    private void probeLocalAdb(){
+        if(!T1ClusterAdbResize.enabled(this)){
+            T1ClusterWazeRouter.status(this,
+                "Primero habilitá PUENTE ADB LOCAL.");
+            render();return;
+        }
+        T1ClusterWazeRouter.status(this,
+            "Conectando ADB 127.0.0.1:5555 (solo lectura)…");
+        render();
+        T1ClusterAdbResize.probe(this,(message,connected)->{
+            if(isFinishing()||isDestroyed())return;
+            T1ClusterWazeRouter.status(this,message);
+            render();
+        });
+    }
+    private void adjustSplit(int delta){
+        if(!T1ClusterLayoutPolicy.MODE_SPLIT.equals(
+            T1ClusterLayoutPolicy.mode(this)))return;
+        int old=T1ClusterLayoutPolicy.number(this,
+            T1ClusterLayoutPolicy.SPLIT_PERCENT,50,30,70);
+        T1ClusterLayoutPolicy.setPercent(this,
+            T1ClusterLayoutPolicy.SPLIT_PERCENT,
+            Math.max(30,Math.min(70,old+delta)),30,70);
+        render();
+        // Exactly the same P/0 guard as PROBAR DISEÑO. No shell
+        // commands or window repositioning while the car is moving.
+        testLayout();
+    }
     private void testLayout(){
         T1ClusterWazeRouter.status(this,
             "Verificando P y 0 km/h del OEM (solo lectura)…");
@@ -244,9 +320,48 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
             String result=failure;
             runOnUiThread(()->{
                 if(isFinishing()||isDestroyed())return;
-                T1ClusterWazeRouter.status(this,result==null?
-                    T1ClusterLayoutPolicy.test(this):result);
+                if(result!=null){
+                    T1ClusterWazeRouter.status(this,result);
+                    render();return;
+                }
+                String launch=T1ClusterLayoutPolicy.test(this);
+                T1ClusterWazeRouter.status(this,launch);
                 render();
+                boolean full=T1ClusterLayoutPolicy.MODE_FULL.equals(
+                    T1ClusterLayoutPolicy.mode(this));
+                if(!T1ClusterAdbResize.enabled(this)||(
+                    !full&&!launch.startsWith("APP SOLICITADA")))return;
+                // Real ADB measurements are asynchronous; never run an
+                // ADB socket or shell command on the Jetour UI thread.
+                String originalMode=T1ClusterLayoutPolicy.mode(this);
+                int originalSplit=T1ClusterLayoutPolicy.number(this,
+                    T1ClusterLayoutPolicy.SPLIT_PERCENT,50,30,70);
+                T1ClusterAdbResize.Done verified=(message,ok)->{
+                    if(isFinishing()||isDestroyed())return;
+                    boolean same=originalMode.equals(
+                        T1ClusterLayoutPolicy.mode(this))&&
+                        originalSplit==T1ClusterLayoutPolicy.number(this,
+                            T1ClusterLayoutPolicy.SPLIT_PERCENT,50,30,70);
+                    if(ok&&same&&!full){
+                        // Same timestamp as the measured ADB bounds.
+                        // Setting TEST_AT later than VERIFIED_AT would make
+                        // enableAfterTest() reject every successful 50/50.
+                        long verifiedAt=cfg().getLong(
+                            T1ClusterAdbResize.VERIFIED_AT,0L);
+                        if(verifiedAt>0L)
+                            cfg().edit().putLong(
+                                T1ClusterLayoutPolicy.TEST_AT,verifiedAt)
+                                .putString(T1ClusterLayoutPolicy.TEST_MODE,
+                                    originalMode).apply();
+                    }
+                    T1ClusterWazeRouter.status(this,message);
+                    render();
+                };
+                if(full)
+                    T1ClusterAdbResize.restoreFull(this,verified);
+                else T1ClusterAdbResize.apply(this,
+                    T1ClusterLayoutPolicy.MODE_SPLIT.equals(originalMode),
+                    1000L,verified);
             });
         },"T1-ClusterLayout-Park-ReadOnly").start();
     }
