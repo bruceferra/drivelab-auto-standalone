@@ -45,6 +45,14 @@ jobs:
           mkdir -p /tmp/t1-unified-voice
           javac -encoding UTF-8 -d /tmp/t1-unified-voice receiver/tests/T1UnifiedWheelQuietVoiceSourceContractTest.java
           java -cp /tmp/t1-unified-voice ar.com.rango5gps.drivelabauto.receiver.T1UnifiedWheelQuietVoiceSourceContractTest
+      - name: Mirror zero-pulse acknowledgement and one-tap cluster ON/OFF
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-mirror-cluster
+          javac -encoding UTF-8 -d /tmp/t1-mirror-cluster \
+            receiver/tests/T1MirrorAcknowledgeClusterToggleSourceContractTest.java
+          java -cp /tmp/t1-mirror-cluster ar.com.rango5gps.drivelabauto.receiver.T1MirrorAcknowledgeClusterToggleSourceContractTest
       - name: Real ADB Waze + Maps task split parser and security contract
         shell: bash
         run: |
