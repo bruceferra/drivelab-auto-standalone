@@ -39,8 +39,8 @@ public final class T1WheelOemBinderSourceContractTest {
         String mic=source("T1OemMicrophoneService.java");
         check(mic.contains("KEY_MIC=1010")&&
             mic.contains("if(action!=100||!started)return;")&&
-            mic.contains("T1VoiceRouteActivity.ACTION_SHORTCUT_GOOGLE_RECOGNITION")&&
-            mic.contains("T1WazeWheelService.OEM_BINDER_ENABLED"),
+            mic.contains("T1VoiceRouteActivity.ACTION_OEM_QUIET_RECOGNITION")&&
+            mic.contains("T1WazeWheelService.dispatchFromSharedMicrophone("),
             "Only genuine 1010/action100 starts voice and vendor Binder is not shared silently");
         check(bridge.contains("void start()")&&bridge.contains("void stop()")&&
             !bridge.contains("BOOT_COMPLETED")&&
@@ -59,7 +59,7 @@ public final class T1WheelOemBinderSourceContractTest {
             svc.contains("case 1001:mapped=KeyEvent.KEYCODE_DPAD_LEFT")&&
             svc.contains("case 1002:mapped=KeyEvent.KEYCODE_BACK")&&
             svc.contains("case 1003:mapped=KeyEvent.KEYCODE_DPAD_CENTER")&&
-            svc.contains("if(action!=100&&action!=101)return;"),
+            svc.contains("if(action!=100)return;"),
             "T1N134 wheel rotate/back/OK codes mapped correctly without reacting to other signals");
         check(svc.contains("if(confirm&&mapMenuArmed&&collectMapChoices(root))")&&
             svc.contains("mapMenuArmed=true;")&&
