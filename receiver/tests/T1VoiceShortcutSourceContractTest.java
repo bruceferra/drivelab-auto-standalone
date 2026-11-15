@@ -73,7 +73,8 @@ public final class T1VoiceShortcutSourceContractTest {
            voice.contains("speechReadyAt=android.os.SystemClock.uptimeMillis()+550L") &&
            voice.contains("voiceHandler.postDelayed(this::readQueuedSpeech,180L)") &&
            voice.contains("AUDIO: ") &&
-           voice.contains("🔊 PROBAR / REPETIR AUDIO"),
+           voice.contains("🔊 PROBAR / REPETIR AUDIO")&&
+           voice.contains("REINTENTAR MOTOR DE VOZ"),
             "Audio answer must defer recognizer focus, acquire multimedia focus, release on TTS completion and expose test control");
         ok(!voice.contains("transact(15"),
             "Voice entry never sends vehicle commands");

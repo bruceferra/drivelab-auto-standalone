@@ -28,6 +28,9 @@
         <!-- Required by Android 11+ target package visibility to initialize
              system TextToSpeech: without this the Jetour can be text-only. -->
         <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>
+        <!-- Optional user-triggered TTS settings/data installation on T1. -->
+        <intent><action android:name="com.android.settings.TTS_SETTINGS" /></intent>
+        <intent><action android:name="android.speech.tts.engine.INSTALL_TTS_DATA" /></intent>
         <!-- Android 11 app-visibility for platform speech recognition. -->
         <intent><action android:name="android.speech.RecognitionService" /></intent>
         <intent><action android:name="android.intent.action.ASSIST" /></intent>

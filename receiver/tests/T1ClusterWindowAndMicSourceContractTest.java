@@ -53,16 +53,18 @@ public final class T1ClusterWindowAndMicSourceContractTest {
         require(hardkey.contains("key==1010")&&
                 mic.contains("KEY_MIC=1010")&&
                 mic.contains("action!=100")&&
-                mic.contains("T1VoiceRouteActivity.ACTION_SHORTCUT_GOOGLE_RECOGNITION")&&
+                mic.contains("T1VoiceRouteActivity.ACTION_OEM_QUIET_RECOGNITION")&&
                 mic.contains("Settings.canDrawOverlays(this)")&&
                 mic.contains("lastKeyAt<1200L")&&
                 boot.contains("T1OemMicrophoneService.ENABLED")&&
                 boot.contains("startForegroundService("),
                 "Real mic key 1010 / down 100, explicit binding and boot restore");
-        require(mic.contains("T1WazeWheelService.OEM_BINDER_ENABLED")&&
-                layout.contains("BINDER OEM COMPARTIDO")&&
-                layout.contains("DESACTIVAR RUEDITA Y PROBAR MIC"),
-                "Avoid competing vendor hardkey callbacks without consent");
+        require(mic.contains("releaseForSharedMicrophone()")&&
+                mic.contains("dispatchFromSharedMicrophone(")&&
+                mic.contains("UNIFIED_WHEEL_CONFIGURED")&&
+                layout.contains("UNIFIED_WHEEL_CONFIGURED")&&
+                layout.contains("ruedita 1000–1003"),
+                "One shared OEM callback for mic 1010 and Waze-only wheel");
         require(!mic.contains("AudioRecord")&&
                 !mic.contains("MediaRecorder")&&
                 !mic.contains("su -c")&&

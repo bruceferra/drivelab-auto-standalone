@@ -38,6 +38,13 @@ jobs:
             common/src/main/java/ar/com/rango5gps/drivelabauto/common/MapLinks.java \
             common/tests/MapLinksTest.java
           java -cp /tmp/bridge-test MapLinksTest
+      - name: Unified physical voice and Waze wheel no-Google-popup regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-unified-voice
+          javac -encoding UTF-8 -d /tmp/t1-unified-voice receiver/tests/T1UnifiedWheelQuietVoiceSourceContractTest.java
+          java -cp /tmp/t1-unified-voice ar.com.rango5gps.drivelabauto.receiver.T1UnifiedWheelQuietVoiceSourceContractTest
       - name: T1 APK-derived microphone and split-window regression
         shell: bash
         run: |

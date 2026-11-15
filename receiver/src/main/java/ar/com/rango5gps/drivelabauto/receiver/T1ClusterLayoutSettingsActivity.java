@@ -125,14 +125,18 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
                 "sin diagnóstico")+
             "\nÚltima tecla: "+mic.getString(
                 T1OemMicrophoneService.LAST_EVENT,"ninguna")+
+            "\nReconocimiento / TTS: "+mic.getString(
+                T1OemMicrophoneService.LAST_VOICE_STATUS,
+                "todavía sin prueba interna")+
             "\nMostrar sobre otras apps: "+
                 (Settings.canDrawOverlays(this)?"AUTORIZADO":"NO AUTORIZADO"),14);
         button(enabled?"DESACTIVAR BOTÓN OEM MICRÓFONO":
             "ACTIVAR BOTÓN OEM MICRÓFONO",this::toggleMicrophone);
         button("ACTUALIZAR DIAGNÓSTICO",this::render);
-        text("Si T1Launcher vuelve a interceptar el mismo servicio OEM, "+
-            "apagá este puente. El puente opcional de ruedita OEM no "+
-            "funciona simultáneamente con este receptor por precaución.",12);
+        text("Un único enlace OEM recibe ahora micrófono 1010 "+
+            "y ruedita 1000–1003. Para que la rueda controle Waze también "+
+            "debe estar habilitado el servicio Android de Accesibilidad "+
+            "DriveLab · Waze y volante. No modifica Google Maps.",12);
         button("VOLVER",this::finish);
         setContentView(scroll);
     }
@@ -255,39 +259,30 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
             catch(RuntimeException ignored){}
             render();return;
         }
-        boolean wheel=getSharedPreferences(T1WazeWheelService.PREFS,
-            MODE_PRIVATE).getBoolean(
-                T1WazeWheelService.OEM_BINDER_ENABLED,false);
-        if(wheel){
-            new AlertDialog.Builder(this)
-                .setTitle("BINDER OEM COMPARTIDO")
-                .setMessage("Está activo el puente experimental de "+
-                    "ruedita a Waze. La ROM puede admitir un solo "+
-                    "receptor del volante. ¿Desactivar aquel puente para "+
-                    "probar primero el micrófono físico 1010?")
-                .setNegativeButton("CANCELAR",null)
-                .setPositiveButton("DESACTIVAR RUEDITA Y PROBAR MIC",
-                    (d,w)->{
-                        getSharedPreferences(T1WazeWheelService.PREFS,
-                            MODE_PRIVATE).edit()
-                            .putBoolean(T1WazeWheelService.OEM_BINDER_ENABLED,
-                                false).apply();
-                        enableMic();
-                    }).show();
-        }else enableMic();
+        enableMic();
     }
     private void enableMic(){
         new AlertDialog.Builder(this)
-            .setTitle("ACTIVAR MICRÓFONO OEM 1010")
+            .setTitle("ACTIVAR VOLANTE OEM UNIFICADO")
             .setMessage("Escucha solo la pulsación física, sin grabar "+
                 "audio en segundo plano. Al apretar, intenta abrir el "+
-                "reconocedor Google de DriveLab. Este callback pertenece "+
-                "al mismo servicio OEM usado por T1Launcher y puede "+
+                "reconocedor INTERNO de DriveLab sin ventana externa. "+
+                "El mismo Binder enviará rueda/OK/Atrás solo a los "+
+                "controles accesibles de Waze, si Accesibilidad está activa. "+
+                "T1Launcher y DriveLab pueden competir si ambos módulos "+
                 "entrar en conflicto si reactivás su módulo Cluster. "+
                 "Probalo detenido y verificá el diagnóstico.")
             .setNegativeButton("CANCELAR",null)
             .setPositiveButton("ACTIVAR", (d,w)->{
+                // One opt-in enables mic and Waze-only wheel routing.
+                // No control is sent to the vehicle. The wheel listener
+                // still requires explicitly installed Android Accessibility.
+                getSharedPreferences(T1WazeWheelService.PREFS,MODE_PRIVATE)
+                    .edit().putBoolean(T1WazeWheelService.ENABLED,true)
+                    .putBoolean(T1WazeWheelService.OEM_BINDER_ENABLED,true)
+                    .apply();
                 T1OemMicrophoneService.prefs(this).edit()
+                    .putBoolean(T1OemMicrophoneService.UNIFIED_WHEEL_CONFIGURED,true)
                     .putBoolean(T1OemMicrophoneService.ENABLED,true)
                     .putString(T1OemMicrophoneService.STATUS,
                         "Activando enlace OEM del botón 1010…").apply();

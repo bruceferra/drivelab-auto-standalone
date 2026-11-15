@@ -42,6 +42,12 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
     private static final int VOICE_REQUEST=7042, AUDIO_PERMISSION=7043;
     static final String ACTION_SHORTCUT_GOOGLE_RECOGNITION=
         "ar.com.rango5gps.drivelabauto.receiver.GOOGLE_RECOGNITION_SHORTCUT";
+    /** Physical 1010 button: transparent, internal SpeechRecognizer.
+     * Android still creates a foreground Activity to get mic permission/
+     * recognition; there is no third-party Google recognition pop-up.
+     */
+    static final String ACTION_OEM_QUIET_RECOGNITION=
+        "ar.com.rango5gps.drivelabauto.receiver.OEM_QUIET_RECOGNITION";
     private static final String GEMINI="com.google.android.apps.bard";
     private static final String CHATGPT="com.openai.chatgpt";
     private static final String PREF="t1_voice_router_v1";
@@ -55,7 +61,8 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
     private AudioManager audioManager;
     private AudioFocusRequest speechFocusRequest;
     private SpeechRecognizer recognizer;
-    private boolean listening,openingAssistant;
+    private boolean listening,openingAssistant,quietOem;
+    private long ttsWaitStarted;
     private final Handler voiceHandler=new Handler(Looper.getMainLooper());
     private boolean recognitionReady;
     private final Runnable recognitionTimeout=()->{
@@ -68,6 +75,7 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         if(status!=null)status.setText("El reconocimiento interno no responde "+
             "en esta T1. Usá HABLAR · VOZ DEL SISTEMA: abre el asistente "+
             "que sí escucha, sin repetir el toque.");
+        finishQuietAfterError("SpeechRecognizer sin respuesta tras 6,5 segundos.");
     };
     private TextToSpeech speaker;
     private boolean ttsReady;
@@ -97,7 +105,24 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         return CHATGPT.equals(packageId)?"ChatGPT":"Gemini";
     }
     @Override protected void onCreate(Bundle state){
+        quietOem=ACTION_OEM_QUIET_RECOGNITION.equals(
+            getIntent()==null?null:getIntent().getAction());
+        if(quietOem)setTheme(android.R.style.Theme_Translucent_NoTitleBar);
         super.onCreate(state);
+        if(quietOem){
+            // No screen-sized assistant nor floating Google dialog:
+            // a transparent Activity owns the microphone only for this
+            // physical press, and uses the SAME Waze/math/news dispatcher.
+            getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+            status=new TextView(this);
+            heard=new TextView(this);
+            audioStatus=new TextView(this);
+            status.setText("Reconocimiento interno solicitado");
+            audioStatus.setText("AUDIO: esperando motor TTS");
+            initSpeechOutput();
+            voiceHandler.postDelayed(this::listen,250L);
+            return;
+        }
         ScrollView sc=new ScrollView(this);
         sc.setFillViewport(true);
         sc.setBackground(T1JetourTheme.backdrop());
@@ -119,6 +144,19 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         status.setTextIsSelectable(true);
         audioStatus=label(root,"AUDIO: comprobando voz de Android…",
             13,T1JetourTheme.MUTED);
+        button(root,"⚙️ AJUSTES DE VOZ ANDROID (TTS)",
+            T1JetourTheme.PANEL_HI,this::openTtsConfiguration);
+        button(root,"REINTENTAR MOTOR DE VOZ",
+            T1JetourTheme.PANEL_HI,()->{
+                if(speaker!=null){
+                    try{speaker.stop();speaker.shutdown();}
+                    catch(RuntimeException ignored){}
+                    speaker=null;
+                }
+                ttsReady=false;ttsWaitStarted=0L;
+                showAudio("reintentando inicialización TTS…");
+                initSpeechOutput();
+            });
         button(root,"🔊 PROBAR / REPETIR AUDIO",
             T1JetourTheme.PANEL_HI,()->{
                 if(lastAudible==null||lastAudible.isEmpty())
@@ -156,7 +194,17 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         setIntent(intent);
         // Pressing physical OEM mic 1010 again while the voice screen is
         // already on top must still open a fresh recognition round.
-        if(intent!=null&&ACTION_SHORTCUT_GOOGLE_RECOGNITION.equals(
+        if(intent!=null&&ACTION_OEM_QUIET_RECOGNITION.equals(
+                intent.getAction())){
+            // Repeat after a press without ever launching Google UI.
+            if(recognizer!=null){
+                try{recognizer.cancel();recognizer.destroy();}
+                catch(RuntimeException ignored){}
+                recognizer=null;
+            }
+            listening=false;recognitionReady=false;
+            voiceHandler.postDelayed(this::listen,250L);
+        }else if(intent!=null&&ACTION_SHORTCUT_GOOGLE_RECOGNITION.equals(
                 intent.getAction()))
             voiceHandler.postDelayed(this::listenExternal,250L);
     }
@@ -171,6 +219,23 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
             "¿A dónde querés ir o qué querés preguntarle a la IA?");
         i.putExtra(RecognizerIntent.EXTRA_MAX_RESULTS,3);
         return i;
+    }
+    private void finishQuietAfterError(String reason){
+        if(!quietOem)return;
+        T1OemMicrophoneService.prefs(this).edit()
+            .putString(T1OemMicrophoneService.LAST_VOICE_STATUS,reason).apply();
+        voiceHandler.postDelayed(()->{
+            if(!isFinishing()&&!isDestroyed())finish();
+        },400L);
+    }
+    private void finishQuietIfNavigation(){
+        if(!quietOem)return;
+        T1OemMicrophoneService.prefs(this).edit()
+            .putString(T1OemMicrophoneService.LAST_VOICE_STATUS,
+                String.valueOf(status.getText())).apply();
+        voiceHandler.postDelayed(()->{
+            if(!isFinishing()&&!isDestroyed())finish();
+        },400L);
     }
     private void listen(){
         if(listening){
@@ -187,9 +252,10 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
             return;
         }
         if(!SpeechRecognizer.isRecognitionAvailable(this)){
-            status.setText("No hay servicio de reconocimiento integrado accesible. " +
-                "Abriendo la alternativa Android.");
-            listenExternal();
+            status.setText("No hay servicio de reconocimiento integrado accesible.");
+            if(quietOem)finishQuietAfterError(
+                "Sin servicio RecognitionService; no se abrió ventana externa.");
+            else listenExternal();
             return;
         }
         try{
@@ -216,12 +282,16 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
                     status.setText("El reconocedor interno devolvió "+code+
                         ". Tocá HABLAR de nuevo o usá MICRÓFONO EXTERNO. " +
                         "Si la ROM reserva el audio, este método puede fallar.");
+                    finishQuietAfterError("RecognitionService falló con código "+code+
+                        "; el micrófono OEM 1010 llegó.");
                 }
                 @Override public void onResults(Bundle b){
                     voiceHandler.removeCallbacks(recognitionTimeout);
                     listening=false;recognitionReady=false;
                     ArrayList<String> matches=b==null?null:
                         b.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION);
+                    // Let the recognizer release its audio route before TTS.
+                    speechReadyAt=android.os.SystemClock.uptimeMillis()+400L;
                     recognize(matches);
                 }
                 @Override public void onPartialResults(Bundle partial){
@@ -245,6 +315,8 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
             listening=false;recognitionReady=false;
             status.setText("La ROM no permitió escucha integrada ("+
                 e.getClass().getSimpleName()+"). Probá el micrófono externo.");
+            finishQuietAfterError("SpeechRecognizer no inició: "+
+                e.getClass().getSimpleName());
         }
     }
     @Override public void onRequestPermissionsResult(int requestCode,
@@ -253,9 +325,10 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         if(requestCode!=AUDIO_PERMISSION)return;
         if(granted.length>0&&granted[0]==PackageManager.PERMISSION_GRANTED)
             listen();
-        else
-            status.setText("Permiso de micrófono denegado; " +
-                "podés seguir con el reconocedor externo o teclado.");
+        else{
+            status.setText("Permiso de micrófono denegado para DriveLab.");
+            finishQuietAfterError("Permiso RECORD_AUDIO denegado.");
+        }
     }
     private void listenExternal(){
         try{
@@ -281,7 +354,9 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         if(isFinishing()||isDestroyed())return;
         if(results==null||results.isEmpty()||
                 results.get(0)==null||results.get(0).trim().isEmpty()){
-            status.setText("No se reconoció el mensaje. Reintentá.");return;
+            status.setText("No se reconoció el mensaje. Reintentá.");
+            finishQuietAfterError("Micrófono escuchó sin resultados útiles.");
+            return;
         }
         String said=results.get(0).trim();
         if(heard!=null)heard.setText("ESCUCHÉ: "+said);
@@ -300,6 +375,7 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
                 // authorization. Waze still resolves the actual location.
                 // Never treat arbitrary questions/numbers as destinations.
                 navigate(target);
+                finishQuietIfNavigation();
             }else{
                 // Keep an explicit confirm for typed test/manual actions.
                 confirmDestination(target);
@@ -391,6 +467,9 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
     }
     private void showAudio(String message){
         if(audioStatus!=null)audioStatus.setText("AUDIO: "+message);
+        if(quietOem)T1OemMicrophoneService.prefs(this).edit()
+            .putString(T1OemMicrophoneService.LAST_VOICE_STATUS,
+                "AUDIO: "+message).apply();
     }
     private void releaseSpeechFocus(){
         if(audioManager!=null&&speechFocusRequest!=null&&speechFocusHeld){
@@ -433,6 +512,15 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         runOnUiThread(()->{
             if(!id.equals(activeSpeechId))return;
             releaseSpeechFocus();
+            if(quietOem){
+                T1OemMicrophoneService.prefs(this).edit().putString(
+                    T1OemMicrophoneService.LAST_VOICE_STATUS,
+                    error==null?"TTS completó síntesis; comprobar audio del vehículo":
+                        "TTS falló: "+error).apply();
+                voiceHandler.postDelayed(()->{
+                    if(!isFinishing()&&!isDestroyed())finish();
+                },200L);
+            }
             if(error==null)
                 showAudio("Android finalizó la voz; verificar parlantes si no se oyó");
             else{
@@ -444,6 +532,35 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
             }
         });
     }
+    /** Android's TTS engine configuration is a user choice, not a
+     * phantom permission that DriveLab can grant itself. AOSP Settings may
+     * expose this action, while some Jetour ROM builds omit it.
+     */
+    private void openTtsConfiguration(){
+        Intent open=new Intent("com.android.settings.TTS_SETTINGS");
+        try{
+            if(open.resolveActivity(getPackageManager())!=null){
+                startActivity(open);
+                showAudio("Ajustes de voz abiertos: seleccioná motor TTS "+
+                    "e instalá voz española, después tocá REINTENTAR.");
+                return;
+            }
+            Intent install=new Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA);
+            if(install.resolveActivity(getPackageManager())!=null){
+                startActivity(install);
+                showAudio("Instalación de datos de voz solicitada; "+
+                    "reintentá el motor después de completar.");
+                return;
+            }
+            showAudio("Esta ROM no expone Ajustes de voz ni instalador "+
+                "de datos TTS. Debe habilitarse un motor compatible "+
+                "desde Ajustes/Aplicaciones de Android.");
+        }catch(RuntimeException ex){
+            showAudio("Jetour bloqueó ajustes de voz: "+
+                ex.getClass().getSimpleName());
+        }
+    }
+
     private void initSpeechOutput(){
         try{
             // OnInit may race with assignment of speaker; marshal the
@@ -519,6 +636,17 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         if(!ttsReady||speaker==null){
             showAudio("motor TTS aún no operativo; verificar voz "+
                 "instalada en Ajustes de la T1. Texto disponible.");
+            if(quietOem){
+                // TTS init is asynchronous. Allow up to 4 seconds before
+                // concluding that this head-unit has no usable voice engine.
+                long now=android.os.SystemClock.uptimeMillis();
+                if(ttsWaitStarted==0L)ttsWaitStarted=now;
+                if(now-ttsWaitStarted<4000L)
+                    voiceHandler.postDelayed(this::readQueuedSpeech,450L);
+                else finishQuietAfterError(String.valueOf(
+                    audioStatus.getText())+" · respuesta="+
+                    String.valueOf(status.getText()));
+            }
             return;
         }
         String answer=answerToSpeak;
