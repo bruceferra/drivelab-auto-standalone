@@ -158,6 +158,8 @@ final class T1GlobalToolbar {
             this::toggleMirrorAuto);
         button(actions,"CONFIG. ESPEJOS R",T1JetourTheme.PANEL_HI,168,
             this::configureReverseMirrors);
+        button(actions,"RECUPERAR ESPEJOS",T1JetourTheme.AMBER_BUTTON,170,
+            this::showMirrorRecovery);
         mirrorButton=button(actions,"ESPEJOS · LEER",T1JetourTheme.PANEL_HI,150,
             this::toggleMirror);
         avsButton=button(actions,"PEATÓN · LEYENDO",T1JetourTheme.PANEL_HI,135,
@@ -370,10 +372,11 @@ final class T1GlobalToolbar {
         SharedPreferences p=owner.getSharedPreferences(
             MirrorAutomationService.PREFS,Context.MODE_PRIVATE);
         boolean auto=p.getBoolean(MirrorAutomationService.AUTO,false);
+        boolean safetyHold=p.getBoolean(MirrorAutomationService.SAFETY_HOLD,true);
         boolean service=p.getBoolean(MirrorAutomationService.SERVICE_ACTIVE,false);
         long age=System.currentTimeMillis()-p.getLong(
             MirrorAutomationService.LAST_POLL,0L);
-        boolean healthy=auto&&service&&age>=0&&age<=8000;
+        boolean healthy=auto&&!safetyHold&&service&&age>=0&&age<=8000;
         String pose=p.getString(MirrorAutomationService.POSITION,"");
         // Tilted during a healthy live AUTO run is EXPECTED; uncertainty
         // matters when the service is gone and physical return was not seen.
@@ -411,7 +414,9 @@ final class T1GlobalToolbar {
         // No redundant confirmation dialog. Keep uncertainty guard: a prior
         // interrupted actuator motion still requires physical inspection.
         String pose=p.getString(MirrorAutomationService.POSITION,"");
-        if(pose.startsWith("INCIERTA")||pose.startsWith("R · inclinados")){
+        if(p.getBoolean(MirrorAutomationService.SAFETY_HOLD,true)||
+                pose.startsWith("INCIERTA")||
+                pose.startsWith("R · inclinados")){
             showMirrorRecovery();
             return;
         }
@@ -434,31 +439,51 @@ final class T1GlobalToolbar {
         SharedPreferences p=owner.getSharedPreferences(
             MirrorAutomationService.PREFS,Context.MODE_PRIVATE);
         String pose=p.getString(MirrorAutomationService.POSITION,"SIN MEDICIÓN");
-        new AlertDialog.Builder(owner)
-            .setTitle("ESPEJOS · REFERENCIA NO CONFIRMADA")
-            .setMessage("Estado registrado: "+pose+
-                "\n\nLa app perdió la referencia de los pulsos, no detectó "+
-                "el ángulo real. Los espejos PUEDEN estar bajos. "+
-                "\n\n1. Detené la T1 en P. "+
-                "\n2. Subí ambos espejos a la posición normal con los "+
-                "mandos ORIGINALES del auto. "+
-                "\n3. SOLO cuando los veas bien, tocá CONFIRMAR. "+
-                "\n\nDriveLab verificará P y 0 km/h, sin enviar movimientos. "+
+        int left=Math.max(0,p.getInt(MirrorAutomationService.PENDING_LEFT,0));
+        int right=Math.max(0,p.getInt(MirrorAutomationService.PENDING_RIGHT,0));
+        boolean unknown=p.getBoolean(MirrorAutomationService.PULSE_IN_FLIGHT,false);
+        boolean exact=(left+right)>0&&!unknown;
+        AlertDialog.Builder dialog=new AlertDialog.Builder(owner)
+            .setTitle("ESPEJOS · RECUPERAR POSICIÓN")
+            .setMessage("Estado: "+pose+
+                "\nPulsos pendientes: IZQ "+left+" · DER "+right+
+                (unknown?"\nHay un pulso sin cierre comprobado. "+
+                    "No se puede compensar automáticamente.":"")+
+                "\n\nEn P, DriveLab puede subir solo los pulsos "+
+                "que quedaron registrados. No repetirá una cantidad fija."+
+                "\nSi esta cuenta se perdió en la versión anterior, "+
+                "acomodá los espejos con los mandos ORIGINALES."+
+                "\nCuando queden a tu gusto, confirmá la referencia. "+
                 "El modo AUTO seguirá apagado hasta que lo actives.")
-            .setNegativeButton("CANCELAR",null)
+            .setNegativeButton("CERRAR",null)
             .setPositiveButton("YA ESTÁN NORMALES · CONFIRMAR",(d,w)->{
                 try{
                     owner.startForegroundService(new Intent(owner,
                         MirrorAutomationService.class)
                         .setAction(MirrorAutomationService.ACTION_CONFIRM_NORMAL));
-                    note("Verificando marcha P y 0 km/h para registrar "+
-                        "la referencia manual. Sin mover espejos.");
-                    main.postDelayed(this::refreshMirrorAuto,800);
+                    note("Confirmando referencia visual en P sin mover espejos");
+                    main.postDelayed(this::refreshMirrorAuto,800L);
                 }catch(Exception ex){
                     note("No se pudo confirmar referencia · "+
                         ex.getClass().getSimpleName());
                 }
-            }).show();
+            });
+        if(exact){
+            dialog.setNeutralButton("SUBIR "+left+" IZQ / "+right+" DER",
+                (d,w)->{
+                    try{
+                        owner.startForegroundService(new Intent(owner,
+                            MirrorAutomationService.class)
+                            .setAction(MirrorAutomationService.ACTION_RECOVER));
+                        note("Recuperando solo pulsos pendientes en P");
+                        main.postDelayed(this::refreshMirrorAuto,1000L);
+                    }catch(Exception ex){
+                        note("No se pudo recuperar espejos: "+
+                            ex.getClass().getSimpleName());
+                    }
+                });
+        }
+        dialog.show();
     }
     private void configureReverseMirrors(){
         SharedPreferences p=owner.getSharedPreferences(
@@ -473,11 +498,17 @@ final class T1GlobalToolbar {
         boolean live=p.getBoolean(MirrorAutomationService.SERVICE_ACTIVE,false)
             &&age>=0&&age<=8000;
         diagnostic.setText("MODO: "+(on?"AUTO":"MANUAL")+
+            " · REARME AUTOMÁTICO: "+
+                (p.getBoolean(MirrorAutomationService.SAFETY_HOLD,true)?
+                    "BLOQUEADO HASTA CONFIRMACIÓN EN P":"PERMITIDO SOLO A PEDIDO")+
             " · SERVICIO: "+(live?"ACTIVO":"SIN LATIDO RECIENTE")+
             "\nÚLTIMA MARCHA: "+p.getInt(MirrorAutomationService.LAST_GEAR,-1)+
             " · VELOCIDAD: "+p.getString(MirrorAutomationService.LAST_SPEED,"SIN DATO")+
             "\nESTADO: "+p.getString(MirrorAutomationService.STATUS,"SIN ESTADO")+
             "\nPOSICIÓN: "+p.getString(MirrorAutomationService.POSITION,"NO MEDIDA")+
+            "\nPULSOS SIN COMPENSAR: IZQ "+
+                p.getInt(MirrorAutomationService.PENDING_LEFT,0)+
+                " / DER "+p.getInt(MirrorAutomationService.PENDING_RIGHT,0)+
             "\nÚLTIMO ERROR: "+p.getString(MirrorAutomationService.LAST_ERROR,"NINGUNO")+
             "\nÚLTIMA TRANSICIÓN: "+
                 p.getString(MirrorAutomationService.LAST_TRANSITION,"NINGUNA")+

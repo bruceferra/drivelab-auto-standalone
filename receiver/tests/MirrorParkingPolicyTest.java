@@ -54,6 +54,52 @@ public final class MirrorParkingPolicyTest {
         eq(p.leftIssued(),4);
         eq(p.rightIssued(),4);
     }
+    static void interruptedTiltCountsOnlyCompletedPulses(){
+        MirrorParkingPolicy p=new MirrorParkingPolicy(20,20);
+        eq(p.observe(Gear.P,0,10,true),Action.NONE);
+        eq(p.observe(Gear.R,0,20,true),Action.TILT_ON_R);
+        // Real T1: shifting back to P while the 20-pulse sequence was
+        // active. Only 15 left and 12 right commands completed.
+        p.completeTilt(15,12);
+        eq(p.phase(),Phase.TILTED);
+        eq(p.leftIssued(),15);
+        eq(p.rightIssued(),12);
+        eq(p.observe(Gear.P,0,1000,true),Action.NONE);
+        eq(p.observe(Gear.P,0,31000,true),Action.NONE);
+        eq(p.observe(Gear.P,0,31001,true),
+            Action.RESTORE_AFTER_NON_R_SPEED);
+        p.completeRestore(15,12);
+        eq(p.phase(),Phase.NORMAL);
+        eq(p.leftIssued(),0);
+        eq(p.rightIssued(),0);
+        eq(p.observe(Gear.P,0,32000,true),Action.NONE);
+    }
+    static void interruptedReturnKeepsRemainingCounts(){
+        MirrorParkingPolicy p=lowered(20,20);
+        eq(p.observe(Gear.P,0,500,true),Action.NONE);
+        eq(p.observe(Gear.P,0,30501,true),
+            Action.RESTORE_AFTER_NON_R_SPEED);
+        // Original 20 down, but only 8 up before a gear change.
+        p.completeRestore(8,6);
+        eq(p.phase(),Phase.TILTED);
+        eq(p.leftIssued(),12);
+        eq(p.rightIssued(),14);
+        // Next uninterrupted 30s in P restores the rest, NOT 20 again.
+        eq(p.observe(Gear.P,0,32000,true),Action.NONE);
+        eq(p.observe(Gear.P,0,62001,true),
+            Action.RESTORE_AFTER_NON_R_SPEED);
+        p.completeRestore(12,14);
+        eq(p.phase(),Phase.NORMAL);
+        eq(p.leftIssued(),0);eq(p.rightIssued(),0);
+    }
+    static void noCompletedDownDoesNotCauseReturn(){
+        MirrorParkingPolicy p=new MirrorParkingPolicy(20);
+        eq(p.observe(Gear.P,0,1,true),Action.NONE);
+        eq(p.observe(Gear.R,0,2,true),Action.TILT_ON_R);
+        p.completeTilt(0,0);
+        eq(p.phase(),Phase.NORMAL);
+        eq(p.observe(Gear.P,0,99999,true),Action.NONE);
+    }
     static void forwardDrivingOver5RestoresOnce(){
         MirrorParkingPolicy p=lowered(2,2);
         eq(p.observe(Gear.N,0,1000,true),Action.NONE);
@@ -101,6 +147,9 @@ public final class MirrorParkingPolicyTest {
     public static void main(String[] args){
         pThirtySecondsOnly();
         reverseParkingShufflesDoNotRestore();
+        interruptedTiltCountsOnlyCompletedPulses();
+        interruptedReturnKeepsRemainingCounts();
+        noCompletedDownDoesNotCauseReturn();
         forwardDrivingOver5RestoresOnce();
         rollingParkDoesNotCount();
         interruptionResetsParkCounter();

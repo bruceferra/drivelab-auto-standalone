@@ -90,27 +90,34 @@ public final class MirrorParkingPolicy {
         return Action.NONE;
     }
 
-    /** Record only completed OEM commands, not presumed physical distance. */
+    /** Actual completed actuator pulses, not requested count. A change to P
+     * during a long R sequence is a NORMAL partial tilt. Never lose the
+     * completed left/right counters or attempt the remaining downward pulses.
+     */
     public void completeTilt(int leftCommands,int rightCommands){
-        if(phase!=Phase.TILTING)throw new IllegalStateException("No se inició inclinación");
+        if(phase!=Phase.TILTING)
+            throw new IllegalStateException("No se inició inclinación");
         if(leftCommands<0||rightCommands<0||
-                leftCommands>requestedLeft||rightCommands>requestedRight)
+           leftCommands>requestedLeft||rightCommands>requestedRight)
             throw new IllegalArgumentException("Recuento inválido");
         leftIssued=leftCommands;rightIssued=rightCommands;
-        phase=(leftCommands==requestedLeft && rightCommands==requestedRight)?
-            Phase.TILTED:Phase.UNKNOWN_POSITION;
+        phase=(leftCommands+rightCommands>0)?Phase.TILTED:Phase.NORMAL;
+        parkedSince=-1;
     }
-
-    /**
-     * We may return to NORMAL only if all previously issued commands were
-     * countered; Binder success alone is not physical-position proof.
+    /** A controlled gear change during return keeps ONLY outstanding pulses.
+     * The next uninterrupted stationary P dwell returns the remainder.
+     * No pulse is ever repeated once successfully compensated.
      */
     public void completeRestore(int leftCommands,int rightCommands){
         if(phase!=Phase.RESTORING)
             throw new IllegalStateException("No se inició retorno");
-        phase=(leftCommands==leftIssued&&rightCommands==rightIssued)?
-            Phase.NORMAL:Phase.UNKNOWN_POSITION;
-        if(phase==Phase.NORMAL)leftIssued=rightIssued=0;
+        if(leftCommands<0||rightCommands<0||
+           leftCommands>leftIssued||rightCommands>rightIssued)
+            throw new IllegalArgumentException("Retorno excede bajada");
+        leftIssued-=leftCommands;
+        rightIssued-=rightCommands;
+        phase=(leftIssued+rightIssued==0)?Phase.NORMAL:Phase.TILTED;
+        parkedSince=-1;
     }
     /**
      * After an explicit stationary manual RECUPERAR, resume AUTO only when

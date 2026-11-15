@@ -38,9 +38,12 @@ public final class T1MirrorUncertainRecoverySourceContractTest {
         check(svc.contains("if(physical.startsWith(\"INCIERTA\")||physical.startsWith(\"R · inclinados\"))")&&
             !svc.contains("INCIERTA · espejos posiblemente bajos tras reinicio"),
             "Keep prior tilted/uncertain pose through process restart");
-        check(svc.contains("INCIERTA · comandos de subida enviados")&&
+        check(svc.contains("RECUPERAR ESPEJOS · subiendo solo los pulsos registrados")&&
+            svc.contains("manual==3?prefs().getInt(PENDING_LEFT,0)")&&
+            svc.contains("manual==3?prefs().getInt(PENDING_RIGHT,0)")&&
+            !svc.contains("int l=manual==3?10:steps(LEFT)")&&
             !svc.contains("AUTO REACTIVADO · próximo R nuevo"),
-            "Blind 10-UP does not automatically re-arm AUTO or claim a normal angle");
+            "Recovery must use exact logged pending pulses per side, not blind 10 UP");
         check(ui.contains("ESPEJOS · REVISAR POSICIÓN")&&
             ui.contains("showMirrorRecovery()")&&
             ui.contains("MirrorAutomationService.ACTION_CONFIRM_NORMAL"),
@@ -53,9 +56,32 @@ public final class T1MirrorUncertainRecoverySourceContractTest {
             quick.contains("confirmá la ")&&
             quick.contains("referencia desde la barra"),
             "Advanced mode must never claim AUTO rearmed while uncertain");
-        check(svc.contains("if(!down && !(gear==4 || (gear==1 && speed<=0.5)))")&&
+        check(svc.contains("if(!down && !(gear==4||(gear==1&&speed<=0.5)))")&&
             !svc.contains("gear==4 && speed>5.0"),
-            "D over 5 kmh is the initial trigger, not a per-pulse guard: slower D must finish restore");
+            "Return can continue in P stopped or D after trigger; no repeated 5kmh check");
+        check(svc.contains("PENDING_LEFT=") &&
+            svc.contains("PENDING_RIGHT=") &&
+            svc.contains("PULSE_IN_FLIGHT=") &&
+            svc.contains(".putInt(key,pending)") &&
+            svc.contains("if(down && (gear!=2||speed>8))return counts;") &&
+            svc.contains("if(!down && !(gear==4||(gear==1&&speed<=0.5)))") &&
+            ui.contains("RECUPERAR ESPEJOS") &&
+            ui.contains("PULSOS SIN COMPENSAR"),
+            "Shift from R into P must preserve completed per-side pulse ledger "+
+            "and expose a direct recovery path");
+        int onAuto=svc.indexOf("if(ACTION_AUTO.equals(action))");
+        int activeFirst=svc.indexOf("if(running)return START_STICKY;",onAuto);
+        int holdCheck=svc.indexOf(
+            "if(prefs().getBoolean(SAFETY_HOLD,true)||",onAuto);
+        check(onAuto>=0&&activeFirst>onAuto&&holdCheck>activeFirst,
+            "Duplicate AUTO while tilting must not stop the live worker "+
+            "because pending pulses are legitimately outstanding");
+        check(svc.contains("PULSE_MS=120L, PAUSE_MS=40L")&&
+            svc.contains("oem.write(id,down?2:1)")&&
+            svc.contains("oem.write(id,0)")&&
+            svc.contains("SystemClock.sleep(PAUSE_MS)")&&
+            !svc.contains("PULSE_MS=500L, PAUSE_MS=180L"),
+            "20 individual quick commands must release to neutral between presses, not a long hold");
         check(policy.contains("RETURN_P_DWELL_MS=30000")&&
             policy.contains("RETURN_THRESHOLD_KMH=5.0"),
             "Preserve user's P over 30 sec / D over 5 kmh only policy");
