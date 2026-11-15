@@ -282,6 +282,7 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
                     .putBoolean(T1WazeWheelService.OEM_BINDER_ENABLED,true)
                     .apply();
                 T1OemMicrophoneService.prefs(this).edit()
+                    .putBoolean(T1OemMicrophoneService.UNIFIED_WHEEL_CONFIGURED,true)
                     .putBoolean(T1OemMicrophoneService.ENABLED,true)
                     .putString(T1OemMicrophoneService.STATUS,
                         "Activando enlace OEM del botón 1010…").apply();
