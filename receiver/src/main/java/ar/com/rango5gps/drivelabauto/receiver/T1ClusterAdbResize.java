@@ -75,6 +75,9 @@ final class T1ClusterAdbResize {
                     T1ClusterLayoutPolicy.mode(app)) && split)
                     throw new IllegalStateException(
                         "El modo dividido cambió durante la prueba");
+                if(!parked(app))
+                    throw new IllegalStateException(
+                        "BLOQUEADO: solo redimensionar con P y 0 km/h confirmados");
                 Rect left=T1ClusterLayoutPolicy.geometry(
                     app,selected,false);
                 Rect right=split?
@@ -90,6 +93,45 @@ final class T1ClusterAdbResize {
                     false,done);
             }
         },"T1-Adb-Resize-Cluster").start();
+    }
+    /** Cluster task changes are experimental UI changes, not needed
+     * for navigation itself. Don't move windows in a moving car.
+     */
+    private static boolean parked(Context c){
+        MirrorAutomationOem oem=null;
+        try{
+            oem=new MirrorAutomationOem(c);
+            double speed=oem.speedKmh();
+            return oem.gear()==1&&Double.isFinite(speed)&&
+                speed>=0&&speed<=0.5;
+        }catch(Exception ex){return false;}
+        finally{if(oem!=null)oem.close();}
+    }
+    static void restoreFull(Context c,Done done){
+        if(!enabled(c)){
+            deliver(c,"Modo FULL: puente ADB desactivado. "+
+                "Probá la apertura Waze a pantalla completa.",false,done);
+            return;
+        }
+        Context app=c.getApplicationContext();
+        new Thread(()->{
+            try{
+                if(!parked(app))
+                    throw new IllegalStateException(
+                        "BLOQUEADO: restaurar pantalla solo detenido en P");
+                Display d=T1ClusterWazeRouter.selected(app);
+                if(d==null)throw new IllegalStateException(
+                    "Display del clúster no disponible");
+                Rect all=new Rect(0,0,d.getMode().getPhysicalWidth(),
+                    d.getMode().getPhysicalHeight());
+                String output=applyMeasured(app,d.getDisplayId(),
+                    false,all,null);
+                deliver(app,output,output.startsWith("VERIFICADO"),done);
+            }catch(Exception ex){
+                deliver(app,T1LocalAdbClient.connectivityHint(ex),
+                    false,done);
+            }
+        },"T1-ADB-restore-Waze-fullscreen").start();
     }
     private static boolean errorOutput(String s){
         String l=s.toLowerCase(java.util.Locale.ROOT);
@@ -132,12 +174,17 @@ final class T1ClusterAdbResize {
         if(split&&(maps==null||maps.id==waze.id))
             return "NO APLICADO: tarea de Google Maps no está "+
                 "identificada de forma única en Display "+display;
+        if(!parked(c))
+            return "BLOQUEADO: ya no está en P/0. No se movió ninguna tarea.";
         String wazeCommand=command(waze.id,left);
         String changed=T1LocalAdbClient.shell(c,wazeCommand);
         if(errorOutput(changed))
             return "WAZE NO REDIMENSIONADO: "+
                 changed.substring(0,Math.min(200,changed.length()));
         if(split){
+            if(!parked(c))
+                return "PARCIAL: se redimensionó Waze, pero ya no hay P/0 "+
+                    "para cambiar Google Maps. Restaurar en P.";
             String changedMaps=T1LocalAdbClient.shell(c,
                 command(maps.id,right));
             if(errorOutput(changedMaps))
