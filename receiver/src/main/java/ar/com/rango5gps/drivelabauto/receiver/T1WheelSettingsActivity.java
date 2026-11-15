@@ -114,9 +114,9 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
         text(body,"NUEVO · PUENTE OEM DEL VOLANTE AL CLÚSTER. "+
             "El APK original T1Launcher T1N134 recibe códigos 1000–1003 "+
             "desde IHardKeyCallback (Binder), NO como KeyEvent Android. "+
-            "DriveLab busca los botones accesibles de Waze en PANTALLA 2, "+
-            "y solicita conexión al mismo servicio OEM SOLO si activás "+
-            "esta opción y Waze está visible. Google Maps queda intacto.",13);
+            "DriveLab busca controles accesibles de Waze en Display 1, "+
+            "El micrófono OEM 1010 y la rueda usan UNA sola conexión "+
+            "si el botón físico está activo. Google Maps no se controla.",13);
         button(body,"CONECTAR / DESCONECTAR RUEDITA OEM → WAZE",()->{
             SharedPreferences p=prefs();
             boolean active=p.getBoolean(T1WazeWheelService.OEM_BINDER_ENABLED,false);
@@ -135,10 +135,10 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
                     "Podemos conectarlo directamente para Waze en el clúster "+
                     "y reconocer giro 1000/1001, ATRÁS 1002 y OK 1003. "+
                     "\n\nIMPORTANTE: algunas ROM admiten UN solo receptor "+
-                    "de teclas. Podría interrumpir temporalmente las "+
-                    "funciones de volante de T1Launcher mientras Waze "+
-                    "esté visible. Desactivá desde esta pantalla si sucede. "+
-                    "\n\nNo se activará al inicio ni en Google Maps. "+
+                    "de teclas. Si el micrófono de DriveLab ya está activo, "+
+                    "se reutiliza su conexión; no se registra otra. "+
+                    "Desactivá uno de los servicios si reactivás T1Launcher. "+
+                    "\n\nNo actúa en Google Maps ni fuera de Waze. "+
                     "Probalo únicamente con el auto detenido en P.")
                 .setNegativeButton("CANCELAR",null)
                 .setPositiveButton("ACTIVAR SOLO EN WAZE",(dialog,which)->{
@@ -148,7 +148,7 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
                             "Solicitado; esperando Waze y servicio Accesibilidad")
                         .apply();
                     report.setText("Puente solicitado. Abrí Waze en "+
-                        "pantalla 2; al regresar consultá el ESTADO. "+
+                        "Display 1; al regresar consultá el ESTADO. "+
                         "Si el OEM rechaza la conexión aparecerá el motivo.");
                 }).show();
         });
