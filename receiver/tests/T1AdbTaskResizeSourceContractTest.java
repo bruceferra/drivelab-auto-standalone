@@ -48,6 +48,15 @@ public final class T1AdbTaskResizeSourceContractTest {
               policy.contains("if(verified==0||verified<time)return false")&&
               policy.contains("T1Adb") == false,
               "Direct navigation stays Waze and split requires ADB-backed verification");
+        String recv=source("ReceiverService.java");
+        check(recv.contains("DESTINO RECIBIDO, Waze BLOQUEADO")&&
+              recv.contains("DESTINO RECIBIDO; Waze SOLICITADO EN CLÚSTER")&&
+              recv.contains("DESTINO RECIBIDO; Waze NO ABIERTO EN CLÚSTER")&&
+              recv.contains("return attempted;"),
+              "Distinguish destination encrypted delivery from attempted Waze cluster launch");
+        check(ui.contains("T1ClusterAdbResize.VERIFIED_AT,0L")&&
+              ui.contains("T1ClusterLayoutPolicy.TEST_AT,verifiedAt"),
+              "Verified bounds must use identical timestamp so opt-in never fails incorrectly");
         check(ui.contains("HABILITAR PUENTE ADB LOCAL")&&
               ui.contains("PROBAR CONEXIÓN ADB LOCAL")&&
               ui.contains("adjustSplit(-10)")&&
