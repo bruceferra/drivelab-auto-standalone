@@ -183,40 +183,56 @@ public final class ReceiverService extends Service {
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         boolean attempted=false;
         boolean cluster=T1ClusterWazeRouter.enabled(this);
-        if(prefs().getBoolean("open_waze",true)&&
-            (ReceiverActivity.isVisible()||Settings.canDrawOverlays(this))){
-            if(cluster){
-                // Never fall back to opening Waze on Display 0 when the
-                // user selected a secondary display. Report refusal instead.
-                attempted=T1ClusterWazeRouter.routeDestination(this,launch);
-            }else{
-                try{startActivity(launch);attempted=true;}
-                catch(RuntimeException error){
-                    prefs().edit().putString("last_open","WAZE BLOQUEADO: "+
-                        error.getClass().getSimpleName()).apply();
-                }
+        boolean launchWanted=prefs().getBoolean("open_waze",true);
+        boolean launchAllowed=ReceiverActivity.isVisible()||
+            Settings.canDrawOverlays(this);
+        String diagnosis;
+        if(!launchWanted){
+            diagnosis="DESTINO RECIBIDO, Waze no solicitado: "+
+                "autoabrir Waze está DESACTIVADO en Receiver.";
+        }else if(!launchAllowed){
+            diagnosis="DESTINO RECIBIDO, Waze BLOQUEADO: Android no "+
+                "autoriza abrir una aplicación en segundo plano. "+
+                "Revisá Mostrar sobre otras apps de DriveLab Receiver.";
+        }else if(cluster){
+            // Receiver obtains encrypted coordinates from Xiaomi, never
+            // receives map pixels. Waze renders natively on Display 1.
+            attempted=T1ClusterWazeRouter.routeDestination(this,launch);
+            String status=T1ClusterWazeRouter.prefs(this).getString(
+                T1ClusterWazeRouter.STATUS,"Sin diagnóstico de display");
+            diagnosis=attempted?
+                "DESTINO RECIBIDO; Waze SOLICITADO EN CLÚSTER · "+
+                    status+" · sin confirmación visual":
+                "DESTINO RECIBIDO; Waze NO ABIERTO EN CLÚSTER · "+status;
+        }else{
+            try{
+                startActivity(launch);
+                attempted=true;
+                diagnosis="DESTINO RECIBIDO; Waze solicitado en pantalla "+
+                    "principal (sin confirmación visual)";
+            }catch(RuntimeException error){
+                diagnosis="DESTINO RECIBIDO; Waze NO ABIERTO: "+
+                    error.getClass().getSimpleName();
             }
         }
-        // Explicit cluster mode: notification opens DriveLab for diagnostics,
-        // NOT Waze on center display. Legacy default path remains unchanged.
+        // Receiver reports a delivery ACK only when the Waze intent was
+        // submitted. NOT_READY explicitly tells Sender that transport
+        // succeeded but the cluster launch did not.
         PendingIntent tap=PendingIntent.getActivity(this,9002,
             cluster?new Intent(this,ReceiverActivity.class):launch,
             PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
         Notification notif=new Notification.Builder(this,ROUTES)
-            .setSmallIcon(android.R.drawable.ic_menu_directions)
-            .setContentTitle("Nuevo destino del Xiaomi")
-            .setContentText(cluster?
-                "Waze solicitado al clúster: tocá si necesitás diagnóstico":
-                "Tocá para abrir en Waze si no apareció en el clúster")
+            .setSmallIcon(attempted?android.R.drawable.ic_menu_directions:
+                android.R.drawable.ic_dialog_alert)
+            .setContentTitle(attempted?
+                "Xiaomi: destino recibido · Waze solicitado":
+                "Xiaomi: destino recibido · Waze pendiente")
+            .setContentText(diagnosis)
+            .setStyle(new Notification.BigTextStyle().bigText(diagnosis))
             .setAutoCancel(true).setContentIntent(tap).build();
         getSystemService(NotificationManager.class).notify(9002,notif);
         prefs().edit().putInt("received",prefs().getInt("received",0)+1)
-            .putString("last_open",cluster?
-                T1ClusterWazeRouter.prefs(this).getString(
-                    T1ClusterWazeRouter.STATUS,
-                    "Clúster activado; sin confirmación de apertura"):
-                attempted?"Waze solicitado en T1 / clúster":
-                    "Ruta recibida; Waze requiere permiso o notificación").apply();
+            .putString("last_open",diagnosis).apply();
         return attempted;
     }
     private void listenPair(){
