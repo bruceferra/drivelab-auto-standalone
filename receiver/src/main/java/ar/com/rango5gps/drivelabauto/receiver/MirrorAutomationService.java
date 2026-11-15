@@ -51,8 +51,8 @@ public final class MirrorAutomationService extends Service {
     // to zero before the next press. Old 500ms ON + 180ms gap was ~27s for
     // 20 pulses on each side and acted more like a long hold than quick ticks.
     // These are experimental conservative values pending physical validation:
-    // 120ms asserted, 40ms neutral, never parallel writes to both mirrors.
-    private static final long POLL_MS=250L, PULSE_MS=120L, PAUSE_MS=40L;
+    // 140ms asserted, 20ms neutral after explicit OEM release, never parallel writes to both mirrors.
+    private static final long POLL_MS=250L, PULSE_MS=140L, PAUSE_MS=20L;
     private volatile boolean running,stop,referenceConfirming;
     private volatile int pendingManual; // 1=down, 2=up, 3=manual 10-up recovery
     private Thread worker;

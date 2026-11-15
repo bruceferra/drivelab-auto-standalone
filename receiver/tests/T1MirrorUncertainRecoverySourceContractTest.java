@@ -76,7 +76,7 @@ public final class T1MirrorUncertainRecoverySourceContractTest {
         check(onAuto>=0&&activeFirst>onAuto&&holdCheck>activeFirst,
             "Duplicate AUTO while tilting must not stop the live worker "+
             "because pending pulses are legitimately outstanding");
-        check(svc.contains("PULSE_MS=120L, PAUSE_MS=40L")&&
+        check(svc.contains("PULSE_MS=140L, PAUSE_MS=20L")&&
             svc.contains("oem.write(id,down?2:1)")&&
             svc.contains("oem.write(id,0)")&&
             svc.contains("SystemClock.sleep(PAUSE_MS)")&&
