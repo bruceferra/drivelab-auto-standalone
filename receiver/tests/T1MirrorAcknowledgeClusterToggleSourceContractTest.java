@@ -36,6 +36,13 @@ public final class T1MirrorAcknowledgeClusterToggleSourceContractTest {
             mirror.contains(".remove(LAST_ERROR).commit()")&&
             mirror.contains("if(gear!=1||!Double.isFinite(speed)||"),
             "Require physical P0 user confirmation, durable reset and no worker race");
+        check(toolbar.contains("mirrorRecoverButton=button(actions,")&&
+            toolbar.contains("ESPEJOS · SIN PENDIENTES")&&
+            toolbar.contains("needsRecovery=safetyHold||unknown||inFlight||")&&
+            toolbar.contains("pendingLeft>0||pendingRight>0")&&
+            toolbar.contains("T1JetourTheme.AMBER_BUTTON:T1JetourTheme.PANEL_HI")&&
+            !toolbar.contains("button(actions,\"RECUPERAR ESPEJOS\",T1JetourTheme.AMBER_BUTTON"),
+            "Dedicated RECUPERAR button must stop glowing orange after confirmed zero-pulse NORMAL");
         int cluster=toolbar.indexOf("clusterButton=button(actions,");
         int optimized=toolbar.indexOf("optimizer=button(actions,");
         check(cluster>=0&&optimized>cluster&&
