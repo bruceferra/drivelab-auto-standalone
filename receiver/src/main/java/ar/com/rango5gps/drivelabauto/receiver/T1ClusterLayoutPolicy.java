@@ -139,12 +139,18 @@ final class T1ClusterLayoutPolicy {
     static String test(Context c){
         Display display=T1ClusterWazeRouter.selected(c);
         if(display==null)return "Elegí primero el display real del tablero";
-        String first=T1ClusterWazeRouter.selectedAppPackage(c);
+        // Navigation ALWAYS owns the left pane. In single-window mode
+        // the user-selected app is still respected.
+        String first=MODE_SPLIT.equals(mode(c))?WAZE:
+            T1ClusterWazeRouter.selectedAppPackage(c);
         Intent app=c.getPackageManager().getLaunchIntentForPackage(first);
         if(app==null)return "App principal no disponible: "+first;
         app.setPackage(first);
         if(MODE_FULL.equals(mode(c)))
             return T1ClusterWazeRouter.launchSelectedApp(c,true,false);
+        if(!T1ClusterAdbResize.enabled(c))
+            return "Para mover ventanas reales activá PUENTE ADB LOCAL "+
+                "y autorizá su clave antes de PROBAR DISEÑO.";
         String second=secondPackage(c);
         Intent other=null;
         if(MODE_SPLIT.equals(mode(c))){
@@ -160,14 +166,12 @@ final class T1ClusterLayoutPolicy {
             String right=start(c,display,other,geometry(c,display,true),
                 secondLabel(c));
             if(!right.startsWith("APP SOLICITADA"))return left+"\n"+right;
-            prefs(c).edit().putLong(TEST_AT,System.currentTimeMillis())
-                .putString(TEST_MODE,mode(c)).apply();
             return left+"\n"+right+
-                "\nDos solicitudes enviadas. Confirmá visualmente antes de activar.";
+                "\nSolicitudes enviadas, NO confirmadas. "+
+                "DriveLab comprobará luego los límites reales mediante ADB.";
         }
-        prefs(c).edit().putLong(TEST_AT,System.currentTimeMillis())
-            .putString(TEST_MODE,mode(c)).apply();
-        return left+"\nVentana solicitada. Confirmá visualmente antes de activar.";
+        return left+"\nVentana solicitada, pendiente de "+
+            "verificación de tamaño real por ADB.";
     }
     /** A previously verified user-defined layout on next ignition. */
     static String boot(Context c){
@@ -183,8 +187,12 @@ final class T1ClusterLayoutPolicy {
             prefs(c).edit().putBoolean(ACTIVE,false).apply();return true;
         }
         if(T1ClusterWazeRouter.selected(c)==null||
-           !T1ClusterWazeRouter.enabled(c))return false;
+           !T1ClusterWazeRouter.enabled(c)||
+           !T1ClusterAdbResize.enabled(c))return false;
         long time=prefs(c).getLong(TEST_AT,0L);
+        long verified=prefs(c).getLong(
+            T1ClusterAdbResize.VERIFIED_AT,0L);
+        if(verified==0||verified<time)return false;
         if(time<=0||System.currentTimeMillis()-time>600000L||
             !mode(c).equals(prefs(c).getString(TEST_MODE,"")))return false;
         prefs(c).edit().putBoolean(ACTIVE,true).apply();
@@ -196,8 +204,9 @@ final class T1ClusterLayoutPolicy {
         if(display==null)return "Layout clúster no disponible";
         if(!WAZE.equals(waze.getPackage()))
             return "Solo Waze puede recibir rutas";
-        // Navigation remains Waze, in first pane. The second pane is not
-        // duplicated or overlaid by DriveLab at each incoming route.
+        // Direct voice/Xiaomi navigation always targets Waze in the LEFT
+        // task. The approved split layout remains the saved geometry.
+        // We do not run shell task changes while moving.
         return start(c,display,waze,geometry(c,display,false),"Waze");
     }
 }
