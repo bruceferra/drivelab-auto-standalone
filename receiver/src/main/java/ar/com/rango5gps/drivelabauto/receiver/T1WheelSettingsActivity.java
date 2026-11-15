@@ -106,6 +106,21 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
             catch(Exception ex){report.setText("Ajustes no disponibles: "+
                 ex.getClass().getSimpleName()+". Usá WebADB.");}
         });
+        button(body,"RUEDITA: ALTERNAR ZOOM / SELECCIÓN DE BOTONES",
+            ()->{
+                SharedPreferences p=prefs();
+                boolean zoom=!p.getBoolean(T1WazeWheelService.ZOOM_MAP,true);
+                p.edit().putBoolean(T1WazeWheelService.ZOOM_MAP,zoom).apply();
+                report.setText(zoom?
+                    "RUEDITA = ZOOM en mapa Waze. Los menús siguen "+
+                    "permitiendo elegir rutas/opciones accesibles.":
+                    "RUEDITA = RECORRER BOTONES ACCESIBLES de Waze. "+
+                    "Sin gestos de zoom.");
+            });
+        text(body,"Por defecto la ruedita acerca/aleja Waze "+
+            "a pantalla completa en Display 1. Cambiá a SELECCIÓN si "+
+            "preferís navegar controles del mapa. Nunca controla "+
+            "Google Maps ni el menú original del vehículo.",13);
         button(body,"ACTIVAR / DESACTIVAR CONTROL EN WAZE",()->{
             SharedPreferences p=prefs();
             boolean active=!p.getBoolean(T1WazeWheelService.ENABLED,false);
