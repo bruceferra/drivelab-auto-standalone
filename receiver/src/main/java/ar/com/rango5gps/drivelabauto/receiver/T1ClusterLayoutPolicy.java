@@ -180,7 +180,17 @@ final class T1ClusterLayoutPolicy {
             return "Autoarranque de clúster desactivado";
         if(!Settings.canDrawOverlays(c)&&!ReceiverActivity.isVisible())
             return "Android bloquea ventanas libres desde segundo plano";
-        return test(c);
+        String launched=test(c);
+        if(launched.startsWith("APP SOLICITADA")&&
+           T1ClusterAdbResize.enabled(c)){
+            // Reuse ONLY the user's approved layout. ADB measurement is
+            // performed asynchronously and rechecks P/0 before moving
+            // any task; after a cold start ADB TCP may need re-enabling.
+            T1ClusterAdbResize.apply(c,
+                MODE_SPLIT.equals(mode(c)),1800L,null);
+            return launched+" · ADB comprobará límites si está autorizado y P/0.";
+        }
+        return launched;
     }
     static boolean enableAfterTest(Context c){
         if(MODE_FULL.equals(mode(c))){
