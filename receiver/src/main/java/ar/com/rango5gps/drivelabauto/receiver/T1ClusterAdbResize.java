@@ -143,7 +143,7 @@ final class T1ClusterAdbResize {
     static void closeClusterApps(Context c,Done done){
         Context app=c.getApplicationContext();
         if(!enabled(app)){
-            deliver(app,"CIERRE PENDIENTE: puente ADB local sin activar. "+
+            deliverClose(app,"CIERRE PENDIENTE: puente ADB local sin activar. "+
                 "DriveLab dejó de enviar Waze al clúster, pero no puede "+
                 "cerrar las tareas de otra aplicación sin autorización ADB. "+
                 "Habilitá ADB o cerrá el módulo desde el sistema OEM.",
@@ -214,8 +214,16 @@ final class T1ClusterAdbResize {
                 result="CIERRE NO CONFIRMADO: "+
                     T1LocalAdbClient.connectivityHint(e);
             }
-            deliver(app,result,success,done);
+            deliverClose(app,result,success,done);
         },"T1-Cluster-ADB-Safe-Close").start();
+    }
+    /** Closing tasks INVALIDATES any earlier split measurements. */
+    private static void deliverClose(Context c,String message,
+                                     boolean success,Done done){
+        T1ClusterWazeRouter.prefs(c).edit()
+            .putString(RESULT,message)
+            .putLong(VERIFIED_AT,0L).apply();
+        MAIN.post(()->{if(done!=null)done.completed(message,success);});
     }
     private static boolean errorOutput(String s){
         String l=s.toLowerCase(java.util.Locale.ROOT);
