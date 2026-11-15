@@ -30,7 +30,7 @@ final class T1GlobalToolbar {
     private final PedestrianAlertControl avas;
     private final LinearLayout container;
     private final Button[] modes=new Button[3];
-    private Button clusterButton,optimizer,mirrorButton,mirrorAutoButton,airButton,avsButton,roadModeButton;
+    private Button clusterButton,optimizer,mirrorButton,mirrorAutoButton,mirrorRecoverButton,airButton,avsButton,roadModeButton;
     // Permanent first-row read-only OEM 1046 / 1040 / 1041 indicators.
     private Button regenIndicator,batteryIndicator,socTargetIndicator;
     private TextView info;
@@ -164,8 +164,8 @@ final class T1GlobalToolbar {
             this::toggleMirrorAuto);
         button(actions,"CONFIG. ESPEJOS R",T1JetourTheme.PANEL_HI,168,
             this::configureReverseMirrors);
-        button(actions,"RECUPERAR ESPEJOS",T1JetourTheme.AMBER_BUTTON,170,
-            this::showMirrorRecovery);
+        mirrorRecoverButton=button(actions,"RECUPERAR ESPEJOS",
+            T1JetourTheme.PANEL_HI,170,this::showMirrorRecovery);
         mirrorButton=button(actions,"ESPEJOS · LEER",T1JetourTheme.PANEL_HI,150,
             this::toggleMirror);
         avsButton=button(actions,"PEATÓN · LEYENDO",T1JetourTheme.PANEL_HI,135,
@@ -457,6 +457,12 @@ final class T1GlobalToolbar {
             MirrorAutomationService.PREFS,Context.MODE_PRIVATE);
         boolean auto=p.getBoolean(MirrorAutomationService.AUTO,false);
         boolean safetyHold=p.getBoolean(MirrorAutomationService.SAFETY_HOLD,true);
+        int pendingLeft=Math.max(0,p.getInt(
+            MirrorAutomationService.PENDING_LEFT,0));
+        int pendingRight=Math.max(0,p.getInt(
+            MirrorAutomationService.PENDING_RIGHT,0));
+        boolean inFlight=p.getBoolean(
+            MirrorAutomationService.PULSE_IN_FLIGHT,false);
         boolean service=p.getBoolean(MirrorAutomationService.SERVICE_ACTIVE,false);
         long age=System.currentTimeMillis()-p.getLong(
             MirrorAutomationService.LAST_POLL,0L);
@@ -473,6 +479,23 @@ final class T1GlobalToolbar {
             T1JetourTheme.AMBER_BUTTON:healthy?
             T1JetourTheme.GREEN_BUTTON:auto?
             T1JetourTheme.AMBER_BUTTON:T1JetourTheme.PANEL_HI);
+        // This recovery shortcut used to be hard-coded AMBER forever.
+        // Clear the warning once the owner acknowledged NORMAL in P/0
+        // and the exact pending ledger is empty. The button remains
+        // accessible in neutral gray for future manual recovery.
+        if(mirrorRecoverButton!=null){
+            boolean needsRecovery=safetyHold||unknown||inFlight||
+                pendingLeft>0||pendingRight>0;
+            T1JetourTheme.button(mirrorRecoverButton,needsRecovery?
+                T1JetourTheme.AMBER_BUTTON:T1JetourTheme.PANEL_HI);
+            mirrorRecoverButton.setText(needsRecovery?
+                "RECUPERAR ESPEJOS":"ESPEJOS · SIN PENDIENTES");
+            mirrorRecoverButton.setContentDescription(needsRecovery?
+                "Recuperación de espejos disponible. Pendientes izquierda "+
+                    pendingLeft+", derecha "+pendingRight:
+                "Espejos sin pulsos pendientes. Posición "+
+                    "normal confirmada o sin recuperación requerida.");
+        }
         mirrorAutoButton.setContentDescription(unknown?
             "Posición física no comprobada; tocar para ver recuperación segura":
             auto?(healthy?"Espejos reversa AUTO activo. Tocar para desactivar":
