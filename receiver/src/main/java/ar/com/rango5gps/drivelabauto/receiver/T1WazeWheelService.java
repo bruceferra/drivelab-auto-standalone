@@ -49,6 +49,7 @@ public final class T1WazeWheelService extends AccessibilityService {
         SCAN_REQUEST="scan_requested_at",SCAN_RESULT="scan_result",
         SCAN_FINISHED="scan_finished_at";
     private static final long LEARN_MS=45000L;
+    static final String ZOOM_MAP="wheel_zoom_map";
     static final String NEXT="wheel_next",PREV="wheel_prev",
         OK="wheel_ok",BACK="wheel_back",ROUTES="wheel_routes";
     private static final String WAZE="com.waze";
@@ -451,6 +452,15 @@ public final class T1WazeWheelService extends AccessibilityService {
             return false;
         }
         promptArmed=false;
+        // The user requested the same wheel behavior as T1Launcher:
+        // when there is NO Waze modal, wheel notches zoom the Waze map.
+        // Draw 2-finger gestures ONLY on the Waze-selected secondary display.
+        // Keep original labelled map-button navigation as an opt-out mode.
+        if((forward||backward)&&!mapMenuArmed&&
+            p.getBoolean(ZOOM_MAP,true)){
+            lastButtonAt=SystemClock.elapsedRealtime();
+            return zoomVisibleWazeMap(root,forward);
+        }
         // A wheel turn focuses REAL labelled buttons. OK can click one only
         // AFTER such an explicit selection: no random initial actions.
         if((forward||backward)&&collectMapChoices(root)){
@@ -494,6 +504,60 @@ public final class T1WazeWheelService extends AccessibilityService {
         }
         return false;
     }
+    /** An explicit OEM wheel notch -> two-finger zoom inside Waze ONLY.
+     * No global BACK, no unknown screen taps, no OEM vehicle writes.
+     * Selected cluster must match the real visible Waze window, Display 1
+     * on this owner's Jetour. Android gesture failure leaves it untouched.
+     */
+    private boolean zoomVisibleWazeMap(AccessibilityNodeInfo root,
+                                       boolean zoomIn){
+        Display display=T1ClusterWazeRouter.selected(this);
+        if(root==null||!WAZE.equals(String.valueOf(root.getPackageName()))||
+            display==null||wazeDisplayId!=display.getDisplayId()){
+            status("ZOOM: Waze no está accesible en el Display elegido; sin gesto");
+            return false;
+        }
+        Rect area=new Rect();
+        root.getBoundsInScreen(area);
+        if(area.width()<400||area.height()<300){
+            status("ZOOM: área de Waze demasiado pequeña; sin gesto");
+            return false;
+        }
+        int cx=area.centerX(),cy=area.centerY();
+        float inner=Math.min(area.width(),area.height())*0.08f;
+        float outer=Math.min(area.width(),area.height())*0.20f;
+        Path fingerA=new Path(),fingerB=new Path();
+        fingerA.moveTo(cx-(zoomIn?inner:outer),cy);
+        fingerB.moveTo(cx+(zoomIn?inner:outer),cy);
+        fingerA.lineTo(cx-(zoomIn?outer:inner),cy);
+        fingerB.lineTo(cx+(zoomIn?outer:inner),cy);
+        try{
+            GestureDescription gesture=new GestureDescription.Builder()
+                .setDisplayId(wazeDisplayId)
+                .addStroke(new GestureDescription.StrokeDescription(
+                    fingerA,0,240L))
+                .addStroke(new GestureDescription.StrokeDescription(
+                    fingerB,0,240L))
+                .build();
+            boolean accepted=dispatchGesture(gesture,
+                new GestureResultCallback(){
+                    @Override public void onCompleted(GestureDescription d){
+                        status("Waze · zoom "+(zoomIn?"ACERCAR":"ALEJAR")+
+                            " completado en Display "+wazeDisplayId);
+                    }
+                    @Override public void onCancelled(GestureDescription d){
+                        status("Waze · gesto zoom cancelado por Android");
+                    }
+                },main);
+            if(!accepted)status("Waze: Android rechazó el gesto de zoom");
+            return accepted;
+        }catch(RuntimeException error){
+            status("Waze: zoom no permitido por Android ("+
+                error.getClass().getSimpleName()+")");
+            return false;
+        }
+    }
+
     /** Exact accessible button match, no screen coordinates or guessed tap. */
     private AccessibilityNodeInfo findRoutesButton(
             AccessibilityNodeInfo root,int depth,int[] visited){
