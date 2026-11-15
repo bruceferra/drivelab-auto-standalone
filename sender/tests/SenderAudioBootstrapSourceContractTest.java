@@ -56,7 +56,7 @@ public final class SenderAudioBootstrapSourceContractTest {
         must(pickerStart>=0&&pickerEnd>pickerStart,
             "Bluetooth selection Activity must exist");
         String picker=activity.substring(pickerStart,pickerEnd);
-        int dialogStart=picker.indexOf(".setTitle(\\"ELEGIR T1");
+        int dialogStart=picker.indexOf(".setTitle(\"ELEGIR T1");
         int choices=picker.indexOf(".setItems(labels.toArray(",dialogStart);
         must(dialogStart>=0&&choices>dialogStart&&
             !picker.substring(dialogStart,choices).contains(".setMessage(")&&
