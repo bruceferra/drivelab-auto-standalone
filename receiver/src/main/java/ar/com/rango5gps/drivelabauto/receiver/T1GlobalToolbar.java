@@ -30,7 +30,7 @@ final class T1GlobalToolbar {
     private final PedestrianAlertControl avas;
     private final LinearLayout container;
     private final Button[] modes=new Button[3];
-    private Button optimizer,mirrorButton,mirrorAutoButton,airButton,avsButton,roadModeButton;
+    private Button clusterButton,optimizer,mirrorButton,mirrorAutoButton,airButton,avsButton,roadModeButton;
     // Permanent first-row read-only OEM 1046 / 1040 / 1041 indicators.
     private Button regenIndicator,batteryIndicator,socTargetIndicator;
     private TextView info;
@@ -148,6 +148,12 @@ final class T1GlobalToolbar {
         actions.setGravity(Gravity.CENTER_VERTICAL);
         actions.setPadding(dp(4),0,dp(7),0);
         strip.addView(actions);
+        // First control on the SECOND row, before OPTIMIZADO ON/OFF.
+        // ON routes Waze/selected app to the verified Display 1.
+        // OFF disables future routing and closes only known Waze/Maps
+        // tasks on that secondary display if local ADB is authorized.
+        clusterButton=button(actions,"CLÚSTER OFF",
+            T1JetourTheme.PANEL_HI,140,this::toggleCluster);
         optimizer=button(actions,"OPTIMIZADO OFF",T1JetourTheme.RED_BUTTON,144,
             this::toggleAuto);
         button(actions,"CONFIGURAR OPT.",T1JetourTheme.PANEL_HI,140,
@@ -223,6 +229,7 @@ final class T1GlobalToolbar {
         T1JetourTheme.button(optimizer,automatic?
             T1JetourTheme.GREEN_BUTTON:T1JetourTheme.RED_BUTTON);
         refreshRoadMode(automatic);
+        refreshCluster();
         refreshMirrorAuto();
         SharedPreferences air=owner.getSharedPreferences(
             RecirculationGuardService.PREFS,Context.MODE_PRIVATE);
@@ -367,6 +374,80 @@ final class T1GlobalToolbar {
     }
     /** Auto tilt is a distinct feature from OEM folding. Preferences are
      * read every refresh; green is reserved for an actual live heartbeat. */
+    /** OFF is not the same as the OEM dashboard being visible:
+     * Android cannot remove Waze's foreign task without authorized ADB.
+     * Mark an unverified close in amber until task inspection succeeds.
+     */
+    private void refreshCluster(){
+        if(clusterButton==null)return;
+        SharedPreferences p=T1ClusterWazeRouter.prefs(owner);
+        boolean active=T1ClusterWazeRouter.enabled(owner);
+        boolean pending=p.getBoolean(T1ClusterWazeRouter.CLOSE_PENDING,false);
+        clusterButton.setText(active?"CLÚSTER ON":
+            pending?"CLÚSTER · CERRAR":"CLÚSTER OFF");
+        T1JetourTheme.button(clusterButton,active?
+            T1JetourTheme.GREEN_BUTTON:pending?
+            T1JetourTheme.AMBER_BUTTON:T1JetourTheme.PANEL_HI);
+        clusterButton.setContentDescription(active?
+            "Clúster de navegación habilitado. Tocar para cerrar Waze "+
+                "y volver al tablero OEM cuando Android permita.":
+            pending?"Clúster desactivado pero cierre de apps pendiente; "+
+                "tocar para reintentar con ADB local autorizado":
+            "Clúster desactivado. Tocar para enviar Waze al Display elegido");
+    }
+    private void toggleCluster(){
+        SharedPreferences p=T1ClusterWazeRouter.prefs(owner);
+        if(T1ClusterWazeRouter.enabled(owner)||
+            p.getBoolean(T1ClusterWazeRouter.CLOSE_PENDING,false)){
+            // Stop future navigation and boot launches immediately,
+            // even if the system doesn't yet allow us to close Waze.
+            p.edit().putBoolean(T1ClusterWazeRouter.ENABLED,false)
+                .putBoolean(T1ClusterWazeRouter.AUTO_BOOT,false)
+                .putBoolean(T1ClusterLayoutPolicy.ACTIVE,false)
+                .putBoolean(T1ClusterWazeRouter.CLOSE_PENDING,true)
+                .putString(T1ClusterWazeRouter.STATUS,
+                    "CLÚSTER OFF solicitado: cerrando tareas Waze/Maps "+
+                    "solo en Display seleccionado, pendiente de verificación.")
+                .apply();
+            refreshCluster();
+            T1ClusterAdbResize.closeClusterApps(owner,(message,confirmed)->{
+                if(!foreground)return;
+                T1ClusterWazeRouter.prefs(owner).edit()
+                    .putBoolean(T1ClusterWazeRouter.CLOSE_PENDING,!confirmed)
+                    .putString(T1ClusterWazeRouter.STATUS,message).apply();
+                refreshCluster();
+                note(message);
+            });
+            return;
+        }
+        if(T1ClusterWazeRouter.selected(owner)==null){
+            note("CLÚSTER: Display 1 no disponible o no elegido. "+
+                "Elegilo en configuración.");
+            navigate(T1ClusterWazeSettingsActivity.class);
+            return;
+        }
+        p.edit().putBoolean(T1ClusterWazeRouter.ENABLED,true)
+            .putBoolean(T1ClusterWazeRouter.AUTO_BOOT,true)
+            .putBoolean(T1ClusterWazeRouter.CLOSE_PENDING,false)
+            .putString(T1ClusterWazeRouter.STATUS,
+                "CLÚSTER ON: abriendo navegación en el display elegido")
+            .apply();
+        String result;
+        if(T1ClusterLayoutPolicy.active(owner))
+            result=T1ClusterLayoutPolicy.boot(owner);
+        else result=T1ClusterWazeRouter.launchSelectedApp(owner,true,false);
+        boolean launched=result.startsWith("Waze SOLICITADO")||
+            result.startsWith("APP SOLICITADA:");
+        if(!launched){
+            // Never show green when Android refused the display.
+            p.edit().putBoolean(T1ClusterWazeRouter.ENABLED,false)
+                .putBoolean(T1ClusterWazeRouter.AUTO_BOOT,false).apply();
+        }
+        T1ClusterWazeRouter.status(owner,result);
+        refreshCluster();
+        note(result);
+    }
+
     private void refreshMirrorAuto(){
         if(mirrorAutoButton==null)return;
         SharedPreferences p=owner.getSharedPreferences(
