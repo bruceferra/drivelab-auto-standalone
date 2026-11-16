@@ -796,7 +796,7 @@ jobs:
           grep -q 'PackageInstaller.SessionParams.MODE_FULL_INSTALL' common/src/main/java/ar/com/rango5gps/drivelabauto/common/Updater.java
           grep -q 'session.commit(callback.getIntentSender())' common/src/main/java/ar/com/rango5gps/drivelabauto/common/Updater.java
           grep -q 'STATUS_PENDING_USER_ACTION' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/ReceiverInstallResultReceiver.java
-          grep -q 'REINTENTAR INSTALACIÓN YA DESCARGADA' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/ReceiverActivity.java
+          grep -q 'REINTENTAR INSTALACIÓN DESCARGADA' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/ReceiverActivity.java
           grep -q 'android:exported="false"' receiver/src/main/AndroidManifest.xml
           "$aapt" dump xmltree "$receiver" AndroidManifest.xml | grep 'ReceiverInstallResultReceiver'
           # Play Protect review: no broad notification listener or Bluetooth access in this corrective build.
