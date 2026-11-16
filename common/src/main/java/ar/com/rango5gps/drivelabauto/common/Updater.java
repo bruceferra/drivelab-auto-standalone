@@ -25,6 +25,7 @@ import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.util.Arrays;
+import org.json.JSONArray;
 import java.util.Locale;
 import java.util.TreeSet;
 import org.json.JSONObject;
@@ -45,6 +46,11 @@ public final class Updater {
     private static final String OWNER=
         "https://github.com/bruceferra/drivelab-auto-standalone/";
     private static final String BASE=OWNER+"releases/latest/download/";
+    private static final String GITHUB_API=
+        "https://api.github.com/repos/bruceferra/drivelab-auto-standalone/releases/";
+    private static final String RELEASE_API=GITHUB_API+"latest";
+    private static final String ASSET_API=GITHUB_API+"assets/";
+    private static final int MAX_RELEASE_META=256_000;
     private static final int MAX_MANIFEST=24_000;
     private static final long MAX_APK=50L*1024*1024;
     private static final String PREFS="drivelab_native_update";
@@ -98,10 +104,15 @@ public final class Updater {
     }
 
     private static final class Offer {
-        final String name,url,hash;
+        final String name,url,hash,backupUrl;
         final long code;
         Offer(String version,String apkUrl,String sha,long versionCode){
+            this(version,apkUrl,sha,versionCode,null);
+        }
+        Offer(String version,String apkUrl,String sha,long versionCode,
+              String apiAssetUrl){
             name=version;url=apkUrl;hash=sha;code=versionCode;
+            backupUrl=apiAssetUrl;
         }
     }
 
@@ -216,7 +227,90 @@ public final class Updater {
         },"DriveLab-Native-Update").start();
     }
 
+    /** Receiver uses GitHub's JSON release index first. Unlike
+     * github.com/releases/latest/download/receiver.json, the release index
+     * does not redirect through the GitHub web frontend or CDN.
+     * The old signed-manifest flow remains a fallback and is unchanged for
+     * Sender. Never claim "up to date" when both network paths fail. */
     private static Offer latest(Activity a,String app,String proper)throws Exception {
+        if("receiver".equals(app)){
+            Exception apiError;
+            try{return latestReceiverViaApi(a);}
+            catch(Exception failure){apiError=failure;}
+            try{return latestFromManifest(a,app);}
+            catch(Exception directError){
+                throw new IOException("Consulta de versiones falló en API "+
+                    "(api.github.com: "+shortError(apiError)+") y en GitHub "+
+                    "(github.com: "+shortError(directError)+")",directError);
+            }
+        }
+        return latestFromManifest(a,app);
+    }
+
+    private static String shortError(Exception e){
+        String msg=e.getMessage();
+        if(msg==null||msg.trim().isEmpty())msg=e.getClass().getSimpleName();
+        if(msg.length()>65)msg=msg.substring(0,65);
+        return msg.replace('\\n',' ').replace('\\r',' ');
+    }
+
+    /** Release tag, HTTPS URL, immutable asset ID and GitHub SHA-256 must all
+     * match this exact repository and APK before an update is offered.
+     * The archive itself still MUST match the installed signing certificate. */
+    private static Offer latestReceiverViaApi(Activity a)throws Exception{
+        byte[] raw=fetchBytes(RELEASE_API,MAX_RELEASE_META);
+        JSONObject release=new JSONObject(new String(raw,StandardCharsets.UTF_8));
+        if(release.optBoolean("draft",false)||
+           release.optBoolean("prerelease",false))
+            throw new SecurityException("GitHub devolvió una versión no estable");
+        String tag=release.getString("tag_name");
+        if(!tag.matches("v[0-9]+\\.[0-9]+\\.[0-9]+"))
+            throw new SecurityException("Etiqueta de actualización no válida");
+        String version=tag.substring(1);
+        PackageInfo installed=a.getPackageManager().getPackageInfo(
+            a.getPackageName(),0);
+        if(!"ar.com.rango5gps.drivelabauto.receiver".equals(a.getPackageName()))
+            throw new SecurityException("Canal del Receiver incorrecto");
+        String filename="DriveLab-Auto-Receiver-v"+version+".apk";
+        JSONArray assets=release.getJSONArray("assets");
+        JSONObject chosen=null;
+        for(int i=0;i<assets.length();i++){
+            JSONObject asset=assets.getJSONObject(i);
+            if(filename.equals(asset.optString("name"))){
+                if(chosen!=null)throw new SecurityException("APK duplicada en GitHub");
+                chosen=asset;
+            }
+        }
+        if(chosen==null)throw new IOException("Release sin APK del Receiver");
+        String url=chosen.getString("browser_download_url");
+        String digest=chosen.getString("digest");
+        long id=chosen.getLong("id");
+        long size=chosen.getLong("size");
+        String assetUrl=chosen.getString("url");
+        if(id<1||size<1024||size>MAX_APK||
+           !digest.matches("sha256:[a-fA-F0-9]{64}")||
+           !ASSET_API.concat(String.valueOf(id)).equals(assetUrl)||
+           !UpdaterManifestUrlPolicy.allowed("receiver",version,url))
+            throw new SecurityException("Release no cumple verificación de origen y SHA-256");
+        if(compareVersions(version,installed.versionName)<=0)return null;
+        // API release index does not expose versionCode. Archive verifier
+        // reads the real code after download and requires it to be NEWER.
+        return new Offer(version,url,digest.substring(7).toLowerCase(Locale.US),
+            -1L,assetUrl);
+    }
+
+    private static int compareVersions(String proposed,String installed){
+        if(installed==null||!installed.matches("[0-9]+\\.[0-9]+\\.[0-9]+"))
+            throw new IllegalArgumentException("Versión local desconocida");
+        String[] next=proposed.split("\\."),old=installed.split("\\.");
+        for(int i=0;i<3;i++){
+            int cmp=Long.compare(Long.parseLong(next[i]),Long.parseLong(old[i]));
+            if(cmp!=0)return cmp;
+        }
+        return 0;
+    }
+
+    private static Offer latestFromManifest(Activity a,String app)throws Exception {
         byte[] body=fetchBytes(BASE+app+".json",MAX_MANIFEST);
         JSONObject data=new JSONObject(new String(body,StandardCharsets.UTF_8));
         String pkg=data.getString("packageName");
@@ -224,9 +318,6 @@ public final class Updater {
         long code=data.getLong("versionCode");
         String url=data.getString("apkUrl");
         String sha=data.getString("sha256").toLowerCase(Locale.US);
-        // Exact, whitelisted Github release paths. Sender historically
-        // shares numeric tags with Receiver; its newer independent sender-v
-        // tags are also permitted (never arbitrary asset URLs).
         if(!a.getPackageName().equals(pkg)||
            !version.matches("[0-9]+\\.[0-9]+\\.[0-9]+")||
            code<1||!sha.matches("[a-f0-9]{64}")||
