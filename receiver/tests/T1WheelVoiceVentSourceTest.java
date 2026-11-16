@@ -19,14 +19,15 @@ public final class T1WheelVoiceVentSourceTest{
             voice.contains("BridgeRouteTarget.BOTH")&&
             voice.contains("secondPackage(this)"),
             "Voice dispatches both apps when verified split is selected");
-        ok(win.contains("awaitTarget(b,id,operation,STEP_TIMEOUT_MS)")&&
+        ok(win.contains("awaitTarget(b,id,command,STEP_TIMEOUT_MS)")&&
             !win.contains("Primero usá CIERRE TOTAL"),
             "Quarter state3 verifies each window from mixed positions");
-        ok(tb.contains("MODO VENTILACIÓN ON")&&
-            tb.contains("MODO VENTILACIÓN OFF")&&
-            qc.contains("MODO VENTILACIÓN ON")&&
-            qc.contains("MODO VENTILACIÓN OFF"),
-            "Explicit ventilation mode labels");
+        ok(tb.contains("this::smartVentilation")&&
+            qc.contains("this::smartVentilation")&&
+            tb.contains("CIERRE TOTAL")&&qc.contains("CIERRE TOTAL")&&
+            tb.contains("RED_BUTTON")&&tb.contains("GREEN_BUTTON")&&
+            qc.contains("styleSurface(ventilationButton,quarter?GREEN:RED)"),
+            "One real-position green/red ventilation toggle and a separate close");
         ok(tb.contains("AIRE INTERIOR · SOLICITADO")&&
             tb.contains("AIRE AUTO · PAUSA OEM"),
             "Green preference does not fake OEM confirmation");
