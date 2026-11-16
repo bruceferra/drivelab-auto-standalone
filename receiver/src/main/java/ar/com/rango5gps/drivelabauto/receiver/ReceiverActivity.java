@@ -22,7 +22,7 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
     private String lastPairQrValue="";
     private ScrollView currentScroll;
     private boolean connectionExpanded=false;
-    private boolean advancedControlsExpanded=false;
+    private boolean technicalExpanded=false;
     private long lastAutoCheckElapsed=0;
     private final Runnable pairUiRefresh=new Runnable(){
         @Override public void run(){
@@ -113,53 +113,23 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
         }catch(Exception ignored){}
         label(body,"v"+installedVersion+
             " · pantalla inmersiva + área libre Hola Jetour",13);
-        // Direct owner control: open Receiver automatically after actual
-        // Android boot. T1Launcher remains HOME; we never replace its launcher.
-        boolean ownBoot=p.getBoolean("launch_app_on_boot",false)&&
-            getPackageName().equals(p.getString("launch_package",""));
-        boolean overlayAllowed=Settings.canDrawOverlays(this);
-        label(body,"INICIO AL ENCENDER · "+(ownBoot?
-            (overlayAllowed?"CONFIGURADO":"FALTA PERMISO ANDROID"):
-            "DESACTIVADO")+
-            "\n"+p.getString("boot_status","Aún sin prueba de arranque"),13);
-        button(body,ownBoot?"DESACTIVAR APERTURA AUTOMÁTICA DRIVELAB":
-            "ACTIVAR APERTURA AUTOMÁTICA DRIVELAB",this::toggleOwnBoot);
-        // Immersive full screen is always enabled in this T1.
-        // HolaJetour was removed by the installed Launcher. No bar toggles.
-        button(body,"WAZE EN CLÚSTER · AUTÓNOMO (SIN VENTANA FLOTANTE)",()->
-            startActivity(new Intent(this,T1ClusterWazeSettingsActivity.class)));
-        button(body,"VEHÍCULO · VENTANILLAS / ENERGÍA / CODE",()->
-            startActivity(new Intent(this,ReceiverVehicleActivity.class)));
-        button(body,"PENDIENTES · ASISTENTE DE VALIDACIÓN T1",()->
-            startActivity(new Intent(this,T1ValidationWizardActivity.class)));
-        button(body,"🎤 ASISTENTE · WAZE / GEMINI / CHATGPT",()->
-            startActivity(new Intent(this,T1VoiceRouteActivity.class)));
-        button(body,"COCKPIT · JORNADA / VIAJES / ENERGÍA",()->
+        // Daily home: no duplicate fixed-toolbar controls or lab pilots.
+        label(body,"FUNCIONES",17);
+        button(body,"COCKPIT · VIAJES Y ENERGÍA",()->
             startActivity(new Intent(this,T1PremiumCockpitActivity.class)));
-        button(body,"TABLERO · TANQUES / CONSUMO / TELEMETRÍA",()->
-            startActivity(new Intent(this,T1TankDashboardActivity.class)));
-        // Vehicle controls are NOT network pairing settings. Keep this
-        // entry visible without opening XIAOMI / AJUSTES / ACTUALIZAR.
-        button(body,advancedControlsExpanded?
-            "OCULTAR CONTROLES OEM AVANZADOS":
-            "CONTROLES OEM AVANZADOS · ESPEJOS R",()->{
-            advancedControlsExpanded=!advancedControlsExpanded;
-            render();
+        button(body,"CLÚSTER · PANELES A/B",()->
+            startActivity(new Intent(this,T1ClusterLayoutSettingsActivity.class)));
+        button(body,"VEHÍCULO · ESTADO Y AJUSTES",()->
+            startActivity(new Intent(this,ReceiverVehicleActivity.class)));
+        label(body,"Xiaomi: "+p.getString("status","Sin iniciar")+
+            " · destinos recibidos: "+p.getInt("received",0),14);
+        button(body,connectionExpanded?"OCULTAR CONEXIÓN XIAOMI":
+            "CONEXIÓN XIAOMI / ACTUALIZAR",()->{
+            connectionExpanded=!connectionExpanded;render();
         });
-        if(advancedControlsExpanded){
-            LinearLayout quickAdvanced=new LinearLayout(this);
-            quickAdvanced.setOrientation(LinearLayout.VERTICAL);
-            body.addView(quickAdvanced);
-            quickControls.attach(quickAdvanced);
-        }
-        label(body,"Conexión Receiver: "+p.getString("status","Sin iniciar")+
-            " · IP "+ReceiverService.localIp()+
-            " · "+p.getString("pair_port_status","sin datos del puerto 48392"),14);
-        button(body,connectionExpanded?
-            "OCULTAR CONEXIÓN Y CONFIGURACIÓN":
-            "CONEXIÓN XIAOMI / AJUSTES / ACTUALIZAR",()->{
-            connectionExpanded=!connectionExpanded;
-            render();
+        button(body,technicalExpanded?"CERRAR MENÚ TÉCNICO":
+            "MENÚ TÉCNICO · PRUEBAS Y AJUSTES",()->{
+            technicalExpanded=!technicalExpanded;render();
         });
         LinearLayout settings=new LinearLayout(this);
         settings.setOrientation(LinearLayout.VERTICAL);
