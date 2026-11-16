@@ -2,6 +2,9 @@ package ar.com.rango5gps.drivelabauto.receiver;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.widget.Toast;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -24,6 +27,8 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
     private T1ClusterLayoutPreview preview;
     private TextView previewState;
     private boolean adbProbeRunning;
+    private TextView adbPersistentStatus;
+    private TextView adbBottomStatus;
     private void text(String value,int size){
         TextView view=new TextView(this);
         view.setText(value);view.setTextSize(size);
@@ -57,14 +62,16 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
             "en el Display elegido. Sin puente ADB autorizado se "+
             "conserva Waze pantalla completa.",13);
         boolean adb=T1ClusterAdbResize.enabled(this);
-        text("PUENTE ADB LOCAL 127.0.0.1:5555: "+
-            (adb?"HABILITADO (no confirma conexión)":"DESACTIVADO")+
-            "\nPRUEBA ADB: "+cfg().getString(T1ClusterAdbResize.RESULT,
-                "Sin prueba ADB realizada"),13);
+        adbPersistentStatus=new TextView(this);
+        adbPersistentStatus.setTextSize(17);
+        adbPersistentStatus.setPadding(12,12,12,12);
+        column.addView(adbPersistentStatus);
+        updateAdbStatus();
         button(adb?"DESACTIVAR PUENTE ADB LOCAL":
             "HABILITAR PUENTE ADB LOCAL (SIN ROOT)",
             this::toggleLocalAdb);
         button("PROBAR CONEXIÓN ADB LOCAL",this::probeLocalAdb);
+        button("COPIAR RESULTADO ADB",this::copyAdbResult);
         text("Preparación una sola vez: conectá la T1 por USB a "+
             "una PC con ADB autorizado; ejecutá «adb tcpip 5555» "+
             "desde esa PC. Después aceptá en la T1 la clave de "+
@@ -132,12 +139,11 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
             button("RESTABLECER PANTALLA COMPLETA",()->
                 chooseMode(T1ClusterLayoutPolicy.MODE_FULL));
         }
-        text("Estado ADB tamaño real: "+
-            cfg().getString(T1ClusterAdbResize.RESULT,
-                "No se intentó redimensionar")+
-            "\nÚltima verificación: "+
-            (cfg().getLong(T1ClusterAdbResize.VERIFIED_AT,0L)>0?
-                "hay medición de tareas":"NINGUNA"),13);
+        adbBottomStatus=new TextView(this);
+        adbBottomStatus.setTextSize(15);
+        adbBottomStatus.setPadding(12,8,12,8);
+        column.addView(adbBottomStatus);
+        updateAdbStatus();
         text("Estado general Waze (NO es prueba ADB): "+cfg().getString(T1ClusterWazeRouter.STATUS,
             "Ninguna prueba realizada"),13);
         text("MICRÓFONO FÍSICO · PROTOCOLO REAL DEL APK",19);
@@ -272,45 +278,44 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
                 render();
             }).show();
     }
+    private void updateAdbStatus(){
+        String value=T1ClusterAdbResize.result(this);
+        String label="PUENTE ADB: "+
+            (T1ClusterAdbResize.enabled(this)?
+                "HABILITADO (no confirma conexión)":"DESACTIVADO")+
+            "\nRESULTADO DE PRUEBA ADB: "+value;
+        if(adbPersistentStatus!=null)adbPersistentStatus.setText(label);
+        if(adbBottomStatus!=null)
+            adbBottomStatus.setText("ESTADO ADB TAMAÑO REAL: "+value+
+                "\nÚltima verificación: "+
+                (cfg().getLong(T1ClusterAdbResize.VERIFIED_AT,0L)>0?
+                    "CONEXIÓN O TAREAS LEÍDAS":"NINGUNA"));
+    }
+    private void copyAdbResult(){
+        String result=T1ClusterAdbResize.result(this);
+        ClipboardManager clipboard=(ClipboardManager)
+            getSystemService(CLIPBOARD_SERVICE);
+        if(clipboard!=null)clipboard.setPrimaryClip(
+            ClipData.newPlainText("Resultado ADB DriveLab",result));
+        Toast.makeText(this,"Resultado ADB copiado",Toast.LENGTH_SHORT).show();
+    }
     private void probeLocalAdb(){
         if(!T1ClusterAdbResize.enabled(this)){
-            new AlertDialog.Builder(this)
-                .setTitle("PRUEBA ADB NO INICIADA")
-                .setMessage("Primero habilitá PUENTE ADB LOCAL.")
-                .setPositiveButton("CERRAR",null).show();
+            cfg().edit().putString(T1ClusterAdbResize.RESULT,
+                "PRUEBA BLOQUEADA: primero habilitá puente ADB.").commit();
+            updateAdbStatus();
             return;
         }
         if(adbProbeRunning)return;
         adbProbeRunning=true;
-        // Persist an immediate distinct test state even before TCP responds.
-        // This MUST replace the stale "Puente habilitado" guidance.
-        cfg().edit().putString(T1ClusterAdbResize.RESULT,
-            "PROBANDO AHORA: conectando 127.0.0.1:5555…").apply();
-        AlertDialog dialog=new AlertDialog.Builder(this)
-            .setTitle("PRUEBA ADB LOCAL · EN CURSO")
-            .setMessage("Probando ADB por 127.0.0.1:5555. "+
-                "El resultado aparecerá ACÁ, no en el estado de Waze.")
-            .setPositiveButton("CERRAR",(d,w)->render())
-            .create();
-        dialog.show();
+        // The result stays in two TextViews. NEVER create a transient dialog
+        // or replace the Activity view tree from an asynchronous callback.
         T1ClusterAdbResize.probe(this,(message,connected)->{
             adbProbeRunning=false;
             if(isFinishing()||isDestroyed())return;
-            T1ClusterWazeRouter.status(this,message);
-            if(dialog.isShowing()){
-                dialog.setTitle(connected?
-                    "ADB LOCAL CONECTADO":"ADB LOCAL NO CONECTADO");
-                dialog.setMessage(message+"\n\n"+
-                    (connected?
-                    "El puente responde. Falta probar CLÚSTER OFF "+
-                    "y el diseño 50/50 en P.":
-                    "No se verificó el puente ADB. No modifiques "+
-                    "las ventanas del clúster."));
-            }
-            // Persisted ADB result survives dialog closure; Waze status is
-            // labeled separately. The dialog makes the async reply visible.
-            render();
+            updateAdbStatus();
         });
+        updateAdbStatus();
     }
     private void adjustSplit(int delta){
         if(!T1ClusterLayoutPolicy.MODE_SPLIT.equals(

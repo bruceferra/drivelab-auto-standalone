@@ -7,6 +7,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.view.Display;
 import java.util.List;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /** The missing post-launch operation from the T1Launcher APK:
  * obtain the REAL Waze/Maps task IDs, run "am task resize", then query
@@ -17,6 +18,8 @@ final class T1ClusterAdbResize {
     static final String OPT_IN="cluster_adb_task_resize_opt_in";
     static final String VERIFIED_AT="cluster_adb_last_verified_ms";
     static final String RESULT="cluster_adb_result";
+    private static final String PROBE_STARTED="cluster_adb_probe_started_ms";
+    private static final long PROBE_LIMIT_MS=22000L;
     private static final Handler MAIN=new Handler(Looper.getMainLooper());
     private static final String WAZE="com.waze";
     private static final String MAPS="com.google.android.apps.maps";
@@ -36,26 +39,46 @@ final class T1ClusterAdbResize {
                 "Puente ADB desactivado. Waze fullscreen sigue disponible.")
             .apply();
     }
+    static String result(Context c){
+        SharedPreferences p=T1ClusterWazeRouter.prefs(c);
+        String state=p.getString(RESULT,"Sin prueba ADB realizada");
+        long started=p.getLong(PROBE_STARTED,0L);
+        if(state.startsWith("PROBANDO AHORA")&&started>0&&
+           System.currentTimeMillis()-started>PROBE_LIMIT_MS+3000L){
+            state="ADB SIN RESULTADO: prueba interrumpida o proceso reiniciado. "+
+                "Volvé a tocar PROBAR CONEXIÓN ADB LOCAL.";
+            p.edit().putString(RESULT,state).commit();
+        }
+        return state;
+    }
     static void probe(Context c,Done done){
-        T1ClusterWazeRouter.prefs(c).edit()
+        Context app=c.getApplicationContext();
+        final AtomicBoolean finished=new AtomicBoolean(false);
+        T1ClusterWazeRouter.prefs(app).edit()
             .putString(RESULT,"PROBANDO AHORA: consulta ADB iniciada…")
-            .putLong(VERIFIED_AT,0L).apply();
+            .putLong(PROBE_STARTED,System.currentTimeMillis())
+            .putLong(VERIFIED_AT,0L).commit();
+        MAIN.postDelayed(()->{
+            if(finished.compareAndSet(false,true))
+                deliver(app,"ADB SIN RESPUESTA: prueba excedió 22 segundos. "+
+                    "No se verificó conexión.",false,done);
+        },PROBE_LIMIT_MS);
         new Thread(()->{
             String result;
             boolean ok=false;
             try{
-                String out=taskList(c);
-                ok=out!=null&&!out.trim().isEmpty()&&
-                    !errorOutput(out);
+                String out=taskList(app);
+                ok=out!=null&&!out.trim().isEmpty()&&!errorOutput(out);
                 result=ok?"ADB LOCAL CONECTADO: tareas legibles. "+
                     "Falta confirmar los tamaños en Display 1.":
                     "ADB responde pero no se obtuvo lista de tareas: "+
                     String.valueOf(out).substring(0,Math.min(
                         200,String.valueOf(out).length()));
-            }catch(Exception error){
-                result=T1LocalAdbClient.connectivityHint(error);
+            }catch(Exception e){
+                result=T1LocalAdbClient.connectivityHint(e);
             }
-            deliver(c,result,ok,done);
+            if(finished.compareAndSet(false,true))
+                deliver(app,result,ok,done);
         },"T1-Local-ADB-Probe").start();
     }
     static void apply(Context c,boolean split,long launchDelayMs,Done done){
@@ -341,7 +364,7 @@ final class T1ClusterAdbResize {
         T1ClusterWazeRouter.prefs(c).edit()
             .putString(RESULT,message)
             .putLong(VERIFIED_AT,success?System.currentTimeMillis():0L)
-            .apply();
+            .commit();
         MAIN.post(()->{if(done!=null)done.completed(message,success);});
     }
 }
