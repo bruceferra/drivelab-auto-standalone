@@ -53,6 +53,17 @@ final class T1ClusterLayoutPolicy {
         return prefs(c).getBoolean(ACTIVE,false)&&
             !MODE_FULL.equals(mode(c));
     }
+    /** Selected split/window must not silently fall back to fullscreen Waze
+     * when a geometry change or new ADB test cleared active approval.
+     */
+    static boolean pendingUnverified(Context c){
+        return !MODE_FULL.equals(mode(c))&&!active(c);
+    }
+    static String pendingMessage(Context c){
+        return "DISEÑO "+(MODE_SPLIT.equals(mode(c))?"DIVIDIDO":"VENTANA")+
+            " PENDIENTE: falta verificar tamaños por ADB en P/0 y "+
+            "CONFIRMAR DISEÑO VISIBLE. No abriré Waze a pantalla completa.";
+    }
     static void setMode(Context c,String desired){
         if(!MODE_FULL.equals(desired)&&!MODE_WINDOW.equals(desired)&&
            !MODE_SPLIT.equals(desired))return;

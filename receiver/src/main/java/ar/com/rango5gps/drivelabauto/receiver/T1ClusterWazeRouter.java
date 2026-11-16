@@ -239,8 +239,12 @@ final class T1ClusterWazeRouter {
         return launchOnDisplay(c,maps,false,false,"Google Maps",false);
     }
     static boolean routeDestination(Context c,Intent waze){
-        // Preserve proven full-screen Display 1 path unless the driver has
-        // explicitly confirmed experimental freeform window placement.
+        // Never silently replace a user-selected unverified 50/50 with FULL
+        // after receiving an Uber or spoken navigation destination.
+        if(enabled(c)&&T1ClusterLayoutPolicy.pendingUnverified(c)){
+            status(c,T1ClusterLayoutPolicy.pendingMessage(c));
+            return false;
+        }
         String shaped=enabled(c)?
             T1ClusterLayoutPolicy.routeWazeIfActive(c,waze):null;
         String result=shaped==null?
@@ -266,8 +270,11 @@ final class T1ClusterWazeRouter {
                 "Se preservan la pantalla central y el launcher OEM.");
             return;
         }
-        // Start whichever launcher app the owner selected; incoming
-        // navigations from Xiaomi remain explicit Waze intents.
+        // Delayed ignition auto-boot must not clobber an unverified 50/50.
+        if(T1ClusterLayoutPolicy.pendingUnverified(c)){
+            status(c,T1ClusterLayoutPolicy.pendingMessage(c));
+            return;
+        }
         if(T1ClusterLayoutPolicy.active(c))
             status(c,T1ClusterLayoutPolicy.boot(c));
         else status(c,launchSelectedApp(c,false,true));

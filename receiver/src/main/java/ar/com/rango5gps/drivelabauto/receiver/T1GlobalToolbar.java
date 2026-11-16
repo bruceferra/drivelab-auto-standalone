@@ -484,14 +484,19 @@ final class T1GlobalToolbar {
             .putString(T1ClusterWazeRouter.STATUS,
                 "CLÚSTER ON: abriendo navegación en el display elegido")
             .apply();
+        // Keep ON enabled for the parked layout confirmation, but never
+        // launch full-screen Waze as a fallback over the chosen split.
+        boolean pendingLayout=T1ClusterLayoutPolicy.pendingUnverified(owner);
         String result;
-        if(T1ClusterLayoutPolicy.active(owner))
+        if(pendingLayout)
+            result=T1ClusterLayoutPolicy.pendingMessage(owner);
+        else if(T1ClusterLayoutPolicy.active(owner))
             result=T1ClusterLayoutPolicy.boot(owner);
         else result=T1ClusterWazeRouter.launchSelectedApp(owner,true,false);
         boolean launched=result.startsWith("Waze SOLICITADO")||
             result.startsWith("APP SOLICITADA:")||
             result.startsWith("APP SOLICITADA EN VENTANA:");
-        if(!launched){
+        if(!launched&&!pendingLayout){
             // Never show green when Android refused the display.
             p.edit().putBoolean(T1ClusterWazeRouter.ENABLED,false)
                 .putBoolean(T1ClusterWazeRouter.AUTO_BOOT,false).apply();
