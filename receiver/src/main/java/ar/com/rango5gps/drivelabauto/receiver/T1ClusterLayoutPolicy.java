@@ -33,6 +33,8 @@ final class T1ClusterLayoutPolicy {
     static final String X="layout_x_pct";
     static final String Y="layout_y_pct";
     static final String SECOND_APP="layout_second_app";
+    static final String PANEL_A_ON="panel_a_on";
+    static final String PANEL_B_ON="panel_b_on";
     static final String SECOND_LABEL="layout_second_label";
     private static final String WAZE="com.waze";
     private static final String MAPS="com.google.android.apps.maps";
@@ -111,6 +113,52 @@ final class T1ClusterLayoutPolicy {
     static String secondLabel(Context c){
         return prefs(c).getString(SECOND_LABEL,"Google Maps");
     }
+    static String firstPackage(Context c){
+        return T1ClusterWazeRouter.selectedAppPackage(c);
+    }
+    static String firstLabel(Context c){
+        return T1ClusterWazeRouter.selectedAppLabel(c);
+    }
+    static boolean panelAOn(Context c){
+        return prefs(c).getBoolean(PANEL_A_ON,true);
+    }
+    static boolean panelBOn(Context c){
+        return prefs(c).getBoolean(PANEL_B_ON,MODE_SPLIT.equals(mode(c)));
+    }
+    static String appInPanel(Context c,boolean panelB){
+        return panelB?secondPackage(c):firstPackage(c);
+    }
+    static String labelInPanel(Context c,boolean panelB){
+        return panelB?secondLabel(c):firstLabel(c);
+    }
+    static String singlePackage(Context c){
+        return !panelAOn(c)&&panelBOn(c)?secondPackage(c):firstPackage(c);
+    }
+    static String singleLabel(Context c){
+        return !panelAOn(c)&&panelBOn(c)?secondLabel(c):firstLabel(c);
+    }
+    /** Atomic single-Apply UX: no half-applied selections or invalidations
+     * while moving the slider or choosing packages in the UI. */
+    static void configurePanels(Context c,boolean aOn,String a,String aLabel,
+                                boolean bOn,String b,String bLabel,int percent){
+        if(!aOn&&!bOn)throw new IllegalArgumentException("Activá al menos un panel");
+        if((aOn&&!T1ClusterWazeRouter.isSelectablePackage(c,a))||
+           (bOn&&!T1ClusterWazeRouter.isSelectablePackage(c,b)))
+            throw new IllegalArgumentException("La aplicación elegida no está disponible");
+        if(aOn&&bOn&&a.equals(b))
+            throw new IllegalArgumentException("Elegí aplicaciones diferentes");
+        prefs(c).edit()
+            .putBoolean(PANEL_A_ON,aOn).putBoolean(PANEL_B_ON,bOn)
+            .putString(T1ClusterWazeRouter.APP_PACKAGE,a)
+            .putString(T1ClusterWazeRouter.APP_LABEL,aLabel)
+            .putString(SECOND_APP,b).putString(SECOND_LABEL,bLabel)
+            .putString(MODE,aOn&&bOn?MODE_SPLIT:MODE_FULL)
+            .putInt(SPLIT_PERCENT,T1ClusterLayoutMath.bounded(percent,30,70))
+            .putBoolean(PANELS_INVERTED,false)
+            .putBoolean(ACTIVE,false)
+            .remove(TEST_AT).remove(TEST_MODE)
+            .apply();
+    }
     private static Rect asRect(T1ClusterLayoutMath.Frame f){
         return new Rect(f.left,f.top,f.right,f.bottom);
     }
@@ -166,15 +214,16 @@ final class T1ClusterLayoutPolicy {
     static String test(Context c){
         Display display=T1ClusterWazeRouter.selected(c);
         if(display==null)return "Elegí primero el display real del tablero";
-        // Navigation ALWAYS owns the left pane. In single-window mode
-        // the user-selected app is still respected.
-        String first=MODE_SPLIT.equals(mode(c))?WAZE:
-            T1ClusterWazeRouter.selectedAppPackage(c);
+        // Panel A/Panel B are logical user-chosen applications, never
+        // hardcoded Waze/Maps. Legacy inverted layouts remain supported.
+        String first=MODE_SPLIT.equals(mode(c))?firstPackage(c):
+            singlePackage(c);
         Intent app=c.getPackageManager().getLaunchIntentForPackage(first);
         if(app==null)return "App principal no disponible: "+first;
         app.setPackage(first);
         if(MODE_FULL.equals(mode(c)))
-            return T1ClusterWazeRouter.launchSelectedApp(c,true,false);
+            return T1ClusterWazeRouter.launchApp(c,first,
+                singleLabel(c),true,false);
         if(!T1ClusterAdbResize.enabled(c))
             return "Para mover ventanas reales activá PUENTE ADB LOCAL "+
                 "y autorizá su clave antes de PROBAR DISEÑO.";
@@ -188,8 +237,8 @@ final class T1ClusterLayoutPolicy {
         }
         boolean reversed=MODE_SPLIT.equals(mode(c))&&inverted(c);
         String left=start(c,display,app,geometry(c,display,reversed),
-            MODE_SPLIT.equals(mode(c))?"Waze":
-                T1ClusterWazeRouter.selectedAppLabel(c));
+            MODE_SPLIT.equals(mode(c))?firstLabel(c):
+                singleLabel(c));
         if(!left.startsWith("APP SOLICITADA"))return left;
         if(MODE_SPLIT.equals(mode(c))){
             String right=start(c,display,other,geometry(c,display,!reversed),
@@ -243,10 +292,16 @@ final class T1ClusterLayoutPolicy {
         if(display==null)return "Layout clúster no disponible";
         if(!WAZE.equals(waze.getPackage()))
             return "Solo Waze puede recibir rutas";
-        // Direct voice/Xiaomi navigation always targets Waze in the LEFT
-        // task. The approved split layout remains the saved geometry.
-        // We do not run shell task changes while moving.
-        return start(c,display,waze,geometry(c,display,
-            MODE_SPLIT.equals(mode(c))&&inverted(c)),"Waze");
+        // Never steal a panel configured for Spotify/YouTube. If Waze
+        // occupies either panel, retain precisely its approved geometry.
+        boolean split=MODE_SPLIT.equals(mode(c));
+        boolean wazeInA=WAZE.equals(firstPackage(c));
+        boolean wazeInB=WAZE.equals(secondPackage(c));
+        if(split&&!wazeInA&&!wazeInB)
+            return "Waze no está elegido en ninguno de los paneles";
+        if(!split&&!WAZE.equals(singlePackage(c)))
+            return "El panel único no está configurado para Waze";
+        boolean right=split&&(wazeInA?inverted(c):!inverted(c));
+        return start(c,display,waze,geometry(c,display,right),"Waze");
     }
 }
