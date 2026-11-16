@@ -54,13 +54,13 @@ public final class T1AdbTaskParserTest {
             "Full-screen Waze must not pass 50-percent verification");
         // Actual Jetour Android 11 am stack list output captured while
         // Waze and Maps were simultaneously in cluster Display 1.
-        String jetour="Stack id=2095 bounds=[0,0][1920,720] displayId=1 userId=0\\n"+
-            "  configuration={1.0 ?mcc?mnc}\\n"+
-            "  taskId=2095: com.waze/com.waze.FreeMapAppActivity bounds=[0,0][1920,720] userId=0 visible=true\\n"+
-            "Stack id=2104 bounds=[960,0][1920,720] displayId=1 userId=0\\n"+
-            "  configuration={1.0 ?mcc?mnc}\\n"+
-            "  taskId=2104: com.google.android.apps.maps/com.google.android.maps.MapsActivity bounds=[960,0][1920,720] userId=0 visible=false\\n"+
-            "Stack id=2116 bounds=[0,0][1920,1080] displayId=0 userId=0\\n"+
+        String jetour="Stack id=2095 bounds=[0,0][1920,720] displayId=1 userId=0\n"+
+            "  configuration={1.0 ?mcc?mnc}\n"+
+            "  taskId=2095: com.waze/com.waze.FreeMapAppActivity bounds=[0,0][1920,720] userId=0 visible=true\n"+
+            "Stack id=2104 bounds=[960,0][1920,720] displayId=1 userId=0\n"+
+            "  configuration={1.0 ?mcc?mnc}\n"+
+            "  taskId=2104: com.google.android.apps.maps/com.google.android.maps.MapsActivity bounds=[960,0][1920,720] userId=0 visible=false\n"+
+            "Stack id=2116 bounds=[0,0][1920,1080] displayId=0 userId=0\n"+
             "  taskId=2116: ar.com.rango5gps.drivelabauto.receiver/.ReceiverActivity bounds=[0,0][1920,1080]";
         T1AdbTaskParser.Task fromCarWaze=T1AdbTaskParser.unique(jetour,1,"com.waze");
         T1AdbTaskParser.Task fromCarMaps=T1AdbTaskParser.unique(jetour,1,"com.google.android.apps.maps");

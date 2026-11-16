@@ -245,3 +245,5 @@ jobs:
 # Publishing trigger: release workflow already registered on main; compile signed 0.3.12.
 
 # Regression suite covers APK provider-specific RSA private-key reload.
+
+# Rerun signed release after fixing Java fixture newline escapes (not runtime code).
