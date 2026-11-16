@@ -53,29 +53,33 @@ final class T1NavigationTargets {
         }
         if(!BridgeRouteTarget.BOTH.equals(target))
             return new Result(false,"Destino de mapa no admitido");
-        if(!T1ClusterLayoutPolicy.active(c)||
-            !T1ClusterLayoutPolicy.MODE_SPLIT.equals(
-                T1ClusterLayoutPolicy.mode(c))||
-            !"com.google.android.apps.maps".equals(
-                T1ClusterLayoutPolicy.secondPackage(c)))
+        if(!T1ClusterLayoutPolicy.MODE_SPLIT.equals(
+                T1ClusterLayoutPolicy.mode(c)))
             return new Result(false,
-                "Para AMBOS activá primero en P el diseño dividido "+
-                "Waze izquierda / Google Maps derecha, verificado por ADB.");
-        Display display=T1ClusterWazeRouter.selected(c);
-        if(display==null)return new Result(false,"Display 1 no disponible");
-        // Both deep links are sent to their OWN existing freeform panes.
-        // No shell geometry, fullscreen fallback or OEM commands.
-        String left=T1ClusterLayoutPolicy.start(c,display,
-            intent("com.waze",base,value),
-            T1ClusterLayoutPolicy.geometry(c,display,false),"Waze");
+                "Para AMBOS elegí un diseño de dos aplicaciones.");
+        boolean aWaze="com.waze".equals(
+            T1ClusterLayoutPolicy.firstPackage(c));
+        boolean bWaze="com.waze".equals(
+            T1ClusterLayoutPolicy.secondPackage(c));
+        boolean aMaps="com.google.android.apps.maps".equals(
+            T1ClusterLayoutPolicy.firstPackage(c));
+        boolean bMaps="com.google.android.apps.maps".equals(
+            T1ClusterLayoutPolicy.secondPackage(c));
+        if(!(aWaze&&bMaps||bWaze&&aMaps))
+            return new Result(false,
+                "AMBOS necesita Waze y Google Maps en los dos paneles");
+        // Target each selected app in its own existing freeform bounds,
+        // regardless of A/B orientation or vendor ADB bounds reporting.
+        // Never launch fullscreen or touch an unrelated OEM task.
+        String left=T1ClusterLayoutPolicy.routeWazeIfActive(c,
+            intent("com.waze",base,value));
         if(!submitted(left)){
             T1ClusterWazeRouter.status(c,left);
-            return new Result(false,"Waze izquierdo no solicitado: "+left);
+            return new Result(false,"Waze no solicitado: "+left);
         }
         T1GoogleMapsReplacement.arm(c);
-        String right=T1ClusterLayoutPolicy.start(c,display,
-            intent("com.google.android.apps.maps",base,value),
-            T1ClusterLayoutPolicy.geometry(c,display,true),"Google Maps");
+        String right=T1ClusterWazeRouter.routeGoogleMaps(c,
+            intent("com.google.android.apps.maps",base,value));
         boolean both=submitted(right);
         if(!both)T1GoogleMapsReplacement.cancel(c);
         String status=both?
