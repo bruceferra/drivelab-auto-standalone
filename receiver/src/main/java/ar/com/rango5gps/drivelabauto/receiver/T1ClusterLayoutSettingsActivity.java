@@ -103,17 +103,23 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
             slider("Posición vertical",T1ClusterLayoutPolicy.Y,0,0,100,1);
         }
         if(T1ClusterLayoutPolicy.MODE_SPLIT.equals(mode)){
-            slider("Porcentaje ventana izquierda · WAZE",
+            boolean reversed=T1ClusterLayoutPolicy.inverted(this);
+            button("INVERTIR PANELES · GOOGLE 40% IZQ / WAZE 60% DER",
+                this::invertPanels);
+            text("Orientación: "+(reversed?
+                "Google Maps izquierda / Waze derecha":
+                "Waze izquierda / Google Maps derecha"),15);
+            slider("Porcentaje ventana izquierda · "+
+                    (reversed?"GOOGLE MAPS":"WAZE"),
                 T1ClusterLayoutPolicy.SPLIT_PERCENT,50,30,70,1);
-            button("−10 % WAZE · +10 % GOOGLE MAPS",
+            button("−10 % IZQUIERDA / +10 % DERECHA",
                 ()->adjustSplit(-10));
-            button("+10 % WAZE · −10 % GOOGLE MAPS",
+            button("+10 % IZQUIERDA / −10 % DERECHA",
                 ()->adjustSplit(10));
-            text("Izquierda SIEMPRE Waze (navegación directa) · "+
-                "Derecha: "+T1ClusterLayoutPolicy.secondLabel(this)+
-                ". Los botones +10/−10 ajustan 30–70 %, con prueba "+
-                "inmediata SOLO si la T1 está detenida en P.",14);
-            button("ELEGIR APP DERECHA",this::chooseSecondApp);
+            text("Google Maps queda a la izquierda y Waze a la derecha "+
+                "al invertir. Ajuste real SOLO en P y 0 km/h; "+
+                "verificá la imagen antes de confirmar el diseño.",14);
+            button("ELEGIR SEGUNDA APP (GOOGLE MAPS)",this::chooseSecondApp);
         }
         button("PROBAR DISEÑO EN DISPLAY · SOLO EN P Y 0 KM/H",
             this::testLayout);
@@ -191,7 +197,8 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
             T1ClusterLayoutPolicy.Y,0,0,100);
         preview.update(mode,ratio,w,h,x,y,
             T1ClusterWazeRouter.selectedAppLabel(this),
-            T1ClusterLayoutPolicy.secondLabel(this));
+            T1ClusterLayoutPolicy.secondLabel(this),
+            T1ClusterLayoutPolicy.inverted(this));
         if(previewState!=null)
             previewState.setText("División: "+ratio+"% / "+(100-ratio)+
                 "% · ventana "+w+"% × "+h+"% · "+
@@ -317,6 +324,15 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
         });
         updateAdbStatus();
     }
+    private void invertPanels(){
+        if(!T1ClusterLayoutPolicy.MODE_SPLIT.equals(
+            T1ClusterLayoutPolicy.mode(this)))return;
+        T1ClusterLayoutPolicy.invertPanels(this);
+        render();
+        // The button tests both REAL task bounds only when P/0 is verified.
+        // A changed layout is not trusted for boot/route until confirmed.
+        testLayout();
+    }
     private void adjustSplit(int delta){
         if(!T1ClusterLayoutPolicy.MODE_SPLIT.equals(
             T1ClusterLayoutPolicy.mode(this)))return;
@@ -367,10 +383,12 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
                 String originalMode=T1ClusterLayoutPolicy.mode(this);
                 int originalSplit=T1ClusterLayoutPolicy.number(this,
                     T1ClusterLayoutPolicy.SPLIT_PERCENT,50,30,70);
+                boolean originalInvert=T1ClusterLayoutPolicy.inverted(this);
                 T1ClusterAdbResize.Done verified=(message,ok)->{
                     if(isFinishing()||isDestroyed())return;
                     boolean same=originalMode.equals(
                         T1ClusterLayoutPolicy.mode(this))&&
+                        originalInvert==T1ClusterLayoutPolicy.inverted(this)&&
                         originalSplit==T1ClusterLayoutPolicy.number(this,
                             T1ClusterLayoutPolicy.SPLIT_PERCENT,50,30,70);
                     if(ok&&same&&!full){

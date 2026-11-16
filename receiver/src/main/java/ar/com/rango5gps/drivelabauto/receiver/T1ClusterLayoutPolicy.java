@@ -27,6 +27,7 @@ final class T1ClusterLayoutPolicy {
     static final String TEST_AT="layout_test_at";
     static final String TEST_MODE="layout_test_mode";
     static final String SPLIT_PERCENT="layout_split_pct";
+    static final String PANELS_INVERTED="layout_panels_inverted";
     static final String WIDTH="layout_width_pct";
     static final String HEIGHT="layout_height_pct";
     static final String X="layout_x_pct";
@@ -48,6 +49,17 @@ final class T1ClusterLayoutPolicy {
     static int number(Context c,String key,int defaultValue,int min,int max){
         return T1ClusterLayoutMath.bounded(
             prefs(c).getInt(key,defaultValue),min,max);
+    }
+    static boolean inverted(Context c){
+        return prefs(c).getBoolean(PANELS_INVERTED,false);
+    }
+    static void invertPanels(Context c){
+        if(!MODE_SPLIT.equals(mode(c)))return;
+        boolean flip=!inverted(c);
+        prefs(c).edit().putBoolean(PANELS_INVERTED,flip)
+            .putInt(SPLIT_PERCENT,flip?40:50)
+            .putBoolean(ACTIVE,false)
+            .remove(TEST_AT).remove(TEST_MODE).apply();
     }
     static boolean active(Context c){
         return prefs(c).getBoolean(ACTIVE,false)&&
@@ -170,11 +182,13 @@ final class T1ClusterLayoutPolicy {
             if(other==null)return "Segunda app no disponible: "+second;
             other.setPackage(second);
         }
-        String left=start(c,display,app,geometry(c,display,false),
-            T1ClusterWazeRouter.selectedAppLabel(c));
+        boolean reversed=MODE_SPLIT.equals(mode(c))&&inverted(c);
+        String left=start(c,display,app,geometry(c,display,reversed),
+            MODE_SPLIT.equals(mode(c))?"Waze":
+                T1ClusterWazeRouter.selectedAppLabel(c));
         if(!left.startsWith("APP SOLICITADA"))return left;
         if(MODE_SPLIT.equals(mode(c))){
-            String right=start(c,display,other,geometry(c,display,true),
+            String right=start(c,display,other,geometry(c,display,!reversed),
                 secondLabel(c));
             if(!right.startsWith("APP SOLICITADA"))return left+"\n"+right;
             return left+"\n"+right+
@@ -228,6 +242,7 @@ final class T1ClusterLayoutPolicy {
         // Direct voice/Xiaomi navigation always targets Waze in the LEFT
         // task. The approved split layout remains the saved geometry.
         // We do not run shell task changes while moving.
-        return start(c,display,waze,geometry(c,display,false),"Waze");
+        return start(c,display,waze,geometry(c,display,
+            MODE_SPLIT.equals(mode(c))&&inverted(c)),"Waze");
     }
 }

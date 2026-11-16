@@ -104,10 +104,13 @@ final class T1ClusterAdbResize {
                 if(!parked(app))
                     throw new IllegalStateException(
                         "BLOQUEADO: solo redimensionar con P y 0 km/h confirmados");
+                // Geometries belong to APPLICATIONS, never fixed screen sides.
+                // Inverted 40/60: Maps left, Waze right.
+                boolean inverted=split&&T1ClusterLayoutPolicy.inverted(app);
                 Rect left=T1ClusterLayoutPolicy.geometry(
-                    app,selected,false);
+                    app,selected,inverted);
                 Rect right=split?
-                    T1ClusterLayoutPolicy.geometry(app,selected,true):null;
+                    T1ClusterLayoutPolicy.geometry(app,selected,!inverted):null;
                 String result=applyMeasured(app,selected.getDisplayId(),
                     split,left,right);
                 deliver(app,result,result.startsWith("VERIFICADO"),done);

@@ -13,13 +13,16 @@ final class T1ClusterLayoutPreview extends View {
     private String mode="FULL";
     private int split=50,width=70,height=70,x=0,y=0;
     private String first="Waze",second="Google Maps";
+    private boolean inverted;
     T1ClusterLayoutPreview(Context c){
         super(c);setMinimumHeight(160);
     }
     void update(String layout,int ratio,int widthPct,int heightPct,
-                int leftPct,int topPct,String app,String secondApp){
+                int leftPct,int topPct,String app,String secondApp,
+                boolean panelsInverted){
         mode=layout;split=ratio;width=widthPct;height=heightPct;
         x=leftPct;y=topPct;first=app;second=secondApp;
+        inverted=panelsInverted;
         invalidate();
     }
     @Override protected void onMeasure(int widthSpec,int heightSpec){
@@ -41,10 +44,12 @@ final class T1ClusterLayoutPreview extends View {
         if("SPLIT".equals(mode)){
             area(canvas,left,top,cw,ch,
                 T1ClusterLayoutMath.left(pxW,pxH,split),pxW,pxH,
-                0xFF0F756F,"Waze");
+                inverted?0xFF1E557E:0xFF0F756F,
+                inverted?second:"Waze");
             area(canvas,left,top,cw,ch,
                 T1ClusterLayoutMath.right(pxW,pxH,split),pxW,pxH,
-                0xFF1E557E,second);
+                inverted?0xFF0F756F:0xFF1E557E,
+                inverted?"Waze":second);
         }else if("WINDOW".equals(mode)){
             area(canvas,left,top,cw,ch,
                 T1ClusterLayoutMath.window(pxW,pxH,width,height,x,y),

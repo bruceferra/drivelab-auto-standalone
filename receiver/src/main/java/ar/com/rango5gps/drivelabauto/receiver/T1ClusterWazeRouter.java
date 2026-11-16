@@ -234,7 +234,8 @@ final class T1ClusterWazeRouter {
             Display display=selected(c);
             if(display==null)return "Display 1 no disponible";
             return T1ClusterLayoutPolicy.start(c,display,maps,
-                T1ClusterLayoutPolicy.geometry(c,display,true),"Google Maps");
+                T1ClusterLayoutPolicy.geometry(c,display,
+                    !T1ClusterLayoutPolicy.inverted(c)),"Google Maps");
         }
         return launchOnDisplay(c,maps,false,false,"Google Maps",false);
     }
