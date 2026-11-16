@@ -50,7 +50,9 @@ final class T1GoogleMapsReplacement {
         String n=norm(value);
         // Matches Maps' prompt about STOPPING the CURRENT navigation.
         // Does not match generic Yes/No, permissions or location notices.
-        return (n.contains("detener")&&n.contains("navegac"))||
+        return (n.contains("salir")&&n.contains("navegac"))||
+            (n.contains("quit")&&n.contains("navigat"))||
+            (n.contains("detener")&&n.contains("navegac"))||
             (n.contains("finalizar")&&n.contains("navegac"))||
             (n.contains("stop")&&n.contains("navigat"))||
             (n.contains("end")&&n.contains("navigat"))||
@@ -58,7 +60,9 @@ final class T1GoogleMapsReplacement {
     }
     static boolean stopAction(String value){
         String n=norm(value);
-        return n.equals("si, detener")||n.equals("si, detener navegacion")||
+        return n.equals("salir")||n.equals("salir de la navegacion")||
+            n.equals("si, salir")||n.equals("exit navigation")||
+            n.equals("si, detener")||n.equals("si, detener navegacion")||
             n.equals("si, finalizar")||n.equals("detener navegacion")||
             n.equals("detener")||n.equals("yes, stop")||
             n.equals("yes, stop navigation")||n.equals("stop navigating")||

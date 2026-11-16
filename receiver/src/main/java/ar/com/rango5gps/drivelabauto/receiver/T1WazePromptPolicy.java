@@ -17,7 +17,10 @@ final class T1WazePromptPolicy {
     }
     static boolean question(String label){
         String s=normalize(label);
-        return s.equals("pase requerido")||
+        return s.contains("quieres apagar waze")||
+            s.contains("quiere apagar waze")||
+            s.contains("exit waze")||
+            s.equals("pase requerido")||
             s.contains("pase requerido")||
             s.contains("telepase requerido")||
             s.contains("se requiere un pase")||
@@ -53,7 +56,9 @@ final class T1WazePromptPolicy {
     }
     static boolean dismiss(String label){
         String s=normalize(label);
-        return s.equals("omitir pase")||
+        return s.equals("no apagar")||s.equals("no salir")||
+            s.equals("permanecer")||s.equals("stay")||
+            s.equals("omitir pase")||
             s.equals("sin pase")||
             s.equals("continuar sin pase")||
             s.equals("no agregar pase")||
@@ -75,7 +80,9 @@ final class T1WazePromptPolicy {
     }
     static boolean otherAction(String label){
         String s=normalize(label);
-        return s.equals("agregar pase")||
+        return s.equals("apagar waze")||s.equals("salir de waze")||
+            s.equals("exit waze")||s.equals("salir")||
+            s.equals("agregar pase")||
             s.equals("anadir pase")||
             s.equals("configurar pase")||
             s.equals("agregar telepase")||
