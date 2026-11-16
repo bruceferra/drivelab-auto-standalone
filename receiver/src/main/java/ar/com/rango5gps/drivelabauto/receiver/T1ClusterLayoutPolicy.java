@@ -147,6 +147,12 @@ final class T1ClusterLayoutPolicy {
             throw new IllegalArgumentException("La aplicación elegida no está disponible");
         if(aOn&&bOn&&a.equals(b))
             throw new IllegalArgumentException("Elegí aplicaciones diferentes");
+        boolean sameConfig=panelAOn(c)==aOn&&panelBOn(c)==bOn&&
+            a.equals(firstPackage(c))&&b.equals(secondPackage(c))&&
+            number(c,SPLIT_PERCENT,50,30,70)==
+                T1ClusterLayoutMath.bounded(percent,30,70)&&
+            !inverted(c)&&MODE_SPLIT.equals(mode(c))==(aOn&&bOn);
+        boolean confirmed=sameConfig&&active(c);
         prefs(c).edit()
             .putBoolean(PANEL_A_ON,aOn).putBoolean(PANEL_B_ON,bOn)
             .putString(T1ClusterWazeRouter.APP_PACKAGE,a)
@@ -155,9 +161,10 @@ final class T1ClusterLayoutPolicy {
             .putString(MODE,aOn&&bOn?MODE_SPLIT:MODE_FULL)
             .putInt(SPLIT_PERCENT,T1ClusterLayoutMath.bounded(percent,30,70))
             .putBoolean(PANELS_INVERTED,false)
-            .putBoolean(ACTIVE,false)
-            .remove(TEST_AT).remove(TEST_MODE)
+            .putBoolean(ACTIVE,confirmed)
             .apply();
+        if(!confirmed) prefs(c).edit()
+            .remove(TEST_AT).remove(TEST_MODE).apply();
     }
     private static Rect asRect(T1ClusterLayoutMath.Frame f){
         return new Rect(f.left,f.top,f.right,f.bottom);
@@ -286,8 +293,12 @@ final class T1ClusterLayoutPolicy {
         prefs(c).edit().putBoolean(ACTIVE,true).apply();
         return true;
     }
+    /** Sender routes are independent from the ADB measurement result.
+     * A requested split can have bounds that the vendor does not report.
+     * Never fall back to fullscreen: always target the configured panel's
+     * freeform task on the selected secondary display. */
     static String routeWazeIfActive(Context c,Intent waze){
-        if(!active(c))return null;
+        if(MODE_FULL.equals(mode(c)))return null;
         Display display=T1ClusterWazeRouter.selected(c);
         if(display==null)return "Layout clúster no disponible";
         if(!WAZE.equals(waze.getPackage()))
@@ -296,7 +307,7 @@ final class T1ClusterLayoutPolicy {
         // occupies either panel, retain precisely its approved geometry.
         boolean split=MODE_SPLIT.equals(mode(c));
         boolean wazeInA=WAZE.equals(firstPackage(c));
-        boolean wazeInB=WAZE.equals(secondPackage(c));
+        boolean wazeInB=split&&WAZE.equals(secondPackage(c));
         if(split&&!wazeInA&&!wazeInB)
             return "Waze no está elegido en ninguno de los paneles";
         if(!split&&!WAZE.equals(singlePackage(c)))
