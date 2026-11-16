@@ -27,7 +27,7 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
             refreshModes();
             report.setText(T1WazeWheelService.describe(
                 T1WheelSettingsActivity.this)+
-                "\n\nCONTROL WAZE: "+
+                "\n\nCONTROL DE LA APP: "+
                 (p.getBoolean(T1WazeWheelService.ENABLED,false)?
                     "ACTIVO":"DESACTIVADO")+
                 "\n\nFOCO PANTALLA: "+
@@ -220,13 +220,17 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
         learning(body,"ATRÁS / CANCELAR",T1WazeWheelService.BACK);
         learning(body,"ACCESO DIRECTO A RUTAS (OPCIONAL)",
             T1WazeWheelService.ROUTES);
-        button(body,"RESTABLECER TECLAS ANDROID DPAD",()->{
+        button(body,"RESTABLECER TECLAS DE ESTA APP (DPAD)",()->{
             prefs().edit()
-                .putInt(T1WazeWheelService.NEXT,KeyEvent.KEYCODE_DPAD_RIGHT)
-                .putInt(T1WazeWheelService.PREV,KeyEvent.KEYCODE_DPAD_LEFT)
-                .putInt(T1WazeWheelService.OK,KeyEvent.KEYCODE_DPAD_CENTER)
-                .putInt(T1WazeWheelService.BACK,KeyEvent.KEYCODE_BACK)
-                .putInt(T1WazeWheelService.ROUTES,-1)
+                .putInt(T1WazeWheelService.settingKey(this,T1WazeWheelService.NEXT),
+                    KeyEvent.KEYCODE_DPAD_RIGHT)
+                .putInt(T1WazeWheelService.settingKey(this,T1WazeWheelService.PREV),
+                    KeyEvent.KEYCODE_DPAD_LEFT)
+                .putInt(T1WazeWheelService.settingKey(this,T1WazeWheelService.OK),
+                    KeyEvent.KEYCODE_DPAD_CENTER)
+                .putInt(T1WazeWheelService.settingKey(this,T1WazeWheelService.BACK),
+                    KeyEvent.KEYCODE_BACK)
+                .putInt(T1WazeWheelService.settingKey(this,T1WazeWheelService.ROUTES),-1)
                 .remove(T1WazeWheelService.PENDING).apply();
         });
         button(body,"ABRIR WAZE Y PROBAR",()->{
