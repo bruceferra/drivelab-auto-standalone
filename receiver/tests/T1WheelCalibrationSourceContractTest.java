@@ -26,7 +26,9 @@ public final class T1WheelCalibrationSourceContractTest {
         check(service.contains("observeActivityKey(Context c,KeyEvent event)"),
             "foreground activity must have second read-only input path");
         check(service.contains("AccessibilityNodeInfo root=activeRoot();")&&
-              service.contains("return T1WheelTarget.panelB(this)?mapsRoot():wazeRoot();")&&
+              service.contains("String pkg=T1WheelTarget.packageName(this);")&&
+              service.contains("if(WAZE.equals(pkg))")&&
+              service.contains("if(MAPS.equals(pkg))return mapsRoot();")&&
               service.contains("if(root==null){")&&
               service.contains("getWindowsOnAllDisplays()"),
             "normal route control must stay restricted to Waze across displays");
