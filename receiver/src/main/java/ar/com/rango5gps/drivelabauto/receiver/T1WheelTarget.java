@@ -50,6 +50,20 @@ final class T1WheelTarget {
     static boolean mapsAllowed(Context c){
         return MAPS.equals(packageName(c))&&mapsPresent(c);
     }
+    /** Routes and their confirmations belong to the displayed app, not
+     * whichever A/B panel the driver last selected for steering input. */
+    static boolean mapsConfigured(Context c){
+        if(!T1ClusterWazeRouter.enabled(c)||
+           T1ClusterWazeRouter.selected(c)==null)return false;
+        boolean split=T1ClusterLayoutPolicy.MODE_SPLIT.equals(
+            T1ClusterLayoutPolicy.mode(c));
+        if(!split)
+            return MAPS.equals(T1ClusterLayoutPolicy.singlePackage(c));
+        return (T1ClusterLayoutPolicy.panelAOn(c)&&
+                MAPS.equals(T1ClusterLayoutPolicy.firstPackage(c)))||
+               (T1ClusterLayoutPolicy.panelBOn(c)&&
+                MAPS.equals(T1ClusterLayoutPolicy.secondPackage(c)));
+    }
     static boolean mapsPresent(Context c){
         return selectedPanelEnabled(c)&&
             T1ClusterWazeRouter.enabled(c)&&
