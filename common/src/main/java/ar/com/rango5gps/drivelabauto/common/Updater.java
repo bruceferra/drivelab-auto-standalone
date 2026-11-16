@@ -251,7 +251,7 @@ public final class Updater {
         String msg=e.getMessage();
         if(msg==null||msg.trim().isEmpty())msg=e.getClass().getSimpleName();
         if(msg.length()>65)msg=msg.substring(0,65);
-        return msg.replace('\\n',' ').replace('\\r',' ');
+        return msg.replace((char)10,' ').replace((char)13,' ');
     }
 
     /** Release tag, HTTPS URL, immutable asset ID and GitHub SHA-256 must all
