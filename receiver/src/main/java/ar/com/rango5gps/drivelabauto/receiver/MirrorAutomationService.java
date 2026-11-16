@@ -59,54 +59,52 @@ public final class MirrorAutomationService extends Service {
 
     @Override public IBinder onBind(Intent ignored){return null;}
     private SharedPreferences prefs(){return getSharedPreferences(PREFS,MODE_PRIVATE);}
-    /** Fail-safe after real returns stayed uncertain on the T1.
-     * NEVER auto-enable just because an Activity opens: it used to do so,
-     * even when the owner previously disabled automatic reverse.
-     * A service whose heartbeat died may have lost the tilt/return ledger.
-     * Only explicit ACTION_AUTO after OEM P/0 verified manual confirmation
-     * can start a fresh cycle.
+    /**
+     * Driver preference: reverse tilt should be requested every time the
+     * DriveLab process starts, including a new ignition.  Never erase a
+     * physically unresolved pulse ledger or execute a command at this point.
+     * The OEM worker waits for fresh gear/speed and a transition INTO R.
      */
+    private static boolean unresolved(SharedPreferences p){
+        return p.getBoolean(PULSE_IN_FLIGHT,false)||
+            p.getInt(PENDING_LEFT,0)!=0||p.getInt(PENDING_RIGHT,0)!=0;
+    }
     static void activateOnAppOpen(Context context){
         SharedPreferences p=context.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
-        boolean auto=p.getBoolean(AUTO,false);
-        boolean safetyHold=p.getBoolean(SAFETY_HOLD,true);
         long age=System.currentTimeMillis()-p.getLong(LAST_POLL,0L);
-        String pose=p.getString(POSITION,"");
-        if(!auto)return; // NEVER arm from an Activity opening.
-        // Keep an ACTIVE foreground monitor intact while mirrors are down:
-        // killing its AUTO state here would prevent P+30s restoration!
-        if(!safetyHold&&p.getBoolean(SERVICE_ACTIVE,false)&&
-           age>=0&&age<=3000)return;
-        if(safetyHold || pose.startsWith("INCIERTA") ||
-           pose.startsWith("R · inclinados")){
-            p.edit().putBoolean(AUTO,false)
-                .putBoolean(SAFETY_HOLD,true)
-                .putString(STATUS,"REVERSA AUTO SUSPENDIDA: los espejos "+
-                    "pueden estar bajos. Ajustalos con controles originales "+
-                    "detenido en P y confirmá la referencia desde REVERSA.")
+        if(p.getBoolean(AUTO,false)&&
+           p.getBoolean(SERVICE_ACTIVE,false)&&age>=0&&age<3000L)
+            return; // keep a healthy live return counter intact
+        if(unresolved(p)){
+            p.edit().putBoolean(AUTO,false).putBoolean(SAFETY_HOLD,true)
+                .putString(STATUS,"ESPEJOS: movimiento incompleto registrado; "+
+                    "el usuario puede corregir físicamente la posición")
                 .apply();
             return;
         }
-        // Preserve an explicit, live, healthy opt-in without restarting the
-        // finite-state machine and losing the recorded return pulses.
-        // An interrupted process has no reliable issued-pulse history,
-        // even if the last recorded state was "NORMAL".
-        p.edit().putBoolean(AUTO,false)
-            .putBoolean(SAFETY_HOLD,true)
-            .putString(POSITION,"INCIERTA · reinicio sin historial de pulsos")
-            .putString(STATUS,"AUTO SUSPENDIDA: servicio reiniciado "+
-                "sin historial físico verificable. Comprobá los espejos "+
-                "detenido en P y confirmá la referencia manual.")
+        // A stale orange warning with ZERO issued pulses must not disable
+        // the owner-preferred AUTO at every ignition.
+        p.edit().putBoolean(SAFETY_HOLD,false)
+            .putBoolean(AUTO,true)
+            .putBoolean(SERVICE_ACTIVE,false)
+            .putString(POSITION,"AUTO · referencia visual del conductor")
+            .putString(STATUS,"AUTO solicitado al abrir · esperando datos OEM")
             .apply();
+        try{
+            context.startForegroundService(new Intent(context,
+                MirrorAutomationService.class).setAction(ACTION_AUTO));
+        }catch(RuntimeException ex){
+            p.edit().putBoolean(AUTO,false)
+                .putString(STATUS,"AUTO no iniciado: "+
+                    ex.getClass().getSimpleName()).apply();
+        }
     }
-    /** Recovery watchdog; only for an already armed preference.
-     * Never re-arms after a manual fold or an uncertain actuator result. */
+    /** Restart a stale worker only with an empty motion ledger. */
     static void ensureRunning(Context context){
-        SharedPreferences p=context.getSharedPreferences(PREFS,MODE_PRIVATE);
-        if(!p.getBoolean(AUTO,false)||p.getBoolean(SAFETY_HOLD,true)||
-            p.getString(POSITION,"").startsWith("INCIERTA"))return;
+        SharedPreferences p=context.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
+        if(!p.getBoolean(AUTO,false)||unresolved(p))return;
         long age=System.currentTimeMillis()-p.getLong(LAST_POLL,0L);
-        if(p.getBoolean(SERVICE_ACTIVE,false)&&age>=0&&age<=3000)return;
+        if(p.getBoolean(SERVICE_ACTIVE,false)&&age>=0&&age<3000L)return;
         activateOnAppOpen(context);
     }
     private int steps(String key){
@@ -116,10 +114,7 @@ public final class MirrorAutomationService extends Service {
         // A restarted process cannot know the actual manual D pose.
         // Require conscious re-arming before any new automatic movement.
         if(intent==null){
-            prefs().edit().putBoolean(AUTO,false)
-                .putBoolean(SERVICE_ACTIVE,false)
-                .putString(STATUS,"AUTO suspendido tras reiniciar app; "+
-                    "ajustá espejos D y volvé a activar AUTO").apply();
+            prefs().edit().putBoolean(SERVICE_ACTIVE,false).apply();
             stopSelf();return START_NOT_STICKY;
         }
         String action=intent.getAction();
@@ -226,10 +221,7 @@ public final class MirrorAutomationService extends Service {
             // A physical "normal" position has no readback sensor. Do not
             // rearm after software update/reboot/partial return without the
             // driver's explicit reference confirmation in P at 0 km/h.
-            if(prefs().getBoolean(SAFETY_HOLD,true)||
-                prefs().getBoolean(PULSE_IN_FLIGHT,false)||
-                prefs().getInt(PENDING_LEFT,0)>0||
-                prefs().getInt(PENDING_RIGHT,0)>0){
+            if(unresolved(prefs())){
                 prefs().edit().putBoolean(AUTO,false)
                     .putString(STATUS,"AUTO BLOQUEADA: primero revisá la "+
                         "posición de ambos espejos con los mandos originales "+
@@ -240,7 +232,8 @@ public final class MirrorAutomationService extends Service {
             // First activation after a stopped/failed service is permitted
             // only with a known, visually acknowledged normal reference.
             String physical=prefs().getString(POSITION,"");
-            if(physical.startsWith("INCIERTA")||physical.startsWith("R · inclinados")){
+            if((physical.startsWith("INCIERTA")||physical.startsWith("R · inclinados"))&&
+               unresolved(prefs())){
                 prefs().edit().putBoolean(AUTO,false)
                     .putString(STATUS,"AUTO BLOQUEADO: la app no sabe si los espejos "+
                         "siguen bajos. Ajustá con mandos OEM, detenido en P, "+
@@ -248,6 +241,7 @@ public final class MirrorAutomationService extends Service {
                 stopSelf();return START_NOT_STICKY;
             }
             prefs().edit().putBoolean(AUTO,true)
+                .putBoolean(SAFETY_HOLD,false)
                 .putString(POSITION,"AUTO armado · referencia de ángulo NO medida")
                 .putString(STATUS,"AUTO armado · esperando transición nueva a R").apply();
         }else if(ACTION_RECOVER.equals(action)){
@@ -559,13 +553,22 @@ public final class MirrorAutomationService extends Service {
     }
     @Override public void onDestroy(){
         stop=true;if(worker!=null)worker.interrupt();
-        if(prefs().getBoolean(AUTO,false))
-            prefs().edit().putBoolean(AUTO,false)
-                .putBoolean(SAFETY_HOLD,true)
+        if(prefs().getBoolean(AUTO,false)){
+            boolean hasUnresolved=unresolved(prefs());
+            SharedPreferences.Editor edit=prefs().edit()
+                .putBoolean(AUTO,false)
                 .putBoolean(SERVICE_ACTIVE,false)
-                .putString(POSITION,"INCIERTA · servicio detenido sin confirmación física")
-                .putString(STATUS,"AUTO suspendido por Android. Revisar espejos "+
-                    "con mandos originales en P; no se rearmará al iniciar.").apply();
+                .putBoolean(SAFETY_HOLD,hasUnresolved);
+            if(hasUnresolved)
+                edit.putString(POSITION,
+                    "INCIERTA · movimiento interrumpido")
+                    .putString(STATUS,
+                        "Movimiento de espejo pendiente; corrección manual disponible");
+            else edit.putString(POSITION,"AUTO · sin pulsos pendientes")
+                .putString(STATUS,
+                    "AUTO detenido; se solicitará de nuevo al iniciar DriveLab");
+            edit.apply();
+        }
         super.onDestroy();
     }
 }

@@ -53,6 +53,7 @@ public abstract class T1ImmersiveActivity extends Activity {
         RecirculationGuardService.ensureRunning(this);
         MirrorAutomationService.ensureRunning(this);
         if(globalToolbar!=null)globalToolbar.onResume();
+        T1OemMicrophoneService.ensureRunning(this);
     }
     @Override protected void onPause(){
         activeScreen=false;

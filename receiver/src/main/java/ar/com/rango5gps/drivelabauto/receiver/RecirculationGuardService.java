@@ -50,6 +50,22 @@ public final class RecirculationGuardService extends Service {
                 .apply();
         }
     }
+    /** A past ignition's OEM reversion does not mean the next ignition
+     * has the same defogging conditions. Retry with fresh OEM validation.
+     * Current-session repeated OEM overrides still suspend repeated writes.
+     */
+    static void newIgnition(Context context){
+        SharedPreferences p=context.getSharedPreferences(PREFS,MODE_PRIVATE);
+        if(p.getBoolean(PAUSED,false)){
+            p.edit().putBoolean(PAUSED,false)
+                .putLong(LAST_CONFIRMED,0L)
+                .putInt(LAST_VALUE,-1)
+                .putString(STATUS,
+                    "AIRE INTERIOR · nuevo encendido, reconectando OEM")
+                .apply();
+        }
+        p.edit().putString(MODE,MODE_INTERIOR).apply();
+    }
     /**
      * Automatic cabin-air preference requested by the vehicle owner:
      * on a fresh DriveLab main-screen launch, select interior air and

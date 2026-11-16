@@ -561,8 +561,8 @@ final class T1GlobalToolbar {
         String pose=p.getString(MirrorAutomationService.POSITION,"");
         // Tilted during a healthy live AUTO run is EXPECTED; uncertainty
         // matters when the service is gone and physical return was not seen.
-        boolean unknown=(pose.startsWith("INCIERTA")||
-            pose.startsWith("R · inclinados"))&&!healthy;
+        boolean unresolved=inFlight||pendingLeft>0||pendingRight>0;
+        boolean unknown=unresolved&&!healthy;
         mirrorAutoButton.setText(unknown?"ESPEJOS · REVISAR POSICIÓN":
             healthy?"REVERSA AUTO ✓":
             auto?"REVERSA AUTO · REVISAR":"REVERSA MANUAL");
@@ -575,8 +575,7 @@ final class T1GlobalToolbar {
         // and the exact pending ledger is empty. The button remains
         // accessible in neutral gray for future manual recovery.
         if(mirrorRecoverButton!=null){
-            boolean needsRecovery=safetyHold||unknown||inFlight||
-                pendingLeft>0||pendingRight>0;
+            boolean needsRecovery=unresolved;
             T1JetourTheme.button(mirrorRecoverButton,needsRecovery?
                 T1JetourTheme.AMBER_BUTTON:T1JetourTheme.PANEL_HI);
             mirrorRecoverButton.setText(needsRecovery?
@@ -612,9 +611,9 @@ final class T1GlobalToolbar {
         // No redundant confirmation dialog. Keep uncertainty guard: a prior
         // interrupted actuator motion still requires physical inspection.
         String pose=p.getString(MirrorAutomationService.POSITION,"");
-        if(p.getBoolean(MirrorAutomationService.SAFETY_HOLD,true)||
-                pose.startsWith("INCIERTA")||
-                pose.startsWith("R · inclinados")){
+        if(p.getBoolean(MirrorAutomationService.PULSE_IN_FLIGHT,false)||
+                p.getInt(MirrorAutomationService.PENDING_LEFT,0)>0||
+                p.getInt(MirrorAutomationService.PENDING_RIGHT,0)>0){
             showMirrorRecovery();
             return;
         }

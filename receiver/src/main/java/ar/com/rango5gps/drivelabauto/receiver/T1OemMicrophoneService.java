@@ -68,6 +68,18 @@ public final class T1OemMicrophoneService extends Service {
     static SharedPreferences prefs(Context c){
         return c.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
     }
+    /** Make the unified OEM hardkey subscription available after the
+     * launcher opens DriveLab, even if boot background starts were denied. */
+    static void ensureRunning(Context c){
+        if(!prefs(c).getBoolean(ENABLED,false)||serviceAlive(c))return;
+        try{
+            c.startForegroundService(new Intent(c,T1OemMicrophoneService.class)
+                .setAction(ACTION_START));
+        }catch(RuntimeException error){
+            status(c,"Micrófono/volante OEM: no se pudo reactivar · "+
+                error.getClass().getSimpleName());
+        }
+    }
     static void status(Context c,String value){
         prefs(c).edit().putString(STATUS,value).apply();
     }

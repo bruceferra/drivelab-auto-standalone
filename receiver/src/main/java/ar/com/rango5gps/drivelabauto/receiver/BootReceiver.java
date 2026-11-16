@@ -68,6 +68,8 @@ public final class BootReceiver extends BroadcastReceiver {
                     .apply();
             }
         }
+        if(Intent.ACTION_BOOT_COMPLETED.equals(action))
+            RecirculationGuardService.newIgnition(context);
         // Recirculation has independent opt-in and a dedicated foreground
         // service, even when DriveLab UI / Maps is closed. An OEM protective
         // PAUSED state is NOT cleared on reboot or package replacement.
