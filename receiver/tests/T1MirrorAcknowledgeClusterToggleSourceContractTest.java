@@ -52,7 +52,9 @@ public final class T1MirrorAcknowledgeClusterToggleSourceContractTest {
             toolbar.contains("T1ClusterWazeRouter.launchSelectedApp(owner,true,false)")&&
             toolbar.contains("T1ClusterAdbResize.closeClusterApps(owner,")&&
             toolbar.contains(".putBoolean(T1ClusterWazeRouter.AUTO_BOOT,false)")&&
-            toolbar.contains(".putBoolean(T1ClusterLayoutPolicy.ACTIVE,false)"),
+            !toolbar.substring(toolbar.indexOf("private void toggleCluster()"),
+                toolbar.indexOf("private void refreshMirrorAuto()")).contains(
+                    ".putBoolean(T1ClusterLayoutPolicy.ACTIVE,false)"),
             "Cluster must be first 2nd-row button and stop forwarding before closing apps");
         check(router.contains("CLOSE_PENDING=")&&
             resize.contains("static void closeClusterApps(Context c,Done done)")&&

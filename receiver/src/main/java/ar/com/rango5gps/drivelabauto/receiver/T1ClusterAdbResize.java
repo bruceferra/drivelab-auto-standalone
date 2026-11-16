@@ -11,7 +11,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 /** The missing post-launch operation from the T1Launcher APK:
  * obtain the REAL Waze/Maps task IDs, run "am task resize", then query
- * task bounds again. Requires locally authorized ADB TCP via 127.0.0.1:5555.
+ * task bounds again. Requires authorized ADB TCP on 5556 or 5555.
  * Deliberately refuses unknown display, duplicated tasks or arbitrary apps.
  */
 final class T1ClusterAdbResize {
@@ -35,7 +35,7 @@ final class T1ClusterAdbResize {
             .putBoolean(T1ClusterLayoutPolicy.ACTIVE,false)
             .putString(RESULT,on?
                 "Puente habilitado. Autorizá depuración ADB local y PROBÁ "+
-                "en P. La conexión no funciona sin adbd TCP 5555.":
+                "en P. DriveLab busca automáticamente ADB en 5556 o 5555.":
                 "Puente ADB desactivado. Waze fullscreen sigue disponible.")
             .apply();
     }
@@ -69,8 +69,9 @@ final class T1ClusterAdbResize {
             try{
                 String out=taskList(app);
                 ok=out!=null&&!out.trim().isEmpty()&&!errorOutput(out);
-                result=ok?"ADB LOCAL CONECTADO: tareas legibles. "+
-                    "Falta confirmar los tamaños en Display 1.":
+                result=ok?"ADB LOCAL CONECTADO en puerto "+
+                    T1LocalAdbClient.connectedPort()+
+                    ": tareas legibles. Falta confirmar tamaños en Display 1.":
                     "ADB responde pero no se obtuvo lista de tareas: "+
                     String.valueOf(out).substring(0,Math.min(
                         200,String.valueOf(out).length()));

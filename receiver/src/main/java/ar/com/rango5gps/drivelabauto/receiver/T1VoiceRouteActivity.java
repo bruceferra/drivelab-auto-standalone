@@ -114,11 +114,30 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
             // a transparent Activity owns the microphone only for this
             // physical press, and uses the SAME Waze/math/news dispatcher.
             getWindow().setBackgroundDrawableResource(android.R.color.transparent);
+            getWindow().clearFlags(
+                android.view.WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+            getWindow().setDimAmount(0f);
+            getWindow().addFlags(
+                android.view.WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL);
+            getWindow().setGravity(android.view.Gravity.TOP|
+                android.view.Gravity.CENTER_HORIZONTAL);
+            // The OEM translucent full-screen Activity without content
+            // was displayed as an entirely BLACK screen on this T1 ROM.
+            // Give it a small actual decor window and visible status instead.
             status=new TextView(this);
             heard=new TextView(this);
             audioStatus=new TextView(this);
-            status.setText("Reconocimiento interno solicitado");
+            status.setText("🎤 Escuchando…");
+            status.setGravity(android.view.Gravity.CENTER);
+            status.setSingleLine(true);
+            status.setTextColor(T1JetourTheme.WHITE);
+            status.setTextSize(17f);
+            status.setBackground(T1JetourTheme.surface(
+                T1JetourTheme.PANEL_HI,16));
             audioStatus.setText("AUDIO: esperando motor TTS");
+            getWindow().setContentView(status);
+            getWindow().setLayout(T1JetourTheme.dp(this,260),
+                T1JetourTheme.dp(this,54));
             initSpeechOutput();
             voiceHandler.postDelayed(this::listen,250L);
             return;

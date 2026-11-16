@@ -15,6 +15,7 @@ import android.widget.HorizontalScrollView;
 import android.widget.LinearLayout;
 import android.widget.NumberPicker;
 import android.widget.TextView;
+import java.util.Date;
 
 /**
  * One owner-requested fixed toolbar shared by ALL Receiver screens, outside
@@ -33,7 +34,14 @@ final class T1GlobalToolbar {
     private Button clusterButton,optimizer,mirrorButton,mirrorAutoButton,mirrorRecoverButton,airButton,avsButton,roadModeButton;
     // Permanent first-row read-only OEM 1046 / 1040 / 1041 indicators.
     private Button regenIndicator,batteryIndicator,socTargetIndicator;
-    private TextView info;
+    private TextView info,clockDate,clockTime;
+    private final Runnable clockTick=new Runnable(){
+        @Override public void run(){
+            if(!foreground)return;
+            refreshClock();
+            main.postDelayed(this,1000L);
+        }
+    };
     private boolean foreground;
     private long lastPoll=0, lastDevicesPoll=0;
     private int mirrorState=-1; // OEM 2003: 0 folded, 1 unfolded
@@ -136,6 +144,26 @@ final class T1GlobalToolbar {
         info.setEllipsize(TextUtils.TruncateAt.END);
         info.setPadding(dp(12),0,dp(5),0);
         header.addView(info,new LinearLayout.LayoutParams(0,-2,1));
+        // Read-only clock stays at upper right, outside scrolling controls.
+        LinearLayout clockBox=new LinearLayout(owner);
+        clockBox.setOrientation(LinearLayout.VERTICAL);
+        clockBox.setGravity(Gravity.CENTER_VERTICAL|Gravity.RIGHT);
+        clockBox.setPadding(dp(4),0,dp(14),0);
+        clockDate=new TextView(owner);
+        clockDate.setGravity(Gravity.RIGHT);
+        clockDate.setSingleLine(true);
+        clockDate.setTextColor(T1JetourTheme.MUTED);
+        clockDate.setTextSize(14f);
+        clockTime=new TextView(owner);
+        clockTime.setGravity(Gravity.RIGHT);
+        clockTime.setSingleLine(true);
+        clockTime.setTypeface(null,Typeface.BOLD);
+        clockTime.setTextColor(T1JetourTheme.WHITE);
+        clockTime.setTextSize(19f);
+        clockBox.addView(clockDate);
+        clockBox.addView(clockTime);
+        header.addView(clockBox,new LinearLayout.LayoutParams(dp(255),-1));
+        refreshClock();
 
         HorizontalScrollView strip=new HorizontalScrollView(owner);
         strip.setFillViewport(false);
@@ -209,10 +237,13 @@ final class T1GlobalToolbar {
         lastDevicesPoll=android.os.SystemClock.elapsedRealtime();
         main.removeCallbacks(poll);
         main.post(poll);
+        main.removeCallbacks(clockTick);
+        main.post(clockTick);
     }
     void onPause(){
         foreground=false;
         main.removeCallbacks(poll);
+        main.removeCallbacks(clockTick);
         mirrors.cancel();
         mirrors.setForeground(false);
         windows.cancel();
@@ -221,6 +252,12 @@ final class T1GlobalToolbar {
     }
     private void note(String text){
         if(foreground&&info!=null)info.setText(text);
+    }
+    private void refreshClock(){
+        if(clockDate==null||clockTime==null)return;
+        Date now=new Date();
+        clockDate.setText(T1HeaderClockFormat.date(now));
+        clockTime.setText(T1HeaderClockFormat.time(now));
     }
     private void refreshAutoAndAir(){
         if(!foreground)return;
@@ -402,7 +439,9 @@ final class T1GlobalToolbar {
             // The OEM dashboard is not verified without a physical test.
             p.edit().putBoolean(T1ClusterWazeRouter.ENABLED,false)
                 .putBoolean(T1ClusterWazeRouter.AUTO_BOOT,false)
-                .putBoolean(T1ClusterLayoutPolicy.ACTIVE,false)
+                // Preserve the already-verified split layout preference
+                // across OFF/ON. Tasks are closed; geometry will be
+                // rechecked before ADB applies the saved bounds again.
                 .putBoolean(T1ClusterWazeRouter.CLOSE_PENDING,true)
                 .putString(T1ClusterWazeRouter.STATUS,
                     T1ClusterAdbResize.enabled(owner)?
@@ -450,7 +489,8 @@ final class T1GlobalToolbar {
             result=T1ClusterLayoutPolicy.boot(owner);
         else result=T1ClusterWazeRouter.launchSelectedApp(owner,true,false);
         boolean launched=result.startsWith("Waze SOLICITADO")||
-            result.startsWith("APP SOLICITADA:");
+            result.startsWith("APP SOLICITADA:")||
+            result.startsWith("APP SOLICITADA EN VENTANA:");
         if(!launched){
             // Never show green when Android refused the display.
             p.edit().putBoolean(T1ClusterWazeRouter.ENABLED,false)

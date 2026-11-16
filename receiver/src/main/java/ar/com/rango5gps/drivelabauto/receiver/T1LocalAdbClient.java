@@ -23,7 +23,8 @@ import java.math.BigInteger;
 /** ADB HOST protocol over the CAR's LOCAL LOOPBACK only.
  *
  * NOT a privileged shell. The owner first enables TCP ADB from an existing,
- * physically authorized USB/WebADB host: adb tcpip 5555. Android then asks to
+ * physically authorized USB/WebADB host. Jetour may persist port 5556
+ * while an explicitly started session listens on 5555. Android then asks to
  * trust this app's NEW 2048-bit host key. No root, no Shizuku, no commands
  * against remote devices and no arbitrary user-input shell execution.
  *
@@ -31,7 +32,9 @@ import java.math.BigInteger;
  * it never exposes an inbound socket or starts adbd by itself.
  */
 final class T1LocalAdbClient {
-    private static final int PORT=5555, MAX_PACKET=1024*1024;
+    private static final int MAX_PACKET=1024*1024;
+    private static final int PERSISTENT_PORT=5556, MANUAL_PORT=5555;
+    private static volatile int lastLocalPort=PERSISTENT_PORT;
     private static final int PROTOCOL=0x01000000;
     private static final String LOOPBACK="127.0.0.1";
     private static final String KEY_FILE="t1_drivelab_local_adb_rsa.pk8";
@@ -41,6 +44,35 @@ final class T1LocalAdbClient {
     };
     private T1LocalAdbClient(){}
 
+    /** Read-only socket discovery: only the two user-observed loopback ports.
+     * Never starts ADB, sets properties, roots the car or opens a listener.
+     */
+    private static Socket openLocal()throws Exception{
+        int first=lastLocalPort==MANUAL_PORT?MANUAL_PORT:PERSISTENT_PORT;
+        int second=first==PERSISTENT_PORT?MANUAL_PORT:PERSISTENT_PORT;
+        java.net.ConnectException failure=null;
+        for(int port:new int[]{first,second}){
+            Socket socket=new Socket();
+            try{
+                socket.connect(new InetSocketAddress(LOOPBACK,port),1500);
+                socket.setSoTimeout(9000);
+                lastLocalPort=port;
+                return socket;
+            }catch(java.net.ConnectException e){
+                failure=e;
+                try{socket.close();}catch(Exception ignored){}
+            }catch(java.net.SocketTimeoutException e){
+                try{socket.close();}catch(Exception ignored){}
+            }catch(Exception e){
+                try{socket.close();}catch(Exception ignored){}
+                throw e;
+            }
+        }
+        throw new java.net.ConnectException(
+            "ADB no escucha en 127.0.0.1:5556 ni :5555"+
+            (failure==null?"":" · "+failure.getMessage()));
+    }
+    static int connectedPort(){return lastLocalPort;}
     static String shell(Context context,String command)throws Exception{
         // STRICT command whitelist, no shell metacharacters or package names.
         // Only harmless listing and bounded task geometry; never OEM data.
@@ -50,10 +82,8 @@ final class T1LocalAdbClient {
               "am task resize [1-9][0-9]{0,6}( [0-9]{1,5}){4}")&&
            !command.matches("am stack remove [1-9][0-9]{0,6}"))
             throw new SecurityException("Comando ADB no permitido");
-        String phase="abrir TCP 127.0.0.1:5555";
-        try(Socket sock=new Socket()){
-            sock.connect(new InetSocketAddress(LOOPBACK,PORT),3000);
-            sock.setSoTimeout(9000);
+        String phase="abrir TCP 127.0.0.1:5556/5555";
+        try(Socket sock=openLocal()){
             DataInputStream in=new DataInputStream(sock.getInputStream());
             phase="recuperar clave RSA autorizada";
             KeyPair pair=hostKey(context.getApplicationContext());
@@ -120,10 +150,9 @@ final class T1LocalAdbClient {
     static String connectivityHint(Throwable error){
         String name=error==null?"":error.getClass().getSimpleName();
         if(error instanceof java.net.ConnectException)
-            return "ADB TCP 127.0.0.1:5555 no responde. Desde el Xiaomi "+
-                "con Termux autorizado por USB, verificá "+
-                "termux-adb tcpip 5555. Puente ACTIVADO en DriveLab "+
-                "no significa que el puerto esté escuchando.";
+            return "ADB no responde en los puertos locales 5556 y 5555. "+
+                "Que 5556 esté configurado como persistente no asegura "+
+                "que el servicio ADB escuche tras reiniciar el vehículo.";
         if(error instanceof java.net.SocketTimeoutException)
             return "ADB no respondió o espera autorización. Revisá en la T1 "+
                 "el diálogo «Permitir depuración USB» y aceptalo SOLO si "+
