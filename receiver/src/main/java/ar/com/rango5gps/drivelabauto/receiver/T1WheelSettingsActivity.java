@@ -8,6 +8,7 @@ import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
 import android.view.KeyEvent;
+import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
@@ -17,7 +18,7 @@ import android.widget.TextView;
 public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
     private final Handler ui=new Handler(Looper.getMainLooper());
     private TextView report,modeState,bridgeState,eventState;
-    private Button selectionButton,zoomButton,bridgeOn,bridgeOff,panelA,panelB;
+    private Button selectionButton,zoomButton,bridgeOn,bridgeOff,panelA,panelB,genericControls;
     private boolean visible;
     private final Runnable ticker=new Runnable(){
         @Override public void run(){
@@ -67,6 +68,16 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
             T1JetourTheme.GREEN_BUTTON:T1JetourTheme.PANEL_HI);
         T1JetourTheme.button(bridgeOff,!link?
             T1JetourTheme.AMBER_BUTTON:T1JetourTheme.PANEL_HI);
+        if(genericControls!=null){
+            boolean other=T1WheelTarget.genericCandidate(this);
+            genericControls.setVisibility(other?View.VISIBLE:View.GONE);
+            genericControls.setText(T1WheelTarget.genericEnabled(this)?
+                "DESACTIVAR CONTROLES · "+T1WheelTarget.application(this):
+                "ACTIVAR CONTROLES · "+T1WheelTarget.application(this));
+            T1JetourTheme.button(genericControls,
+                T1WheelTarget.genericEnabled(this)?
+                    T1JetourTheme.GREEN_BUTTON:T1JetourTheme.PANEL_HI);
+        }
         eventState.setText("ÚLTIMA TECLA: "+
             p.getString(T1WazeWheelService.OEM_LAST,"ninguna")+
             "\nÚLTIMA ACCIÓN: "+
@@ -148,8 +159,23 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
         panelB=button(body,"CONTROLAR PANEL B",()->{
             T1WheelTarget.select(this,true);refreshModes();
         });
-        text(body,"PANEL A: Waze · PANEL B: Google Maps. Otras apps "+
-            "se muestran pero no reciben controles hasta integrarlas.",13);
+        text(body,"Los paneles usan la app que elegiste en CLÚSTER. "+
+            "Waze y Google Maps mantienen sus perfiles probados. "+
+            "Las otras apps requieren activación individual.",13);
+        genericControls=button(body,"CONFIGURAR CONTROLES · OTRA APP",()->{
+            if(!T1WheelTarget.genericCandidate(this))return;
+            boolean next=!T1WheelTarget.genericEnabled(this);
+            T1WheelTarget.setGenericEnabled(this,next);
+            T1WazeWheelService.requestScan(this);
+            report.setText(next?
+                "Controles de "+T1WheelTarget.application(this)+
+                " habilitados. Tocá INSPECCIONAR CONTROLES para "+
+                "detectar sus menús y botones. Usá OK solo tras "+
+                "seleccionar una opción con la rueda.":
+                "Controles de esta aplicación desactivados, sin "+
+                "modificar las configuraciones de Waze ni Google Maps.");
+            refreshModes();
+        });
         selectionButton=button(body,"SELECCIÓN DE BOTONES",()->{
             prefs().edit().putBoolean(T1WazeWheelService.ZOOM_MAP,false).apply();
             refreshModes();
@@ -212,10 +238,11 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
                 report.setText("No se abrió Waze: "+ex.getClass().getSimpleName());
             }
         });
-        text(body,"Rueda selecciona botones REALES de Waze; OK pulsa "+
-            "únicamente la selección. ATRÁS usa Cancelar/Volver si Waze "+
-            "lo expone; nunca manda BACK global que cerraba otras apps. "+
-            "Google Maps todavía no admite volante. Probar detenido.",13);
+        text(body,"Waze y Google Maps: botones accesibles propios. "+
+            "Otras aplicaciones: elegí Panel A/B y ACTIVAR CONTROLES, "+
+            "después INSPECCIONAR CONTROLES. La ruedita recorre "+
+            "elementos accesibles y OK confirma solo el seleccionado. "+
+            "ATRÁS nunca envía BACK global. Probar detenido.",13);
         setContentView(scroll);
         refreshModes();
     }
