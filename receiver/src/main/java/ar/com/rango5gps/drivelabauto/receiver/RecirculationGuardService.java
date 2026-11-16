@@ -35,6 +35,7 @@ public final class RecirculationGuardService extends Service {
     private volatile boolean running;
     private Thread worker;
     private final ArrayDeque<Long> recentWrites=new ArrayDeque<>();
+    private final ArrayDeque<Long> confirmedReversions=new ArrayDeque<>();
     private SharedPreferences pref(){return getSharedPreferences(PREFS,MODE_PRIVATE);}
     /** Old releases latched PAUSED forever after four read/IPC errors.
      * Migrate ONLY that exact communication error. A safety pause caused by
@@ -166,6 +167,9 @@ public final class RecirculationGuardService extends Service {
     }
     private void monitor(){
         int failures=0;
+        // Only a verified transition 1004=1 -> 1004=2 is an OEM
+        // reversion. Three attempted writes do NOT prove any reversion.
+        int previousObserved=-1;
         try{
             while(!stop && MODE_INTERIOR.equals(pref().getString(MODE,MODE_AUTO))){
                 if(pref().getBoolean(PAUSED,false))break;
@@ -181,23 +185,43 @@ public final class RecirculationGuardService extends Service {
                         .putLong(LAST_CONFIRMED,state==1?
                             System.currentTimeMillis():0L).apply();
                     failures=0;
+                    long now=SystemClock.elapsedRealtime();
+                    while(!recentWrites.isEmpty()&&
+                          now-recentWrites.peekFirst()>60000L)
+                        recentWrites.removeFirst();
+                    while(!confirmedReversions.isEmpty()&&
+                          now-confirmedReversions.peekFirst()>60000L)
+                        confirmedReversions.removeFirst();
+                    if(state==2&&previousObserved==1)
+                        confirmedReversions.addLast(now);
+                    previousObserved=state;
                     if(RecirculationPolicy.needsActivation(state)){
-                        long now=SystemClock.elapsedRealtime();
-                        while(!recentWrites.isEmpty() &&
-                            now-recentWrites.peekFirst()>60000)
-                            recentWrites.removeFirst();
-                        if(recentWrites.size()>=3){
+                        if(confirmedReversions.size()>=3){
                             pref().edit().putBoolean(PAUSED,true)
-                                .putString(STATUS,"PAUSADO: OEM revirtió 1004 "+
-                                    "3 veces/min. Posible desempañado; elegí AUTO "+
-                                    "o reactivá el modo interior").apply();
+                                .putString(STATUS,
+                                    "PAUSADO: OEM cambió 1004=1 a 1004=2 "+
+                                    "3 veces/min. Posible desempañado; "+
+                                    "se suspendieron nuevas escrituras").apply();
                             break;
+                        }
+                        if(recentWrites.size()>=3){
+                            // Cooldown, not a permanent safety pause. A
+                            // rejected/ignored write is NOT an observed
+                            // OEM reversion; retry after rolling 60 s.
+                            pref().edit().putString(STATUS,
+                                "AIRE INTERIOR · OEM todavía marca 1004=2; "+
+                                "reintento automático con pausa entre comandos")
+                                .apply();
+                            continue;
                         }
                         recentWrites.addLast(now);
                         vehicle.enableCabinRecirculation();
                         SystemClock.sleep(300);
                         if(stop)break;
                         int after=vehicle.read(1004);
+                        if(!RecirculationPolicy.valid(after))
+                            throw new IllegalStateException("1004 no reconocido: "+after);
+                        previousObserved=after;
                         pref().edit().putInt(LAST_VALUE,after)
                             .putLong(LAST_CONFIRMED,after==1?
                                 System.currentTimeMillis():0L)
