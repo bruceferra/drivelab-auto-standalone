@@ -34,7 +34,7 @@ public final class T1UnifiedWheelQuietVoiceSourceContractTest {
         require(wheel.contains("static volatile T1WazeWheelService connectedInstance")&&
             wheel.contains("dispatchFromSharedMicrophone(Context app,int code,")&&
             wheel.contains("if(code<1000||code>1003)return;")&&
-            wheel.contains("if(shared){")&&
+            wheel.contains("if(T1OemMicrophoneService.serviceAlive(this)){")&&
             wheel.contains("oemBridge.stop();")&&
             wheel.contains("active.handleOemKey(code,action,extra)")&&
             wheel.contains("if(action!=100)return;")&&
