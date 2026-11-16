@@ -51,6 +51,9 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
         column.setPadding(16,10,16,24);
         column.setOrientation(LinearLayout.VERTICAL);
         scroll.addView(column);
+        // Do not keep detached previews from the hidden diagnostics panel.
+        preview=null;
+        previewState=null;
         String selected=T1ClusterLayoutPolicy.mode(this);
         boolean dual=T1ClusterLayoutPolicy.MODE_SPLIT.equals(selected);
         text("CLÚSTER",22);
@@ -208,17 +211,22 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
     }
     // Two everyday choices; no extra Probar / Confirmar taps.
     private void chooseAndApply(String mode){
-        if(T1ClusterLayoutPolicy.MODE_SPLIT.equals(mode)&&
-           !T1ClusterLayoutPolicy.MODE_SPLIT.equals(
-               T1ClusterLayoutPolicy.mode(this))){
-            try{
+        try{
+            // Main shortcuts mean exactly Waze alone or Waze + Maps,
+            // even when an experimental app was chosen in Advanced.
+            if(T1ClusterLayoutPolicy.MODE_FULL.equals(mode)&&
+               !"com.waze".equals(
+                   T1ClusterWazeRouter.selectedAppPackage(this)))
+                T1ClusterWazeRouter.chooseApp(this,"com.waze","Waze");
+            if(T1ClusterLayoutPolicy.MODE_SPLIT.equals(mode)&&
+               !"com.google.android.apps.maps".equals(
+                   T1ClusterLayoutPolicy.secondPackage(this)))
                 T1ClusterLayoutPolicy.secondApp(this,
                     "com.google.android.apps.maps","Google Maps");
-            }catch(IllegalArgumentException e){
-                T1ClusterWazeRouter.status(this,
-                    "Google Maps no está disponible para el clúster");
-                render();return;
-            }
+        }catch(IllegalArgumentException e){
+            T1ClusterWazeRouter.status(this,
+                "Falta instalar Waze o Google Maps para ese modo.");
+            render();return;
         }
         T1ClusterLayoutPolicy.setMode(this,mode);
         render();
