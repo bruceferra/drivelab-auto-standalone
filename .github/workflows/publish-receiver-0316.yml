@@ -259,3 +259,5 @@ jobs:
 # Re-run: update ADB source-contract to check both verified local ports instead of legacy 5555 constant.
 
 # Prior release for guard, download and signer continuity is v0.3.15, new tag is v0.3.16.
+
+# Legacy Waze safety source contract now checks focus guard, never an unguarded global BACK.
