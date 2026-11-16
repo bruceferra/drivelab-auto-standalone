@@ -156,7 +156,7 @@ public final class T1WazeWheelService extends AccessibilityService {
     }
     private T1OemHardKeyBridge oemBridge;
     private final Handler main=new Handler(Looper.getMainLooper());
-    private long lastOemKeyAt,lastScanAt,lastActiveWindowAt;
+    private long lastOemKeyAt,lastScanAt;
     private AccessibilityNodeInfo eventWazeRoot,eventMapsRoot;
     private long eventWazeAt,eventMapsAt;
     private int lastOemCode=-1;
@@ -371,6 +371,7 @@ public final class T1WazeWheelService extends AccessibilityService {
         // task on the center display or a competing OEM task.
         Display chosen=T1ClusterWazeRouter.selected(this);
         int expected=chosen==null?-1:chosen.getDisplayId();
+        if(chosen==null&&T1ClusterWazeRouter.enabled(this))return null;
         try{
             SparseArray<List<AccessibilityWindowInfo>> across=getWindowsOnAllDisplays();
             if(across!=null)for(int d=0;d<across.size();d++){
@@ -500,10 +501,8 @@ public final class T1WazeWheelService extends AccessibilityService {
         final int displayId=chosen.getDisplayId();
         try{
             SparseArray<List<AccessibilityWindowInfo>> all=getWindowsOnAllDisplays();
-            if(all==null)return null;
-            List<AccessibilityWindowInfo> windows=all.get(displayId);
-            if(windows==null)return null;
-            for(AccessibilityWindowInfo win:windows){
+            List<AccessibilityWindowInfo> windows=all==null?null:all.get(displayId);
+            if(windows!=null)for(AccessibilityWindowInfo win:windows){
                 if(win==null)continue;
                 AccessibilityNodeInfo root=findMapNode(win.getRoot(),
                     MAPS,0,new int[]{0});
@@ -542,34 +541,39 @@ public final class T1WazeWheelService extends AccessibilityService {
             "no envié BACK global a pantalla central");
         return false;
     }
+    /** Keep the explicitly enabled OEM wheel subscriber independent of
+     * whether Android publishes the freeform map's accessibility root.
+     * Access to controls is STILL fail-closed in onKeyEvent: no verified
+     * Waze/Maps root means no click, gesture, BACK or OEM command.
+     *
+     * On this ROM callback registration may be exclusive. If the opt-in
+     * microphone service is alive it owns the ONE Binder subscriber and
+     * forwards wheel codes; otherwise the wheel subscriber takes over.
+     * NEVER subscribe with cluster off or without a selected display.
+     */
     private void refreshOemBridge(){
         if(oemBridge==null)return;
-        boolean shared=T1OemMicrophoneService.serviceAlive(this);
-        if(shared){
-            // Foreground microphone service is the sole OEM Binder owner.
-            oemBridge.stop();
-            prefs().edit().putString(OEM_BINDER_STATUS,
-                "OEM compartido: micrófono 1010 recibe el Binder; "+
-                "ruedita 1000–1003 por este mismo receptor").apply();
-            return;
-        }
-        boolean enabled=prefs().getBoolean(OEM_BINDER_ENABLED,false);
-        if(!enabled||!T1ClusterWazeRouter.enabled(this)){
-            lastActiveWindowAt=0L;
+        boolean optedIn=prefs().getBoolean(ENABLED,false)&&
+            prefs().getBoolean(OEM_BINDER_ENABLED,false);
+        boolean clusterReady=T1ClusterWazeRouter.enabled(this)&&
+            T1ClusterWazeRouter.selected(this)!=null;
+        if(!optedIn||!clusterReady){
             oemBridge.stop();
             return;
         }
-        AccessibilityNodeInfo active=activeRoot();
-        long now=SystemClock.elapsedRealtime();
-        if(active!=null){
-            lastActiveWindowAt=now;
-            oemBridge.start();
-        }else if(lastActiveWindowAt>0&&now-lastActiveWindowAt<15000L){
-            // Temporary dialogs must not unregister the wheel immediately.
-            oemBridge.start();
+        if(T1OemMicrophoneService.serviceAlive(this)){
+            // Only the microphone foreground service receives OEM callbacks.
+            oemBridge.stop();
             prefs().edit().putString(OEM_BINDER_STATUS,
-                "Panel temporalmente oculto; conservando enlace 15 s").apply();
-        }else oemBridge.stop();
+                "OEM compartido: micrófono 1010 recibe Binder; "+
+                "volante 1000–1003 delegado a Accesibilidad").apply();
+            return;
+        }
+        // A visible Waze/Maps image may have ZERO accessible windows after
+        // ignition. Do not unsubscribe for that reason: the previous root
+        // gate prevented receiving wheel keys and made recovery impossible.
+        // Each key still needs a verified map subtree on this display.
+        oemBridge.start();
     }
     /** Vendor hard-key callback IDs confirmed in the owner's T1N134 APK.
      * 1000,1001 wheel rotation; 1002 BACK; 1003 OK.
@@ -638,8 +642,7 @@ public final class T1WazeWheelService extends AccessibilityService {
         }
         // Normal Waze controls remain strictly restricted to com.waze.
         // Absolutely no key logging or interception in unrelated apps.
-        AccessibilityNodeInfo root=wazeRoot();
-        if(T1WheelTarget.panelB(this))root=mapsRoot();
+        AccessibilityNodeInfo root=activeRoot();
         String panel=T1WheelTarget.name(this);
         if(!panel.equals(seenPackage)){
             seenPackage=panel;
@@ -649,8 +652,9 @@ public final class T1WazeWheelService extends AccessibilityService {
         if(root==null){
             mapMenuArmed=false;promptArmed=false;hideHint();
             p.edit().putString(LAST_STATUS,
-                "Tecla recibida, pero "+panel+
-                " no es accesible; revisar ventana OEM encima").apply();
+                "Tecla OEM "+code+" recibida, pero "+panel+
+                " no expone controles accesibles en el display del clúster; "+
+                "sin pulsación sobre otras ventanas").apply();
             return false;
         }
         p.edit().putInt(LAST,code).putLong(LAST_TIME,now).apply();
