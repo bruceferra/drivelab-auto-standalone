@@ -40,6 +40,15 @@ public final class T1WheelPanelAndSpeedSourceTest {
             !w.contains("performGlobalAction(GLOBAL_ACTION_BACK)")&&
             !w.contains("injectInputEvent("),
             "No global back or blind input across the two cluster apps");
+        require(p.contains("wheel_generic_enabled_")&&
+            p.contains("genericEnabled(Context c)")&&
+            p.contains("setGenericEnabled(Context c,boolean enabled)")&&
+            w.contains("static String settingKey(Context c,String action)")&&
+            w.contains("settingKey(this,NEXT)")&&
+            w.contains("handleGenericKey(root,forward,backward,confirm,cancel)")&&
+            settings.contains("RESTABLECER TECLAS DE ESTA APP (DPAD)")&&
+            settings.contains("T1WazeWheelService.settingKey(this,"),
+            "Per-app generic wheel profile never overwrites the map key profile");
         require(meter.indexOf("\"VELOCIDAD · OEM\"")<
             meter.indexOf("\"COMBUSTIBLE UTILIZABLE\"")&&
             meter.contains("speed==null?\"SIN LECTURA\"")&&
