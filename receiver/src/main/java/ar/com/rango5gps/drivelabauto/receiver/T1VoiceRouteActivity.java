@@ -402,6 +402,25 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         if(phrase==null||phrase.trim().length()<2){
             status.setText("Primero decí o escribí tu consulta.");return;
         }
+        String request=phrase.trim().toLowerCase(java.util.Locale.ROOT);
+        boolean control=request.startsWith("controlar ")||
+            request.startsWith("controla ")||
+            request.startsWith("seleccionar ")||
+            request.startsWith("cambiar a ")||
+            request.startsWith("cambia a ");
+        if(control&&(request.endsWith("panel a")||request.endsWith("waze"))){
+            T1WheelTarget.select(this,false);
+            status.setText("VOLANTE · PANEL A");
+            if(quietOem)finishQuietIfNavigation();
+            return;
+        }
+        if(control&&(request.endsWith("panel b")||
+                    request.endsWith("google maps"))){
+            T1WheelTarget.select(this,true);
+            status.setText("VOLANTE · PANEL B");
+            if(quietOem)finishQuietIfNavigation();
+            return;
+        }
         String target=T1VoiceIntentPolicy.routeDestination(phrase);
         if(target!=null){
             status.setText("NAVEGACIÓN DETECTADA · "+target+

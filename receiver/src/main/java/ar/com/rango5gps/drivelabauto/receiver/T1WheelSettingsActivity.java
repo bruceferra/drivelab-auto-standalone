@@ -17,7 +17,7 @@ import android.widget.TextView;
 public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
     private final Handler ui=new Handler(Looper.getMainLooper());
     private TextView report,modeState,bridgeState,eventState;
-    private Button selectionButton,zoomButton,bridgeOn,bridgeOff;
+    private Button selectionButton,zoomButton,bridgeOn,bridgeOff,panelA,panelB;
     private boolean visible;
     private final Runnable ticker=new Runnable(){
         @Override public void run(){
@@ -47,13 +47,19 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
         boolean zoom=p.getBoolean(T1WazeWheelService.ZOOM_MAP,false);
         boolean on=p.getBoolean(T1WazeWheelService.ENABLED,false);
         boolean link=p.getBoolean(T1WazeWheelService.OEM_BINDER_ENABLED,false);
-        modeState.setText("MODO RUEDITA ACTUAL: "+
+        modeState.setText("OBJETIVO: "+T1WheelTarget.name(this)+" · "+
+            T1WheelTarget.application(this)+
+            "\nMODO RUEDITA ACTUAL: "+
             (zoom?"ZOOM":"SELECCIÓN DE BOTONES"));
+        if(panelA!=null)T1JetourTheme.button(panelA,
+            T1WheelTarget.panelB(this)?T1JetourTheme.PANEL_HI:T1JetourTheme.GREEN_BUTTON);
+        if(panelB!=null)T1JetourTheme.button(panelB,
+            T1WheelTarget.panelB(this)?T1JetourTheme.GREEN_BUTTON:T1JetourTheme.PANEL_HI);
         T1JetourTheme.button(selectionButton,zoom?
             T1JetourTheme.PANEL_HI:T1JetourTheme.GREEN_BUTTON);
         T1JetourTheme.button(zoomButton,zoom?
             T1JetourTheme.GREEN_BUTTON:T1JetourTheme.PANEL_HI);
-        bridgeState.setText("CONTROL WAZE "+(on?"ACTIVO":"APAGADO")+
+        bridgeState.setText("CONTROL "+T1WheelTarget.name(this)+" "+(on?"ACTIVO":"APAGADO")+
             " · PUENTE OEM "+(link?"HABILITADO":"APAGADO")+
             "\n"+p.getString(T1WazeWheelService.OEM_BINDER_STATUS,
                 "Sin conexión"));
@@ -118,7 +124,7 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
         button(body,"VER ESTADO DEL SERVICIO ANDROID",()->{
             report.setText(T1WazeWheelService.describe(this));
         });
-        button(body,"INSPECCIONAR CONTROLES DE WAZE · CLÚSTER",()->{
+        button(body,"INSPECCIONAR CONTROLES · PANEL ACTIVO",()->{
             T1WazeWheelService.requestScan(this);
             report.setText("Inspección solicitada al servicio de Accesibilidad. "+
                 "Con Waze visible en el clúster, aquí aparecerán los controles "+
@@ -136,6 +142,14 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
                 ex.getClass().getSimpleName()+". Usá WebADB.");}
         });
         modeState=text(body,"MODO RUEDITA ACTUAL: SELECCIÓN DE BOTONES",20);
+        panelA=button(body,"CONTROLAR PANEL A",()->{
+            T1WheelTarget.select(this,false);refreshModes();
+        });
+        panelB=button(body,"CONTROLAR PANEL B",()->{
+            T1WheelTarget.select(this,true);refreshModes();
+        });
+        text(body,"PANEL A: Waze · PANEL B: Google Maps. Otras apps "+
+            "se muestran pero no reciben controles hasta integrarlas.",13);
         selectionButton=button(body,"SELECCIÓN DE BOTONES",()->{
             prefs().edit().putBoolean(T1WazeWheelService.ZOOM_MAP,false).apply();
             refreshModes();

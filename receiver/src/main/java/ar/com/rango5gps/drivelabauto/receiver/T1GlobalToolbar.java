@@ -31,7 +31,7 @@ final class T1GlobalToolbar {
     private final PedestrianAlertControl avas;
     private final LinearLayout container;
     private final Button[] modes=new Button[3];
-    private Button clusterButton,optimizer,mirrorButton,mirrorAutoButton,mirrorRecoverButton,airButton,avsButton,roadModeButton,ventilationButton;
+    private Button clusterButton,wheelPanelButton,optimizer,mirrorButton,mirrorAutoButton,mirrorRecoverButton,airButton,avsButton,roadModeButton,ventilationButton;
     // Permanent first-row read-only OEM 1046 / 1040 / 1041 indicators.
     private Button regenIndicator,batteryIndicator,socTargetIndicator;
     private TextView info,clockDate,clockTime;
@@ -183,6 +183,9 @@ final class T1GlobalToolbar {
         // tasks on that secondary display if local ADB is authorized.
         clusterButton=button(actions,"CLÚSTER OFF",
             T1JetourTheme.PANEL_HI,140,this::toggleCluster);
+        wheelPanelButton=button(actions,"VOLANTE · PANEL A",
+            T1JetourTheme.PANEL_HI,158,this::toggleWheelPanel);
+        refreshWheelPanel();
         optimizer=button(actions,"OPTIMIZADO OFF",T1JetourTheme.RED_BUTTON,144,
             this::toggleAuto);
         button(actions,"CONFIGURAR OPT.",T1JetourTheme.PANEL_HI,140,
@@ -269,6 +272,7 @@ final class T1GlobalToolbar {
             T1JetourTheme.GREEN_BUTTON:T1JetourTheme.RED_BUTTON);
         refreshRoadMode(automatic);
         refreshCluster();
+        refreshWheelPanel();
         refreshMirrorAuto();
         SharedPreferences air=owner.getSharedPreferences(
             RecirculationGuardService.PREFS,Context.MODE_PRIVATE);
@@ -436,6 +440,21 @@ final class T1GlobalToolbar {
             pending?"Clúster desactivado pero cierre de apps pendiente; "+
                 "tocá para volver a CLÚSTER ON; Waze puede seguir visible sin ADB":
             "Clúster desactivado. Tocar para enviar Waze al Display elegido");
+    }
+    private void refreshWheelPanel(){
+        if(wheelPanelButton==null)return;
+        boolean b=T1WheelTarget.panelB(owner);
+        wheelPanelButton.setText("VOLANTE · PANEL "+(b?"B":"A"));
+        T1JetourTheme.button(wheelPanelButton,b?
+            T1JetourTheme.GREEN_BUTTON:T1JetourTheme.PANEL_HI);
+        wheelPanelButton.setContentDescription(
+            "La rueda controla "+T1WheelTarget.name(owner)+
+            " · "+T1WheelTarget.application(owner)+". Tocar para alternar.");
+    }
+    private void toggleWheelPanel(){
+        T1WheelTarget.select(owner,!T1WheelTarget.panelB(owner));
+        refreshWheelPanel();
+        note(T1WheelTarget.name(owner)+" · "+T1WheelTarget.application(owner));
     }
     private void toggleCluster(){
         SharedPreferences p=T1ClusterWazeRouter.prefs(owner);
