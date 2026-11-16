@@ -31,7 +31,7 @@ final class T1GlobalToolbar {
     private final PedestrianAlertControl avas;
     private final LinearLayout container;
     private final Button[] modes=new Button[3];
-    private Button clusterButton,optimizer,mirrorButton,mirrorAutoButton,mirrorRecoverButton,airButton,avsButton,roadModeButton;
+    private Button clusterButton,optimizer,mirrorButton,mirrorAutoButton,mirrorRecoverButton,airButton,avsButton,roadModeButton,ventilationButton;
     // Permanent first-row read-only OEM 1046 / 1040 / 1041 indicators.
     private Button regenIndicator,batteryIndicator,socTargetIndicator;
     private TextView info,clockDate,clockTime;
@@ -61,6 +61,7 @@ final class T1GlobalToolbar {
                 lastDevicesPoll=now;
                 if(!mirrors.busy())readMirrorState();
                 if(!avas.busy())readAvasState();
+                if(!windows.busy())readWindowVentilationState();
             }
             main.postDelayed(this,3000L);
         }
@@ -198,9 +199,9 @@ final class T1GlobalToolbar {
             this::toggleMirror);
         avsButton=button(actions,"PEATÓN · LEYENDO",T1JetourTheme.PANEL_HI,135,
             this::toggleAvas);
-        button(actions,"MODO VENTILACIÓN ON",T1JetourTheme.PANEL_HI,165,
-            ()->windows(WindowGroupPolicy.VENT_QUARTER));
-        button(actions,"MODO VENTILACIÓN OFF",T1JetourTheme.PANEL_HI,133,
+        ventilationButton=button(actions,"MODO VENTILACIÓN · LEER",
+            T1JetourTheme.PANEL_HI,180,this::smartVentilation);
+        button(actions,"CIERRE TOTAL",T1JetourTheme.PANEL_HI,135,
             ()->windows(WindowGroupPolicy.CLOSE));
         airButton=button(actions,"AIRE INTERIOR AUTO",T1JetourTheme.GREEN_BUTTON,170,
             this::airStatus);
@@ -233,6 +234,7 @@ final class T1GlobalToolbar {
         // Re-observe the hardware instead of carrying a stale button label.
         readMirrorState();
         readAvasState();
+        readWindowVentilationState();
         lastPoll=0;
         lastDevicesPoll=android.os.SystemClock.elapsedRealtime();
         main.removeCallbacks(poll);
@@ -812,6 +814,34 @@ final class T1GlobalToolbar {
             showAvasState();
         }
     }
+    private void showVentilation(int[] states,String error){
+        if(!foreground||ventilationButton==null)return;
+        if(states==null||error!=null){
+            ventilationButton.setText("VENTILACIÓN · SIN LECTURA");
+            T1JetourTheme.button(ventilationButton,T1JetourTheme.AMBER_BUTTON);
+            return;
+        }
+        boolean quarter=WindowGroupPolicy.smartOperation(states)==WindowGroupPolicy.CLOSE;
+        ventilationButton.setText(quarter?"MODO VENTILACIÓN ON":"MODO VENTILACIÓN OFF");
+        T1JetourTheme.button(ventilationButton,quarter?
+            T1JetourTheme.GREEN_BUTTON:T1JetourTheme.RED_BUTTON);
+    }
+    private void readWindowVentilationState(){
+        if(!foreground||windows.busy())return;
+        windows.inspectState(this::showVentilation);
+    }
+    private void smartVentilation(){
+        if(!foreground)return;
+        if(windows.busy()||mirrors.busy()){
+            note("Espejos/ventanillas: orden en curso");return;
+        }
+        if(!windows.smartVentilation(progress->{
+            if(!foreground)return;
+            note(progress.message);
+            if(!progress.running)readWindowVentilationState();
+        }))note("Modo ventilación: no se inició la lectura OEM");
+        else note("Leyendo las cuatro ventanillas: a 1/4 o cierre automático…");
+    }
     private void windows(int command){
         if(!foreground)return;
         if(windows.busy()||mirrors.busy()){
@@ -820,6 +850,7 @@ final class T1GlobalToolbar {
         }
         if(!windows.start(command,p->{
             if(foreground)note(p.message);
+            if(foreground&&!p.running)readWindowVentilationState();
         }))note("Ventanillas: no se inició (comprobar OEM)");
         else note("Ventanillas: verificando estado OEM…");
     }
