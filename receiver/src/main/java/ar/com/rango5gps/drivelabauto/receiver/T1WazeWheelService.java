@@ -98,6 +98,45 @@ public final class T1WazeWheelService extends AccessibilityService {
         }
         active.handleOemKey(code,action,extra);
     }
+    /** Reinitialize the already-authorized Accessibility window cache
+     * after the last delayed cold-boot navigation intent. Never requires
+     * user to toggle the service or changes the selected A/B panel.
+     */
+    static void requestClusterReady(Context context){
+        T1WazeWheelService live=connectedInstance;
+        if(live==null){
+            context.getSharedPreferences(PREFS,Context.MODE_PRIVATE)
+                .edit().putString(LAST_STATUS,
+                    "Clúster abierto; Android aún no conectó Accesibilidad")
+                .apply();
+            return;
+        }
+        live.main.post(()->{
+            if(!live.prefs().getBoolean(ENABLED,false)||!T1ClusterWazeRouter.enabled(live))
+                return;
+            try{
+                AccessibilityServiceInfo info=live.getServiceInfo();
+                if(info!=null){
+                    info.flags|=AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
+                        |AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
+                        |AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS;
+                    info.eventTypes=AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
+                        |AccessibilityEvent.TYPE_WINDOWS_CHANGED
+                        |AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED;
+                    live.setServiceInfo(info);
+                }
+                live.refreshOemBridge();
+                live.prefs().edit().putString(WINDOW_DIAG,
+                    live.describeAccessibleDisplays())
+                    .putString(LAST_STATUS,
+                        "Arranque: enlace OEM verificado y ventanas reconsultadas; "+
+                        "si falta Waze/Maps, ver inventario").apply();
+            }catch(Exception ex){
+                live.status("No se pudo actualizar ventanas del clúster: "+
+                    ex.getClass().getSimpleName());
+            }
+        });
+    }
     private T1OemHardKeyBridge oemBridge;
     private final Handler main=new Handler(Looper.getMainLooper());
     private long lastOemKeyAt,lastScanAt,lastActiveWindowAt;
@@ -218,7 +257,8 @@ public final class T1WazeWheelService extends AccessibilityService {
             info.flags|=AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS
                 |AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;
             info.eventTypes=AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED
-                |AccessibilityEvent.TYPE_WINDOWS_CHANGED;
+                |AccessibilityEvent.TYPE_WINDOWS_CHANGED
+                |AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED;
             info.feedbackType=AccessibilityServiceInfo.FEEDBACK_GENERIC;
             setServiceInfo(info);
         }
@@ -1173,7 +1213,10 @@ public final class T1WazeWheelService extends AccessibilityService {
         // Waze can be visible ONLY on the cluster display. A different
         // foreground package does NOT prove that projected Waze disappeared.
         if(event.getEventType()==AccessibilityEvent.TYPE_WINDOWS_CHANGED||
-           event.getEventType()==AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED){
+           event.getEventType()==AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED||
+           (event.getEventType()==AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED&&
+            (WAZE.equals(String.valueOf(event.getPackageName()))||
+             MAPS.equals(String.valueOf(event.getPackageName()))))){
             refreshOemBridge();
             maybeConfirmMapsReplacement();
             if(activeRoot()==null)hideHint();

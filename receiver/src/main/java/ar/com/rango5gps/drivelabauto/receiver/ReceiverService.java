@@ -378,6 +378,11 @@ public final class ReceiverService extends Service {
                 if(currentAt!=requestedAt)return;
                 String restored=T1LastRoute.restore(this);
                 prefs().edit().putString("boot_route_restore",restored).apply();
+                // Maps/Waze are now on-screen and the old route has been
+                // reissued. Requery Accessibility on the real display and
+                // reuse the existing unified physical wheel Binder.
+                T1OemMicrophoneService.ensureRunning(this);
+                T1WazeWheelService.requestClusterReady(this);
             },3200L);
         },20000L);
     }

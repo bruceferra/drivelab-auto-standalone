@@ -43,21 +43,19 @@ public final class MirrorControlsVisibilitySourceContractTest {
               base.contains("MirrorAutomationService.activateOnAppOpen(this)"),
               "mirror safety check and cabin interior initialization remain accessible");
         check(service.contains("static void activateOnAppOpen(Context context)") &&
-              service.contains("if(!auto)return;") &&
-              service.contains("if(safetyHold || pose.startsWith") &&
-              service.contains(".putBoolean(SAFETY_HOLD,true)") &&
-              service.contains("if(prefs().getBoolean(SAFETY_HOLD,true)||") &&
-              !service.substring(service.indexOf("static void activateOnAppOpen(Context context)"),
-                service.indexOf("/** Recovery watchdog;")).contains("context.startForegroundService"),
-              "Mirror AUTO must remain off across app launches until physical confirmation");
-        check(service.contains("startsWith(\"INCIERTA\")") &&
+              service.contains("if(unresolved(p))") &&
+              service.contains("context.startForegroundService(new Intent(context,") &&
+              service.contains("if(unresolved(prefs()))") &&
+              service.contains(".putBoolean(SAFETY_HOLD,true)"),
+              "Mirror AUTO auto-starts at ignition only when no motor pulse is unresolved");
+        check(service.contains("private static boolean unresolved(SharedPreferences p)") &&
               base.contains("MirrorAutomationService.ensureRunning(this)"),
-              "uncertain physical position must never auto-rearm; navigation only watchdogs ON");
+              "Unresolved physical movement blocks rearm; stable boot re-subscribes");
         check(air.contains("putString(MODE,MODE_INTERIOR)") &&
               air.contains("if(safetyPaused)return;"),
               "interior air auto defaults ON without bypassing OEM defog safety");
         check(!toolbar.contains("oem.write(2068")&&!toolbar.contains("oem.write(2069"),
               "toolbar must never directly issue mirror actuator writes");
-        System.out.println("PASS: mirror AUTO fail-safe manual after restart, cabin INTERIOR unchanged, diagnostics");
+        System.out.println("PASS: clean-ledger mirror AUTO at ignition, cabin INTERIOR with OEM protections, diagnostics");
     }
 }
