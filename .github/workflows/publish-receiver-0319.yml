@@ -274,3 +274,5 @@ jobs:
 # 0.3.18 validates latest tag after publishing; previous APK signature from 0.3.16.
 
 # Pre-publish latest is 0.3.18; post-publish latest must be 0.3.19.
+
+# Re-run after fixing OFF/ON source regression: delayed route replay is ON-guarded, not an OFF blocker.
