@@ -27,7 +27,7 @@ final class ReceiverQuickControls {
     private final VehicleWindowGroup windows;
     private final PedestrianAlertControl avas;
     private TextView status,config;
-    private Button mirrorAuto,mirrorManual,interiorMode,airAuto;
+    private Button mirrorAuto,mirrorManual,interiorMode,airAuto,ventilationButton;
     private Button leftMinus,leftPlus,rightMinus,rightPlus;
     ReceiverQuickControls(Activity a){
         activity=a;fold=new MirrorPulsePilot(a);
@@ -39,6 +39,7 @@ final class ReceiverQuickControls {
         avas.setForeground(true);
         ensureRecirculationGuard();
         refresh();
+        readVentilationState();
     }
     private void ensureRecirculationGuard(){
         android.content.SharedPreferences p=hvacPrefs();
@@ -197,8 +198,9 @@ final class ReceiverQuickControls {
         LinearLayout b=row(extra);
         button(b,"BAJAR ESPEJOS",BLUE,()->move(false));
         button(b,"SUBIR ESPEJOS",BLUE,()->move(true));
-        button(b,"MODO VENTILACIÓN ON",TEAL,()->windows(WindowGroupPolicy.VENT_QUARTER));
-        button(b,"MODO VENTILACIÓN OFF",ORANGE,()->windows(WindowGroupPolicy.CLOSE));
+        ventilationButton=button(b,"MODO VENTILACIÓN · LEER",
+            RED,this::smartVentilation);
+        button(b,"CIERRE TOTAL",RED,()->windows(WindowGroupPolicy.CLOSE));
 
         LinearLayout c=row(root);
         button(c,"ALARMA PEATÓN ON/OFF",RED,()->avas());
@@ -296,10 +298,35 @@ final class ReceiverQuickControls {
             message("No se inició plegado: comprobá marcha/velocidad y conexión OEM");
         else message("Verificando 2003 y enviando una orden si hace falta…");
     }
+    private void showVentilation(int[] positions,String error){
+        if(ventilationButton==null)return;
+        if(positions==null||error!=null){
+            ventilationButton.setText("VENTILACIÓN · SIN LECTURA");
+            styleSurface(ventilationButton,ORANGE);return;
+        }
+        boolean quarter=WindowGroupPolicy.smartOperation(positions)==
+            WindowGroupPolicy.CLOSE;
+        ventilationButton.setText(quarter?"MODO VENTILACIÓN ON":
+            "MODO VENTILACIÓN OFF");
+        styleSurface(ventilationButton,quarter?GREEN:RED);
+    }
+    private void readVentilationState(){
+        if(!windows.busy())windows.inspectState(this::showVentilation);
+    }
+    private void smartVentilation(){
+        if(busy()){message("Otra orden está en curso");return;}
+        if(!windows.smartVentilation(p->{
+            message(p.message);
+            if(!p.running)readVentilationState();
+        }))message("No se inició MODO VENTILACIÓN");
+        else message("Leyendo cuatro posiciones OEM antes de decidir…");
+    }
     private void windows(int operation){
         if(busy()){message("Otra orden está en curso");return;}
-        if(!windows.start(operation,p->message(p.message)))
-            message("No se inició la orden de ventanillas");
+        if(!windows.start(operation,p->{
+            message(p.message);
+            if(!p.running)readVentilationState();
+        }))message("No se inició la orden de ventanillas");
         else message("Verificando ventanas antes de enviar comandos…");
     }
     private void avas(){
