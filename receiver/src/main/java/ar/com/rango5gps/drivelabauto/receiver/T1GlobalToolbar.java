@@ -287,8 +287,11 @@ final class T1GlobalToolbar {
             airButton.setText("AIRE INTERIOR AUTO ✓");
             T1JetourTheme.button(airButton,T1JetourTheme.GREEN_BUTTON);
         }else if(interior){
-            airButton.setText("AIRE AUTO · RECONECTANDO");
-            T1JetourTheme.button(airButton,T1JetourTheme.AMBER_BUTTON);
+            // Green reflects selected preference; the word SOLICITADO
+            // distinguishes it from OEM value 1004=1 verified success.
+            // OEM PAUSE/defog status remains independently visible in amber.
+            airButton.setText("AIRE INTERIOR · SOLICITADO");
+            T1JetourTheme.button(airButton,T1JetourTheme.GREEN_BUTTON);
         }else{
             airButton.setText("AIRE INTERIOR AUTO");
             T1JetourTheme.button(airButton,T1JetourTheme.PANEL_HI);

@@ -245,7 +245,8 @@ final class ReceiverQuickControls {
             a.getBoolean(RecirculationGuardService.MONITORING,false)&&
             a.getInt(RecirculationGuardService.LAST_VALUE,-1)==1&&
             recircAge>=0&&recircAge<12000;
-        styleSelected(interiorMode,recircConfirmed,GREEN);
+        styleSelected(interiorMode,interior&&
+            !a.getBoolean(RecirculationGuardService.PAUSED,false),GREEN);
         styleSelected(airAuto,!interior,GREY);
         if(leftMinus!=null)leftMinus.setText("IZQ − ("+l+")");
         if(leftPlus!=null)leftPlus.setText("IZQ + ("+l+")");

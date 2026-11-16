@@ -129,15 +129,31 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
             audioStatus=new TextView(this);
             status.setText("🎤 Escuchando…");
             status.setGravity(android.view.Gravity.CENTER);
-            status.setSingleLine(true);
+            status.setSingleLine(false);
+            status.setMaxLines(4);
             status.setTextColor(T1JetourTheme.WHITE);
             status.setTextSize(17f);
             status.setBackground(T1JetourTheme.surface(
                 T1JetourTheme.PANEL_HI,16));
             audioStatus.setText("AUDIO: esperando motor TTS");
-            getWindow().setContentView(status);
-            getWindow().setLayout(T1JetourTheme.dp(this,260),
-                T1JetourTheme.dp(this,54));
+            LinearLayout card=new LinearLayout(this);
+            card.setOrientation(LinearLayout.VERTICAL);
+            card.setPadding(14,8,14,10);
+            card.setBackground(T1JetourTheme.surface(T1JetourTheme.PANEL_HI,20));
+            TextView title=new TextView(this);
+            title.setText("🎤  DRIVELAB · VOZ");
+            title.setTextSize(17f);
+            title.setTextColor(T1JetourTheme.CYAN);
+            card.addView(title);
+            status.setBackgroundColor(android.graphics.Color.TRANSPARENT);
+            card.addView(status);
+            heard.setTextColor(T1JetourTheme.WHITE);
+            heard.setTextSize(14f);
+            heard.setMaxLines(2);
+            card.addView(heard);
+            getWindow().setContentView(card);
+            getWindow().setLayout(T1JetourTheme.dp(this,520),
+                T1JetourTheme.dp(this,154));
             initSpeechOutput();
             voiceHandler.postDelayed(this::listen,250L);
             return;
@@ -388,7 +404,11 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         }
         String target=T1VoiceIntentPolicy.routeDestination(phrase);
         if(target!=null){
-            status.setText("NAVEGACIÓN DETECTADA → Waze/clúster · "+target);
+            status.setText("NAVEGACIÓN DETECTADA · "+target+
+                " · clúster: "+(T1ClusterLayoutPolicy.active(this)&&
+                    T1ClusterLayoutPolicy.MODE_SPLIT.equals(
+                        T1ClusterLayoutPolicy.mode(this))?
+                    "dos mapas":"Waze"));
             if(fromVoice){
                 // The explicit "ir a"/"navegar a" utterance is itself
                 // authorization. Waze still resolves the actual location.
@@ -699,9 +719,22 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
             Uri.parse("waze://?q="+Uri.encode(place)+"&navigate=yes"))
             .setPackage("com.waze");
         if(T1ClusterWazeRouter.enabled(this)){
-            boolean requested=T1ClusterWazeRouter.routeDestination(this,i);
-            status.setText(T1ClusterWazeRouter.prefs(this).getString(
-                T1ClusterWazeRouter.STATUS,"Sin resultado de clúster"));
+            boolean both=T1ClusterLayoutPolicy.active(this)&&
+                T1ClusterLayoutPolicy.MODE_SPLIT.equals(
+                    T1ClusterLayoutPolicy.mode(this))&&
+                "com.google.android.apps.maps".equals(
+                    T1ClusterLayoutPolicy.secondPackage(this));
+            if(both){
+                // The same dual target dispatch already proven by Sender.
+                T1NavigationTargets.Result result=T1NavigationTargets.send(
+                    this,ar.com.rango5gps.drivelabauto.common.BridgeRouteTarget.BOTH,
+                    "search",place,true);
+                status.setText(result.status);
+            }else{
+                T1ClusterWazeRouter.routeDestination(this,i);
+                status.setText(T1ClusterWazeRouter.prefs(this).getString(
+                    T1ClusterWazeRouter.STATUS,"Sin resultado de clúster"));
+            }
             return; // never open center Waze as a surprise fallback
         }
         try{
