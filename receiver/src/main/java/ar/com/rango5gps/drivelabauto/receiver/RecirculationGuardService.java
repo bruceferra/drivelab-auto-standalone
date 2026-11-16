@@ -43,8 +43,10 @@ public final class RecirculationGuardService extends Service {
      */
     static void recoverLegacyReadError(android.content.Context context){
         SharedPreferences p=context.getSharedPreferences(PREFS,MODE_PRIVATE);
-        if(p.getBoolean(PAUSED,false)&&p.getString(STATUS,"").startsWith(
-                "PAUSADO: 4 errores OEM consecutivos.")){
+        String old=p.getString(STATUS,"");
+        if(p.getBoolean(PAUSED,false)&&(
+            old.startsWith("PAUSADO: 4 errores OEM consecutivos.")||
+            old.startsWith("PAUSADO: OEM revirtió 1004 3 veces/min."))){
             p.edit().putBoolean(PAUSED,false).putInt(LAST_VALUE,-1)
                 .putLong(LAST_CONFIRMED,0)
                 .putString(STATUS,
@@ -212,22 +214,22 @@ public final class RecirculationGuardService extends Service {
                                 "AIRE INTERIOR · OEM todavía marca 1004=2; "+
                                 "reintento automático con pausa entre comandos")
                                 .apply();
-                            continue;
+                        }else{
+                            recentWrites.addLast(now);
+                            vehicle.enableCabinRecirculation();
+                            SystemClock.sleep(300);
+                            if(stop)break;
+                            int after=vehicle.read(1004);
+                            if(!RecirculationPolicy.valid(after))
+                                throw new IllegalStateException("1004 no reconocido: "+after);
+                            previousObserved=after;
+                            pref().edit().putInt(LAST_VALUE,after)
+                                .putLong(LAST_CONFIRMED,after==1?
+                                    System.currentTimeMillis():0L)
+                                .putString(STATUS,after==1?
+                                    "AIRE INTERIOR · 1004=1 confirmado":
+                                    "1004=1 enviado; OEM no confirmó el cambio").apply();
                         }
-                        recentWrites.addLast(now);
-                        vehicle.enableCabinRecirculation();
-                        SystemClock.sleep(300);
-                        if(stop)break;
-                        int after=vehicle.read(1004);
-                        if(!RecirculationPolicy.valid(after))
-                            throw new IllegalStateException("1004 no reconocido: "+after);
-                        previousObserved=after;
-                        pref().edit().putInt(LAST_VALUE,after)
-                            .putLong(LAST_CONFIRMED,after==1?
-                                System.currentTimeMillis():0L)
-                            .putString(STATUS,after==1?
-                                "AIRE INTERIOR · 1004=1 confirmado":
-                                "1004=1 enviado; OEM no confirmó el cambio").apply();
                     }else{
                         pref().edit().putString(STATUS,
                             "AIRE INTERIOR · 1004=1 confirmado").apply();
