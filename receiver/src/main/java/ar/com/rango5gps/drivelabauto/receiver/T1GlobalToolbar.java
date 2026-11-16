@@ -509,6 +509,18 @@ final class T1GlobalToolbar {
         T1ClusterWazeRouter.status(owner,result);
         refreshCluster();
         note(result);
+        // Boot launches both apps and resizes them asynchronously (1.8 s).
+        // A recent explicit destination can then be reapplied in the
+        // PREVIOUSLY confirmed 60/40 layout; never surprise the center display.
+        if(launched&&!pendingLayout){
+            final long onAt=android.os.SystemClock.elapsedRealtime();
+            main.postDelayed(()->{
+                if(!T1ClusterWazeRouter.enabled(owner)||
+                   T1ClusterLayoutPolicy.pendingUnverified(owner))return;
+                String restored=T1LastRoute.restore(owner);
+                if(foreground)note(restored);
+            },3000L);
+        }
     }
 
     private void refreshMirrorAuto(){
