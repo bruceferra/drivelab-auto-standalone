@@ -73,7 +73,7 @@ public final class T1ClusterWazeSourceContractTest {
             router.contains("packageName.equals(\"com.t1launcher\")")&&
             router.contains("packageName.startsWith(\"com.autolink.\")")&&
             router.contains("putBoolean(AUTO_BOOT,false)")&&
-            router.contains("launchSelectedApp(c,false,true)")&&
+            router.contains("launchApp(c,T1ClusterLayoutPolicy.singlePackage(c),")&&
             router.contains("openSelectedAppTest(Context c)"),
             "Only explicit user-selected public apps, with auto boot reset on change");
         ok(setup.contains("ELEGIR APLICACIÓN DEL CLÚSTER")&&
