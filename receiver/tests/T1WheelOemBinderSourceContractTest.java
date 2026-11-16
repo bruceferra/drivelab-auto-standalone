@@ -52,10 +52,13 @@ public final class T1WheelOemBinderSourceContractTest {
             svc.contains("AccessibilityWindowInfo")&&
             svc.contains("WAZE.equals(")&&
             svc.contains("String.valueOf(root.getPackageName())")&&
-            svc.contains("AccessibilityNodeInfo active=activeRoot();")&&
-            svc.contains("now-lastActiveWindowAt<15000L")&&
-            svc.contains("!T1ClusterWazeRouter.enabled(this)"),
-            "Waze-only opt-in service must bind only while a Waze window is visible on any display");
+            svc.contains("boolean optedIn=prefs().getBoolean(ENABLED,false)")&&
+            svc.contains("T1ClusterWazeRouter.enabled(this)")&&
+            svc.contains("T1ClusterWazeRouter.selected(this)!=null")&&
+            svc.contains("oemBridge.start();")&&
+            !svc.contains("lastActiveWindowAt")&&
+            svc.contains("if(root==null){"),
+            "Explicit wheel opt-in stays registered despite hidden map windows; actions still require map root");
         check(svc.contains("case 1000:mapped=KeyEvent.KEYCODE_DPAD_RIGHT")&&
             svc.contains("case 1001:mapped=KeyEvent.KEYCODE_DPAD_LEFT")&&
             svc.contains("case 1002:mapped=KeyEvent.KEYCODE_BACK")&&
