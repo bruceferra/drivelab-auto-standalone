@@ -131,6 +131,23 @@ public final class T1WazeWheelService extends AccessibilityService {
                     .putString(LAST_STATUS,
                         "Arranque: enlace OEM verificado y ventanas reconsultadas; "+
                         "si falta Waze/Maps, ver inventario").apply();
+                // Booted Android can publish app windows only AFTER the
+                // navigation task settles. Read-only bounded retries, never
+                // an automatic click, task restart or global key injection.
+                for(long delay:new long[]{2500L,6500L,10500L}){
+                    live.main.postDelayed(()->{
+                        if(connectedInstance!=live||
+                           !live.prefs().getBoolean(ENABLED,false)||
+                           !T1ClusterWazeRouter.enabled(live))return;
+                        if(live.activeRoot()!=null)return;
+                        live.prefs().edit()
+                            .putString(WINDOW_DIAG,
+                                live.describeAccessibleDisplays())
+                            .putString(LAST_STATUS,
+                                "Reconsultando ventana tras encendido; "+
+                                "el volante OEM sigue conectado").apply();
+                    },delay);
+                }
             }catch(Exception ex){
                 live.status("No se pudo actualizar ventanas del clúster: "+
                     ex.getClass().getSimpleName());
