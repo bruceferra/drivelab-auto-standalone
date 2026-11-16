@@ -23,6 +23,7 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
     private LinearLayout column;
     private T1ClusterLayoutPreview preview;
     private TextView previewState;
+    private boolean adbProbeRunning;
     private void text(String value,int size){
         TextView view=new TextView(this);
         view.setText(value);view.setTextSize(size);
@@ -57,8 +58,8 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
             "conserva Waze pantalla completa.",13);
         boolean adb=T1ClusterAdbResize.enabled(this);
         text("PUENTE ADB LOCAL 127.0.0.1:5555: "+
-            (adb?"ACTIVADO":"DESACTIVADO")+
-            "\n"+cfg().getString(T1ClusterAdbResize.RESULT,
+            (adb?"HABILITADO (no confirma conexión)":"DESACTIVADO")+
+            "\nPRUEBA ADB: "+cfg().getString(T1ClusterAdbResize.RESULT,
                 "Sin prueba ADB realizada"),13);
         button(adb?"DESACTIVAR PUENTE ADB LOCAL":
             "HABILITAR PUENTE ADB LOCAL (SIN ROOT)",
@@ -137,7 +138,7 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
             "\nÚltima verificación: "+
             (cfg().getLong(T1ClusterAdbResize.VERIFIED_AT,0L)>0?
                 "hay medición de tareas":"NINGUNA"),13);
-        text("Resultado: "+cfg().getString(T1ClusterWazeRouter.STATUS,
+        text("Estado general Waze (NO es prueba ADB): "+cfg().getString(T1ClusterWazeRouter.STATUS,
             "Ninguna prueba realizada"),13);
         text("MICRÓFONO FÍSICO · PROTOCOLO REAL DEL APK",19);
         SharedPreferences mic=T1OemMicrophoneService.prefs(this);
@@ -273,16 +274,41 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
     }
     private void probeLocalAdb(){
         if(!T1ClusterAdbResize.enabled(this)){
-            T1ClusterWazeRouter.status(this,
-                "Primero habilitá PUENTE ADB LOCAL.");
-            render();return;
+            new AlertDialog.Builder(this)
+                .setTitle("PRUEBA ADB NO INICIADA")
+                .setMessage("Primero habilitá PUENTE ADB LOCAL.")
+                .setPositiveButton("CERRAR",null).show();
+            return;
         }
-        T1ClusterWazeRouter.status(this,
-            "Conectando ADB 127.0.0.1:5555 (solo lectura)…");
-        render();
+        if(adbProbeRunning)return;
+        adbProbeRunning=true;
+        // Persist an immediate distinct test state even before TCP responds.
+        // This MUST replace the stale "Puente habilitado" guidance.
+        cfg().edit().putString(T1ClusterAdbResize.RESULT,
+            "PROBANDO AHORA: conectando 127.0.0.1:5555…").apply();
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("PRUEBA ADB LOCAL · EN CURSO")
+            .setMessage("Probando ADB por 127.0.0.1:5555. "+
+                "El resultado aparecerá ACÁ, no en el estado de Waze.")
+            .setPositiveButton("CERRAR",(d,w)->render())
+            .create();
+        dialog.show();
         T1ClusterAdbResize.probe(this,(message,connected)->{
+            adbProbeRunning=false;
             if(isFinishing()||isDestroyed())return;
             T1ClusterWazeRouter.status(this,message);
+            if(dialog.isShowing()){
+                dialog.setTitle(connected?
+                    "ADB LOCAL CONECTADO":"ADB LOCAL NO CONECTADO");
+                dialog.setMessage(message+"\n\n"+
+                    (connected?
+                    "El puente responde. Falta probar CLÚSTER OFF "+
+                    "y el diseño 50/50 en P.":
+                    "No se verificó el puente ADB. No modifiques "+
+                    "las ventanas del clúster."));
+            }
+            // Persisted ADB result survives dialog closure; Waze status is
+            // labeled separately. The dialog makes the async reply visible.
             render();
         });
     }

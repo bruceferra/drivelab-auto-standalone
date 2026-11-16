@@ -37,6 +37,9 @@ final class T1ClusterAdbResize {
             .apply();
     }
     static void probe(Context c,Done done){
+        T1ClusterWazeRouter.prefs(c).edit()
+            .putString(RESULT,"PROBANDO AHORA: consulta ADB iniciada…")
+            .putLong(VERIFIED_AT,0L).apply();
         new Thread(()->{
             String result;
             boolean ok=false;
