@@ -230,11 +230,9 @@ final class T1ClusterWazeRouter {
         if(!target.equals(maps.getPackage()))
             return "Rechazado: el destino no es de Google Maps";
         if(!enabled(c))return "CLÚSTER OFF: no enviar al Display 1";
-        if(T1ClusterLayoutPolicy.pendingUnverified(c))
-            return T1ClusterLayoutPolicy.pendingMessage(c);
-        if(T1ClusterLayoutPolicy.active(c)){
-            boolean dual=T1ClusterLayoutPolicy.MODE_SPLIT.equals(
-                T1ClusterLayoutPolicy.mode(c));
+        if(T1ClusterLayoutPolicy.MODE_SPLIT.equals(
+            T1ClusterLayoutPolicy.mode(c))){
+            boolean dual=true;
             boolean inA=target.equals(T1ClusterLayoutPolicy.firstPackage(c));
             boolean inB=target.equals(T1ClusterLayoutPolicy.secondPackage(c));
             if(dual&&!inA&&!inB)
@@ -253,10 +251,12 @@ final class T1ClusterWazeRouter {
         return launchOnDisplay(c,maps,false,false,"Google Maps",false);
     }
     static boolean routeDestination(Context c,Intent waze){
-        // Never silently replace a user-selected unverified 50/50 with FULL
-        // after receiving an Uber or spoken navigation destination.
-        if(enabled(c)&&T1ClusterLayoutPolicy.pendingUnverified(c)){
-            status(c,T1ClusterLayoutPolicy.pendingMessage(c));
+        // ADB bounds may be unavailable on Jetour even when both apps
+        // are visibly split. A pending measurement must NOT reject Sender
+        // routes. The configured freeform pane receives the destination;
+        // a fullscreen fallback remains disallowed for split layouts.
+        if(!enabled(c)){
+            status(c,"CLÚSTER OFF: destino no abierto");
             return false;
         }
         String shaped=enabled(c)?
