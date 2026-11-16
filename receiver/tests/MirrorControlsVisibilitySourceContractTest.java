@@ -31,11 +31,12 @@ public final class MirrorControlsVisibilitySourceContractTest {
               toolbar.contains("MirrorAutomationService.RIGHT,right.getValue()") &&
               toolbar.contains("MirrorParkingPolicy.MAX_PULSES_PER_SIDE"),
               "left and right pulse settings must be independently configurable");
-        int visible=hub.indexOf("CONTROLES OEM AVANZADOS · ESPEJOS R");
-        int settings=hub.indexOf("button(body,connectionExpanded?");
-        check(visible>=0 && settings>visible &&
+        int visible=hub.indexOf("MENÚ TÉCNICO · PRUEBAS Y AJUSTES");
+        check(visible>=0&&hub.contains("technicalOemExpanded")&&
+              hub.contains("quickControls.attach(oldControls)")&&
+              hub.contains("button(technical,technicalOemExpanded?")&&
               !hub.contains("button(settings,\"CONTROLES OEM AVANZADOS\""),
-              "OEM advanced controls must be reachable without opening connection settings");
+              "OEM experimental controls must remain reachable inside a single technical menu, not duplicate daily controls");
         String base=Files.readString(root.resolve("T1ImmersiveActivity.java"));
         String air=Files.readString(root.resolve("RecirculationGuardService.java"));
         check(base.contains("AUTO_INITIALIZED.compareAndSet(false,true)") &&
