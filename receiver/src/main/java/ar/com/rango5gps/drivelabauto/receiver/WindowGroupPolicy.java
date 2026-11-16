@@ -23,6 +23,20 @@ public final class WindowGroupPolicy {
         if(state==3)return SKIP; // already in the quarter reporting band.
         return SEND; // explicit ventilation request from ANY readable state 0..4.
     }
+    /** A new tap uses all FOUR real OEM positions, never previous button state.
+     * All quarter (3) => CLOSE (1); any different => VENT_QUARTER (3).
+     */
+    public static int smartOperation(int[] positions){
+        if(positions==null||positions.length!=IDS.length)
+            throw new IllegalArgumentException("Se necesitan cuatro posiciones OEM");
+        boolean allQuarter=true;
+        for(int value:positions){
+            if(!validState(value))
+                throw new IllegalArgumentException("Estado de ventanilla inválido "+value);
+            if(value!=VENT_QUARTER)allQuarter=false;
+        }
+        return allQuarter?CLOSE:VENT_QUARTER;
+    }
     /** Four-window all-or-nothing preflight, no unknown commands. */
     public static int[] plan(int operation,int[] states){
         if(states==null||states.length!=IDS.length)
