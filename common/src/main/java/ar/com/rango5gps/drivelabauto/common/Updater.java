@@ -180,11 +180,13 @@ public final class Updater {
         long code=data.getLong("versionCode");
         String url=data.getString("apkUrl");
         String sha=data.getString("sha256").toLowerCase(Locale.US);
-        String expected=OWNER+"releases/download/v"+version+
-            "/DriveLab-Auto-"+proper+"-v"+version+".apk";
+        // Exact, whitelisted Github release paths. Sender historically
+        // shares numeric tags with Receiver; its newer independent sender-v
+        // tags are also permitted (never arbitrary asset URLs).
         if(!a.getPackageName().equals(pkg)||
            !version.matches("[0-9]+\\.[0-9]+\\.[0-9]+")||
-           code<1 || !sha.matches("[a-f0-9]{64}")||!expected.equals(url))
+           code<1||!sha.matches("[a-f0-9]{64}")||
+           !UpdaterManifestUrlPolicy.allowed(app,version,url))
             throw new SecurityException("Manifiesto de actualización inválido");
         PackageInfo installed=a.getPackageManager().getPackageInfo(a.getPackageName(),0);
         long current=installed.getLongVersionCode();
