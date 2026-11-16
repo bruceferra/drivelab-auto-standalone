@@ -23,6 +23,7 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
     private ScrollView currentScroll;
     private boolean connectionExpanded=false;
     private boolean technicalExpanded=false;
+    private boolean technicalOemExpanded=false;
     private long lastAutoCheckElapsed=0;
     private final Runnable pairUiRefresh=new Runnable(){
         @Override public void run(){
@@ -136,13 +137,44 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
         settings.setVisibility(connectionExpanded?android.view.View.VISIBLE:
             android.view.View.GONE);
         body.addView(settings);
-        label(settings,"Jetour T1 · Receptor cifrado independiente",14);
+        LinearLayout technical=new LinearLayout(this);
+        technical.setOrientation(LinearLayout.VERTICAL);
+        technical.setVisibility(technicalExpanded?android.view.View.VISIBLE:
+            android.view.View.GONE);
+        body.addView(technical);
+        if(technicalExpanded){
+            label(technical,"DIAGNÓSTICO Y CONFIGURACIÓN AVANZADA",17);
+            button(technical,"DISPLAY / CLÚSTER · PRUEBAS",()->
+                startActivity(new Intent(this,T1ClusterWazeSettingsActivity.class)));
+            button(technical,"VOLANTE · DETECTAR TECLAS Y MENÚS",()->
+                startActivity(new Intent(this,T1WheelSettingsActivity.class)));
+            button(technical,"PENDIENTES · VALIDACIONES OEM",()->
+                startActivity(new Intent(this,T1ValidationWizardActivity.class)));
+            button(technical,"TABLERO · TANQUES Y TELEMETRÍA",()->
+                startActivity(new Intent(this,T1TankDashboardActivity.class)));
+            button(technical,"OPTIMIZADOR · CONFIGURAR",()->
+                startActivity(new Intent(this,T1OptimizedModeActivity.class)));
+            button(technical,"ASISTENTE DE VOZ · CONFIGURAR",()->
+                startActivity(new Intent(this,T1VoiceRouteActivity.class)));
+            button(technical,technicalOemExpanded?
+                "OCULTAR CONTROLES OEM DE PRUEBA":
+                "CONTROLES OEM DE PRUEBA · ESPEJOS",()->{
+                technicalOemExpanded=!technicalOemExpanded;render();
+            });
+            if(technicalOemExpanded){
+                LinearLayout oldControls=new LinearLayout(this);
+                oldControls.setOrientation(LinearLayout.VERTICAL);
+                technical.addView(oldControls);
+                quickControls.attach(oldControls);
+            }
+        }
+        label(settings,"CONEXIÓN SEGURA · XIAOMI",16);
         label(settings,"IP de T1: "+ReceiverService.localIp()+" · Puertos 48391 / 48392",15);
         label(settings,"ESTADO: "+p.getString("status","Sin iniciar")+
             "\nDestinos recibidos: "+p.getInt("received",0)+
             "\nÚltima navegación: "+p.getString("last_open","Sin pruebas"),14);
-        button(settings,"INICIAR RECEPTOR · en segundo plano",()->start(ReceiverService.ACTION_START));
-        button(settings,"DETENER RECEPTOR",()->new AlertDialog.Builder(this)
+        button(technical,"INICIAR RECEPTOR · en segundo plano",()->start(ReceiverService.ACTION_START));
+        button(technical,"DETENER RECEPTOR",()->new AlertDialog.Builder(this)
             .setMessage("Se detendrá el receptor y su inicio automático. ¿Confirmás?")
             .setNegativeButton("CANCELAR",null)
             .setPositiveButton("DETENER",(d,w)->start(ReceiverService.ACTION_STOP)).show());
@@ -170,26 +202,26 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
         button(settings,"AUTORIZAR CÓDIGO COINCIDENTE · PASO 1",this::approve);
         button(settings,"ACTUALIZAR ESTADO",this::render);
         boolean auto=p.getBoolean("auto_boot",false);
-        label(settings,"Inicio automático del receptor: "+(auto?"ACTIVO":"DESACTIVADO"),16);
-        button(settings,auto?"Desactivar inicio automático":"ACTIVAR INICIO AL ENCENDER T1",()->{
+        label(technical,"Inicio automático del receptor: "+(auto?"ACTIVO":"DESACTIVADO"),16);
+        button(technical,auto?"Desactivar inicio automático":"ACTIVAR INICIO AL ENCENDER T1",()->{
             p.edit().putBoolean("auto_boot",!auto).apply();
             if(!auto)start(ReceiverService.ACTION_START);else render();
         });
-        label(settings,"Permiso para iniciar Waze desde segundo plano: "+
+        label(technical,"Permiso para iniciar Waze desde segundo plano: "+
             (Settings.canDrawOverlays(this)?"CONCEDIDO":"SIN AUTORIZAR"),14);
-        button(settings,"AUTORIZAR SEGUNDO PLANO EN ANDROID",this::requestBackground);
+        button(technical,"AUTORIZAR SEGUNDO PLANO EN ANDROID",this::requestBackground);
         boolean waze=p.getBoolean("open_waze",true);
-        label(settings,"Cuando CLÚSTER está ON, las rutas del Sender entran "+
+        label(technical,"Cuando CLÚSTER está ON, las rutas del Sender entran "+
             "aunque esté apagada la apertura de Waze fuera del clúster.",13);
-        button(settings,waze?"DESACTIVAR APERTURA FUERA DEL CLÚSTER":
+        button(technical,waze?"DESACTIVAR APERTURA FUERA DEL CLÚSTER":
             "ACTIVAR APERTURA FUERA DEL CLÚSTER",()->{
             p.edit().putBoolean("open_waze",!waze).apply();render();
         });
-        label(settings,"App opcional al encender: "+p.getString("launch_label","NINGUNA")+
+        label(technical,"App opcional al encender: "+p.getString("launch_label","NINGUNA")+
             "\nEstado último arranque: "+p.getString("boot_status","Sin pruebas"),13);
-        button(settings,"ELEGIR APP PARA ABRIR AL ENCENDER",this::pickBootApp);
+        button(technical,"ELEGIR APP PARA ABRIR AL ENCENDER",this::pickBootApp);
         boolean launch=p.getBoolean("launch_app_on_boot",false);
-        button(settings,launch?"Desactivar apertura de app al encender":
+        button(technical,launch?"Desactivar apertura de app al encender":
             "Activar apertura de app al encender",()->{
             if(!launch&&(!p.getBoolean("auto_boot",false)||
                 !Settings.canDrawOverlays(this)||p.getString("launch_package","").isEmpty())){
@@ -198,12 +230,12 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
             }
             p.edit().putBoolean("launch_app_on_boot",!launch).apply();render();
         });
-        button(settings,"Quitar app de inicio",()->{
+        button(technical,"Quitar app de inicio",()->{
             p.edit().remove("launch_package").remove("launch_label")
                 .putBoolean("launch_app_on_boot",false).apply();render();
         });
-        button(settings,"PRUEBA DIRECTA A LA PLATA",()->direct("-34.9214,-57.9545"));
-        button(settings,"PRUEBA DIRECTA A MAR DEL PLATA",()->direct("-38.0055,-57.5426"));
+        button(technical,"PRUEBA DIRECTA A LA PLATA",()->direct("-34.9214,-57.9545"));
+        button(technical,"PRUEBA DIRECTA A MAR DEL PLATA",()->direct("-38.0055,-57.5426"));
         label(settings,"Receiver instalado: "+Updater.installedVersion(this),14);
         button(settings,"COMPROBAR ACTUALIZACIÓN RECEIVER",
             ()->Updater.check(this,"receiver",this::report));
@@ -217,12 +249,7 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
             button(settings,"ABRIR AJUSTES RECEIVER (PERMISO)",
                 ()->Updater.openReceiverSettings(this,this::report));
         }
-        label(settings,"El sistema Android debe confirmar la instalación. "+
-            "Si Jetour rechaza ambos métodos, el estado indicará el motivo. "+
-            "No desactives Play Protect ni desinstales Receiver.",13);
-        label(settings,"El servicio sigue activo aunque cierres esta pantalla. "+
-            "No fuerza Wi-Fi ni modifica Android Auto o T1Launcher. "+
-            "La apertura en clúster depende de la ROM de la camioneta.",13);
+        label(settings,"Instalación Android: no desinstales Receiver para actualizar.",13);
         Receiver3DButtons.apply(body);
         setContentView(scroll);
         refreshPairPanel();
