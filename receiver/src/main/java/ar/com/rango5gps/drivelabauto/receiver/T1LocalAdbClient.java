@@ -48,7 +48,7 @@ final class T1LocalAdbClient {
            !command.equals("dumpsys activity activities")&&
            !command.matches(
               "am task resize [1-9][0-9]{0,6}( [0-9]{1,5}){4}")&&
-           !command.matches("am task remove [1-9][0-9]{0,6}"))
+           !command.matches("am stack remove [1-9][0-9]{0,6}"))
             throw new SecurityException("Comando ADB no permitido");
         String phase="abrir TCP 127.0.0.1:5555";
         try(Socket sock=new Socket()){

@@ -221,7 +221,7 @@ final class T1ClusterAdbResize {
                         throw new IllegalStateException(
                             "Cierre cancelado: CLÚSTER volvió a ON");
                     String output=T1LocalAdbClient.shell(app,
-                        "am task remove "+task.id);
+                        "am stack remove "+task.id);
                     if(errorOutput(output))
                         throw new IllegalStateException(
                             "Android rechazó cerrar "+pkg+": "+output);
@@ -234,8 +234,8 @@ final class T1ClusterAdbResize {
                     throw new IllegalStateException(
                         "Waze/Maps todavía tienen tareas en Display "+id);
                 success=true;
-                result="TAREAS CERRADAS POR ADB ("+removed+
-                    ") en Display "+id+
+                result="WAZE Y GOOGLE MAPS CERRADOS POR ADB ("+removed+
+                    " tareas) en Display "+id+
                     ". Comprobá físicamente que se recuperó "+
                     "el tablero OEM; no se modificó su HOME.";
             }catch(InterruptedException e){

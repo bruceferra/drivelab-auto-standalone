@@ -58,11 +58,11 @@ public final class T1MirrorAcknowledgeClusterToggleSourceContractTest {
             resize.contains("static void closeClusterApps(Context c,Done done)")&&
             resize.contains("new String[]{WAZE,MAPS}")&&
             resize.contains("T1AdbTaskParser.unique(now,id,pkg)")&&
-            resize.contains("\"am task remove \"+task.id")&&
+            resize.contains("\"am stack remove \"+task.id")&&
             resize.contains("if(!parked(app))")&&
             resize.contains("deliverClose(app,result,success,done)")&&
             resize.contains(".putLong(VERIFIED_AT,0L)")&&
-            adb.contains("am task remove [1-9]"),
+            adb.contains("am stack remove [1-9]"),
             "Only Waze/Maps tasks on selected display may be closed with authorized P0 ADB");
         check(!toolbar.contains("Intent.CATEGORY_HOME")&&
             !resize.contains("am force-stop")&&
