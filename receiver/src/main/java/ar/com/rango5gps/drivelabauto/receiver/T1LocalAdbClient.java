@@ -18,7 +18,6 @@ import java.security.KeyPairGenerator;
 import java.security.PrivateKey;
 import java.security.Signature;
 import java.security.interfaces.RSAPublicKey;
-import java.security.spec.PKCS8EncodedKeySpec;
 import java.math.BigInteger;
 
 /** ADB HOST protocol over the CAR's LOCAL LOOPBACK only.
@@ -51,11 +50,14 @@ final class T1LocalAdbClient {
               "am task resize [1-9][0-9]{0,6}( [0-9]{1,5}){4}")&&
            !command.matches("am task remove [1-9][0-9]{0,6}"))
             throw new SecurityException("Comando ADB no permitido");
+        String phase="abrir TCP 127.0.0.1:5555";
         try(Socket sock=new Socket()){
             sock.connect(new InetSocketAddress(LOOPBACK,PORT),3000);
             sock.setSoTimeout(9000);
             DataInputStream in=new DataInputStream(sock.getInputStream());
+            phase="recuperar clave RSA autorizada";
             KeyPair pair=hostKey(context.getApplicationContext());
+            phase="negociar autorización ADB";
             send(sock,"CNXN",PROTOCOL,4096,
                 ascii("host::\0"));
             boolean signatureSent=false,publicKeySent=false,ready=false;
@@ -66,8 +68,10 @@ final class T1LocalAdbClient {
                     throw new IllegalStateException(
                         "Respuesta ADB incompatible durante autorización");
                 if(!signatureSent){
+                    phase="firmar desafío ADB";
                     send(sock,"AUTH",2,0,signChallenge(
                         pair.getPrivate(),msg.payload));
+                    phase="esperar autorización ADB";
                     signatureSent=true;
                 }else if(!publicKeySent){
                     send(sock,"AUTH",3,0,adbPublicKey(
@@ -80,6 +84,7 @@ final class T1LocalAdbClient {
             }
             if(!ready)throw new SecurityException(
                 "ADB local no autorizó a DriveLab (revisar pantalla de T1)");
+            phase="leer tareas por shell ADB";
             send(sock,"OPEN",1,0,ascii("shell:"+command+"\0"));
             int remote=0;
             ByteArrayOutputStream output=new ByteArrayOutputStream();
@@ -102,14 +107,21 @@ final class T1LocalAdbClient {
                     throw new IllegalStateException("Respuesta shell ADB inválida");
             }
             throw new IllegalStateException("ADB no cerró la sesión shell");
+        }catch(java.net.ConnectException ex){throw ex;
+        }catch(java.net.SocketTimeoutException ex){throw ex;
+        }catch(Exception ex){
+            throw new IllegalStateException("fase: "+phase+" · "+
+                ex.getClass().getSimpleName()+": "+
+                String.valueOf(ex.getMessage()),ex);
         }
     }
     static String connectivityHint(Throwable error){
         String name=error==null?"":error.getClass().getSimpleName();
         if(error instanceof java.net.ConnectException)
-            return "ADB local 127.0.0.1:5555 no responde. Conectá WebADB "+
-                "por USB a la T1 y ejecutá DESDE LA PC: adb tcpip 5555; "+
-                "repetí la prueba estacionado. No se activa automáticamente.";
+            return "ADB TCP 127.0.0.1:5555 no responde. Desde el Xiaomi "+
+                "con Termux autorizado por USB, verificá "+
+                "termux-adb tcpip 5555. Puente ACTIVADO en DriveLab "+
+                "no significa que el puerto esté escuchando.";
         if(error instanceof java.net.SocketTimeoutException)
             return "ADB no respondió o espera autorización. Revisá en la T1 "+
                 "el diálogo «Permitir depuración USB» y aceptalo SOLO si "+
@@ -121,15 +133,16 @@ final class T1LocalAdbClient {
         File file=new File(c.getFilesDir(),KEY_FILE);
         KeyFactory factory=KeyFactory.getInstance("RSA");
         if(file.exists()){
-            // Android 11 Conscrypt may rehydrate an OpenSSLRSAPrivateKey
-            // that does NOT implement RSAPrivateCrtKey. Its PKCS#8 encoding
-            // does still contain n and e; recover those WITHOUT casting the
-            // provider's key or regenerating our already authorized host key.
+            // Importing PKCS8 into Android Conscrypt can produce a non-CRT
+            // OpenSSLRSAPrivateKey, triggering a cast failure during signing.
+            // Restore ALL CRT parameters without rotating the existing key.
             byte[] encoded=Files.readAllBytes(file.toPath());
-            PrivateKey priv=factory.generatePrivate(
-                new PKCS8EncodedKeySpec(encoded));
+            java.security.spec.RSAPrivateCrtKeySpec crt=
+                T1RsaPkcs8PublicSpec.recoverPrivate(encoded);
+            PrivateKey priv=factory.generatePrivate(crt);
             return new KeyPair(factory.generatePublic(
-                T1RsaPkcs8PublicSpec.recover(encoded)),priv);
+                new java.security.spec.RSAPublicKeySpec(
+                    crt.getModulus(),crt.getPublicExponent())),priv);
         }
         KeyPairGenerator generator=KeyPairGenerator.getInstance("RSA");
         generator.initialize(2048);
