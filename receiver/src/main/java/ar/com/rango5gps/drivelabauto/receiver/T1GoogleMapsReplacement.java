@@ -11,7 +11,8 @@ import java.util.Locale;
  */
 final class T1GoogleMapsReplacement {
     private static final String PREF="t1_google_maps_replace_v1";
-    private static final String TIME="requested_at",ACTIVE="pending",RESULT="result";
+    private static final String TIME="requested_at",ACTIVE="pending",RESULT="result",
+        START_PENDING="start_pending";
     private static final long TTL=12000L;
     private T1GoogleMapsReplacement(){}
     private static SharedPreferences prefs(Context c){
@@ -19,21 +20,47 @@ final class T1GoogleMapsReplacement {
     }
     static void arm(Context c){
         prefs(c).edit().putBoolean(ACTIVE,true)
+            .putBoolean(START_PENDING,true)
             .putLong(TIME,System.currentTimeMillis())
             .putString(RESULT,"Esperando confirmación de ruta nueva, si aparece")
             .apply();
     }
-    static boolean pending(Context c){
-        if(!T1WheelTarget.mapsPresent(c))return false;
+    private static boolean recent(Context c){
+        if(!T1WheelTarget.mapsConfigured(c))return false;
         SharedPreferences p=prefs(c);
         long age=System.currentTimeMillis()-p.getLong(TIME,0L);
-        if(age<0||age>TTL){if(p.getBoolean(ACTIVE,false))cancel(c);return false;}
-        return p.getBoolean(ACTIVE,false);
+        if(age<0||age>TTL){
+            if(p.getBoolean(ACTIVE,false)||
+               p.getBoolean(START_PENDING,false))cancel(c);
+            return false;
+        }
+        return true;
+    }
+    static boolean pending(Context c){
+        return recent(c)&&prefs(c).getBoolean(ACTIVE,false);
+    }
+    static boolean startPending(Context c){
+        return recent(c)&&prefs(c).getBoolean(START_PENDING,false);
+    }
+    static void consumeStart(Context c){
+        prefs(c).edit().putBoolean(START_PENDING,false).apply();
+    }
+    static boolean startAction(String value){
+        String n=norm(value);
+        // Only explicit Maps navigation action following the signed
+        // Sender request. Never generic OK/Yes or a system permission.
+        return n.equals("iniciar")||n.equals("iniciar navegacion")||
+            n.equals("comenzar navegacion")||
+            n.equals("start")||n.equals("start navigation")||
+            n.equals("start driving")||n.equals("comenzar");
     }
     static void cancel(Context c){
+        prefs(c).edit().putBoolean(ACTIVE,false)
+            .putBoolean(START_PENDING,false).apply();
+    }
+    static void consume(Context c){
         prefs(c).edit().putBoolean(ACTIVE,false).apply();
     }
-    static void consume(Context c){cancel(c);}
     static void result(Context c,String status){
         prefs(c).edit().putString(RESULT,status).apply();
     }
