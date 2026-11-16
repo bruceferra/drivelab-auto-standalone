@@ -106,7 +106,7 @@ jobs:
             echo "$badge" | grep -F "package: name='ar.com.rango5gps.drivelabauto.$app'"
             echo "$badge" | grep -F "versionCode='$expected_code'"
             echo "$badge" | grep -F "versionName='$expected_name'"
-            asset="DriveLab-Auto-$proper-$tag.apk"
+            asset="DriveLab-Auto-$proper-v$expected_name.apk"
             cp "$apk" "output/$asset"
             sha=$(sha256sum "output/$asset" | awk '{print $1}')
             APP_NAME="$app" APP_VERSION="$expected_name" APP_CODE="$expected_code" APP_HASH="$sha" APP_TAG="$tag" APP_ASSET="$asset" python3 - <<'PY'
@@ -136,3 +136,5 @@ jobs:
 # Re-run: BridgeCrypto route-kind validation is again standalone for legacy QA compilers.
 
 # Sender release uses separate tag sender-v0.2.19: old Receiver v0.2.19 is immutable.
+
+# Sender tag sender-v0.2.19 is distinct from filename DriveLab-Auto-Sender-v0.2.19.apk.

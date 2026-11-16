@@ -71,7 +71,7 @@ public final class SenderActivity extends Activity {
         title(body,"DESTINO PREDETERMINADO DE UBER",18);
         String navMode=SenderRouteTarget.selected(this);
         title(body,"Al tocar NAVEGAR: "+SenderRouteTarget.label(navMode)+
-            "\\nSe guarda la elección. No pregunta en cada viaje.",14);
+            "\nSe guarda la elección. No pregunta en cada viaje.",14);
         button(body,"ELEGIR DESTINO · WAZE / GOOGLE / AMBOS",
             this::chooseNavigationTarget);
         boolean paired=SenderClient.configured(this);
