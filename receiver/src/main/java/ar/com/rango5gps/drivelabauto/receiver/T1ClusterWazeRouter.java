@@ -193,9 +193,8 @@ final class T1ClusterWazeRouter {
     /** Deliberate app launch for a stopped vehicle, or the user-enabled
      * auto-boot option. Never called for an incoming navigation intent.
      */
-    static String launchSelectedApp(Context c,boolean manualTest,
-                                    boolean fromBoot){
-        String pkg=selectedAppPackage(c);
+    static String launchApp(Context c,String pkg,String label,
+                            boolean manualTest,boolean fromBoot){
         if(!isSelectablePackage(c,pkg))
             return "Aplicación elegida no disponible: "+pkg+
                 ". Elegí otra en CLÚSTER.";
@@ -204,7 +203,12 @@ final class T1ClusterWazeRouter {
             return "La app no expone una pantalla de inicio: "+pkg;
         app.setPackage(pkg);
         return launchOnDisplay(c,app,manualTest,fromBoot,
-            selectedAppLabel(c),WAZE.equals(pkg));
+            label,WAZE.equals(pkg));
+    }
+    static String launchSelectedApp(Context c,boolean manualTest,
+                                    boolean fromBoot){
+        return launchApp(c,selectedAppPackage(c),selectedAppLabel(c),
+            manualTest,fromBoot);
     }
     static boolean openSelectedAppTest(Context c){
         String result=launchSelectedApp(c,true,false);
@@ -222,20 +226,29 @@ final class T1ClusterWazeRouter {
     }
     /** Google Maps destination, only on the chosen secondary display. */
     static String routeGoogleMaps(Context c,Intent maps){
-        if(!"com.google.android.apps.maps".equals(maps.getPackage()))
+        final String target="com.google.android.apps.maps";
+        if(!target.equals(maps.getPackage()))
             return "Rechazado: el destino no es de Google Maps";
         if(!enabled(c))return "CLÚSTER OFF: no enviar al Display 1";
-        if(T1ClusterLayoutPolicy.active(c)&&
-            T1ClusterLayoutPolicy.MODE_SPLIT.equals(
-                T1ClusterLayoutPolicy.mode(c))){
-            if(!"com.google.android.apps.maps".equals(
-                T1ClusterLayoutPolicy.secondPackage(c)))
-                return "La ventana derecha no está configurada para Google Maps";
+        if(T1ClusterLayoutPolicy.pendingUnverified(c))
+            return T1ClusterLayoutPolicy.pendingMessage(c);
+        if(T1ClusterLayoutPolicy.active(c)){
+            boolean dual=T1ClusterLayoutPolicy.MODE_SPLIT.equals(
+                T1ClusterLayoutPolicy.mode(c));
+            boolean inA=target.equals(T1ClusterLayoutPolicy.firstPackage(c));
+            boolean inB=target.equals(T1ClusterLayoutPolicy.secondPackage(c));
+            if(dual&&!inA&&!inB)
+                return "Google Maps no está configurado en los paneles";
+            if(!dual&&!target.equals(T1ClusterLayoutPolicy.singlePackage(c)))
+                return "El panel único no está configurado para Google Maps";
             Display display=selected(c);
-            if(display==null)return "Display 1 no disponible";
+            if(display==null)return "Display del clúster no disponible";
+            boolean right=dual&&(inA?
+                T1ClusterLayoutPolicy.inverted(c):
+                !T1ClusterLayoutPolicy.inverted(c));
             return T1ClusterLayoutPolicy.start(c,display,maps,
-                T1ClusterLayoutPolicy.geometry(c,display,
-                    !T1ClusterLayoutPolicy.inverted(c)),"Google Maps");
+                T1ClusterLayoutPolicy.geometry(c,display,right),
+                "Google Maps");
         }
         return launchOnDisplay(c,maps,false,false,"Google Maps",false);
     }
@@ -280,7 +293,8 @@ final class T1ClusterWazeRouter {
         }
         String opened=T1ClusterLayoutPolicy.active(c)?
             T1ClusterLayoutPolicy.boot(c):
-            launchSelectedApp(c,false,true);
+            launchApp(c,T1ClusterLayoutPolicy.singlePackage(c),
+                T1ClusterLayoutPolicy.singleLabel(c),false,true);
         status(c,opened);
         return opened;
     }
