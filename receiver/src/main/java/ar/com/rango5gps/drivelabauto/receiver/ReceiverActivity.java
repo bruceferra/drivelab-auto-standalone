@@ -195,8 +195,10 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
             (Settings.canDrawOverlays(this)?"CONCEDIDO":"SIN AUTORIZAR"),14);
         button(settings,"AUTORIZAR SEGUNDO PLANO EN ANDROID",this::requestBackground);
         boolean waze=p.getBoolean("open_waze",true);
-        button(settings,waze?"Desactivar apertura automática de Waze":
-            "Activar apertura automática de Waze",()->{
+        label(settings,"Cuando CLÚSTER está ON, las rutas del Sender entran "+
+            "aunque esté apagada la apertura de Waze fuera del clúster.",13);
+        button(settings,waze?"DESACTIVAR APERTURA FUERA DEL CLÚSTER":
+            "ACTIVAR APERTURA FUERA DEL CLÚSTER",()->{
             p.edit().putBoolean("open_waze",!waze).apply();render();
         });
         label(settings,"App opcional al encender: "+p.getString("launch_label","NINGUNA")+
