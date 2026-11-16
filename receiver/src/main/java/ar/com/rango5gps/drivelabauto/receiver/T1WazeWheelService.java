@@ -284,49 +284,14 @@ public final class T1WazeWheelService extends AccessibilityService {
                 "Waze no visible para Accesibilidad en ninguna pantalla").apply();
         return null;
     }
-    /** Edge-back gesture from the T1Launcher reached Waze on the cluster,
-     * but an accessibility GLOBAL_ACTION_BACK is dispatched to Android's
-     * currently FOCUSED window. Confirm Waze focus on the selected cluster
-     * before attempting it; never use Waze merely being visible as proof.
+    /** Android global BACK on T1 is not display scoped: it can close
+     * the center-screen task. Only an actual Waze Cancelar/Volver
+     * accessibility node may be activated; otherwise no action.
      */
-    private boolean backOnlyIfWazeFocused(){
-        Display d=T1ClusterWazeRouter.selected(this);
-        if(d==null||d.getDisplayId()<=0){
-            status("ATRÁS: Display de Waze no identificado");
-            return false;
-        }
-        final int target=d.getDisplayId();
-        boolean focused=false;
-        try{
-            SparseArray<List<AccessibilityWindowInfo>> all=
-                getWindowsOnAllDisplays();
-            List<AccessibilityWindowInfo> onCluster=
-                all==null?null:all.get(target);
-            if(onCluster!=null)for(AccessibilityWindowInfo win:onCluster){
-                if(win==null||!win.isFocused())continue;
-                AccessibilityNodeInfo root=win.getRoot();
-                if(root!=null&&root.isVisibleToUser()&&
-                    WAZE.equals(String.valueOf(root.getPackageName()))){
-                    focused=true;break;
-                }
-            }
-        }catch(RuntimeException ex){
-            status("ATRÁS Waze: no se pudo comprobar foco · "+
-                ex.getClass().getSimpleName());
-            return false;
-        }
-        if(!focused){
-            status("ATRÁS: Waze no tiene foco en Display "+target+
-                "; no se tocó el tablero OEM ni otra aplicación");
-            return false;
-        }
-        boolean requested=performGlobalAction(GLOBAL_ACTION_BACK);
-        lastButtonAt=SystemClock.elapsedRealtime();
-        hideHint();selectedLabel="";
-        status("ATRÁS Waze · "+(requested?
-            "acción solicitada con foco confirmado":"Android rechazó BACK")+
-            " · verificar diálogo en el clúster");
-        return requested;
+    private boolean backOnlyOnWaze(){
+        status("ATRÁS: sin botón Cancelar/Volver propio de Waze; "+
+            "no envié BACK global a pantalla central");
+        return false;
     }
     private void refreshOemBridge(){
         if(oemBridge==null)return;
@@ -440,7 +405,7 @@ public final class T1WazeWheelService extends AccessibilityService {
         if(collectAlternativeRoutes(root)){
             lastButtonAt=SystemClock.elapsedRealtime();
             if(cancel){
-                return backOnlyIfWazeFocused();
+                return backOnlyOnWaze();
             }
             if(routeShortcut){
                 highlight();
@@ -478,7 +443,7 @@ public final class T1WazeWheelService extends AccessibilityService {
                     }
                 }
                 promptArmed=false;
-                return backOnlyIfWazeFocused();
+                return backOnlyOnWaze();
             }
             if(confirm&&!promptArmed){
                 status("MENSAJE WAZE: girá la rueda para elegir una "+
@@ -518,7 +483,7 @@ public final class T1WazeWheelService extends AccessibilityService {
             return true;
         }
         if(cancel){
-            return backOnlyIfWazeFocused();
+            return backOnlyOnWaze();
         }
         if(confirm&&mapMenuArmed&&collectMapChoices(root)){
             mapMenuArmed=false;
@@ -692,13 +657,24 @@ public final class T1WazeWheelService extends AccessibilityService {
      * custom Canvas elements and inaccessible controls. The visible label
      * is required before physical wheel navigation can act on it.
      */
+    /** T1 freeform-window chrome is not a Waze navigation action.
+     * Modal-specific Cerrar still works via collectPromptChoices.
+     */
+    private static boolean windowDecoration(String label){
+        String n=T1WazePromptPolicy.normalize(label);
+        return n.equals("maximizar")||n.equals("minimizar")||
+            n.equals("restaurar ventana")||n.equals("cerrar ventana")||
+            n.equals("maximize")||n.equals("minimize")||
+            n.equals("restore window")||n.equals("close window")||
+            n.equals("cerrar")||n.equals("close");
+    }
     private void visitMapChoices(AccessibilityNodeInfo node,int depth,int[] count){
         if(node==null||depth>16||count[0]++>420||!node.isVisibleToUser())return;
         String label=labelOf(node);
         String norm=normalize(label);
         if(node.isClickable()&&!norm.isEmpty()&&
             norm.length()<=95&&!norm.equals("mapa")&&!norm.equals("map")&&
-            !norm.equals("waze")){
+            !norm.equals("waze")&&!windowDecoration(label)){
             Rect r=new Rect();
             node.getBoundsInScreen(r);
             if(r.width()>28&&r.height()>22)

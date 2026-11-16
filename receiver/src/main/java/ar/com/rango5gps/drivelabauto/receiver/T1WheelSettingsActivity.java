@@ -16,12 +16,14 @@ import android.widget.TextView;
 /** Explicit opt-in for Waze-only steering key / route alternatives experiment. */
 public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
     private final Handler ui=new Handler(Looper.getMainLooper());
-    private TextView report;
+    private TextView report,modeState,bridgeState,eventState;
+    private Button selectionButton,zoomButton,bridgeOn,bridgeOff;
     private boolean visible;
     private final Runnable ticker=new Runnable(){
         @Override public void run(){
             if(!visible)return;
             SharedPreferences p=prefs();
+            refreshModes();
             report.setText(T1WazeWheelService.describe(
                 T1WheelSettingsActivity.this)+
                 "\n\nCONTROL WAZE: "+
@@ -38,6 +40,32 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
     private SharedPreferences prefs(){
         return getSharedPreferences(T1WazeWheelService.PREFS,Context.MODE_PRIVATE);
     }
+    /** Fixed indicators independent of the scrolling diagnostic report. */
+    private void refreshModes(){
+        if(modeState==null)return;
+        SharedPreferences p=prefs();
+        boolean zoom=p.getBoolean(T1WazeWheelService.ZOOM_MAP,false);
+        boolean on=p.getBoolean(T1WazeWheelService.ENABLED,false);
+        boolean link=p.getBoolean(T1WazeWheelService.OEM_BINDER_ENABLED,false);
+        modeState.setText("MODO RUEDITA ACTUAL: "+
+            (zoom?"ZOOM":"SELECCIÓN DE BOTONES"));
+        T1JetourTheme.button(selectionButton,zoom?
+            T1JetourTheme.PANEL_HI:T1JetourTheme.GREEN_BUTTON);
+        T1JetourTheme.button(zoomButton,zoom?
+            T1JetourTheme.GREEN_BUTTON:T1JetourTheme.PANEL_HI);
+        bridgeState.setText("CONTROL WAZE "+(on?"ACTIVO":"APAGADO")+
+            " · PUENTE OEM "+(link?"HABILITADO":"APAGADO")+
+            "\n"+p.getString(T1WazeWheelService.OEM_BINDER_STATUS,
+                "Sin conexión"));
+        T1JetourTheme.button(bridgeOn,on&&link?
+            T1JetourTheme.GREEN_BUTTON:T1JetourTheme.PANEL_HI);
+        T1JetourTheme.button(bridgeOff,!link?
+            T1JetourTheme.AMBER_BUTTON:T1JetourTheme.PANEL_HI);
+        eventState.setText("ÚLTIMA TECLA: "+
+            p.getString(T1WazeWheelService.OEM_LAST,"ninguna")+
+            "\nÚLTIMA ACCIÓN: "+
+            p.getString(T1WazeWheelService.LAST_STATUS,"ninguna"));
+    }
     private TextView text(LinearLayout col,String title,int size){
         TextView t=new TextView(this);
         t.setText(title);t.setTextSize(size);
@@ -45,12 +73,13 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
         t.setPadding(12,10,12,10);
         col.addView(t);return t;
     }
-    private void button(LinearLayout col,String name,Runnable action){
+    private Button button(LinearLayout col,String name,Runnable action){
         Button b=new Button(this);
         b.setAllCaps(false);b.setText(name);
         T1JetourTheme.button(b,T1JetourTheme.PANEL_HI);
         b.setOnClickListener(v->action.run());
         col.addView(b,new LinearLayout.LayoutParams(-1,57));
+        return b;
     }
     private void learning(LinearLayout col,String label,String action){
         button(col,"APRENDER TECLA · "+label,()->{
@@ -106,68 +135,35 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
             catch(Exception ex){report.setText("Ajustes no disponibles: "+
                 ex.getClass().getSimpleName()+". Usá WebADB.");}
         });
-        button(body,"RUEDITA: ALTERNAR ZOOM / SELECCIÓN DE BOTONES",
-            ()->{
-                SharedPreferences p=prefs();
-                boolean zoom=!p.getBoolean(T1WazeWheelService.ZOOM_MAP,false);
-                p.edit().putBoolean(T1WazeWheelService.ZOOM_MAP,zoom).apply();
-                report.setText(zoom?
-                    "RUEDITA = ZOOM en mapa Waze. Los menús siguen "+
-                    "permitiendo elegir rutas/opciones accesibles.":
-                    "RUEDITA = RECORRER BOTONES ACCESIBLES de Waze. "+
-                    "Sin gestos de zoom.");
-            });
-        text(body,"Por defecto la ruedita RECORRE los botones "+
-            "accesibles de Waze; OK activa SOLO el botón que elegiste "+
-            "y ATRÁS busca cancelar/volver sin tocar controles OEM. "+
-            "Podés cambiar a ZOOM manualmente. Por ahora este módulo "+
-            "solo controla Waze, no otras aplicaciones.",13);
-        button(body,"ACTIVAR / DESACTIVAR CONTROL EN WAZE",()->{
-            SharedPreferences p=prefs();
-            boolean active=!p.getBoolean(T1WazeWheelService.ENABLED,false);
-            p.edit().putBoolean(T1WazeWheelService.ENABLED,active).apply();
+        modeState=text(body,"MODO RUEDITA ACTUAL: SELECCIÓN DE BOTONES",20);
+        selectionButton=button(body,"SELECCIÓN DE BOTONES",()->{
+            prefs().edit().putBoolean(T1WazeWheelService.ZOOM_MAP,false).apply();
+            refreshModes();
         });
-        text(body,"NUEVO · PUENTE OEM DEL VOLANTE AL CLÚSTER. "+
-            "El APK original T1Launcher T1N134 recibe códigos 1000–1003 "+
-            "desde IHardKeyCallback (Binder), NO como KeyEvent Android. "+
-            "DriveLab busca controles accesibles de Waze en Display 1, "+
-            "El micrófono OEM 1010 y la rueda usan UNA sola conexión "+
-            "si el botón físico está activo. Google Maps no se controla.",13);
-        button(body,"CONECTAR / DESCONECTAR RUEDITA OEM → WAZE",()->{
-            SharedPreferences p=prefs();
-            boolean active=p.getBoolean(T1WazeWheelService.OEM_BINDER_ENABLED,false);
-            if(active){
-                p.edit().putBoolean(T1WazeWheelService.OEM_BINDER_ENABLED,false)
-                    .putString(T1WazeWheelService.OEM_BINDER_STATUS,
-                        "Desactivando enlace; no se usará en Google Maps")
-                    .apply();
-                report.setText("PUENTE OEM DESACTIVADO. La conexión se "+
-                    "cierra en el próximo ciclo del servicio.");
-                return;
-            }
-            new android.app.AlertDialog.Builder(this)
-                .setTitle("VOLANTE OEM → WAZE · PRUEBA EN P")
-                .setMessage("T1Launcher usa un servicio Binder del fabricante. "+
-                    "Podemos conectarlo directamente para Waze en el clúster "+
-                    "y reconocer giro 1000/1001, ATRÁS 1002 y OK 1003. "+
-                    "\n\nIMPORTANTE: algunas ROM admiten UN solo receptor "+
-                    "de teclas. Si el micrófono de DriveLab ya está activo, "+
-                    "se reutiliza su conexión; no se registra otra. "+
-                    "Desactivá uno de los servicios si reactivás T1Launcher. "+
-                    "\n\nNo actúa en Google Maps ni fuera de Waze. "+
-                    "Probalo únicamente con el auto detenido en P.")
-                .setNegativeButton("CANCELAR",null)
-                .setPositiveButton("ACTIVAR SOLO EN WAZE",(dialog,which)->{
-                    p.edit().putBoolean(T1WazeWheelService.ENABLED,true)
-                        .putBoolean(T1WazeWheelService.OEM_BINDER_ENABLED,true)
-                        .putString(T1WazeWheelService.OEM_BINDER_STATUS,
-                            "Solicitado; esperando Waze y servicio Accesibilidad")
-                        .apply();
-                    report.setText("Puente solicitado. Abrí Waze en "+
-                        "Display 1; al regresar consultá el ESTADO. "+
-                        "Si el OEM rechaza la conexión aparecerá el motivo.");
-                }).show();
+        zoomButton=button(body,"ZOOM DEL MAPA",()->{
+            prefs().edit().putBoolean(T1WazeWheelService.ZOOM_MAP,true).apply();
+            refreshModes();
         });
+        text(body,"SELECCIÓN: solo botones internos de Waze; sin menú ni "+
+            "botón útil no se selecciona nada. Maximizar/Cerrar de la "+
+            "ventana no son botones de Waze.",13);
+        bridgeState=text(body,"PUENTE OEM: consultando",16);
+        bridgeOn=button(body,"ACTIVAR VOLANTE OEM → WAZE",()->{
+            // ON is idempotent; touching twice does not disconnect Binder.
+            prefs().edit().putBoolean(T1WazeWheelService.ENABLED,true)
+                .putBoolean(T1WazeWheelService.OEM_BINDER_ENABLED,true)
+                .putString(T1WazeWheelService.OEM_BINDER_STATUS,
+                    "Solicitado; esperando códigos de botones físicos")
+                .apply();
+            refreshModes();
+        });
+        bridgeOff=button(body,"DESACTIVAR VOLANTE OEM",()->{
+            prefs().edit().putBoolean(T1WazeWheelService.OEM_BINDER_ENABLED,false)
+                .putString(T1WazeWheelService.OEM_BINDER_STATUS,
+                    "Desconectado por usuario").apply();
+            refreshModes();
+        });
+        eventState=text(body,"ÚLTIMA TECLA: ninguna",14);
         text(body,"La rueda OEM ya tiene sus cuatro códigos aprendidos "+
             "automáticamente (1000 / 1001 / 1002 / 1003). "+
             "No es necesario tocar APRENDER TECLA para Waze. "+
@@ -202,14 +198,12 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
                 report.setText("No se abrió Waze: "+ex.getClass().getSimpleName());
             }
         });
-        text(body,"Uso: ruedita recorre controles visibles de Waze; "+
-            "OK ejecuta el control seleccionado. ATRÁS activa un botón "+
-            "Cancelar/Volver identificado o intenta volver solo cuando "+
-            "Waze tiene foco confirmado en el Display del clúster. "+
-            "Nunca acepta avisos automáticamente. Si los botones no "+
-            "son accesibles, muestra diagnóstico sin pulsar a ciegas. "+
-            "Probá las selecciones detenido en P.",13);
+        text(body,"Rueda selecciona botones REALES de Waze; OK pulsa "+
+            "únicamente la selección. ATRÁS usa Cancelar/Volver si Waze "+
+            "lo expone; nunca manda BACK global que cerraba otras apps. "+
+            "Google Maps todavía no admite volante. Probar detenido.",13);
         setContentView(scroll);
+        refreshModes();
     }
     @Override public boolean dispatchKeyEvent(KeyEvent event){
         // Additional diagnostic channel when the user has DriveLab open:
