@@ -697,11 +697,16 @@ public final class Updater {
                 throw new SecurityException("La descarga salió del canal HTTPS autorizado");
             HttpURLConnection c=(HttpURLConnection)current.openConnection();
             c.setInstanceFollowRedirects(false);
-            c.setConnectTimeout(12000);
-            c.setReadTimeout(45000);
+            c.setConnectTimeout(14000);
+            c.setReadTimeout(70000);
             c.setUseCaches(false);
             c.setRequestProperty("Cache-Control","no-cache");
-            c.setRequestProperty("User-Agent","DriveLab-Auto-Updater/0.2.3");
+            c.setRequestProperty("User-Agent","DriveLab-Auto-Updater/0.3.27");
+            if("api.github.com".equalsIgnoreCase(current.getHost())){
+                c.setRequestProperty("Accept",current.getPath().contains("/assets/")?
+                    "application/octet-stream":"application/vnd.github+json");
+                c.setRequestProperty("X-GitHub-Api-Version","2022-11-28");
+            }
             int status=c.getResponseCode();
             if(status==200)return c;
             if(status==301||status==302||status==303||status==307||status==308){
@@ -721,6 +726,7 @@ public final class Updater {
         if(host==null)return false;
         String normalized=host.toLowerCase(Locale.ROOT);
         return "github.com".equals(normalized)||
+            "api.github.com".equals(normalized)||
             normalized.endsWith(".githubusercontent.com");
     }
     private static String hex(byte[] bytes){
