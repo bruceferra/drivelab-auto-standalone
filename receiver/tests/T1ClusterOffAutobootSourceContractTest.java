@@ -17,7 +17,10 @@ public final class T1ClusterOffAutobootSourceContractTest {
         check(begin>=0&&end>begin,"Cluster toggle exists");
         String toggle=toolbar.substring(begin,end);
         check(toggle.contains("if(T1ClusterWazeRouter.enabled(owner)){")&&
-            !toggle.contains("T1ClusterWazeRouter.enabled(owner)||")&&
+            // An OFF/ON decision must not be coupled to CLOSE_PENDING.
+            // But the delayed last-route replay MUST check still ON.
+            !toggle.contains("if(T1ClusterWazeRouter.enabled(owner)||")&&
+            toggle.contains("if(!T1ClusterWazeRouter.enabled(owner)||")&&
             toggle.contains(".putBoolean(T1ClusterWazeRouter.CLOSE_PENDING,false)")&&
             toggle.contains(".putBoolean(T1ClusterWazeRouter.AUTO_BOOT,true)"),
             "Pending OFF cannot prevent turning ON and restoring autoboot");
