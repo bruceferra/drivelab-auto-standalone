@@ -43,7 +43,7 @@ public final class MirrorAutomationService extends Service {
     public static final String ACTION_RECOVER="t1.mirror.RECOVER_TEN_UP"; // now exact logged pending pulses, NOT ten blind pulses
     public static final String ACTION_STOP="t1.mirror.STOP";
     /** Explicit driver confirmation AFTER physically resetting mirrors with OEM switch.
-     * Never an angle sensor; requires a fresh OEM P and zero-speed read. */
+     * Never an angle sensor; is a visual acknowledgement and never actuates the mirrors. */
     public static final String ACTION_CONFIRM_NORMAL="t1.mirror.CONFIRM_NORMAL";
     private static final String CHANNEL="t1_mirror_parking";
     private static final int NOTIF_ID=7526;
@@ -137,7 +137,7 @@ public final class MirrorAutomationService extends Service {
             referenceConfirming=true;
             Thread prior=running?worker:null;
             prefs().edit().putBoolean(AUTO,false)
-                .putString(STATUS,"Confirmando posición normal en P. "+
+                .putString(STATUS,"Confirmando posición visual sin mover espejos. "+
                     "Esperando que se detenga la reversa automática.")
                 .apply();
             stop=true;
@@ -153,13 +153,14 @@ public final class MirrorAutomationService extends Service {
                                 "Servicio anterior sigue moviendo espejos; "+
                                 "no se puede confirmar");
                     }
-                    check=new MirrorAutomationOem(this);
-                    int gear=check.gear();
-                    double speed=check.speedKmh();
-                    if(gear!=1||!Double.isFinite(speed)||
-                       speed<0||speed>0.5)
+                    // No physical movement on reference acknowledgement.
+                    // It is valid in P or D only after the driver VISUALLY
+                    // verifies the mirrors. Never erase a pending pulse ledger.
+                    if(prefs().getBoolean(PULSE_IN_FLIGHT,false)||
+                       prefs().getInt(PENDING_LEFT,0)!=0||
+                       prefs().getInt(PENDING_RIGHT,0)!=0)
                         throw new IllegalStateException(
-                            "Se requiere marcha P y 0 km/h confirmados por OEM");
+                            "Hay pulsos sin compensar o inciertos.");
                     // This confirms the user's manual VISUAL reference only.
                     // After stopping the old monitor, no automatic pulses are
                     // emitted and no movement of either mirror is requested.
@@ -172,7 +173,7 @@ public final class MirrorAutomationService extends Service {
                         .putString(POSITION,
                             "NORMAL · referencia visual confirmada por conductor")
                         .putString(STATUS,
-                            "POSICIÓN NORMAL CONFIRMADA · REVERSA MANUAL. "+
+                            "POSICIÓN VISUAL CONFIRMADA · REVERSA MANUAL. "+
                             "Sin pulsos pendientes. Tocá REVERSA para AUTO.")
                         .remove(LAST_ERROR).commit();
                     if(!saved)
@@ -250,10 +251,10 @@ public final class MirrorAutomationService extends Service {
                 .putString(POSITION,"AUTO armado · referencia de ángulo NO medida")
                 .putString(STATUS,"AUTO armado · esperando transición nueva a R").apply();
         }else if(ACTION_RECOVER.equals(action)){
-            // One explicit control, P/0 only. Never blindly send ten UP.
+            // One explicit control for P or D; never blindly send ten UP.
             // Recover only confirmed, logged, uncompensated commands.
             prefs().edit().putBoolean(AUTO,false)
-                .putString(STATUS,"RECUPERAR ESPEJOS · subiendo solo los pulsos registrados en P").apply();
+                .putString(STATUS,"RECUPERAR ESPEJOS · subiendo solo los pulsos registrados en P o D").apply();
             pendingManual=3;
         }else if(ACTION_DOWN.equals(action)||ACTION_UP.equals(action)){
             // Ordinary manual adjustments intentionally disarm AUTO.
@@ -325,10 +326,11 @@ public final class MirrorAutomationService extends Service {
                     errors=0;readErrors=0;
                     if(manual!=0){
                         pendingManual=0;
-                        if(speed>0.5)
-                            throw new IllegalStateException("Manual solo detenido: "+speed+" km/h");
-                        if(manual==3 && rawGear!=1)
-                            throw new IllegalStateException("Recuperación solo en P");
+                        // Relative ANGLE adjustment in D is manually requested
+                        // by the driver; folding has its own <=5 km/h guard.
+                        if(rawGear!=1&&rawGear!=4)
+                            throw new IllegalStateException(
+                                "Ajuste manual de orientación: solo P o D");
                         int l=manual==3?prefs().getInt(PENDING_LEFT,0):steps(LEFT);
                         int r=manual==3?prefs().getInt(PENDING_RIGHT,0):steps(RIGHT);
                         if(manual==3 && (l+r==0)){
@@ -519,11 +521,12 @@ public final class MirrorAutomationService extends Service {
                         // even if D speed drops under the trigger threshold.
                         if(!down && !(gear==4||(gear==1&&speed<=0.5)))
                             return counts;
-                    }else if(speed>0.5){
+                    }else if(gear!=1&&gear!=4){
                         return counts;
                     }
-                    // Only P is allowed for explicit logged-pulse recovery.
-                    if(trackLedger && !automatic && gear!=1)return counts;
+                    // Recover only exactly logged pulses in P or D.
+                    if(trackLedger && !automatic && gear!=1&&gear!=4)
+                        return counts;
                     int id=side==0?2068:2069;
                     if(trackLedger &&
                        !prefs().edit().putBoolean(PULSE_IN_FLIGHT,true).commit())

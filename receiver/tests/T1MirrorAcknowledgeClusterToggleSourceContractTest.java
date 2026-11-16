@@ -23,18 +23,18 @@ public final class T1MirrorAcknowledgeClusterToggleSourceContractTest {
         int acknowledge=mirror.indexOf("if(ACTION_CONFIRM_NORMAL.equals(action))");
         int stop=mirror.indexOf("stop=true;",acknowledge);
         int join=mirror.indexOf("prior.join(4500L)",stop);
-        int pCheck=mirror.indexOf("int gear=check.gear();",join);
+        int pCheck=mirror.indexOf("getBoolean(PULSE_IN_FLIGHT,false)",join);
         int normal=mirror.indexOf("NORMAL · referencia visual confirmada por conductor",pCheck);
         check(acknowledge>=0&&stop>acknowledge&&join>stop&&
             pCheck>join&&normal>pCheck,
-            "Confirmation must stop prior monitor before verifying OEM P0 and clearing orange");
+            "Confirmation must stop prior monitor before checking pending pulses and clearing orange");
         check(mirror.contains("referenceConfirming=true;")&&
             mirror.contains("if(!referenceConfirming){")&&
             mirror.contains("stopSelf(startId)")&&
             mirror.contains(".putBoolean(SAFETY_HOLD,false)")&&
             mirror.contains(".putInt(PENDING_LEFT,0).putInt(PENDING_RIGHT,0)")&&
             mirror.contains(".remove(LAST_ERROR).commit()")&&
-            mirror.contains("if(gear!=1||!Double.isFinite(speed)||"),
+            mirror.contains("Hay pulsos sin compensar o inciertos."),
             "Require physical P0 user confirmation, durable reset and no worker race");
         check(toolbar.contains("mirrorRecoverButton=button(actions,")&&
             toolbar.contains("ESPEJOS · SIN PENDIENTES")&&

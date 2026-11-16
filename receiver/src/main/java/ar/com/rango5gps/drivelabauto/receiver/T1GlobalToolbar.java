@@ -571,7 +571,7 @@ final class T1GlobalToolbar {
             T1JetourTheme.GREEN_BUTTON:auto?
             T1JetourTheme.AMBER_BUTTON:T1JetourTheme.PANEL_HI);
         // This recovery shortcut used to be hard-coded AMBER forever.
-        // Clear the warning once the owner acknowledged NORMAL in P/0
+        // Clear the warning once the owner acknowledged NORMAL visually
         // and the exact pending ledger is empty. The button remains
         // accessible in neutral gray for future manual recovery.
         if(mirrorRecoverButton!=null){
@@ -647,11 +647,11 @@ final class T1GlobalToolbar {
                 "\nPulsos pendientes: IZQ "+left+" · DER "+right+
                 (unknown?"\nHay un pulso sin cierre comprobado. "+
                     "No se puede compensar automáticamente.":"")+
-                "\n\nEn P, DriveLab puede subir solo los pulsos "+
+                "\n\nEn P o D, DriveLab puede subir solo los pulsos "+
                 "que quedaron registrados. No repetirá una cantidad fija."+
                 "\nSi esta cuenta se perdió en la versión anterior, "+
                 "acomodá los espejos con los mandos ORIGINALES."+
-                "\nCuando queden a tu gusto, confirmá la referencia. "+
+                "\nCuando queden a tu gusto, confirmá la referencia visual. "+
                 "El modo AUTO seguirá apagado hasta que lo actives.")
             .setNegativeButton("CERRAR",null)
             .setPositiveButton("YA ESTÁN NORMALES · CONFIRMAR",(d,w)->{
@@ -659,7 +659,7 @@ final class T1GlobalToolbar {
                     owner.startForegroundService(new Intent(owner,
                         MirrorAutomationService.class)
                         .setAction(MirrorAutomationService.ACTION_CONFIRM_NORMAL));
-                    note("Confirmando referencia visual en P sin mover espejos");
+                    note("Confirmando referencia visual sin mover espejos");
                     main.postDelayed(this::refreshMirrorAuto,800L);
                 }catch(Exception ex){
                     note("No se pudo confirmar referencia · "+
@@ -673,7 +673,7 @@ final class T1GlobalToolbar {
                         owner.startForegroundService(new Intent(owner,
                             MirrorAutomationService.class)
                             .setAction(MirrorAutomationService.ACTION_RECOVER));
-                        note("Recuperando solo pulsos pendientes en P");
+                        note("Recuperando solo pulsos pendientes en P o D");
                         main.postDelayed(this::refreshMirrorAuto,1000L);
                     }catch(Exception ex){
                         note("No se pudo recuperar espejos: "+
@@ -698,7 +698,7 @@ final class T1GlobalToolbar {
         diagnostic.setText("MODO: "+(on?"AUTO":"MANUAL")+
             " · REARME AUTOMÁTICO: "+
                 (p.getBoolean(MirrorAutomationService.SAFETY_HOLD,true)?
-                    "BLOQUEADO HASTA CONFIRMACIÓN EN P":"PERMITIDO SOLO A PEDIDO")+
+                    "REQUIERE REVISIÓN VISUAL":"PERMITIDO SOLO A PEDIDO")+
             " · SERVICIO: "+(live?"ACTIVO":"SIN LATIDO RECIENTE")+
             "\nÚLTIMA MARCHA: "+p.getInt(MirrorAutomationService.LAST_GEAR,-1)+
             " · VELOCIDAD: "+p.getString(MirrorAutomationService.LAST_SPEED,"SIN DATO")+

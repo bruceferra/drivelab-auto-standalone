@@ -4,7 +4,7 @@ import java.nio.file.Path;
 
 /** T1 has no confirmed mirror-angle readback. Uncertain cannot disappear
  * because of an Android service restart, a ten-pulse write, or a random AUTO tap.
- * A deliberate driver visual acknowledgement is needed, checked in OEM P/0.
+ * A deliberate driver visual acknowledgement is needed, checked against an empty pulse ledger, without P/0.
  */
 public final class T1MirrorUncertainRecoverySourceContractTest {
     private static void check(boolean yes,String message){
@@ -26,11 +26,12 @@ public final class T1MirrorUncertainRecoverySourceContractTest {
         int stop=svc.indexOf("if(ACTION_STOP.equals(action)",ack);
         check(ack>=0&&stop>ack, "ACK branch isolated before AUTO commands");
         String confirmation=svc.substring(ack,stop);
-        check(confirmation.contains("check.gear()")&&
-            confirmation.contains("check.speedKmh()")&&
-            confirmation.contains("gear!=1||!Double.isFinite(speed)")&&
-            confirmation.contains("speed>0.5"),
-            "Only OEM-validated P and stopped can accept visual reference");
+        check(confirmation.contains("getBoolean(PULSE_IN_FLIGHT,false)")&&
+            confirmation.contains("getInt(PENDING_LEFT,0)")&&
+            confirmation.contains("getInt(PENDING_RIGHT,0)")&&
+            !confirmation.contains("runPulses(")&&
+            !confirmation.contains("check.gear()"),
+            "Visual ACK allowed in D only if no pending or uncertain pulses");
         check(!confirmation.contains("runPulses(")&&
             !confirmation.contains(".write(")&&
             !confirmation.contains(".putBoolean(AUTO,true)"),
