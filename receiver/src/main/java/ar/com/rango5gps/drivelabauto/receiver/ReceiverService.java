@@ -190,9 +190,10 @@ public final class ReceiverService extends Service {
         boolean launchAllowed=ReceiverActivity.isVisible()||
             Settings.canDrawOverlays(this);
         String diagnosis;
-        if(!launchWanted){
-            diagnosis="DESTINO RECIBIDO, Waze no solicitado: "+
-                "autoabrir Waze está DESACTIVADO en Receiver.";
+        if(!launchWanted&&!cluster){
+            // Autoopen only applies outside the cluster. An incoming route
+            // to an already-enabled cluster must never be blocked by it.
+            diagnosis="DESTINO RECIBIDO, apertura fuera del clúster desactivada.";
         }else if(!launchAllowed){
             diagnosis="DESTINO RECIBIDO, Waze BLOQUEADO: Android no "+
                 "autoriza abrir una aplicación en segundo plano. "+
@@ -225,6 +226,10 @@ public final class ReceiverService extends Service {
                     error.getClass().getSimpleName();
             }
         }
+        // Save only a successfully SUBMITTED route (not an unverified
+        // transport delivery) for the next deliberate CLÚSTER ON.
+        if(attempted&&cluster)T1LastRoute.remember(
+            this,routeTarget,base,msg.value);
         // Receiver reports a delivery ACK only when the Waze intent was
         // submitted. NOT_READY explicitly tells Sender that transport
         // succeeded but the cluster launch did not.
