@@ -47,6 +47,7 @@ public final class T1WazeWheelService extends AccessibilityService {
         OEM_BINDER_STATUS="oem_binder_status",
         OEM_LAST="oem_last_key",
         SCAN_REQUEST="scan_requested_at",SCAN_RESULT="scan_result",
+        WINDOW_DIAG="window_diagnostic",
         SCAN_FINISHED="scan_finished_at";
     private static final long LEARN_MS=45000L;
     static final String ZOOM_MAP="wheel_zoom_map";
@@ -167,6 +168,7 @@ public final class T1WazeWheelService extends AccessibilityService {
             " · "+p.getString(OEM_BINDER_STATUS,"sin enlace iniciado")+
             "\nWaze en clúster: "+p.getString("waze_display",
                 "todavía no detectado")+
+            "\n"+p.getString(WINDOW_DIAG,"Inventario pendiente; inspeccioná el panel")+
             "\nÚltima señal OEM: "+p.getString(OEM_LAST,"ninguna")+
             "\nBOTONES WAZE (última inspección):\n"+
                 p.getString(SCAN_RESULT,"Tocá INSPECCIONAR CONTROLES WAZE.")+
@@ -283,8 +285,59 @@ public final class T1WazeWheelService extends AccessibilityService {
         wazeDisplayId=-1;
         if(prefs().getBoolean(OEM_BINDER_ENABLED,false))
             prefs().edit().putString("waze_display",
-                "Waze no visible para Accesibilidad en ninguna pantalla").apply();
+                "Waze no accesible en Display seleccionado "+expected+
+                "; inspeccioná inventario multidisplay").apply();
         return null;
+    }
+    /** Read-only snapshot of Android's accessible window inventory.
+     * No private view text, GPS, touches, global BACK or task manipulation.
+     * Essential after ignition when a visible cluster image may not expose
+     * any actual accessibility window to Android.
+     */
+    private String describeAccessibleDisplays(){
+        Display selected=T1ClusterWazeRouter.selected(this);
+        int expected=selected==null?-1:selected.getDisplayId();
+        StringBuilder out=new StringBuilder("Display clúster elegido: "+
+            expected+" · "+(selected==null?"SIN DISPLAY":"resuelto")+
+            "\nAccesibilidad multidisplay:");
+        try{
+            SparseArray<List<AccessibilityWindowInfo>> all=
+                getWindowsOnAllDisplays();
+            if(all==null||all.size()==0)return out+
+                "\nAndroid devuelve cero ventanas; revisar servicio Accesibilidad";
+            for(int j=0;j<all.size();j++){
+                int display=all.keyAt(j);
+                List<AccessibilityWindowInfo> ws=all.valueAt(j);
+                int count=ws==null?0:ws.size(),waze=0,maps=0,empty=0,
+                    wazeVisible=0,mapsVisible=0,other=0;
+                if(ws!=null)for(AccessibilityWindowInfo win:ws){
+                    if(win==null)continue;
+                    AccessibilityNodeInfo node=win.getRoot();
+                    if(node==null){empty++;continue;}
+                    String pkg=String.valueOf(node.getPackageName());
+                    if(WAZE.equals(pkg)){
+                        waze++;
+                        if(node.isVisibleToUser())wazeVisible++;
+                    }else if(MAPS.equals(pkg)){
+                        maps++;
+                        if(node.isVisibleToUser())mapsVisible++;
+                    }else other++;
+                }
+                out.append("\nDisplay ").append(display)
+                    .append(display==expected?" (seleccionado)":"")
+                    .append(": ventanas ").append(count)
+                    .append(", Waze ").append(waze)
+                    .append(" (visibles ").append(wazeVisible).append(")")
+                    .append(", Maps ").append(maps)
+                    .append(" (visibles ").append(mapsVisible).append(")")
+                    .append(", sin raíz ").append(empty)
+                    .append(", otras ").append(other);
+            }
+        }catch(Exception ex){
+            out.append("\nError inventario: ")
+                .append(ex.getClass().getSimpleName());
+        }
+        return out.toString();
     }
     /** Only Maps in the verified right split window; never default display. */
     private AccessibilityNodeInfo mapsRoot(){
@@ -815,9 +868,11 @@ public final class T1WazeWheelService extends AccessibilityService {
         if(requested==0||requested==lastScanAt)return;
         lastScanAt=requested;
         AccessibilityNodeInfo root=activeRoot();
+        String inventory=describeAccessibleDisplays();
+        prefs().edit().putString(WINDOW_DIAG,inventory).apply();
         if(root==null){
             prefs().edit().putString(SCAN_RESULT,
-                "Waze no aparece entre las ventanas accesibles del clúster.")
+                "Panel no accesible. "+inventory)
                 .putLong(SCAN_FINISHED,System.currentTimeMillis()).apply();
             return;
         }

@@ -186,6 +186,8 @@ final class T1GlobalToolbar {
         wheelPanelButton=button(actions,"VOLANTE · PANEL A",
             T1JetourTheme.PANEL_HI,158,this::toggleWheelPanel);
         refreshWheelPanel();
+        button(actions,"COCKPIT",T1JetourTheme.GREEN_BUTTON,114,
+            ()->navigate(T1PremiumCockpitActivity.class));
         optimizer=button(actions,"OPTIMIZADO OFF",T1JetourTheme.RED_BUTTON,144,
             this::toggleAuto);
         button(actions,"CONFIGURAR OPT.",T1JetourTheme.PANEL_HI,140,
@@ -208,8 +210,6 @@ final class T1GlobalToolbar {
             ()->windows(WindowGroupPolicy.CLOSE));
         airButton=button(actions,"AIRE INTERIOR AUTO",T1JetourTheme.GREEN_BUTTON,170,
             this::airStatus);
-        button(actions,"COCKPIT",T1JetourTheme.PANEL_HI,110,
-            ()->navigate(T1PremiumCockpitActivity.class));
         button(actions,"VEHÍCULO",T1JetourTheme.PANEL_HI,115,
             ()->navigate(ReceiverVehicleActivity.class));
         button(actions,"PENDIENTES",T1JetourTheme.PANEL_HI,115,

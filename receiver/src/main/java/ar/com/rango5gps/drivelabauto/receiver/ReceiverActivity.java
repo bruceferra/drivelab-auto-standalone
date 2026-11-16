@@ -42,6 +42,18 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
         // reboot through BootReceiver. OEM safety PAUSED is respected.
         // Auto air and reverse mirrors are now armed by the shared base
         // Activity, so all Receiver pages receive the same defaults.
+        // Start directly in Cockpit from launcher or the owner's boot
+        // auto-open. Explicit INICIO navigation remains the settings hub.
+        if((getIntent()!=null&&getIntent().hasCategory(Intent.CATEGORY_LAUNCHER))||
+           (getIntent()!=null&&getIntent().getBooleanExtra(
+               "drivelab_open_after_boot",false))){
+            Intent cockpit=new Intent(this,T1PremiumCockpitActivity.class)
+                .addFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP|
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            startActivity(cockpit);
+            finish();
+            return;
+        }
         quickControls=new ReceiverQuickControls(this);
         render();
     }
@@ -52,6 +64,7 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
                 "DriveLab abrió su pantalla tras el arranque de Android").apply();
             getIntent().removeExtra("drivelab_open_after_boot");
         }
+        if(isFinishing()||quickControls==null)return;
         visible=true;quickControls.onResume();render();
         pairUiHandler.removeCallbacks(pairUiRefresh);
         pairUiHandler.postDelayed(pairUiRefresh,450);
@@ -64,7 +77,7 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
     }
     @Override protected void onPause(){
         visible=false;
-        quickControls.onPause();
+        if(quickControls!=null)quickControls.onPause();
         pairUiHandler.removeCallbacks(pairUiRefresh);
         super.onPause();
     }

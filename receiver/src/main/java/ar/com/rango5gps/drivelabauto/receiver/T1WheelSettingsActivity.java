@@ -126,9 +126,9 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
         });
         button(body,"INSPECCIONAR CONTROLES · PANEL ACTIVO",()->{
             T1WazeWheelService.requestScan(this);
-            report.setText("Inspección solicitada al servicio de Accesibilidad. "+
-                "Con Waze visible en el clúster, aquí aparecerán los controles "+
-                "reconocidos. No toca botones ni modifica rutas.");
+            report.setText("Inspección solicitada: aparecerá el Display seleccionado "+
+                "y las ventanas Waze/Maps que realmente expone Android. "+
+                "No toca botones ni modifica rutas.");
         });
         button(body,"ABRIR AJUSTES DE ACCESIBILIDAD (SI EXISTEN)",()->{
             Intent intent=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
