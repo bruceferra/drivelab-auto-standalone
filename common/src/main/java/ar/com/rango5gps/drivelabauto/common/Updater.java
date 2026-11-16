@@ -55,6 +55,48 @@ public final class Updater {
     private static volatile boolean busy=false;
     private static volatile boolean permissionRecovery=false;
 
+    /** A previous PackageInstaller error is not an update-check error.
+     * When a newer APK was installed through ADB, discard obsolete cached
+     * installer state before displaying the update panel. */
+    public static void reconcileInstalled(Activity a){
+        SharedPreferences prefs=a.getSharedPreferences(PREFS,Activity.MODE_PRIVATE);
+        final long installed;
+        try{
+            installed=a.getPackageManager().getPackageInfo(a.getPackageName(),0)
+                .getLongVersionCode();
+        }catch(Exception error){return;}
+        long pendingCode=prefs.getLong(READY_CODE,0L);
+        if(pendingCode>installed)return;
+        if(prefs.contains(INSTALL_STATUS)||prefs.contains(READY_CODE)||
+           prefs.contains(READY_SHA)||prefs.getBoolean(NEED_PERMISSION,false))
+            prefs.edit().remove(READY_CODE).remove(READY_SHA)
+                .remove(NEED_PERMISSION).remove(INSTALL_STATUS).apply();
+    }
+    public static boolean hasPendingInstall(Activity a){
+        reconcileInstalled(a);
+        SharedPreferences prefs=a.getSharedPreferences(PREFS,Activity.MODE_PRIVATE);
+        long pending=prefs.getLong(READY_CODE,0L);
+        try{
+            long installed=a.getPackageManager().getPackageInfo(a.getPackageName(),0)
+                .getLongVersionCode();
+            return pending>installed&&prefs.getString(READY_SHA,"")
+                .matches("[a-f0-9]{64}")&&UpdateApkProvider.apk(a).isFile();
+        }catch(Exception error){return false;}
+    }
+    public static String installedVersion(Activity a){
+        try{
+            PackageInfo p=a.getPackageManager().getPackageInfo(a.getPackageName(),0);
+            return p.versionName+" · código "+p.getLongVersionCode();
+        }catch(Exception error){return "no disponible";}
+    }
+    public static String installationStatus(Activity a){
+        reconcileInstalled(a);
+        return hasPendingInstall(a)?
+            a.getSharedPreferences(PREFS,Activity.MODE_PRIVATE)
+                .getString(INSTALL_STATUS,"APK nueva descargada; instalación pendiente"):
+            "Sin instalación pendiente";
+    }
+
     private static final class Offer {
         final String name,url,hash;
         final long code;
@@ -69,6 +111,7 @@ public final class Updater {
      * started exclusively AFTER the user confirms the offer in this dialog.
      */
     public static void checkOnOpen(Activity a,String app,Reporter reporter){
+        reconcileInstalled(a);
         String proper;
         if("sender".equals(app))proper="Sender";
         else if("receiver".equals(app))proper="Receiver";
@@ -126,6 +169,7 @@ public final class Updater {
     }
 
     public static void check(Activity a,String app,Reporter reporter){
+        reconcileInstalled(a);
         String proper;
         if("sender".equals(app))proper="Sender";
         else if("receiver".equals(app))proper="Receiver";
@@ -319,6 +363,7 @@ public final class Updater {
      * explicitly authorized one in this app.
      */
     public static void onResume(Activity a,Reporter reporter){
+        reconcileInstalled(a);
         if(permissionRecovery||busy)return;
         SharedPreferences p=a.getSharedPreferences(PREFS,Activity.MODE_PRIVATE);
         if(!p.getBoolean(NEED_PERMISSION,false)||
@@ -406,6 +451,10 @@ public final class Updater {
     /** Retry an already downloaded and verified APK without transferring it. */
     public static void retryInstall(Activity a,Reporter reporter){
         if(!isT1Receiver(a))return;
+        if(!hasPendingInstall(a)){
+            notify(a,reporter,"No hay una actualización nueva pendiente de instalar.");
+            return;
+        }
         notify(a,reporter,"Verificando APK descargada y reintentando instalación…");
         installVerified(a,reporter);
     }
@@ -429,6 +478,10 @@ public final class Updater {
     /** Alternate OEM package installer intent, without opening a browser. */
     public static void tryNativeIntent(Activity a,Reporter reporter){
         if(!isT1Receiver(a))return;
+        if(!hasPendingInstall(a)){
+            notify(a,reporter,"No hay una actualización nueva pendiente de instalar.");
+            return;
+        }
         new Thread(()->{
             try{
                 verifyReady(a);
