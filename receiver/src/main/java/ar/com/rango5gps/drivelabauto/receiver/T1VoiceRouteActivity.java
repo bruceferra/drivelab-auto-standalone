@@ -729,9 +729,15 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
                 T1NavigationTargets.Result result=T1NavigationTargets.send(
                     this,ar.com.rango5gps.drivelabauto.common.BridgeRouteTarget.BOTH,
                     "search",place,true);
+                if(result.attempted)T1LastRoute.remember(this,
+                    ar.com.rango5gps.drivelabauto.common.BridgeRouteTarget.BOTH,
+                    "search",place);
                 status.setText(result.status);
             }else{
-                T1ClusterWazeRouter.routeDestination(this,i);
+                if(T1ClusterWazeRouter.routeDestination(this,i))
+                    T1LastRoute.remember(this,
+                        ar.com.rango5gps.drivelabauto.common.BridgeRouteTarget.WAZE,
+                        "search",place);
                 status.setText(T1ClusterWazeRouter.prefs(this).getString(
                     T1ClusterWazeRouter.STATUS,"Sin resultado de clúster"));
             }
