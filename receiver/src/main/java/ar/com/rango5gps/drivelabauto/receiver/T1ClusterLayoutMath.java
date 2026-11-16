@@ -36,6 +36,7 @@ final class T1ClusterLayoutMath {
             w*bounded(leftPercent,30,70)/100.0),1,w-1);
         return new Frame(0,0,split,h);
     }
+    /** 40% Google LEFT / 60% Waze RIGHT share one exact seam. */
     static Frame right(int displayWidth,int displayHeight,int leftPercent){
         Frame first=left(displayWidth,displayHeight,leftPercent);
         return new Frame(first.right,0,Math.max(2,displayWidth),

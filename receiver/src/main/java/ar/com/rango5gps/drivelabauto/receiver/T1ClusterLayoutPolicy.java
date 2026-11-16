@@ -56,10 +56,14 @@ final class T1ClusterLayoutPolicy {
     static void invertPanels(Context c){
         if(!MODE_SPLIT.equals(mode(c)))return;
         boolean flip=!inverted(c);
-        prefs(c).edit().putBoolean(PANELS_INVERTED,flip)
+        SharedPreferences.Editor edit=prefs(c).edit()
+            .putBoolean(PANELS_INVERTED,flip)
             .putInt(SPLIT_PERCENT,flip?40:50)
             .putBoolean(ACTIVE,false)
-            .remove(TEST_AT).remove(TEST_MODE).apply();
+            .remove(TEST_AT).remove(TEST_MODE);
+        if(flip)edit.putString(SECOND_APP,MAPS)
+            .putString(SECOND_LABEL,"Google Maps");
+        edit.apply();
     }
     static boolean active(Context c){
         return prefs(c).getBoolean(ACTIVE,false)&&

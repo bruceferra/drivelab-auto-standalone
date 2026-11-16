@@ -104,7 +104,8 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
         }
         if(T1ClusterLayoutPolicy.MODE_SPLIT.equals(mode)){
             boolean reversed=T1ClusterLayoutPolicy.inverted(this);
-            button("INVERTIR PANELES · GOOGLE 40% IZQ / WAZE 60% DER",
+            button(reversed?"RESTAURAR PANELES · WAZE IZQ / GOOGLE DER":
+                "INVERTIR PANELES · GOOGLE 40% IZQ / WAZE 60% DER",
                 this::invertPanels);
             text("Orientación: "+(reversed?
                 "Google Maps izquierda / Waze derecha":
