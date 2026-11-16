@@ -293,64 +293,68 @@ final class T1ClusterAdbResize {
             "dumpsys activity activities");
         return T1AdbTaskParser.unique(dump,display,pkg);
     }
-    /** Actual service call is limited to Waze + Google Maps already
-     * visible on selected secondary display. Never move a HOME/OEM task.
-     */
+    /** Resize only explicitly selected user apps on the chosen secondary
+     * display. Validate package, task uniqueness, and P/0 before each
+     * mutation. No OEM, HOME or main-display task can be touched. */
     private static String applyMeasured(Context c,int display,boolean split,
                                         Rect left,Rect right)throws Exception{
+        String first=split?T1ClusterLayoutPolicy.firstPackage(c):
+            T1ClusterLayoutPolicy.singlePackage(c);
+        String second=split?T1ClusterLayoutPolicy.secondPackage(c):null;
+        if(!T1ClusterWazeRouter.isSelectablePackage(c,first)||
+           (split&&(!T1ClusterWazeRouter.isSelectablePackage(c,second)||
+               first.equals(second))))
+            return "NO APLICADO: paneles no válidos o aplicaciones repetidas";
         String before=taskList(c);
-        T1AdbTaskParser.Task waze=find(c,before,display,WAZE);
-        if(waze==null)
-            return "NO APLICADO: tarea Waze no identificada de forma "+
-                "única en Display "+display+". No tocaré tareas OEM.";
-        T1AdbTaskParser.Task maps=split?
-            find(c,before,display,MAPS):null;
-        if(split&&(maps==null||maps.id==waze.id))
-            return "NO APLICADO: tarea de Google Maps no está "+
-                "identificada de forma única en Display "+display;
+        T1AdbTaskParser.Task taskA=find(c,before,display,first);
+        if(taskA==null)
+            return "NO APLICADO: tarea de Panel A no identificada en Display "+
+                display+" ("+first+"). No tocaré tareas OEM.";
+        T1AdbTaskParser.Task taskB=split?
+            find(c,before,display,second):null;
+        if(split&&(taskB==null||taskB.id==taskA.id))
+            return "NO APLICADO: tarea de Panel B no identificada "+
+                "de forma única en Display "+display+" ("+second+")";
         if(!parked(c))
             return "BLOQUEADO: ya no está en P/0. No se movió ninguna tarea.";
-        String wazeCommand=command(waze.id,left);
-        String changed=T1LocalAdbClient.shell(c,wazeCommand);
+        String changed=T1LocalAdbClient.shell(c,command(taskA.id,left));
         if(errorOutput(changed))
-            return "WAZE NO REDIMENSIONADO: "+
+            return "PANEL A NO REDIMENSIONADO: "+
                 changed.substring(0,Math.min(200,changed.length()));
         if(split){
             if(!parked(c))
-                return "PARCIAL: se redimensionó Waze, pero ya no hay P/0 "+
-                    "para cambiar Google Maps. Restaurar en P.";
-            String changedMaps=T1LocalAdbClient.shell(c,
-                command(maps.id,right));
-            if(errorOutput(changedMaps))
-                return "MAPS NO REDIMENSIONADO: "+
-                    changedMaps.substring(0,
-                        Math.min(200,changedMaps.length()))+
-                    " · Waze puede haber cambiado parcialmente.";
+                return "PARCIAL: Panel A redimensionado; sin P/0 para Panel B.";
+            String changedB=T1LocalAdbClient.shell(c,
+                command(taskB.id,right));
+            if(errorOutput(changedB))
+                return "PANEL B NO REDIMENSIONADO: "+
+                    changedB.substring(0,Math.min(200,changedB.length()));
         }
-        // A request without shell error is NOT success: read task bounds.
+        // Some Jetour ROMs ignore window bounds or report stale geometry.
+        // A successful shell request alone MUST NOT claim success.
         try{Thread.sleep(300L);}catch(InterruptedException ex){
             Thread.currentThread().interrupt();
         }
         String after=taskList(c);
-        T1AdbTaskParser.Task wazeNow=find(c,after,display,WAZE);
-        T1AdbTaskParser.Task mapsNow=split?find(c,after,display,MAPS):null;
-        T1AdbTaskParser.Box wazeBox=box(left),mapsBox=split?box(right):null;
-        boolean wazeOk=wazeNow!=null&&wazeNow.id==waze.id&&
-            wazeNow.bounds!=null&&wazeNow.bounds.near(wazeBox,20);
-        boolean mapsOk=!split||(mapsNow!=null&&mapsNow.id==maps.id&&
-            mapsNow.bounds!=null&&mapsNow.bounds.near(mapsBox,20));
-        if(wazeOk&&mapsOk)
+        T1AdbTaskParser.Task nowA=find(c,after,display,first);
+        T1AdbTaskParser.Task nowB=split?find(c,after,display,second):null;
+        T1AdbTaskParser.Box boxA=box(left),boxB=split?box(right):null;
+        boolean okA=nowA!=null&&nowA.id==taskA.id&&
+            nowA.bounds!=null&&nowA.bounds.near(boxA,20);
+        boolean okB=!split||(nowB!=null&&nowB.id==taskB.id&&
+            nowB.bounds!=null&&nowB.bounds.near(boxB,20));
+        if(okA&&okB)
             return "VERIFICADO POR ADB: Display "+display+
-                " · Waze task "+waze.id+" "+wazeNow.bounds+
-                (split?" · Google Maps task "+maps.id+
-                    " "+mapsNow.bounds:"")+
-                ". Mirá el tablero: esto NO prueba que ambas se vean.";
-        return "SOLICITADO, NO VERIFICADO: Waze="+
-            String.valueOf(wazeNow)+
-            (split?" · Maps="+String.valueOf(mapsNow):"")+
-            " · solicitado "+wazeBox+
-            (split?" / "+mapsBox:"")+
-            ". ROM ignoró geometría o task list no expone límites.";
+                " · Panel A "+first+" task "+taskA.id+" "+nowA.bounds+
+                (split?" · Panel B "+second+" task "+taskB.id+
+                    " "+nowB.bounds:"")+
+                ". Confirmá visualmente: ADB no prueba lo pintado.";
+        return "SOLICITADO, NO VERIFICADO: Panel A="+
+            String.valueOf(nowA)+
+            (split?" · Panel B="+String.valueOf(nowB):"")+
+            " · solicitado "+boxA+
+            (split?" / "+boxB:"")+
+            ". ROM ignoró geometría o no expone límites reales.";
     }
     private static T1AdbTaskParser.Box box(Rect r){
         return new T1AdbTaskParser.Box(r.left,r.top,r.right,r.bottom);
