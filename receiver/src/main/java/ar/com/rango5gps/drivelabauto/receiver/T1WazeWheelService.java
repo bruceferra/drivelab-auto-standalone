@@ -297,6 +297,25 @@ public final class T1WazeWheelService extends AccessibilityService {
         main.post(oemHeartbeat);
         Log.i("DriveLabWheel","AccessibilityService connected; OEM bridge is opt-in");
     }
+    /** Freeform wrappers may contain actual app-owned subtrees even when the
+     * top-level window itself belongs to the launcher. Never use an OEM-only
+     * node for wheel clicks.
+     */
+    private AccessibilityNodeInfo findMapNode(AccessibilityNodeInfo node,
+            String pkg,int depth,int[] seen){
+        if(node==null||depth>24||seen[0]++>700)return null;
+        if(pkg.equals(String.valueOf(node.getPackageName()))&&
+            node.isVisibleToUser()){
+            Rect r=new Rect();node.getBoundsInScreen(r);
+            if(r.width()>=120&&r.height()>=120)return node;
+        }
+        for(int i=0;i<node.getChildCount()&&seen[0]<700;i++){
+            AccessibilityNodeInfo found=findMapNode(node.getChild(i),
+                pkg,depth+1,seen);
+            if(found!=null)return found;
+        }
+        return null;
+    }
     /** Waze can run on Display 2 while another app stays focused on Display 0.
      * T1Launcher itself uses getWindowsOnAllDisplays: do not limit this service
      * to getRootInActiveWindow() or main screen package.
@@ -315,14 +334,14 @@ public final class T1WazeWheelService extends AccessibilityService {
                 for(AccessibilityWindowInfo win:ws){
                     if(win==null)continue;
                     AccessibilityNodeInfo root=win.getRoot();
-                    if(root!=null&&WAZE.equals(
-                            String.valueOf(root.getPackageName()))&&
-                            root.isVisibleToUser()){
+                    AccessibilityNodeInfo found=findMapNode(root,WAZE,0,
+                        new int[]{0});
+                    if(found!=null){
                         wazeDisplayId=across.keyAt(d);
                         prefs().edit().putString("waze_display",
                             "Display "+wazeDisplayId+" · Waze accesible")
                             .apply();
-                        return root;
+                        return found;
                     }
                 }
             }
@@ -367,18 +386,33 @@ public final class T1WazeWheelService extends AccessibilityService {
                 List<AccessibilityWindowInfo> ws=all.valueAt(j);
                 int count=ws==null?0:ws.size(),waze=0,maps=0,empty=0,
                     wazeVisible=0,mapsVisible=0,other=0;
+                StringBuilder packages=new StringBuilder();
                 if(ws!=null)for(AccessibilityWindowInfo win:ws){
                     if(win==null)continue;
                     AccessibilityNodeInfo node=win.getRoot();
                     if(node==null){empty++;continue;}
                     String pkg=String.valueOf(node.getPackageName());
-                    if(WAZE.equals(pkg)){
+                    if(packages.length()<290){
+                        String title=String.valueOf(win.getTitle());
+                        if(title.length()>42)title=title.substring(0,42);
+                        packages.append("\n  ventana ").append(win.getId())
+                            .append(" · ").append(pkg)
+                            .append(" · tipo ").append(win.getType())
+                            .append(" · título ").append(title);
+                    }
+                    AccessibilityNodeInfo childWaze=findMapNode(node,WAZE,0,
+                        new int[]{0});
+                    AccessibilityNodeInfo childMap=findMapNode(node,MAPS,0,
+                        new int[]{0});
+                    if(childWaze!=null){
                         waze++;
-                        if(node.isVisibleToUser())wazeVisible++;
-                    }else if(MAPS.equals(pkg)){
+                        if(childWaze.isVisibleToUser())wazeVisible++;
+                    }
+                    if(childMap!=null){
                         maps++;
-                        if(node.isVisibleToUser())mapsVisible++;
-                    }else other++;
+                        if(childMap.isVisibleToUser())mapsVisible++;
+                    }
+                    if(childWaze==null&&childMap==null)other++;
                 }
                 out.append("\nDisplay ").append(display)
                     .append(display==expected?" (seleccionado)":"")
@@ -388,7 +422,8 @@ public final class T1WazeWheelService extends AccessibilityService {
                     .append(", Maps ").append(maps)
                     .append(" (visibles ").append(mapsVisible).append(")")
                     .append(", sin raíz ").append(empty)
-                    .append(", otras ").append(other);
+                    .append(", otras ").append(other)
+                    .append(packages);
             }
         }catch(Exception ex){
             out.append("\nError inventario: ")
@@ -409,9 +444,9 @@ public final class T1WazeWheelService extends AccessibilityService {
             if(windows==null)return null;
             for(AccessibilityWindowInfo win:windows){
                 if(win==null)continue;
-                AccessibilityNodeInfo root=win.getRoot();
-                if(root==null||!root.isVisibleToUser()||
-                    !MAPS.equals(String.valueOf(root.getPackageName())))continue;
+                AccessibilityNodeInfo root=findMapNode(win.getRoot(),
+                    MAPS,0,new int[]{0});
+                if(root==null)continue;
                 Rect r=new Rect();root.getBoundsInScreen(r);
                 if(r.width()<120||r.height()<120)continue;
                 wazeDisplayId=displayId; // shared active wheel display
