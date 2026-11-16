@@ -68,6 +68,7 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
         visible=true;quickControls.onResume();render();
         pairUiHandler.removeCallbacks(pairUiRefresh);
         pairUiHandler.postDelayed(pairUiRefresh,450);
+        Updater.reconcileInstalled(this);
         Updater.onResume(this,this::report);
         long now=SystemClock.elapsedRealtime();
         if(lastAutoCheckElapsed==0||now-lastAutoCheckElapsed>120000){
@@ -233,18 +234,19 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
         });
         button(settings,"PRUEBA DIRECTA A LA PLATA",()->direct("-34.9214,-57.9545"));
         button(settings,"PRUEBA DIRECTA A MAR DEL PLATA",()->direct("-38.0055,-57.5426"));
-        button(settings,"ACTUALIZAR RECEIVER · INSTALACIÓN DIRECTA",
+        label(settings,"Receiver instalado: "+Updater.installedVersion(this),14);
+        button(settings,"COMPROBAR ACTUALIZACIÓN RECEIVER",
             ()->Updater.check(this,"receiver",this::report));
         if(!message.isEmpty())label(settings,"Actualizador / estado: "+message,14);
-        label(settings,"Estado instalador T1: "+
-            getSharedPreferences("drivelab_native_update",MODE_PRIVATE)
-                .getString("last_install_status","Aún no hay instalación solicitada"),14);
-        button(settings,"REINTENTAR INSTALACIÓN YA DESCARGADA",
-            ()->Updater.retryInstall(this,this::report));
-        button(settings,"INSTALADOR NATIVO ALTERNATIVO",
-            ()->Updater.tryNativeIntent(this,this::report));
-        button(settings,"ABRIR AJUSTES DE RECEIVER (PERMISO)",
-            ()->Updater.openReceiverSettings(this,this::report));
+        label(settings,"Instalador: "+Updater.installationStatus(this),14);
+        if(Updater.hasPendingInstall(this)){
+            button(settings,"REINTENTAR INSTALACIÓN DESCARGADA",
+                ()->Updater.retryInstall(this,this::report));
+            button(settings,"INSTALADOR NATIVO ALTERNATIVO",
+                ()->Updater.tryNativeIntent(this,this::report));
+            button(settings,"ABRIR AJUSTES RECEIVER (PERMISO)",
+                ()->Updater.openReceiverSettings(this,this::report));
+        }
         label(settings,"El sistema Android debe confirmar la instalación. "+
             "Si Jetour rechaza ambos métodos, el estado indicará el motivo. "+
             "No desactives Play Protect ni desinstales Receiver.",13);
