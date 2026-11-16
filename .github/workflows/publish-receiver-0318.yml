@@ -248,7 +248,8 @@ jobs:
       - name: Publish verified OTA (Sender unchanged)
         run: |
           set -euo pipefail
-          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.18
+          # First verify the PRIOR release before creating the new tag.
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.17
           gh release create v0.3.18 output/DriveLab-Auto-Receiver-v0.3.18.apk output/receiver.json output/sender.json output/receiver.sha256 --target "$GITHUB_SHA" --latest --title 'DriveLab Auto Receiver 0.3.18 - CLUSTER OFF disponible en D' --notes 'Receiver 0.3.18 code119: Modo ruedita SELECCION/ZOOM con botones propios y estado actual visible; puente OEM encender y apagar separados; no ejecutar BACK global sobre display 0, filtrar Maximizar/Cerrar de controles libres. Microfono envia destino a Waze y Maps juntos si split verificado 50/50 o 60/40; tarjeta de voz mas grande. MODO VENTILACION ON solicita estado3 de ventanillas desde 0..4, OFF pide estado1, validando una por una. Aire interior solicitado se ve verde por preferencia, el OEM PAUSA continua con aviso y sin ocultar rechazos. AVAS y espejos mantienen protecciones existentes. Sender 0.2.20, Spotify AudioTrack y MODE no reparados por esta version.'
           mkdir -p verify
           gh release download v0.3.18 --pattern receiver.json --dir verify
@@ -269,3 +270,5 @@ jobs:
 # Legacy Waze safety source contract now checks focus guard, never an unguarded global BACK.
 
 # 0.3.17 validates latest tag after publishing; previous APK signature from 0.3.16.
+
+# Pre-publish latest is 0.3.17; post-publish latest must be 0.3.18.
