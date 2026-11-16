@@ -253,3 +253,5 @@ jobs:
 # Regression suite covers APK provider-specific RSA private-key reload.
 
 # Rerun signed release after fixing Java fixture newline escapes (not runtime code).
+
+# Re-run: update ADB source-contract to check both verified local ports instead of legacy 5555 constant.

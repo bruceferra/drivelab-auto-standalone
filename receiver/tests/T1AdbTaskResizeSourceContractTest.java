@@ -18,12 +18,13 @@ public final class T1AdbTaskResizeSourceContractTest {
         String math=source("T1ClusterLayoutMath.java");
         String router=source("T1ClusterWazeRouter.java");
         check(adb.contains("LOOPBACK=\"127.0.0.1\"")&&
-              adb.contains("PORT=5555")&&
+              adb.contains("PERSISTENT_PORT=5556, MANUAL_PORT=5555")&&
               adb.contains("command.matches(")&&
               adb.contains("am task resize [1-9]")&&
               adb.contains("am stack list")&&
               adb.contains("dumpsys activity activities")&&
-              adb.contains("new InetSocketAddress(LOOPBACK,PORT)")&&
+              adb.contains("new InetSocketAddress(LOOPBACK,port)")&&
+              adb.contains("try(Socket sock=openLocal())")&&
               adb.contains("KeyPairGenerator.getInstance(\"RSA\")")&&
               adb.contains("generator.initialize(2048)")&&
               adb.contains("adbPublicKey(")&&
