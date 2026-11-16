@@ -1182,7 +1182,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 updateHistory(); // ONE lazy background refresh on opening.
             }
         });
-        compactButton(expandRow,"ZONAS / DIAGNÓSTICOS",BLUE,()->{
+        compactButton(expandRow,"MENÚ TÉCNICO · PRUEBAS OEM",BLUE,()->{
             advanced.setVisibility(advanced.getVisibility()==android.view.View.GONE?
                 android.view.View.VISIBLE:android.view.View.GONE);
             updateZone();
@@ -1470,7 +1470,9 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         rearBeltStatus=text("Sin comparación de cinturones todavía.",
             14,WHITE,false);
         advanced.addView(rearBeltStatus);
-        LinearLayout extra=row();root.addView(extra);
+        // Legacy diagnostics are not daily cockpit actions. They live
+        // below the single technical toggle above, never duplicated here.
+        LinearLayout extra=row();advanced.addView(extra);
         button(extra,"TABLERO TÉCNICO / CSV",BLUE,()->startActivity(
             new Intent(this,T1TankDashboardActivity.class)));
         button(extra,"DIAGNÓSTICO OEM",BLUE,()->startActivity(
