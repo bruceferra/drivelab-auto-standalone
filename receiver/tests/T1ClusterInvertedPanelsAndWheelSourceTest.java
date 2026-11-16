@@ -38,11 +38,12 @@ public final class T1ClusterInvertedPanelsAndWheelSourceTest {
             target.contains("T1ClusterWazeRouter.enabled(c)")&&
             target.contains("T1ClusterWazeRouter.selected(c)!=null"),
             "Do not gate read-only map discovery on pending ADB layout approval");
-        check(ui.contains("INVERTIR PANELES")&&
-            ui.contains("this::invertPanels")&&ui.contains("testLayout()")&&
+        check(ui.contains("panelRow(false)")&&ui.contains("panelRow(true)")&&
+            ui.contains("boolean inverted=T1ClusterLayoutPolicy.MODE_SPLIT.equals(")&&
+            ui.contains("button(\"APLICAR\",this::applyPanels)")&&
             ui.contains("originalInvert==T1ClusterLayoutPolicy.inverted(this)")&&
             preview.contains("inverted?\"Waze\":second"),
-            "Single inverter button previews changes and re-verifies orientation");
+            "Existing inverted layouts migrate into simple physical A/B controls");
         check(wheel.contains("findMapNode(")&&
             wheel.contains("recentEventRoot(")&&
             wheel.contains("sourceWindow.getDisplayId()!=display.getDisplayId()")&&
