@@ -241,9 +241,14 @@ public final class T1WazeWheelService extends AccessibilityService {
      * to getRootInActiveWindow() or main screen package.
      */
     private AccessibilityNodeInfo wazeRoot(){
+        // The wheel is for the *selected cluster* only, never a second Waze
+        // task on the center display or a competing OEM task.
+        Display chosen=T1ClusterWazeRouter.selected(this);
+        int expected=chosen==null?-1:chosen.getDisplayId();
         try{
             SparseArray<List<AccessibilityWindowInfo>> across=getWindowsOnAllDisplays();
             if(across!=null)for(int d=0;d<across.size();d++){
+                if(expected>0&&across.keyAt(d)!=expected)continue;
                 List<AccessibilityWindowInfo> ws=across.valueAt(d);
                 if(ws==null)continue;
                 for(AccessibilityWindowInfo win:ws){
@@ -265,7 +270,7 @@ public final class T1WazeWheelService extends AccessibilityService {
                 "No se pudo consultar pantalla 2: "+e.getClass().getSimpleName())
                 .apply();
         }
-        AccessibilityNodeInfo current=getRootInActiveWindow();
+        AccessibilityNodeInfo current=expected>0?null:getRootInActiveWindow();
         if(current!=null&&WAZE.equals(
                 String.valueOf(current.getPackageName()))){
             wazeDisplayId=Display.DEFAULT_DISPLAY;
@@ -278,6 +283,50 @@ public final class T1WazeWheelService extends AccessibilityService {
             prefs().edit().putString("waze_display",
                 "Waze no visible para Accesibilidad en ninguna pantalla").apply();
         return null;
+    }
+    /** Edge-back gesture from the T1Launcher reached Waze on the cluster,
+     * but an accessibility GLOBAL_ACTION_BACK is dispatched to Android's
+     * currently FOCUSED window. Confirm Waze focus on the selected cluster
+     * before attempting it; never use Waze merely being visible as proof.
+     */
+    private boolean backOnlyIfWazeFocused(){
+        Display d=T1ClusterWazeRouter.selected(this);
+        if(d==null||d.getDisplayId()<=0){
+            status("ATRÁS: Display de Waze no identificado");
+            return false;
+        }
+        final int target=d.getDisplayId();
+        boolean focused=false;
+        try{
+            SparseArray<List<AccessibilityWindowInfo>> all=
+                getWindowsOnAllDisplays();
+            List<AccessibilityWindowInfo> onCluster=
+                all==null?null:all.get(target);
+            if(onCluster!=null)for(AccessibilityWindowInfo win:onCluster){
+                if(win==null||!win.isFocused())continue;
+                AccessibilityNodeInfo root=win.getRoot();
+                if(root!=null&&root.isVisibleToUser()&&
+                    WAZE.equals(String.valueOf(root.getPackageName()))){
+                    focused=true;break;
+                }
+            }
+        }catch(RuntimeException ex){
+            status("ATRÁS Waze: no se pudo comprobar foco · "+
+                ex.getClass().getSimpleName());
+            return false;
+        }
+        if(!focused){
+            status("ATRÁS: Waze no tiene foco en Display "+target+
+                "; no se tocó el tablero OEM ni otra aplicación");
+            return false;
+        }
+        boolean requested=performGlobalAction(GLOBAL_ACTION_BACK);
+        lastButtonAt=SystemClock.elapsedRealtime();
+        hideHint();selectedLabel="";
+        status("ATRÁS Waze · "+(requested?
+            "acción solicitada con foco confirmado":"Android rechazó BACK")+
+            " · verificar diálogo en el clúster");
+        return requested;
     }
     private void refreshOemBridge(){
         if(oemBridge==null)return;
@@ -391,14 +440,7 @@ public final class T1WazeWheelService extends AccessibilityService {
         if(collectAlternativeRoutes(root)){
             lastButtonAt=SystemClock.elapsedRealtime();
             if(cancel){
-                // GLOBAL_ACTION_BACK targets the system's active display, which
-                // can be the T1Launcher/OEM window rather than Waze Display 5.
-                // Never close arbitrary OEM windows to dismiss Waze alternatives.
-                hideHint();
-                selectedLabel="";
-                status("Waze: ATRÁS en alternativas no pulsa regresar "+
-                    "sin botón Waze específico; ventanas OEM intactas");
-                return false;
+                return backOnlyIfWazeFocused();
             }
             if(routeShortcut){
                 highlight();
@@ -435,9 +477,8 @@ public final class T1WazeWheelService extends AccessibilityService {
                         return clickSelected("CANCELAR MENSAJE WAZE");
                     }
                 }
-                promptArmed=false;hideHint();
-                status("ATRÁS: mensaje sin botón de cancelar identificado");
-                return false;
+                promptArmed=false;
+                return backOnlyIfWazeFocused();
             }
             if(confirm&&!promptArmed){
                 status("MENSAJE WAZE: girá la rueda para elegir una "+
@@ -452,12 +493,10 @@ public final class T1WazeWheelService extends AccessibilityService {
             return false;
         }
         promptArmed=false;
-        // The user requested the same wheel behavior as T1Launcher:
-        // when there is NO Waze modal, wheel notches zoom the Waze map.
-        // Draw 2-finger gestures ONLY on the Waze-selected secondary display.
-        // Keep original labelled map-button navigation as an opt-out mode.
+        // Owner preference: wheel moves button-to-button by DEFAULT.
+        // Legacy zoom remains an opt-in toggle, not an automatic fallback.
         if((forward||backward)&&!mapMenuArmed&&
-            p.getBoolean(ZOOM_MAP,true)){
+            p.getBoolean(ZOOM_MAP,false)){
             lastButtonAt=SystemClock.elapsedRealtime();
             return zoomVisibleWazeMap(root,forward);
         }
@@ -478,14 +517,23 @@ public final class T1WazeWheelService extends AccessibilityService {
             status("Waze: selección cancelada sin tocar pantalla");
             return true;
         }
+        if(cancel){
+            return backOnlyIfWazeFocused();
+        }
         if(confirm&&mapMenuArmed&&collectMapChoices(root)){
             mapMenuArmed=false;
             lastButtonAt=SystemClock.elapsedRealtime();
             return clickSelected("BOTÓN DE WAZE · OK");
         }
-        // Previous behaviour: OK with no highlighted map button attempts
-        // only the labelled "Rutas" accessibility control.
-        if(confirm||routeShortcut){
+        // OK without a wheel-selected button must NEVER open Rutas or
+        // accept an unrelated action by guesswork.
+        if(confirm&&!mapMenuArmed){
+            status("OK Waze: girá primero la rueda y elegí un botón "+
+                "identificado en el clúster");
+            return false;
+        }
+        // Optional dedicated route-key can still open an actual Waze button.
+        if(routeShortcut){
             AccessibilityNodeInfo routesButton=findRoutesButton(root,0,new int[]{0});
             if(routesButton==null){
                 status("RUTAS: Waze no expone el botón de rutas accesible. "+
@@ -842,7 +890,10 @@ public final class T1WazeWheelService extends AccessibilityService {
         Collections.sort(choices,Comparator
             .comparingInt((Candidate c)->c.bounds.top)
             .thenComparingInt(c->c.bounds.left));
-        if(choices.size()<2||choices.size()>9)return false;
+        if(choices.isEmpty()||choices.size()>9)return false;
+        // Some Waze dialogs (e.g. "Pase requerido") expose a single button.
+        // Treat it as a modal ONLY if an explicit question/cue was seen.
+        if(choices.size()==1&&!question[0])return false;
         boolean continueTrip=false,dismiss=false;
         for(Candidate c:choices){
             if(T1WazePromptPolicy.continueTrip(c.label))continueTrip=true;

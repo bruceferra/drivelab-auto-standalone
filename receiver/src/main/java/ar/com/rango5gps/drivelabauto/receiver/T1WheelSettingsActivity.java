@@ -109,7 +109,7 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
         button(body,"RUEDITA: ALTERNAR ZOOM / SELECCIÓN DE BOTONES",
             ()->{
                 SharedPreferences p=prefs();
-                boolean zoom=!p.getBoolean(T1WazeWheelService.ZOOM_MAP,true);
+                boolean zoom=!p.getBoolean(T1WazeWheelService.ZOOM_MAP,false);
                 p.edit().putBoolean(T1WazeWheelService.ZOOM_MAP,zoom).apply();
                 report.setText(zoom?
                     "RUEDITA = ZOOM en mapa Waze. Los menús siguen "+
@@ -117,10 +117,11 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
                     "RUEDITA = RECORRER BOTONES ACCESIBLES de Waze. "+
                     "Sin gestos de zoom.");
             });
-        text(body,"Por defecto la ruedita acerca/aleja Waze "+
-            "a pantalla completa en Display 1. Cambiá a SELECCIÓN si "+
-            "preferís navegar controles del mapa. Nunca controla "+
-            "Google Maps ni el menú original del vehículo.",13);
+        text(body,"Por defecto la ruedita RECORRE los botones "+
+            "accesibles de Waze; OK activa SOLO el botón que elegiste "+
+            "y ATRÁS busca cancelar/volver sin tocar controles OEM. "+
+            "Podés cambiar a ZOOM manualmente. Por ahora este módulo "+
+            "solo controla Waze, no otras aplicaciones.",13);
         button(body,"ACTIVAR / DESACTIVAR CONTROL EN WAZE",()->{
             SharedPreferences p=prefs();
             boolean active=!p.getBoolean(T1WazeWheelService.ENABLED,false);
@@ -201,13 +202,13 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
                 report.setText("No se abrió Waze: "+ex.getClass().getSimpleName());
             }
         });
-        text(body,"Uso previsto: en el mapa, OK intenta abrir 'Rutas "+
-            "alternativas' si encuentra ese control accesible. Si configurás "+
-            "una tecla RUTAS, la usa como acceso dedicado. Dentro de "+
-            "alternativas, ruedita recorre rutas visibles, OK selecciona "+
-            "y Atrás vuelve. Si Waze no expone los controles, no envía "+
-            "pulsaciones inventadas. No operar el listado de rutas "+
-            "mientras conducís.",13);
+        text(body,"Uso: ruedita recorre controles visibles de Waze; "+
+            "OK ejecuta el control seleccionado. ATRÁS activa un botón "+
+            "Cancelar/Volver identificado o intenta volver solo cuando "+
+            "Waze tiene foco confirmado en el Display del clúster. "+
+            "Nunca acepta avisos automáticamente. Si los botones no "+
+            "son accesibles, muestra diagnóstico sin pulsar a ciegas. "+
+            "Probá las selecciones detenido en P.",13);
         setContentView(scroll);
     }
     @Override public boolean dispatchKeyEvent(KeyEvent event){

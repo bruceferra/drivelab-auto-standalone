@@ -17,7 +17,13 @@ final class T1WazePromptPolicy {
     }
     static boolean question(String label){
         String s=normalize(label);
-        return s.startsWith("aun vas ")||
+        return s.equals("pase requerido")||
+            s.contains("pase requerido")||
+            s.contains("telepase requerido")||
+            s.contains("se requiere un pase")||
+            s.contains("toll pass required")||
+            s.contains("pass required")||
+            s.startsWith("aun vas ")||
             s.startsWith("todavia vas ")||
             s.startsWith("seguis yendo ")||
             s.startsWith("vas al ")||
@@ -47,7 +53,12 @@ final class T1WazePromptPolicy {
     }
     static boolean dismiss(String label){
         String s=normalize(label);
-        return s.equals("no gracias")||
+        return s.equals("omitir pase")||
+            s.equals("sin pase")||
+            s.equals("continuar sin pase")||
+            s.equals("no agregar pase")||
+            s.equals("cerrar aviso")||
+            s.equals("no gracias")||
             s.equals("no grabar")||
             s.equals("ahora no")||
             s.equals("no")||
@@ -64,7 +75,14 @@ final class T1WazePromptPolicy {
     }
     static boolean otherAction(String label){
         String s=normalize(label);
-        return s.equals("aceptar")||s.equals("confirmar")||
+        return s.equals("agregar pase")||
+            s.equals("anadir pase")||
+            s.equals("configurar pase")||
+            s.equals("agregar telepase")||
+            s.equals("anadir telepase")||
+            s.equals("add pass")||
+            s.equals("manage passes")||
+            s.equals("aceptar")||s.equals("confirmar")||
             s.equals("si")||s.equals("entendido")||
             s.equals("listo")||s.equals("continuar navegando")||
             s.equals("iniciar")||s.equals("guardar")||

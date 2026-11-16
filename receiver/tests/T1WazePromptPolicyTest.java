@@ -16,6 +16,18 @@ public final class T1WazePromptPolicyTest {
         yes(T1WazePromptPolicy.dismiss("No grabar"),"dismiss recorded phrase");
         yes(T1WazePromptPolicy.dismiss("NOT NOW"),"dismiss English");
         yes(T1WazePromptPolicy.action("Confirmar"),"confirmation");
+        yes(T1WazePromptPolicy.question("Pase requerido"),
+            "Waze toll pass modal cue");
+        yes(T1WazePromptPolicy.action("Agregar pase"),
+            "user-selected toll pass action");
+        yes(T1WazePromptPolicy.action("Añadir telepase"),
+            "localized add toll pass");
+        yes(T1WazePromptPolicy.dismiss("Continuar sin pase"),
+            "explicit dismiss toll pass");
+        yes(!T1WazePromptPolicy.action("Pase requerido"),
+            "pass message title is not an action");
+        yes(!T1WazePromptPolicy.action("Comprar pase y pagar"),
+            "never infer payment-related actions");
         yes(!T1WazePromptPolicy.action("Aún vas al Obelisco"),"question not clickable choice");
         yes(!T1WazePromptPolicy.action("Mapa de Buenos Aires"),"map title not clickable");
         yes(!T1WazePromptPolicy.continueTrip("Reanudar actualización de vehículo"),"no fuzzy untrusted action");
