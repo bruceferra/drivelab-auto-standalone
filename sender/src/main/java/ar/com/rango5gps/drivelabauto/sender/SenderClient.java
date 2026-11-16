@@ -158,7 +158,7 @@ public final class SenderClient {
                 if(!accepted&&!"not_ready".equals(reply.kind))
                     throw new IOException("Tipo de respuesta inválido");
                 String status=accepted?"T1 CONFIRMÓ RECEPCIÓN CIFRADA":
-                    "T1 recibió el destino, pero Waze no pudo iniciarse automáticamente";
+                    "T1 recibió el destino, pero la navegación elegida no se inició";
                 SharedPreferences.Editor edit=p.edit().putString("last_status",status);
                 if(accepted)edit.putInt("sent",p.getInt("sent",0)+1);
                 edit.apply();return new Delivery(accepted,status);

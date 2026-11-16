@@ -75,13 +75,14 @@ public final class BridgeCrypto {
     private static void validate(String kind,String value) throws GeneralSecurityException {
         if("ping".equals(kind)&&"".equals(value))return;
         if(("ack".equals(kind)||"not_ready".equals(kind))&&value!=null&&value.matches("[A-Za-z0-9+/]{16}"))return;
-        if("coord".equals(kind)&&value!=null&&value.matches("-?[0-9]{1,2}(?:\\.[0-9]{1,9})?,-?[0-9]{1,3}(?:\\.[0-9]{1,9})?")){
+        String base=BridgeRouteTarget.baseKind(kind);
+        if("coord".equals(base)&&value!=null&&value.matches("-?[0-9]{1,2}(?:\\.[0-9]{1,9})?,-?[0-9]{1,3}(?:\\.[0-9]{1,9})?")){
             String[] a=value.split(",");
             try {double lat=Double.parseDouble(a[0]),lon=Double.parseDouble(a[1]);
                 if(Math.abs(lat)<=90&&Math.abs(lon)<=180&&!(lat==0&&lon==0))return;
             }catch(NumberFormatException ignored){}
         }
-        if("search".equals(kind)&&value!=null&&value.length()>=3&&value.length()<=180&&
+        if("search".equals(base)&&value!=null&&value.length()>=3&&value.length()<=180&&
            !value.contains("\n")&&!value.contains("\r")&&value.matches("(?s).*\\p{L}.*"))return;
         throw new GeneralSecurityException("Invalid navigation payload");
     }

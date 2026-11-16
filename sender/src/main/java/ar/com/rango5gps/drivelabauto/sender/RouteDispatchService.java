@@ -12,6 +12,7 @@ import android.os.IBinder;
 import android.net.Uri;
 import android.widget.Toast;
 import ar.com.rango5gps.drivelabauto.common.MapLinks;
+import ar.com.rango5gps.drivelabauto.common.BridgeRouteTarget;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -92,18 +93,28 @@ public final class RouteDispatchService extends Service {
             failure("El Xiaomi no está vinculado con Receiver de T1",d);
             return;
         }
-        // Do not open Waze or DriveLab on the phone in SOLO CLÚSTER mode.
-        SenderClient.Delivery sent=SenderClient.send(this,d.kind,d.value);
+        // Preserve legacy coord/search for default Waze and use explicit
+        // authenticated route kinds for Google Maps / both. No modal in Uber.
+        String mode=SenderRouteTarget.selected(this);
+        String wireKind=BridgeRouteTarget.sendKind(d.kind,mode);
+        SenderClient.Delivery sent=SenderClient.send(this,wireKind,d.value);
         if(!sent.accepted)failure(sent.status,d);
-        else mark("T1 CONFIRMÓ · destino enviado en segundo plano");
-        if(!only){
-            // The user deliberately requested navigation on both devices.
-            Intent waze=new Intent(Intent.ACTION_VIEW,d.wazeUri());
-            waze.setPackage("com.waze");
-            waze.addCategory(Intent.CATEGORY_BROWSABLE);
-            waze.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            try{startActivity(waze);}
-            catch(Exception ex){failure("Android bloqueó abrir Waze automáticamente en Xiaomi",d);}
+        else mark("T1 CONFIRMÓ · "+SenderRouteTarget.label(mode)+
+            " solicitados en segundo plano");
+        if(!only&&sent.accepted){
+            // CLÚSTER + XIAOMI still launches at most ONE phone app.
+            // Both means both on the T1, not two competing phone windows.
+            boolean google=BridgeRouteTarget.MAPS.equals(mode);
+            Uri phoneUri=google?
+                Uri.parse("google.navigation:q="+
+                    Uri.encode(d.value,"coord".equals(d.kind)?",":"")+
+                    "&mode=d"):d.wazeUri();
+            Intent phone=new Intent(Intent.ACTION_VIEW,phoneUri)
+                .setPackage(google?"com.google.android.apps.maps":"com.waze");
+            phone.addCategory(Intent.CATEGORY_BROWSABLE);
+            phone.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            try{startActivity(phone);}
+            catch(Exception ex){failure("Android bloqueó abrir navegación en Xiaomi",d);}
         }
         // Successful SOLO CLÚSTER dispatch is intentionally silent.
     }
@@ -114,10 +125,15 @@ public final class RouteDispatchService extends Service {
         try{
         PendingIntent tap;
         if(destination!=null){
-            Intent waze=new Intent(Intent.ACTION_VIEW,destination.wazeUri())
-                .setPackage("com.waze");
-            waze.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            tap=PendingIntent.getActivity(this,FAILURE_ID,waze,
+            String target=SenderRouteTarget.selected(this);
+            boolean google=BridgeRouteTarget.MAPS.equals(target);
+            Uri uri=google?
+                Uri.parse("google.navigation:q="+Uri.encode(destination.value)+
+                    "&mode=d"):destination.wazeUri();
+            Intent fallback=new Intent(Intent.ACTION_VIEW,uri)
+                .setPackage(google?"com.google.android.apps.maps":"com.waze");
+            fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            tap=PendingIntent.getActivity(this,FAILURE_ID,fallback,
                 PendingIntent.FLAG_CANCEL_CURRENT|PendingIntent.FLAG_IMMUTABLE);
         }else{
             tap=PendingIntent.getActivity(this,FAILURE_ID,
@@ -129,7 +145,7 @@ public final class RouteDispatchService extends Service {
             .setContentTitle("DriveLab · destino no confirmado")
             .setContentText(reason)
             .setStyle(new Notification.BigTextStyle().bigText(reason+
-                "\nTocá para revisar o abrir Waze manualmente."))
+                "\nTocá para abrir el mapa elegido manualmente."))
             .setAutoCancel(true).setContentIntent(tap).build());
         }catch(RuntimeException ex){
             // Notifications may be restricted by Xiaomi; never crash Sender

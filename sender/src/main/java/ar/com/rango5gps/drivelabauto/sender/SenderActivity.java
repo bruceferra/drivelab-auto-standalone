@@ -18,6 +18,7 @@ import android.graphics.Color;
 import android.view.*;
 import android.widget.*;
 import ar.com.rango5gps.drivelabauto.common.MapLinks;
+import ar.com.rango5gps.drivelabauto.common.BridgeRouteTarget;
 import ar.com.rango5gps.drivelabauto.common.Updater;
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning;
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions;
@@ -67,6 +68,12 @@ public final class SenderActivity extends Activity {
         button(body,only?"Cambiar a clúster + Xiaomi":"Cambiar a solo clúster",()->{
             SenderClient.prefs(this).edit().putBoolean("only_cluster",!only).apply();render();
         });
+        title(body,"DESTINO PREDETERMINADO DE UBER",18);
+        String navMode=SenderRouteTarget.selected(this);
+        title(body,"Al tocar NAVEGAR: "+SenderRouteTarget.label(navMode)+
+            "\\nSe guarda la elección. No pregunta en cada viaje.",14);
+        button(body,"ELEGIR DESTINO · WAZE / GOOGLE / AMBOS",
+            this::chooseNavigationTarget);
         boolean paired=SenderClient.configured(this);
         title(body,paired?"T1 VINCULADA":"T1 SIN VINCULAR",18);
         if(paired)title(body,"IP receptor: "+SenderClient.prefs(this).getString("receiver_ip",""),14);
@@ -126,6 +133,21 @@ public final class SenderActivity extends Activity {
         if(restoreY>0)scroll.post(()->{
             if(currentScroll==scroll)scroll.scrollTo(0,restoreY);
         });
+    }
+    private void chooseNavigationTarget(){
+        String current=SenderRouteTarget.selected(this);
+        final String[] choices={"Waze","Google Maps","Ambos simultáneamente"};
+        int selected=BridgeRouteTarget.MAPS.equals(current)?1:
+            BridgeRouteTarget.BOTH.equals(current)?2:0;
+        new AlertDialog.Builder(this)
+            .setTitle("NAVEGACIÓN DE UBER EN LA T1")
+            .setSingleChoiceItems(choices,selected,(dialog,which)->{
+                SenderRouteTarget.choose(this,which==1?
+                    BridgeRouteTarget.MAPS:which==2?
+                    BridgeRouteTarget.BOTH:BridgeRouteTarget.WAZE);
+                dialog.dismiss();render();
+            })
+            .setNegativeButton("CANCELAR",null).show();
     }
     private void acceptQrIntent(Intent intent){
         if(intent==null||intent.getData()==null)return;
@@ -204,7 +226,9 @@ public final class SenderActivity extends Activity {
     private void test(){
         if(!SenderClient.configured(this)){info("Primero vinculá el Receiver");return;}
         new Thread(()->{
-            SenderClient.Delivery result=SenderClient.send(this,"coord","-34.9214,-57.9545");
+            SenderClient.Delivery result=SenderClient.send(this,
+                BridgeRouteTarget.sendKind("coord",SenderRouteTarget.selected(this)),
+                "-34.9214,-57.9545");
             runOnUiThread(()->info(result.status));
         },"Sender-Real-Test").start();
     }

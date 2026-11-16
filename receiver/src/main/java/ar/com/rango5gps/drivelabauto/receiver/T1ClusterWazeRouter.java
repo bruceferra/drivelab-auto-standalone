@@ -220,6 +220,24 @@ final class T1ClusterWazeRouter {
         launch.setPackage(WAZE);
         return launchOnDisplay(c,launch,manualTest,fromBoot,"Waze",true);
     }
+    /** Google Maps destination, only on the chosen secondary display. */
+    static String routeGoogleMaps(Context c,Intent maps){
+        if(!"com.google.android.apps.maps".equals(maps.getPackage()))
+            return "Rechazado: el destino no es de Google Maps";
+        if(!enabled(c))return "CLÚSTER OFF: no enviar al Display 1";
+        if(T1ClusterLayoutPolicy.active(c)&&
+            T1ClusterLayoutPolicy.MODE_SPLIT.equals(
+                T1ClusterLayoutPolicy.mode(c))){
+            if(!"com.google.android.apps.maps".equals(
+                T1ClusterLayoutPolicy.secondPackage(c)))
+                return "La ventana derecha no está configurada para Google Maps";
+            Display display=selected(c);
+            if(display==null)return "Display 1 no disponible";
+            return T1ClusterLayoutPolicy.start(c,display,maps,
+                T1ClusterLayoutPolicy.geometry(c,display,true),"Google Maps");
+        }
+        return launchOnDisplay(c,maps,false,false,"Google Maps",false);
+    }
     static boolean routeDestination(Context c,Intent waze){
         // Preserve proven full-screen Display 1 path unless the driver has
         // explicitly confirmed experimental freeform window placement.

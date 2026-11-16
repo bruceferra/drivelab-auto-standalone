@@ -7,6 +7,7 @@ import android.net.Uri;
 import android.os.*;
 import android.provider.Settings;
 import ar.com.rango5gps.drivelabauto.common.BridgeCrypto;
+import ar.com.rango5gps.drivelabauto.common.BridgeRouteTarget;
 import java.io.*;
 import java.net.*;
 import java.security.*;
@@ -176,9 +177,11 @@ public final class ReceiverService extends Service {
         return address!=null&&(address.isSiteLocalAddress()||address.isLinkLocalAddress());
     }
     private boolean dispatchNavigation(BridgeCrypto.Packet msg){
-        if(!"coord".equals(msg.kind)&&!"search".equals(msg.kind))return false;
-        Uri target=Uri.parse("waze://?"+("coord".equals(msg.kind)?"ll=":"q=")+
-            Uri.encode(msg.value,"coord".equals(msg.kind)?",":"")+"&navigate=yes");
+        String base=BridgeRouteTarget.baseKind(msg.kind);
+        String routeTarget=BridgeRouteTarget.target(msg.kind);
+        if(base==null||routeTarget==null)return false;
+        Uri target=Uri.parse("waze://?"+("coord".equals(base)?"ll=":"q=")+
+            Uri.encode(msg.value,"coord".equals(base)?",":"")+"&navigate=yes");
         Intent launch=new Intent(Intent.ACTION_VIEW,target).setPackage("com.waze");
         launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         boolean attempted=false;
@@ -194,6 +197,13 @@ public final class ReceiverService extends Service {
             diagnosis="DESTINO RECIBIDO, Waze BLOQUEADO: Android no "+
                 "autoriza abrir una aplicación en segundo plano. "+
                 "Revisá Mostrar sobre otras apps de DriveLab Receiver.";
+        }else if(!BridgeRouteTarget.WAZE.equals(routeTarget)){
+            // Other navigation selections require explicit cluster display.
+            // Never open a surprise Maps window over the center instruments.
+            T1NavigationTargets.Result selected=T1NavigationTargets.send(
+                this,routeTarget,base,msg.value,cluster);
+            attempted=selected.attempted;
+            diagnosis="DESTINO RECIBIDO · "+selected.status;
         }else if(cluster){
             // Receiver obtains encrypted coordinates from Xiaomi, never
             // receives map pixels. Waze renders natively on Display 1.
@@ -225,8 +235,8 @@ public final class ReceiverService extends Service {
             .setSmallIcon(attempted?android.R.drawable.ic_menu_directions:
                 android.R.drawable.ic_dialog_alert)
             .setContentTitle(attempted?
-                "Xiaomi: destino recibido · Waze solicitado":
-                "Xiaomi: destino recibido · Waze pendiente")
+                "Xiaomi: destino recibido · navegación solicitada":
+                "Xiaomi: destino recibido · navegación pendiente")
             .setContentText(diagnosis)
             .setStyle(new Notification.BigTextStyle().bigText(diagnosis))
             .setAutoCancel(true).setContentIntent(tap).build();
