@@ -17,6 +17,7 @@ import java.util.TreeMap;
 
 /** Explicit, reversible setup; no invisible window or cloned launcher UI. */
 public final class T1ClusterWazeSettingsActivity extends Activity {
+    private boolean showTechnical;
     private void label(LinearLayout parent,String text,int size){
         TextView t=new TextView(this);
         t.setText(text);t.setTextSize(size);
@@ -58,6 +59,16 @@ public final class T1ClusterWazeSettingsActivity extends Activity {
             "\nApp al encender: "+(boot?"ACTIVO":"APAGADO")+
             "\nResultado: "+p.getString(T1ClusterWazeRouter.STATUS,
                 "Sin prueba; ningún display elegido"),14);
+        button(body,"CONFIGURAR PANELES A/B · APLICAR",()->
+            startActivity(new Intent(this,T1ClusterLayoutSettingsActivity.class)));
+        if(T1ClusterWazeRouter.selected(this)==null)
+            button(body,"SELECCIONAR DISPLAY DEL TABLERO",this::chooseDisplay);
+        button(body,showTechnical?"OCULTAR MENÚ TÉCNICO":
+            "MENÚ TÉCNICO · DISPLAY / PRUEBAS",()->{
+            showTechnical=!showTechnical;render();
+        });
+        if(showTechnical){
+            label(body,"DIAGNÓSTICOS ANTIGUOS · NO NECESARIOS PARA EL USO NORMAL",14);
         label(body,"Pantallas secundarias públicas detectadas: "+
             T1ClusterWazeRouter.candidates(this).size()+
             ". Si elegís una, se desactivará la ruta anterior hasta "+
@@ -147,6 +158,7 @@ public final class T1ClusterWazeSettingsActivity extends Activity {
             "de manera automática. Si Android lo rechaza, DriveLab NO abre "+
             "Waze sobre la pantalla principal como reemplazo.",12);
         button(body,"ACTUALIZAR PANTALLAS Y ESTADO",this::render);
+        }
         button(body,"VOLVER A DRIVELAB",this::finish);
         setContentView(scroll);
     }
