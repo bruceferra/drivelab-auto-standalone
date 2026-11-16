@@ -1,0 +1,67 @@
+package ar.com.rango5gps.drivelabauto.receiver;
+
+import android.content.Context;
+import android.content.SharedPreferences;
+import java.text.Normalizer;
+import java.util.Locale;
+
+/** A narrowly scoped, expiring authorization for the Maps route-replacement
+ * dialog following a NEW, explicit Sender/voice navigation request.
+ * No routine popup, permissions dialog or stale request can be accepted.
+ */
+final class T1GoogleMapsReplacement {
+    private static final String PREF="t1_google_maps_replace_v1";
+    private static final String TIME="requested_at",ACTIVE="pending",RESULT="result";
+    private static final long TTL=12000L;
+    private T1GoogleMapsReplacement(){}
+    private static SharedPreferences prefs(Context c){
+        return c.getSharedPreferences(PREF,Context.MODE_PRIVATE);
+    }
+    static void arm(Context c){
+        prefs(c).edit().putBoolean(ACTIVE,true)
+            .putLong(TIME,System.currentTimeMillis())
+            .putString(RESULT,"Esperando confirmación de ruta nueva, si aparece")
+            .apply();
+    }
+    static boolean pending(Context c){
+        if(!T1WheelTarget.mapsPresent(c))return false;
+        SharedPreferences p=prefs(c);
+        long age=System.currentTimeMillis()-p.getLong(TIME,0L);
+        if(age<0||age>TTL){if(p.getBoolean(ACTIVE,false))cancel(c);return false;}
+        return p.getBoolean(ACTIVE,false);
+    }
+    static void cancel(Context c){
+        prefs(c).edit().putBoolean(ACTIVE,false).apply();
+    }
+    static void consume(Context c){cancel(c);}
+    static void result(Context c,String status){
+        prefs(c).edit().putString(RESULT,status).apply();
+    }
+    static String status(Context c){
+        return prefs(c).getString(RESULT,"Sin solicitud reciente");
+    }
+    private static String norm(String input){
+        if(input==null)return "";
+        return Normalizer.normalize(input,Normalizer.Form.NFD)
+            .replaceAll("\\p{M}","").toLowerCase(Locale.ROOT)
+            .replaceAll("\\s+"," ").trim();
+    }
+    static boolean stopQuestion(String value){
+        String n=norm(value);
+        // Matches Maps' prompt about STOPPING the CURRENT navigation.
+        // Does not match generic Yes/No, permissions or location notices.
+        return (n.contains("detener")&&n.contains("navegac"))||
+            (n.contains("finalizar")&&n.contains("navegac"))||
+            (n.contains("stop")&&n.contains("navigat"))||
+            (n.contains("end")&&n.contains("navigat"))||
+            (n.contains("stop")&&n.contains("this route"));
+    }
+    static boolean stopAction(String value){
+        String n=norm(value);
+        return n.equals("si, detener")||n.equals("si, detener navegacion")||
+            n.equals("si, finalizar")||n.equals("detener navegacion")||
+            n.equals("detener")||n.equals("yes, stop")||
+            n.equals("yes, stop navigation")||n.equals("stop navigating")||
+            n.equals("stop navigation");
+    }
+}

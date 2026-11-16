@@ -21,7 +21,10 @@ final class T1WheelTarget {
         return panelB(c)?T1ClusterLayoutPolicy.secondLabel(c):"Waze";
     }
     static boolean mapsAllowed(Context c){
-        return panelB(c)&&T1ClusterWazeRouter.enabled(c)&&
+        return panelB(c)&&mapsPresent(c);
+    }
+    static boolean mapsPresent(Context c){
+        return T1ClusterWazeRouter.enabled(c)&&
             T1ClusterLayoutPolicy.active(c)&&
             T1ClusterLayoutPolicy.MODE_SPLIT.equals(T1ClusterLayoutPolicy.mode(c))&&
             "com.google.android.apps.maps".equals(T1ClusterLayoutPolicy.secondPackage(c))&&

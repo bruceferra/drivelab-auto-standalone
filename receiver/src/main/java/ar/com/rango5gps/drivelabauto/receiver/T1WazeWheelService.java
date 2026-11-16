@@ -105,6 +105,7 @@ public final class T1WazeWheelService extends AccessibilityService {
         @Override public void run(){
             refreshOemBridge();
             scanRequestedWindow();
+            maybeConfirmMapsReplacement();
             main.postDelayed(this,1800L);
         }
     };
@@ -287,7 +288,7 @@ public final class T1WazeWheelService extends AccessibilityService {
     }
     /** Only Maps in the verified right split window; never default display. */
     private AccessibilityNodeInfo mapsRoot(){
-        if(!T1WheelTarget.mapsAllowed(this))return null;
+        if(!T1WheelTarget.mapsPresent(this))return null;
         Display chosen=T1ClusterWazeRouter.selected(this);
         if(chosen==null)return null;
         final int displayId=chosen.getDisplayId();
@@ -1042,6 +1043,61 @@ public final class T1WazeWheelService extends AccessibilityService {
         }catch(Exception ignored){}
         hint=null;hintWindowManager=null;hintDisplayId=-1;
     }
+    /** Explicit new Sender/voice destination authorizes replacing the old
+     * Maps route. Only the one labelled STOP-confirmation in Maps is clickable,
+     * within a short intent-scoped window; no global back, generic YES or taps.
+     */
+    private static final class StopPrompt {
+        boolean question;
+        AccessibilityNodeInfo button;
+        Rect bounds;
+        int differentButtons;
+    }
+    private void findStopPrompt(AccessibilityNodeInfo n,StopPrompt prompt,
+                                int depth,int[] visits){
+        if(n==null||depth>16||visits[0]++>400||!n.isVisibleToUser())return;
+        String label=labelOf(n);
+        if(T1GoogleMapsReplacement.stopQuestion(label))prompt.question=true;
+        if(T1GoogleMapsReplacement.stopAction(label)){
+            AccessibilityNodeInfo clickable=n.isClickable()?n:null;
+            if(clickable==null){
+                AccessibilityNodeInfo parent=n.getParent();
+                if(parent!=null&&parent.isClickable())clickable=parent;
+            }
+            if(clickable!=null){
+                Rect b=new Rect();clickable.getBoundsInScreen(b);
+                if(b.width()>28&&b.height()>20&&b.width()<700&&b.height()<260){
+                    if(prompt.bounds==null||!prompt.bounds.equals(b)){
+                        prompt.differentButtons++;
+                        prompt.bounds=b;
+                        prompt.button=clickable;
+                    }
+                }
+            }
+        }
+        for(int i=0;i<n.getChildCount()&&visits[0]<400;i++)
+            findStopPrompt(n.getChild(i),prompt,depth+1,visits);
+    }
+    private void maybeConfirmMapsReplacement(){
+        if(!T1GoogleMapsReplacement.pending(this))return;
+        AccessibilityNodeInfo root=mapsRoot();
+        if(root==null||!MAPS.equals(String.valueOf(root.getPackageName())))
+            return;
+        StopPrompt prompt=new StopPrompt();
+        findStopPrompt(root,prompt,0,new int[]{0});
+        if(!prompt.question||prompt.differentButtons!=1||
+           prompt.button==null)return;
+        // Consume the permission BEFORE clicking so repeated AccessibilityEvents
+        // cannot click twice. If Maps rejects it, leave a diagnostic instead.
+        T1GoogleMapsReplacement.consume(this);
+        boolean clicked=false;
+        try{clicked=prompt.button.performAction(
+            AccessibilityNodeInfo.ACTION_CLICK);}
+        catch(Exception ignored){}
+        T1GoogleMapsReplacement.result(this,clicked?
+            "Maps: se pulsó la confirmación explícita de reemplazo":
+            "Maps: botón de reemplazo reconocido, clic rechazado");
+    }
     @Override public void onAccessibilityEvent(AccessibilityEvent event){
         if(event==null)return;
         // Waze can be visible ONLY on the cluster display. A different
@@ -1049,6 +1105,7 @@ public final class T1WazeWheelService extends AccessibilityService {
         if(event.getEventType()==AccessibilityEvent.TYPE_WINDOWS_CHANGED||
            event.getEventType()==AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED){
             refreshOemBridge();
+            maybeConfirmMapsReplacement();
             if(activeRoot()==null)hideHint();
         }
     }

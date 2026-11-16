@@ -41,8 +41,10 @@ final class T1NavigationTargets {
         if(T1ClusterWazeRouter.selected(c)==null)
             return new Result(false,"Display del clúster no disponible");
         if(BridgeRouteTarget.MAPS.equals(target)){
+            T1GoogleMapsReplacement.arm(c);
             String result=T1ClusterWazeRouter.routeGoogleMaps(c,
                 intent("com.google.android.apps.maps",base,value));
+            if(!submitted(result))T1GoogleMapsReplacement.cancel(c);
             T1ClusterWazeRouter.status(c,result);
             return new Result(submitted(result),
                 "Google Maps "+(submitted(result)?"SOLICITADO":"NO ABIERTO")+
@@ -70,10 +72,12 @@ final class T1NavigationTargets {
             T1ClusterWazeRouter.status(c,left);
             return new Result(false,"Waze izquierdo no solicitado: "+left);
         }
+        T1GoogleMapsReplacement.arm(c);
         String right=T1ClusterLayoutPolicy.start(c,display,
             intent("com.google.android.apps.maps",base,value),
             T1ClusterLayoutPolicy.geometry(c,display,true),"Google Maps");
         boolean both=submitted(right);
+        if(!both)T1GoogleMapsReplacement.cancel(c);
         String status=both?
             "Waze y Google Maps SOLICITADOS en sus dos mitades. "+
             "Verificar físicamente que AMBOS estén navegando":

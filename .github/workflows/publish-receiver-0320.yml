@@ -121,6 +121,8 @@ jobs:
           java -cp /tmp/mirror-tests ar.com.rango5gps.drivelabauto.receiver.T1WheelCalibrationSourceContractTest
           javac -encoding UTF-8 -d /tmp/mirror-tests receiver/tests/T1WheelOemBinderSourceContractTest.java
           java -cp /tmp/mirror-tests ar.com.rango5gps.drivelabauto.receiver.T1WheelOemBinderSourceContractTest
+          javac -encoding UTF-8 -d /tmp/mirror-tests receiver/tests/T1GoogleMapsReplaceSourceContractTest.java
+          java -cp /tmp/mirror-tests ar.com.rango5gps.drivelabauto.receiver.T1GoogleMapsReplaceSourceContractTest
           javac -encoding UTF-8 -d /tmp/mirror-tests receiver/tests/T1WheelPanelAndSpeedSourceTest.java
           java -cp /tmp/mirror-tests ar.com.rango5gps.drivelabauto.receiver.T1WheelPanelAndSpeedSourceTest
           # Display5 QA now protects against global BACK and permits diagnostic text.
@@ -278,3 +280,5 @@ jobs:
 # Pre-publish latest is 0.3.19; post-publish latest must be 0.3.20.
 
 # Re-run after fixing OFF/ON source regression: delayed route replay is ON-guarded, not an OFF blocker.
+
+# Retry after preserving diagnostics label contract; add guarded Maps route replacement.

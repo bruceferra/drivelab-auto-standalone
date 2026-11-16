@@ -66,7 +66,7 @@ public final class T1ReplayAndHvacBackgroundSourceContractTest {
             waze.contains("SCAN_RESULT")&&
             waze.contains("lastScanAt=requested")&&
             src("T1WheelSettingsActivity.java").contains(
-                "INSPECCIONAR CONTROLES DE WAZE"),
+                "INSPECCIONAR CONTROLES · PANEL ACTIVO"),
             "Diagnostics inspect Waze display without clicking");
         System.out.println("PASS "+checks+" background trip/HVAC/Waze safety source contracts");
     }
