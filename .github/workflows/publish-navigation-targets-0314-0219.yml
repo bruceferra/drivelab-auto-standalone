@@ -54,7 +54,7 @@ jobs:
           test "$GITHUB_REPOSITORY" = bruceferra/drivelab-auto-standalone
           test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.13
           ! gh release view v0.3.14 >/dev/null 2>&1
-          ! gh release view v0.2.19 >/dev/null 2>&1
+          ! gh release view sender-v0.2.19 >/dev/null 2>&1
           mkdir -p /tmp/nav-tests /tmp/previous-sender /tmp/previous-receiver output
           gh release download v0.2.18 --pattern 'DriveLab-Auto-Sender-v0.2.18.apk' --dir /tmp/previous-sender
           gh release download v0.3.13 --pattern 'DriveLab-Auto-Receiver-v0.3.13.apk' --dir /tmp/previous-receiver
@@ -89,7 +89,7 @@ jobs:
               prev=/tmp/previous-sender/DriveLab-Auto-Sender-v0.2.18.apk
               expected_name=0.2.19
               expected_code=20
-              tag=v0.2.19
+              tag=sender-v0.2.19
               proper=Sender
             else
               prev=/tmp/previous-receiver/DriveLab-Auto-Receiver-v0.3.13.apk
@@ -125,7 +125,7 @@ jobs:
         run: |
           set -euo pipefail
           test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.13
-          gh release create v0.2.19 output/DriveLab-Auto-Sender-v0.2.19.apk output/sender.json output/sender.sha256 /tmp/previous-receiver/receiver.json --target "$GITHUB_SHA" --latest=false --title 'DriveLab Sender 0.2.19 · Uber elegir Waze Google o ambos' --notes 'Sender: destino predeterminado persistente Waze, Google Maps o Ambos al recibir Uber. Waze es la opcion inicial. Ambos exige Receiver 0.3.14 con split verificado; conserva vinculacion WiFi y audio Bluetooth. Se usa el cifrado previo y se agregan solo tipos de ruta autenticados. Sin apps emergentes sobre Uber.'
+          gh release create sender-v0.2.19 output/DriveLab-Auto-Sender-v0.2.19.apk output/sender.json output/sender.sha256 /tmp/previous-receiver/receiver.json --target "$GITHUB_SHA" --latest=false --title 'DriveLab Sender 0.2.19 · Uber elegir Waze Google o ambos' --notes 'Sender: destino predeterminado persistente Waze, Google Maps o Ambos al recibir Uber. Waze es la opcion inicial. Ambos exige Receiver 0.3.14 con split verificado; conserva vinculacion WiFi y audio Bluetooth. Se usa el cifrado previo y se agregan solo tipos de ruta autenticados. Sin apps emergentes sobre Uber.'
           gh release create v0.3.14 output/DriveLab-Auto-Receiver-v0.3.14.apk output/receiver.json output/sender.json output/receiver.sha256 --target "$GITHUB_SHA" --latest --title 'DriveLab Receiver 0.3.14 · rutas Waze, Maps o ambos' --notes 'Receiver reconoce orden cifrada del Sender v0.2.19: solo Waze, solo Google Maps o ambos. Ambos exige diseño dividido previamente verificado con Waze izquierda y Google derecha; se solicitan dos navegaciones mediante Intents sobre el Display 1 sin modificar geometria por ADB al circular. Se conserva CLUSTER OFF aun en D, firma RSA y autorizacion, controles OEM y Sender vinculado. Navegacion simultanea real pendiente de validacion fisica; las solicitudes de Intents no son confirmacion visual.'
           mkdir -p verify
           gh release download v0.3.14 --pattern receiver.json --pattern sender.json --dir verify
@@ -134,3 +134,5 @@ jobs:
           test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.14
 
 # Re-run: BridgeCrypto route-kind validation is again standalone for legacy QA compilers.
+
+# Sender release uses separate tag sender-v0.2.19: old Receiver v0.2.19 is immutable.
