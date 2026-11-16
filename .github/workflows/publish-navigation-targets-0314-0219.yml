@@ -132,3 +132,5 @@ jobs:
           cmp output/receiver.json verify/receiver.json
           cmp output/sender.json verify/sender.json
           test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.14
+
+# Re-run: BridgeCrypto route-kind validation is again standalone for legacy QA compilers.

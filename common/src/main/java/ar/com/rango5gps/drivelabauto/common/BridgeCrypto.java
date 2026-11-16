@@ -75,7 +75,13 @@ public final class BridgeCrypto {
     private static void validate(String kind,String value) throws GeneralSecurityException {
         if("ping".equals(kind)&&"".equals(value))return;
         if(("ack".equals(kind)||"not_ready".equals(kind))&&value!=null&&value.matches("[A-Za-z0-9+/]{16}"))return;
-        String base=BridgeRouteTarget.baseKind(kind);
+        // Keep core AES validation self-contained: older QA scripts compile
+        // BridgeCrypto alone, without the Sender route-preference helper.
+        String base=kind;
+        if("coord_maps".equals(kind)||"coord_both".equals(kind))
+            base="coord";
+        else if("search_maps".equals(kind)||"search_both".equals(kind))
+            base="search";
         if("coord".equals(base)&&value!=null&&value.matches("-?[0-9]{1,2}(?:\\.[0-9]{1,9})?,-?[0-9]{1,3}(?:\\.[0-9]{1,9})?")){
             String[] a=value.split(",");
             try {double lat=Double.parseDouble(a[0]),lon=Double.parseDouble(a[1]);
