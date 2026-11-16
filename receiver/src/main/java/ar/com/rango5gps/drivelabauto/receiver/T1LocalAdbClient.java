@@ -100,7 +100,9 @@ final class T1LocalAdbClient {
                     send(sock,"OKAY",1,remote,new byte[0]);
                 }else if(msg.is("CLSE")){
                     send(sock,"CLSE",1,msg.arg0,new byte[0]);
-                    return output.toString(StandardCharsets.UTF_8);
+                    // Android 11 lacks ByteArrayOutputStream.toString(Charset).
+                    // Decode bytes with the API 1 String(byte[], Charset) instead.
+                    return new String(output.toByteArray(),StandardCharsets.UTF_8);
                 }else if(msg.is("AUTH"))
                     throw new SecurityException("ADB perdió autorización");
                 else if(msg.is("CNXN")||msg.is("OPEN"))
