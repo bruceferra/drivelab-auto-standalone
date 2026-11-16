@@ -18,8 +18,7 @@ public final class T1UpdaterFallbackSourceContractTest {
             updater.contains("latestReceiverViaApi(a)")&&
             updater.contains("latestFromManifest(a,app)")&&
             updater.contains("Consulta de versiones falló en API")&&
-            updater.contains("GitHub",
-            updater.lastIndexOf("github.com:")-30),
+            updater.contains("github.com: "),
             "Failed GitHub frontends must report which version-check paths failed");
         require(updater.contains("getString(\"digest\")")&&
             updater.contains("sha256:[a-fA-F0-9]{64}")&&
