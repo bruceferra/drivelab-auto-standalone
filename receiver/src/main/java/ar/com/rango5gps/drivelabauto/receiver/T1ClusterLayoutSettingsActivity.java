@@ -12,6 +12,7 @@ import android.content.pm.ResolveInfo;
 import android.os.Bundle;
 import android.provider.Settings;
 import android.widget.Button;
+import android.widget.CheckBox;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.SeekBar;
@@ -27,7 +28,10 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
     private T1ClusterLayoutPreview preview;
     private TextView previewState;
     private boolean adbProbeRunning;
-    private boolean showAdvanced;
+    private boolean showAdvanced,draftLoaded;
+    private boolean aEnabled,bEnabled;
+    private int ratio;
+    private String appA,appB,labelA,labelB;
     private TextView adbPersistentStatus;
     private TextView adbBottomStatus;
     private void text(String value,int size){
@@ -45,55 +49,140 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
     }
     @Override protected void onResume(){super.onResume();render();}
     private SharedPreferences cfg(){return T1ClusterWazeRouter.prefs(this);}
+    private void loadDraft(){
+        if(draftLoaded)return;
+        draftLoaded=true;
+        boolean inverted=T1ClusterLayoutPolicy.MODE_SPLIT.equals(
+            T1ClusterLayoutPolicy.mode(this))&&
+            T1ClusterLayoutPolicy.inverted(this);
+        aEnabled=T1ClusterLayoutPolicy.panelAOn(this);
+        bEnabled=T1ClusterLayoutPolicy.panelBOn(this);
+        appA=inverted?T1ClusterLayoutPolicy.secondPackage(this):
+            T1ClusterLayoutPolicy.firstPackage(this);
+        appB=inverted?T1ClusterLayoutPolicy.firstPackage(this):
+            T1ClusterLayoutPolicy.secondPackage(this);
+        labelA=inverted?T1ClusterLayoutPolicy.secondLabel(this):
+            T1ClusterLayoutPolicy.firstLabel(this);
+        labelB=inverted?T1ClusterLayoutPolicy.firstLabel(this):
+            T1ClusterLayoutPolicy.secondLabel(this);
+        ratio=T1ClusterLayoutPolicy.number(this,
+            T1ClusterLayoutPolicy.SPLIT_PERCENT,50,30,70);
+    }
+    private void panelRow(boolean right){
+        CheckBox check=new CheckBox(this);
+        check.setText(right?"PANEL B · DERECHA":"PANEL A · IZQUIERDA");
+        check.setTextSize(18);
+        check.setChecked(right?bEnabled:aEnabled);
+        check.setOnCheckedChangeListener((button,checked)->{
+            if(right){bEnabled=checked;if(!checked&&!aEnabled)aEnabled=true;}
+            else {aEnabled=checked;if(!checked&&!bEnabled)bEnabled=true;}
+            render();
+        });
+        column.addView(check);
+        button("ELEGIR APP · "+(right?labelB:labelA),
+            ()->choosePanelApp(right));
+    }
+    private void choosePanelApp(boolean right){
+        PackageManager pm=getPackageManager();
+        TreeMap<String,String> found=new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        Intent query=new Intent(Intent.ACTION_MAIN)
+            .addCategory(Intent.CATEGORY_LAUNCHER);
+        for(ResolveInfo ri:pm.queryIntentActivities(query,0)){
+            if(ri.activityInfo==null)continue;
+            String pkg=ri.activityInfo.packageName;
+            if(!T1ClusterWazeRouter.isSelectablePackage(this,pkg))continue;
+            found.put(String.valueOf(ri.loadLabel(pm))+" · "+pkg,pkg);
+        }
+        for(String pkg:new String[]{"com.waze","com.google.android.apps.maps",
+                                    "com.spotify.music","com.google.android.youtube"}){
+            if(!T1ClusterWazeRouter.isSelectablePackage(this,pkg)||
+               found.containsValue(pkg))continue;
+            String label=pkg.equals("com.waze")?"Waze":
+                pkg.equals("com.google.android.apps.maps")?"Google Maps":
+                pkg.equals("com.spotify.music")?"Spotify":"YouTube";
+            found.put(label+" · "+pkg,pkg);
+        }
+        if(found.isEmpty()){
+            Toast.makeText(this,"No hay apps disponibles",Toast.LENGTH_LONG).show();
+            return;
+        }
+        String[] titles=found.keySet().toArray(new String[0]);
+        String[] pkgs=found.values().toArray(new String[0]);
+        new AlertDialog.Builder(this)
+            .setTitle(right?"ELEGIR APP · PANEL B":"ELEGIR APP · PANEL A")
+            .setItems(titles,(d,index)->{
+                if(right){appB=pkgs[index];labelB=titles[index].split(" · ")[0];}
+                else {appA=pkgs[index];labelA=titles[index].split(" · ")[0];}
+                render();
+            }).setNegativeButton("CANCELAR",null).show();
+    }
+    private void applyPanels(){
+        if(!T1ClusterWazeRouter.enabled(this)||
+           T1ClusterWazeRouter.selected(this)==null){
+            Toast.makeText(this,"Activá primero el clúster en Display 1",
+                Toast.LENGTH_LONG).show();return;
+        }
+        if(aEnabled&&bEnabled&&!T1ClusterAdbResize.enabled(this)){
+            showAdvanced=true;render();
+            Toast.makeText(this,"Habilitá el puente ADB en Menú técnico",
+                Toast.LENGTH_LONG).show();
+            return;
+        }
+        try{
+            T1ClusterLayoutPolicy.configurePanels(this,aEnabled,appA,labelA,
+                bEnabled,appB,labelB,ratio);
+        }catch(IllegalArgumentException e){
+            Toast.makeText(this,e.getMessage(),Toast.LENGTH_LONG).show();return;
+        }
+        render();
+        testLayout();
+    }
     private void render(){
+        loadDraft();
         ScrollView scroll=new ScrollView(this);
         column=new LinearLayout(this);
         column.setPadding(16,10,16,24);
         column.setOrientation(LinearLayout.VERTICAL);
         scroll.addView(column);
-        // Do not keep detached previews from the hidden diagnostics panel.
         preview=null;
         previewState=null;
-        String selected=T1ClusterLayoutPolicy.mode(this);
-        boolean dual=T1ClusterLayoutPolicy.MODE_SPLIT.equals(selected);
-        text("CLÚSTER",22);
-        text("Elegí cómo ver los mapas. El cambio se aplica al tocar. "+
-            "Para ajustar tamaños, dejá la T1 en P y detenida.",14);
-        button("WAZE SOLO · PANTALLA COMPLETA",()->
-            chooseAndApply(T1ClusterLayoutPolicy.MODE_FULL));
-        button("WAZE + GOOGLE MAPS · DOS MAPAS",()->
-            chooseAndApply(T1ClusterLayoutPolicy.MODE_SPLIT));
-        if(dual){
-            slider("Porcentaje izquierda · "+
-                (T1ClusterLayoutPolicy.inverted(this)?"Maps":"Waze"),
-                T1ClusterLayoutPolicy.SPLIT_PERCENT,50,30,70,1);
-            text("El reparto se aplica al soltar la barra.",12);
-        }
-        String result=T1ClusterAdbResize.result(this);
-        String summary;
-        if(result.startsWith("VERIFICADO"))
-            summary="Tamaños comprobados por ADB. Comprobá que "+
-                "se vean ambos mapas.";
-        else if(result.startsWith("SOLICITADO, NO VERIFICADO"))
-            summary="No se verificó el reparto: Waze podría "+
-                "seguir a pantalla completa.";
-        else if(result.startsWith("PROBANDO AHORA"))
-            summary="Comprobando…";
-        else if(result.startsWith("NO APLICADO")||
-            result.startsWith("BLOQUEADO")||
-            result.startsWith("ADB SIN")||
-            result.startsWith("MAPS NO")||
-            result.startsWith("WAZE NO"))
-            summary="No se aplicó el cambio. Revisá Avanzado.";
-        else
-            summary="Seleccioná una de las opciones para aplicar.";
-        text("Estado: "+summary,14);
-        if(dual&&!T1ClusterAdbResize.enabled(this))
-            button("CONFIGURAR CONEXIÓN (UNA SOLA VEZ)",()->{
-                showAdvanced=true;render();
+        text("CLÚSTER · PANELES",22);
+        text("Elegí las apps y aplicá en P, detenido. "+
+            "Configurar no ejecuta cambios hasta tocar APLICAR.",14);
+        panelRow(false);
+        panelRow(true);
+        if(aEnabled&&bEnabled){
+            TextView pct=new TextView(this);
+            pct.setTextSize(18);pct.setPadding(12,12,12,4);
+            pct.setText("DIVISIÓN · "+ratio+"% / "+(100-ratio)+"%");
+            column.addView(pct);
+            SeekBar seek=new SeekBar(this);
+            seek.setMin(30);seek.setMax(70);seek.setProgress(ratio);
+            seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+                @Override public void onProgressChanged(SeekBar bar,int value,
+                    boolean user){
+                    if(!user)return;
+                    ratio=Math.max(30,Math.min(70,(int)Math.round(value/5.0)*5));
+                    pct.setText("DIVISIÓN · "+ratio+"% / "+(100-ratio)+"%");
+                }
+                @Override public void onStartTrackingTouch(SeekBar bar){}
+                @Override public void onStopTrackingTouch(SeekBar bar){}
             });
-        button(showAdvanced?"OCULTAR AVANZADO":
-            "AVANZADO · DIAGNÓSTICOS",()->{
+            column.addView(seek);
+        }
+        button("APLICAR",this::applyPanels);
+        String result=T1ClusterAdbResize.result(this);
+        text("Estado: "+(result.startsWith("VERIFICADO")?
+            "Tamaños confirmados por ADB; comprobá el tablero":
+            result.startsWith("SOLICITADO, NO VERIFICADO")?
+            "Android no confirmó el reparto; consultá Menú técnico":
+            result.startsWith("NO APLICADO")||result.startsWith("BLOQUEADO")?
+            "No se pudo aplicar; consultá Menú técnico":
+            cfg().getString(T1ClusterWazeRouter.STATUS,"Sin cambios")),14);
+        button("CONFIGURAR CONTROLES DEL VOLANTE",()->
+            startActivity(new Intent(this,T1WheelSettingsActivity.class)));
+        button(showAdvanced?"CERRAR MENÚ TÉCNICO":
+            "MENÚ TÉCNICO · ADB Y PRUEBAS",()->{
             showAdvanced=!showAdvanced;render();
         });
         if(showAdvanced){
@@ -137,40 +226,9 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
         previewState.setPadding(12,6,12,8);
         column.addView(previewState);
         updatePreview();
-        button("PANTALLA COMPLETA · COMO AHORA",()->
-            chooseMode(T1ClusterLayoutPolicy.MODE_FULL));
-        button("UNA VENTANA · AJUSTAR TAMAÑO Y POSICIÓN",()->
-            chooseMode(T1ClusterLayoutPolicy.MODE_WINDOW));
-        button("DOS APPS · DIVIDIR ANCHO",()->
-            chooseMode(T1ClusterLayoutPolicy.MODE_SPLIT));
-        if(T1ClusterLayoutPolicy.MODE_WINDOW.equals(mode)){
-            slider("Ancho ventana",T1ClusterLayoutPolicy.WIDTH,70,30,100,1);
-            slider("Alto ventana",T1ClusterLayoutPolicy.HEIGHT,75,35,100,1);
-            slider("Posición horizontal",T1ClusterLayoutPolicy.X,0,0,100,1);
-            slider("Posición vertical",T1ClusterLayoutPolicy.Y,0,0,100,1);
-        }
-        if(T1ClusterLayoutPolicy.MODE_SPLIT.equals(mode)){
-            boolean reversed=T1ClusterLayoutPolicy.inverted(this);
-            button(reversed?"RESTAURAR PANELES · WAZE IZQ / GOOGLE DER":
-                "INVERTIR PANELES · GOOGLE 40% IZQ / WAZE 60% DER",
-                this::invertPanels);
-            text("Orientación: "+(reversed?
-                "Google Maps izquierda / Waze derecha":
-                "Waze izquierda / Google Maps derecha"),15);
-            slider("Porcentaje ventana izquierda · "+
-                    (reversed?"GOOGLE MAPS":"WAZE"),
-                T1ClusterLayoutPolicy.SPLIT_PERCENT,50,30,70,1);
-            button("−10 % IZQUIERDA / +10 % DERECHA",
-                ()->adjustSplit(-10));
-            button("+10 % IZQUIERDA / −10 % DERECHA",
-                ()->adjustSplit(10));
-            text("Google Maps queda a la izquierda y Waze a la derecha "+
-                "al invertir. Ajuste real SOLO en P y 0 km/h; "+
-                "verificá la imagen antes de confirmar el diseño.",14);
-            button("ELEGIR SEGUNDA APP (GOOGLE MAPS)",this::chooseSecondApp);
-        }
-        button("PROBAR DISEÑO EN DISPLAY · SOLO EN P Y 0 KM/H",
-            this::testLayout);
+        text("Herramientas técnicas: mediciones, conexión ADB "+
+            "y diagnóstico. No hacen falta en cada uso.",13);
+        button("PROBAR GEOMETRÍA EN P Y 0 KM/H",this::testLayout);
         adbBottomStatus=new TextView(this);
         adbBottomStatus.setTextSize(15);
         adbBottomStatus.setPadding(12,8,12,8);
@@ -208,32 +266,6 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
         }
         button("VOLVER",this::finish);
         setContentView(scroll);
-    }
-    // Two everyday choices; no extra Probar / Confirmar taps.
-    private void chooseAndApply(String mode){
-        try{
-            // Main shortcuts mean exactly Waze alone or Waze + Maps,
-            // even when an experimental app was chosen in Advanced.
-            if(T1ClusterLayoutPolicy.MODE_FULL.equals(mode)&&
-               !"com.waze".equals(
-                   T1ClusterWazeRouter.selectedAppPackage(this)))
-                T1ClusterWazeRouter.chooseApp(this,"com.waze","Waze");
-            if(T1ClusterLayoutPolicy.MODE_SPLIT.equals(mode)&&
-               !"com.google.android.apps.maps".equals(
-                   T1ClusterLayoutPolicy.secondPackage(this)))
-                T1ClusterLayoutPolicy.secondApp(this,
-                    "com.google.android.apps.maps","Google Maps");
-        }catch(IllegalArgumentException e){
-            T1ClusterWazeRouter.status(this,
-                "Falta instalar Waze o Google Maps para ese modo.");
-            render();return;
-        }
-        T1ClusterLayoutPolicy.setMode(this,mode);
-        render();
-        testLayout();
-    }
-    private void chooseMode(String mode){
-        T1ClusterLayoutPolicy.setMode(this,mode);render();
     }
     private void updatePreview(){
         if(preview==null)return;
