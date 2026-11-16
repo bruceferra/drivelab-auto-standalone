@@ -190,8 +190,7 @@ final class T1GlobalToolbar {
             ()->navigate(T1PremiumCockpitActivity.class));
         optimizer=button(actions,"OPTIMIZADO OFF",T1JetourTheme.RED_BUTTON,144,
             this::toggleAuto);
-        button(actions,"CONFIGURAR OPT.",T1JetourTheme.PANEL_HI,140,
-            ()->navigate(T1OptimizedModeActivity.class));
+        // Optimizer configuration lives in Inicio > Menú técnico.
         // Reverse parking automation is NOT the fold/unfold control.
         // Keep AUTO/MANUAL and configuration always visible on every Receiver screen.
         mirrorAutoButton=button(actions,"REVERSA · ESTADO",T1JetourTheme.PANEL_HI,166,
@@ -210,14 +209,10 @@ final class T1GlobalToolbar {
             ()->windows(WindowGroupPolicy.CLOSE));
         airButton=button(actions,"AIRE INTERIOR AUTO",T1JetourTheme.GREEN_BUTTON,170,
             this::airStatus);
-        button(actions,"VEHÍCULO",T1JetourTheme.PANEL_HI,115,
-            ()->navigate(ReceiverVehicleActivity.class));
-        button(actions,"PENDIENTES",T1JetourTheme.PANEL_HI,115,
-            ()->navigate(T1ValidationWizardActivity.class));
+        // Vehicle details and OEM validation are available from Inicio.
         button(actions,"IA / WAZE",T1JetourTheme.PANEL_HI,115,
             ()->navigate(T1VoiceRouteActivity.class));
-        button(actions,"RUTAS · VOLANTE",T1JetourTheme.PANEL_HI,150,
-            ()->navigate(T1WheelSettingsActivity.class));
+        // Wheel calibration is a technical option, not a driving control.
         button(actions,"INICIO",T1JetourTheme.PANEL_HI,95,
             ()->navigate(ReceiverActivity.class));
     }
