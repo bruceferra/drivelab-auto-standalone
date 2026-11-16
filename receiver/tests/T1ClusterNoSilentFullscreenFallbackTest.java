@@ -30,10 +30,11 @@ public final class T1ClusterNoSilentFullscreenFallbackTest {
             "if(enabled(c)&&T1ClusterLayoutPolicy.pendingUnverified(c))")&&
            router.substring(rt,man).contains("return false;"),
            "Incoming routes must not overwrite split by Waze fullscreen");
-        int boot=router.indexOf("static void onReceiverBoot(Context c)");
+        int boot=router.indexOf("static String onReceiverBoot(Context c)");
         ck(boot>0&&router.substring(boot).contains(
             "if(T1ClusterLayoutPolicy.pendingUnverified(c))")&&
-            router.substring(boot).contains("return;")&&
+            router.substring(boot).contains("return reason;")&&
+            router.substring(boot).contains("return opened;")&&
             router.substring(boot).contains("T1ClusterLayoutPolicy.boot(c)"),
             "Delayed autoboot must not undo pending 50/50");
         ck(policy.contains("static String test(Context c)")&&

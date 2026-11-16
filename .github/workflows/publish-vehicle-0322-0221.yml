@@ -324,3 +324,5 @@ jobs:
 # Retry after preserving diagnostics label contract; add guarded Maps route replacement.
 
 # v0.3.22 source checks: temporary OEM focus, Maps exit dialog and mirror orientation P/D.
+
+# Rebuild: onReceiverBoot now returns a launch status, pending split still fails closed.
