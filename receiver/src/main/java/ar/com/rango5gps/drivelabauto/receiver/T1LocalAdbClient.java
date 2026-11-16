@@ -17,10 +17,8 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.PrivateKey;
 import java.security.Signature;
-import java.security.interfaces.RSAPrivateCrtKey;
 import java.security.interfaces.RSAPublicKey;
 import java.security.spec.PKCS8EncodedKeySpec;
-import java.security.spec.RSAPublicKeySpec;
 import java.math.BigInteger;
 
 /** ADB HOST protocol over the CAR's LOCAL LOOPBACK only.
@@ -123,11 +121,15 @@ final class T1LocalAdbClient {
         File file=new File(c.getFilesDir(),KEY_FILE);
         KeyFactory factory=KeyFactory.getInstance("RSA");
         if(file.exists()){
-            PrivateKey priv=factory.generatePrivate(new PKCS8EncodedKeySpec(
-                Files.readAllBytes(file.toPath())));
-            RSAPrivateCrtKey rsa=(RSAPrivateCrtKey)priv;
-            return new KeyPair(factory.generatePublic(new RSAPublicKeySpec(
-                rsa.getModulus(),rsa.getPublicExponent())),priv);
+            // Android 11 Conscrypt may rehydrate an OpenSSLRSAPrivateKey
+            // that does NOT implement RSAPrivateCrtKey. Its PKCS#8 encoding
+            // does still contain n and e; recover those WITHOUT casting the
+            // provider's key or regenerating our already authorized host key.
+            byte[] encoded=Files.readAllBytes(file.toPath());
+            PrivateKey priv=factory.generatePrivate(
+                new PKCS8EncodedKeySpec(encoded));
+            return new KeyPair(factory.generatePublic(
+                T1RsaPkcs8PublicSpec.recover(encoded)),priv);
         }
         KeyPairGenerator generator=KeyPairGenerator.getInstance("RSA");
         generator.initialize(2048);
