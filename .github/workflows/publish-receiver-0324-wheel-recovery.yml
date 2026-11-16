@@ -2,7 +2,7 @@ name: Signed Receiver 0.3.24 - OEM wheel reconnect independent of map accessibil
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/publish-receiver-0324-wheel-split.yml']
+    paths: ['.github/workflows/publish-receiver-0324-wheel-recovery.yml']
   workflow_dispatch:
 permissions:
   contents: write
