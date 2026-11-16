@@ -197,20 +197,23 @@ final class SenderAudioBootstrap {
                 .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
                 .setSampleRate(RATE)
                 .setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build();
+            // MODE_STATIC with the entire 1.4s mono buffer failed on
+            // this Xiaomi/Jetour combination. Use the Android-supported
+            // STREAM mode with a small hardware-reported buffer instead.
+            int minBuffer=AudioTrack.getMinBufferSize(RATE,
+                AudioFormat.CHANNEL_OUT_MONO,
+                AudioFormat.ENCODING_PCM_16BIT);
+            if(minBuffer<=0)throw new IllegalStateException(
+                "PCM mono 48k no admitido (buffer="+minBuffer+")");
             track=new AudioTrack.Builder()
                 .setAudioAttributes(attrs)
                 .setAudioFormat(fmt)
-                .setTransferMode(AudioTrack.MODE_STATIC)
-                .setBufferSizeInBytes(pcm.length).build();
+                .setTransferMode(AudioTrack.MODE_STREAM)
+                .setBufferSizeInBytes(Math.max(minBuffer,RATE/5*2)).build();
             if(track.getState()!=AudioTrack.STATE_INITIALIZED)
-                throw new IllegalStateException("AudioTrack no inicializado");
-            int written=0;
-            while(written<pcm.length){
-                int n=track.write(pcm,written,pcm.length-written);
-                if(n<=0)throw new IllegalStateException(
-                    "AudioTrack no aceptó PCM ("+n+")");
-                written+=n;
-            }
+                throw new IllegalStateException(
+                    "AudioTrack STREAM 48k no inicializado · "+
+                    "buffer mínimo "+minBuffer);
             session=new MediaSession(c,"DriveLab-T1-A2DP-Wakeup");
             session.setPlaybackToLocal(attrs);
             session.setMetadata(new MediaMetadata.Builder()
@@ -223,7 +226,15 @@ final class SenderAudioBootstrap {
                 .build());
             session.setActive(true);
             track.play();
-            SystemClock.sleep(PLAY_MS+150L);
+            int written=0;
+            while(written<pcm.length){
+                int n=track.write(pcm,written,
+                    Math.min(8192,pcm.length-written));
+                if(n<=0)throw new IllegalStateException(
+                    "AudioTrack STREAM no aceptó PCM ("+n+")");
+                written+=n;
+            }
+            SystemClock.sleep(220L);
             report(c,"Prueba A2DP enviada a "+p.getString(LABEL,"T1")+
                 ": 1,4 s de audio con datos de pista. "+
                 "Verificá si desapareció 'Not assigned'. "+
