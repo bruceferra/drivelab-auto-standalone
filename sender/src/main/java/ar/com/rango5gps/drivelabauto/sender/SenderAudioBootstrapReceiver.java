@@ -34,7 +34,11 @@ public final class SenderAudioBootstrapReceiver extends BroadcastReceiver {
         Context app=context.getApplicationContext();
         new Thread(()->{
             try{
-                SenderAudioBootstrap.prime(app,true);
+                if(SenderAudioBootstrap.prefs(app).getBoolean(
+                    SenderAudioBootstrap.AUTO_RESUME,false))
+                    SenderAudioBootstrap.resumeLastMedia(app,true);
+                else
+                    SenderAudioBootstrap.prime(app,true);
             }finally{pending.finish();}
         },"DriveLab-T1-A2DP-Connect").start();
     }

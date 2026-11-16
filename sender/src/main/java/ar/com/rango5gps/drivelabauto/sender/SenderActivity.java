@@ -88,7 +88,7 @@ public final class SenderActivity extends Activity {
         button(body,"Vincular manualmente · 6 dígitos (respaldo)",this::pair);
         button(body,"Probar envío real a La Plata",this::test);
         button(body,"Pegar enlace de Google Maps / WhatsApp",this::paste);
-        title(body,"AUDIO DE LA T1 · ACTIVAR SIN SPOTIFY",18);
+        title(body,"AUDIO BLUETOOTH T1 · SPOTIFY / PLAY",18);
         android.content.SharedPreferences audio=SenderAudioBootstrap.prefs(this);
         String selected=audio.getString(SenderAudioBootstrap.LABEL,"Sin vehículo elegido");
         boolean enabled=SenderAudioBootstrap.configured(this);
@@ -100,17 +100,34 @@ public final class SenderActivity extends Activity {
             "abrí Ajustes Bluetooth y emparejala allí; después volvé "+
             "a seleccionar la T1 en DriveLab. No es la vinculación Wi-Fi "+
             "del Receiver.",13);
-        title(body,"La primera vez elegí el Bluetooth REAL de la T1. "+
-            "Cuando el Xiaomi detecte su conexión A2DP, Sender intentará "+
-            "una reproducción suave de 1,4 segundos, sin abrir Spotify. "+
-            "La radio puede requerir que la fuente Bluetooth esté elegida. "+
-            "El resultado físico aún debe probarse.",13);
+        title(body,"PROBAR PLAY envía al reproductor multimedia activo del "+
+            "Xiaomi (habitualmente Spotify si fue el último), después de "+
+            "confirmar conexión A2DP con la T1 elegida. No empareja ni "+
+            "cambia la fuente Radio/Bluetooth de Jetour. AUTO PLAY es "+
+            "opcional; si está apagado, al conectar se mantiene solo la "+
+            "prueba breve de tono. El resultado físico debe verificarse.",13);
         button(body,"1 · ELEGIR T1 EMPAREJADA · ACTIVAR AUTO",
             this::chooseCarAudio);
         button(body,"ABRIR AJUSTES BLUETOOTH DEL XIAOMI",
             this::openBluetoothSettings);
-        button(body,"2 · PROBAR AHORA · SIN ABRIR SPOTIFY",
+        button(body,"2 · PROBAR PLAY MULTIMEDIA EN XIAOMI",
+            this::testResumeCarAudio);
+        button(body,"DIAGNÓSTICO · TONO A2DP (1,4 S)",
             this::testCarAudio);
+        if(enabled)button(body,audio.getBoolean(
+            SenderAudioBootstrap.AUTO_RESUME,false)?
+            "AUTO PLAY AL CONECTAR · ON (APAGAR)":
+            "AUTO PLAY AL CONECTAR · OFF (ACTIVAR)",()->{
+                boolean enable=!audio.getBoolean(
+                    SenderAudioBootstrap.AUTO_RESUME,false);
+                audio.edit().putBoolean(SenderAudioBootstrap.AUTO_RESUME,enable)
+                    .putString(SenderAudioBootstrap.STATUS,enable?
+                        "AUTO PLAY pedido al conectar la T1. "+
+                        "Se envía PLAY a la última sesión multimedia Android.":
+                        "AUTO PLAY desactivado; solo prueba de tono A2DP")
+                    .apply();
+                render();
+            });
         if(enabled)button(body,"DESACTIVAR INICIO DE AUDIO T1",
             ()->{
                 audio.edit().putBoolean(SenderAudioBootstrap.ENABLED,false)
@@ -329,6 +346,19 @@ public final class SenderActivity extends Activity {
             info("Android no pudo abrir Ajustes Bluetooth: "+
                 error.getClass().getSimpleName());
         }
+    }
+    private void testResumeCarAudio(){
+        if(!hasBtPermission()||!SenderAudioBootstrap.configured(this)){
+            info("Seleccioná la T1 en Bluetooth y autorizá Dispositivos cercanos");
+            return;
+        }
+        info("Verificando perfil A2DP de la T1 antes de enviar PLAY…");
+        new Thread(()->{
+            SenderAudioBootstrap.resumeLastMedia(getApplicationContext(),false);
+            String result=SenderAudioBootstrap.prefs(this)
+                .getString(SenderAudioBootstrap.STATUS,"Sin resultado PLAY");
+            runOnUiThread(()->info(result));
+        },"Sender-T1-Media-Play").start();
     }
     private void testCarAudio(){
         if(!hasBtPermission()){

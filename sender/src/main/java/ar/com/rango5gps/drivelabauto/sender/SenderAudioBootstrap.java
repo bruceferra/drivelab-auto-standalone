@@ -20,6 +20,7 @@ import android.media.session.MediaSession;
 import android.media.session.PlaybackState;
 import android.os.Build;
 import android.os.SystemClock;
+import android.view.KeyEvent;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -41,6 +42,7 @@ final class SenderAudioBootstrap {
     static final String LABEL="device_label";
     static final String STATUS="last_status";
     static final String ATTEMPT_MS="last_attempt_ms";
+    static final String AUTO_RESUME="auto_resume_last_media";
     private static final long COOLDOWN_MS=60000L;
     private static final int RATE=48000;
     private static final int PLAY_MS=1400;
@@ -68,6 +70,59 @@ final class SenderAudioBootstrap {
     }
     static void report(Context c,String message){
         prefs(c).edit().putString(STATUS,message).apply();
+    }
+    /** Send one standard MEDIA_PLAY to Android's existing media session.
+     * This is NOT a Spotify API, Bluetooth pairing or OEM source switch.
+     * Android chooses the currently registered media-key consumer.
+     * Only the previously chosen real T1 A2DP route is eligible.
+     */
+    static void resumeLastMedia(Context context,boolean fromVerifiedConnection){
+        Context c=context.getApplicationContext();
+        SharedPreferences p=prefs(c);
+        if(!configured(c)||!permission(c)){
+            report(c,"PLAY no enviado: elegí la T1 y autorizá Bluetooth");
+            return;
+        }
+        AudioManager am=(AudioManager)c.getSystemService(Context.AUDIO_SERVICE);
+        if(am==null){report(c,"PLAY no enviado: AudioManager no disponible");return;}
+        if(!fromVerifiedConnection&&
+           !exactConnectedA2dp(c,p.getString(ADDRESS,""))){
+            report(c,"PLAY no enviado: T1 no conectada por A2DP");return;
+        }
+        boolean ready=false;
+        for(int i=0;i<5;i++){
+            if(routeMatches(am,p.getString(ADDRESS,""),true)){
+                ready=true;break;
+            }
+            SystemClock.sleep(350L);
+        }
+        if(!ready){
+            report(c,"PLAY no enviado: salida de audio T1 no confirmada");
+            return;
+        }
+        if(am.isMusicActive()){
+            report(c,"PLAY omitido: ya hay música activa en Android. "+
+                "La fuente Radio/Bluetooth de la T1 se maneja aparte.");
+            return;
+        }
+        try{
+            // PLAY (not PLAY_PAUSE) cannot intentionally pause a session.
+            // Platform dispatch requires both down AND up.
+            am.dispatchMediaKeyEvent(new KeyEvent(
+                KeyEvent.ACTION_DOWN,KeyEvent.KEYCODE_MEDIA_PLAY));
+            am.dispatchMediaKeyEvent(new KeyEvent(
+                KeyEvent.ACTION_UP,KeyEvent.KEYCODE_MEDIA_PLAY));
+            SystemClock.sleep(500L);
+            report(c,"PLAY enviado a la sesión multimedia del Xiaomi ("+
+                (am.isMusicActive()?
+                    "Android detectó audio activo":
+                    "Android no confirmó reproducción")+
+                "). Puede ser Spotify si era la última sesión. "+
+                "No cambia la fuente Radio/Bluetooth del vehículo.");
+        }catch(RuntimeException ex){
+            report(c,"Android rechazó PLAY multimedia: "+
+                ex.getClass().getSimpleName());
+        }
     }
     /** Called from either a short goAsync A2DP receiver or the foreground UI. */
     static void prime(Context context,boolean fromVerifiedConnection){
