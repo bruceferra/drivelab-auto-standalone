@@ -20,9 +20,8 @@ public final class WindowGroupPolicy {
         if((operation!=CLOSE&&operation!=VENT_QUARTER)||!validState(state))
             return INVALID;
         if(operation==CLOSE)return state==1?SKIP:SEND;
-        if(state==1)return SEND;
-        if(state==3)return SKIP; // already in the first-quarter reporting band, not exact 25%.
-        return NEEDS_CLOSING_FIRST; // unknown command 3 from open/middle states: don't assume safe.
+        if(state==3)return SKIP; // already in the quarter reporting band.
+        return SEND; // explicit ventilation request from ANY readable state 0..4.
     }
     /** Four-window all-or-nothing preflight, no unknown commands. */
     public static int[] plan(int operation,int[] states){
@@ -33,8 +32,7 @@ public final class WindowGroupPolicy {
             int d=decision(operation,states[i]);
             if(d==INVALID)throw new IllegalArgumentException(
                 NAMES[i]+": estado OEM inválido "+states[i]);
-            if(d==NEEDS_CLOSING_FIRST)throw new IllegalArgumentException(
-                NAMES[i]+" demasiado abierta: usar CIERRE TOTAL primero");
+            // Open and partially open windows are valid ventilation sources.
             decisions[i]=d;
         }
         return decisions;
@@ -45,7 +43,7 @@ public final class WindowGroupPolicy {
     }
     public static String operation(int value){
         if(value==CLOSE)return "CIERRE TOTAL";
-        if(value==VENT_QUARTER)return "VENTILACIÓN TOTAL";
+        if(value==VENT_QUARTER)return "MODO VENTILACIÓN ON";
         throw new IllegalArgumentException("Operación no permitida");
     }
     private WindowGroupPolicy(){}

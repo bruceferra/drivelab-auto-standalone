@@ -198,9 +198,9 @@ final class T1GlobalToolbar {
             this::toggleMirror);
         avsButton=button(actions,"PEATÓN · LEYENDO",T1JetourTheme.PANEL_HI,135,
             this::toggleAvas);
-        button(actions,"VENTILACIÓN TOTAL",T1JetourTheme.PANEL_HI,165,
+        button(actions,"MODO VENTILACIÓN ON",T1JetourTheme.PANEL_HI,165,
             ()->windows(WindowGroupPolicy.VENT_QUARTER));
-        button(actions,"CIERRE TOTAL",T1JetourTheme.PANEL_HI,133,
+        button(actions,"MODO VENTILACIÓN OFF",T1JetourTheme.PANEL_HI,133,
             ()->windows(WindowGroupPolicy.CLOSE));
         airButton=button(actions,"AIRE INTERIOR AUTO",T1JetourTheme.GREEN_BUTTON,170,
             this::airStatus);

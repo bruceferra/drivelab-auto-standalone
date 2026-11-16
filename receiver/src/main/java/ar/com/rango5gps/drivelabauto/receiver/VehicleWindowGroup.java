@@ -18,9 +18,9 @@ import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Four-window manual group controls, using the user's tested OEM Binder interface.
- * 2004..2007 only. CLOSE(1) skips already-closed windows. VENT(3) is issued only
- * from fully closed state; aborts ALL before actuation if any window is farther
- * open than the first-quarter read-state band.
+ * 2004..2007 only. CLOSE(1) skips already-closed windows.
+ * Explicit ventilation (3) is requested from any readable state 0..4;
+ * every OEM target is checked before moving to the next window.
  *
  * Manual foreground tap; proven sequential dispatch, never writes all motors together.
  * No root/ADB, no background/boot commands, no anti-pinch override, no ECU reset.
@@ -100,18 +100,14 @@ public final class VehicleWindowGroup {
             if(b==null||!TOKEN.equals(b.getInterfaceDescriptor()))
                 throw new SecurityException("Interfaz OEM inesperada");
 
-            // Preflight for ventilation: do not silently close and reopen open windows.
+            // Read the selected windows before starting. An open window is
+            // not an error: the explicit OEM destination is quarter state 3.
+            // Abort if ANY initial read fails before the first movement.
             if(operation==WindowGroupPolicy.VENT_QUARTER){
                 for(int id:ids){
                     requireForeground();
                     int state=read(b,id);
-                    int decision=WindowGroupPolicy.decision(operation,state);
-                    if(decision==WindowGroupPolicy.NEEDS_CLOSING_FIRST)
-                        throw new IllegalStateException(WindowGroupPolicy.name(id)+
-                            " está abierta (estado "+state+"). Primero usá CIERRE TOTAL");
-                    if(decision==WindowGroupPolicy.INVALID)
-                        throw new IllegalStateException("Estado ilegible: "+id);
-                    events.add(WindowGroupPolicy.name(id)+" · posición inicial "+state);
+                    events.add(WindowGroupPolicy.name(id)+" · estado inicial "+state);
                 }
             }
 

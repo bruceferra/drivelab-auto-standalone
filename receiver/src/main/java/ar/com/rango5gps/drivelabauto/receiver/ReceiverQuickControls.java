@@ -197,8 +197,8 @@ final class ReceiverQuickControls {
         LinearLayout b=row(extra);
         button(b,"BAJAR ESPEJOS",BLUE,()->move(false));
         button(b,"SUBIR ESPEJOS",BLUE,()->move(true));
-        button(b,"VENTILACIÓN TOTAL",TEAL,()->windows(WindowGroupPolicy.VENT_QUARTER));
-        button(b,"CIERRE TOTAL",ORANGE,()->windows(WindowGroupPolicy.CLOSE));
+        button(b,"MODO VENTILACIÓN ON",TEAL,()->windows(WindowGroupPolicy.VENT_QUARTER));
+        button(b,"MODO VENTILACIÓN OFF",ORANGE,()->windows(WindowGroupPolicy.CLOSE));
 
         LinearLayout c=row(root);
         button(c,"ALARMA PEATÓN ON/OFF",RED,()->avas());
