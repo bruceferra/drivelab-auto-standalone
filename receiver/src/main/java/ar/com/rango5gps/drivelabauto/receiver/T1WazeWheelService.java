@@ -238,11 +238,11 @@ public final class T1WazeWheelService extends AccessibilityService {
                 p.getString(SCAN_RESULT,"Tocá INSPECCIONAR CONTROLES WAZE.")+
             "\nÚltima ventana durante captura: "+
             p.getString(WINDOW,"sin datos")+
-            "\nSIGUIENTE="+p.getInt(settingKey(this,NEXT),KeyEvent.KEYCODE_DPAD_RIGHT)+
-            " · ANTERIOR="+p.getInt(settingKey(this,PREV),KeyEvent.KEYCODE_DPAD_LEFT)+
-            " · OK="+p.getInt(settingKey(this,OK),KeyEvent.KEYCODE_DPAD_CENTER)+
-            " · ATRÁS="+p.getInt(settingKey(this,BACK),KeyEvent.KEYCODE_BACK)+
-            " · RUTAS="+p.getInt(settingKey(this,ROUTES),-1);
+            "\nSIGUIENTE="+p.getInt(settingKey(c,NEXT),KeyEvent.KEYCODE_DPAD_RIGHT)+
+            " · ANTERIOR="+p.getInt(settingKey(c,PREV),KeyEvent.KEYCODE_DPAD_LEFT)+
+            " · OK="+p.getInt(settingKey(c,OK),KeyEvent.KEYCODE_DPAD_CENTER)+
+            " · ATRÁS="+p.getInt(settingKey(c,BACK),KeyEvent.KEYCODE_BACK)+
+            " · RUTAS="+p.getInt(settingKey(c,ROUTES),-1);
     }
     /** Local in-screen keyboard/key diagnosis, independent of accessibility.
      * Runs ONLY during an explicit 45-second user calibration. Never
