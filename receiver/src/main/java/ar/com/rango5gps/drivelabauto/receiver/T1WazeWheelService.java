@@ -529,8 +529,42 @@ public final class T1WazeWheelService extends AccessibilityService {
         wazeDisplayId=-1;
         return null;
     }
+    /** The selected physical panel determines the package, not hardcoded
+     * Waze-on-A / Maps-on-B. Other user apps require a separate explicit
+     * profile opt-in and a verified accessibility tree on Display 1. */
     private AccessibilityNodeInfo activeRoot(){
-        return T1WheelTarget.panelB(this)?mapsRoot():wazeRoot();
+        String pkg=T1WheelTarget.packageName(this);
+        if(WAZE.equals(pkg))
+            return T1WheelTarget.wazePresent(this)?wazeRoot():null;
+        if(MAPS.equals(pkg))return mapsRoot();
+        if(!T1WheelTarget.genericCandidate(this))return null;
+        return selectedAppRoot(pkg);
+    }
+    private AccessibilityNodeInfo selectedAppRoot(String pkg){
+        Display display=T1ClusterWazeRouter.selected(this);
+        if(display==null||!T1WheelTarget.selectedPanelEnabled(this)||
+           !T1ClusterWazeRouter.isSelectablePackage(this,pkg))return null;
+        int id=display.getDisplayId();
+        try{
+            SparseArray<List<AccessibilityWindowInfo>> all=
+                getWindowsOnAllDisplays();
+            List<AccessibilityWindowInfo> windows=all==null?null:all.get(id);
+            if(windows==null)return null;
+            for(AccessibilityWindowInfo win:windows){
+                if(win==null)continue;
+                AccessibilityNodeInfo root=findMapNode(win.getRoot(),
+                    pkg,0,new int[]{0});
+                if(root==null)continue;
+                Rect area=new Rect();root.getBoundsInScreen(area);
+                if(area.width()<120||area.height()<120)continue;
+                wazeDisplayId=id;
+                return root;
+            }
+        }catch(Exception error){
+            status("Controles "+pkg+" inaccesibles: "+
+                error.getClass().getSimpleName());
+        }
+        return null;
     }
     /** Android global BACK on T1 is not display scoped: it can close
      * the center-screen task. Only an actual Waze Cancelar/Volver
@@ -674,8 +708,11 @@ public final class T1WazeWheelService extends AccessibilityService {
         boolean cancel=code==back;
         if(!forward&&!backward&&!confirm&&!cancel&&!routeShortcut)return false;
         if(SystemClock.elapsedRealtime()-lastButtonAt<150)return true;
-        if(T1WheelTarget.panelB(this))
+        String target=T1WheelTarget.packageName(this);
+        if(MAPS.equals(target))
             return handleMapsKey(root,forward,backward,confirm,cancel);
+        if(!WAZE.equals(target))
+            return handleGenericKey(root,forward,backward,confirm,cancel);
         // First priority: list of actual Waze route alternatives. Not a
         // coordinate-based selector; the candidates are real clickable nodes.
         if(collectAlternativeRoutes(root)){
@@ -793,6 +830,40 @@ public final class T1WazeWheelService extends AccessibilityService {
         }
         return false;
     }
+    /** Other selected apps: explicit per-package opt-in, only actual
+     * accessible clickable nodes. No blind gestures, system BACK or media
+     * session hijacking. Tested Waze/Maps profiles are never modified. */
+    private boolean handleGenericKey(AccessibilityNodeInfo root,
+                                     boolean forward,boolean backward,
+                                     boolean confirm,boolean cancel){
+        String target=T1WheelTarget.packageName(this);
+        if(!T1WheelTarget.genericEnabled(this)||
+           root==null||!target.equals(String.valueOf(root.getPackageName()))){
+            status("App "+target+": configurá controles antes de usar el volante");
+            return false;
+        }
+        if((forward||backward)&&collectMapChoices(root)){
+            lastButtonAt=SystemClock.elapsedRealtime();
+            selected=Math.floorMod(selected+(forward?1:-1),choices.size());
+            selectedLabel=choices.get(selected).label;
+            mapMenuArmed=true;
+            highlight();
+            return true;
+        }
+        if(cancel&&mapMenuArmed){
+            mapMenuArmed=false;
+            selectedLabel="";
+            hideHint();
+            status(target+": selección cancelada");
+            return true;
+        }
+        if(confirm&&mapMenuArmed&&collectMapChoices(root)){
+            mapMenuArmed=false;
+            lastButtonAt=SystemClock.elapsedRealtime();
+            return clickSelected("BOTÓN DE "+target+" · OK");
+        }
+        return false;
+    }
     /** Google Maps has separate generic accessibility controls. No global BACK. */
     private boolean handleMapsKey(AccessibilityNodeInfo root,boolean forward,
                                   boolean backward,boolean confirm,boolean cancel){
@@ -845,7 +916,7 @@ public final class T1WazeWheelService extends AccessibilityService {
     private boolean zoomVisibleWazeMap(AccessibilityNodeInfo root,
                                        boolean zoomIn){
         Display display=T1ClusterWazeRouter.selected(this);
-        String expected=T1WheelTarget.panelB(this)?MAPS:WAZE;
+        String expected=T1WheelTarget.packageName(this);
         if(root==null||!expected.equals(String.valueOf(root.getPackageName()))||
             display==null||wazeDisplayId!=display.getDisplayId()){
             status("ZOOM: Waze no está accesible en el Display elegido; sin gesto");
@@ -1048,7 +1119,7 @@ public final class T1WazeWheelService extends AccessibilityService {
         for(int i=0;i<Math.min(labels.size(),22);i++)
             lines.append(i+1).append(") ").append(labels.get(i)).append("\n");
         if(labels.isEmpty())lines.append(
-            "Waze no expone controles etiquetados: sin pulsaciones automáticas.");
+            "La app no expone controles etiquetados: sin pulsaciones automáticas.");
         prefs().edit().putString(SCAN_RESULT,lines.toString())
             .putLong(SCAN_FINISHED,System.currentTimeMillis()).apply();
     }
