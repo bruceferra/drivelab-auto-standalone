@@ -678,8 +678,9 @@ public final class T1WazeWheelService extends AccessibilityService {
         // Absolutely no key logging or interception in unrelated apps.
         AccessibilityNodeInfo root=activeRoot();
         String panel=T1WheelTarget.name(this);
-        if(!panel.equals(seenPackage)){
-            seenPackage=panel;
+        String identity=panel+" · "+T1WheelTarget.packageName(this);
+        if(!identity.equals(seenPackage)){
+            seenPackage=identity;
             choices.clear();selected=0;selectedLabel="";
             mapMenuArmed=false;promptArmed=false;hideHint();
         }
