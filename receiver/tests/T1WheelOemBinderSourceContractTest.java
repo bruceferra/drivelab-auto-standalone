@@ -52,8 +52,9 @@ public final class T1WheelOemBinderSourceContractTest {
             svc.contains("AccessibilityWindowInfo")&&
             svc.contains("WAZE.equals(")&&
             svc.contains("String.valueOf(root.getPackageName())")&&
-            svc.contains("if(enabled&&wazeRoot()!=null)oemBridge.start();")&&
-            svc.contains("else oemBridge.stop();"),
+            svc.contains("AccessibilityNodeInfo active=activeRoot();")&&
+            svc.contains("now-lastActiveWindowAt<15000L")&&
+            svc.contains("!T1ClusterWazeRouter.enabled(this)"),
             "Waze-only opt-in service must bind only while a Waze window is visible on any display");
         check(svc.contains("case 1000:mapped=KeyEvent.KEYCODE_DPAD_RIGHT")&&
             svc.contains("case 1001:mapped=KeyEvent.KEYCODE_DPAD_LEFT")&&

@@ -9,6 +9,8 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.os.IBinder;
+import android.os.Handler;
+import android.os.Looper;
 import android.os.SystemClock;
 import android.provider.Settings;
 
@@ -32,6 +34,13 @@ public final class T1OemMicrophoneService extends Service {
     static final String LAST_EVENT="last_event";
     static final String LAST_VOICE_STATUS="last_voice_status";
     static final String UNIFIED_WHEEL_CONFIGURED="unified_wheel_configured";
+    private static final String HEARTBEAT="oem_service_heartbeat";
+    /** A stale enabled setting must not claim the only OEM callback. */
+    static boolean serviceAlive(Context c){
+        SharedPreferences p=prefs(c);
+        long age=System.currentTimeMillis()-p.getLong(HEARTBEAT,0L);
+        return p.getBoolean(ENABLED,false)&&age>=0&&age<8000L;
+    }
     static final String ACTION_START="drivelab.oem.mic.START";
     static final String ACTION_STOP="drivelab.oem.mic.STOP";
     private static final String CHANNEL="drivelab_t1_oem_mic";
@@ -39,7 +48,22 @@ public final class T1OemMicrophoneService extends Service {
     private static final int KEY_MIC=1010;
     private T1OemHardKeyBridge bridge;
     private boolean started;
-    private long lastKeyAt;
+    private long lastKeyAt,lastRebindAt;
+    private final Handler watchdog=new Handler(Looper.getMainLooper());
+    private final Runnable maintainBinder=new Runnable(){
+        @Override public void run(){
+            if(!started)return;
+            prefs(T1OemMicrophoneService.this).edit()
+                .putLong(HEARTBEAT,System.currentTimeMillis()).apply();
+            long now=SystemClock.elapsedRealtime();
+            if(bridge!=null&&!bridge.registered()&&now-lastRebindAt>5500L){
+                lastRebindAt=now;
+                bridge.stop();
+                bridge.start();
+            }
+            watchdog.postDelayed(this,2200L);
+        }
+    };
 
     static SharedPreferences prefs(Context c){
         return c.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
@@ -66,6 +90,8 @@ public final class T1OemMicrophoneService extends Service {
         if(ACTION_STOP.equals(action)||!prefs(this).getBoolean(ENABLED,false)){
             if(bridge!=null)bridge.stop();
             started=false;
+            watchdog.removeCallbacks(maintainBinder);
+            prefs(this).edit().putLong(HEARTBEAT,0L).apply();
             stopForeground(STOP_FOREGROUND_REMOVE);
             stopSelf();
             return START_NOT_STICKY;
@@ -89,6 +115,9 @@ public final class T1OemMicrophoneService extends Service {
             startForeground(NOTIFICATION_ID,notification());
             started=true;
             bridge.start();
+            lastRebindAt=SystemClock.elapsedRealtime();
+            watchdog.removeCallbacks(maintainBinder);
+            watchdog.postDelayed(maintainBinder,2200L);
         }
         return START_STICKY;
     }
@@ -153,6 +182,8 @@ public final class T1OemMicrophoneService extends Service {
     }
     @Override public void onDestroy(){
         started=false;
+        watchdog.removeCallbacks(maintainBinder);
+        prefs(this).edit().putLong(HEARTBEAT,0L).apply();
         if(bridge!=null)bridge.stop();
         super.onDestroy();
     }

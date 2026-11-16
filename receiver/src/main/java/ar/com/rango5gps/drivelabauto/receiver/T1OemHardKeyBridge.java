@@ -90,7 +90,7 @@ final class T1OemHardKeyBridge {
         @Override public void onServiceDisconnected(ComponentName name){
             service=null;
             registered=false;
-            status("Binder OEM desconectado; control Waze suspendido");
+            status("Binder OEM desconectado; reconexión pendiente");
         }
     };
     T1OemHardKeyBridge(Context context,Receiver receiver){
@@ -100,7 +100,10 @@ final class T1OemHardKeyBridge {
     private void status(String text){receiver.onStatus(text);}
     boolean registered(){return registered&&bound&&requested;}
     void start(){
-        if(requested)return;
+        if(requested&&registered())return;
+        // A vendor Binder callback can die without clearing requested.
+        // Rebind when disconnected; avoid permanent dead wheel control.
+        if(requested)stop();
         requested=true;
         Intent intent=new Intent();
         intent.setComponent(new ComponentName(SERVICE_PKG,SERVICE_NAME));

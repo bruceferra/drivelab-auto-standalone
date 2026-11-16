@@ -99,7 +99,7 @@ public final class T1WazeWheelService extends AccessibilityService {
     }
     private T1OemHardKeyBridge oemBridge;
     private final Handler main=new Handler(Looper.getMainLooper());
-    private long lastOemKeyAt,lastScanAt;
+    private long lastOemKeyAt,lastScanAt,lastActiveWindowAt;
     private int lastOemCode=-1;
     private final Runnable oemHeartbeat=new Runnable(){
         @Override public void run(){
@@ -330,8 +330,7 @@ public final class T1WazeWheelService extends AccessibilityService {
     }
     private void refreshOemBridge(){
         if(oemBridge==null)return;
-        boolean shared=T1OemMicrophoneService.prefs(this).getBoolean(
-            T1OemMicrophoneService.ENABLED,false);
+        boolean shared=T1OemMicrophoneService.serviceAlive(this);
         if(shared){
             // Foreground microphone service is the sole OEM Binder owner.
             oemBridge.stop();
@@ -341,13 +340,22 @@ public final class T1WazeWheelService extends AccessibilityService {
             return;
         }
         boolean enabled=prefs().getBoolean(OEM_BINDER_ENABLED,false);
-        if(T1WheelTarget.panelB(this)){
-            if(enabled&&mapsRoot()!=null)oemBridge.start();
-            else oemBridge.stop();
-        }else{
-            if(enabled&&wazeRoot()!=null)oemBridge.start();
-            else oemBridge.stop();
+        if(!enabled||!T1ClusterWazeRouter.enabled(this)){
+            lastActiveWindowAt=0L;
+            oemBridge.stop();
+            return;
         }
+        AccessibilityNodeInfo active=activeRoot();
+        long now=SystemClock.elapsedRealtime();
+        if(active!=null){
+            lastActiveWindowAt=now;
+            oemBridge.start();
+        }else if(lastActiveWindowAt>0&&now-lastActiveWindowAt<15000L){
+            // Temporary dialogs must not unregister the wheel immediately.
+            oemBridge.start();
+            prefs().edit().putString(OEM_BINDER_STATUS,
+                "Panel temporalmente oculto; conservando enlace 15 s").apply();
+        }else oemBridge.stop();
     }
     /** Vendor hard-key callback IDs confirmed in the owner's T1N134 APK.
      * 1000,1001 wheel rotation; 1002 BACK; 1003 OK.
@@ -426,6 +434,9 @@ public final class T1WazeWheelService extends AccessibilityService {
         }
         if(root==null){
             mapMenuArmed=false;promptArmed=false;hideHint();
+            p.edit().putString(LAST_STATUS,
+                "Tecla recibida, pero "+panel+
+                " no es accesible; revisar ventana OEM encima").apply();
             return false;
         }
         p.edit().putInt(LAST,code).putLong(LAST_TIME,now).apply();
