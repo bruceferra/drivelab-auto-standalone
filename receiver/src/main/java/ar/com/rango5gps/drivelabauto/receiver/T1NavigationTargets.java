@@ -62,7 +62,7 @@ final class T1NavigationTargets {
         Display display=T1ClusterWazeRouter.selected(c);
         if(display==null)return new Result(false,"Display 1 no disponible");
         // Both deep links are sent to their OWN existing freeform panes.
-        // No 'am task resize', no fullscreen fallback or OEM commands.
+        // No shell geometry, fullscreen fallback or OEM commands.
         String left=T1ClusterLayoutPolicy.start(c,display,
             intent("com.waze",base,value),
             T1ClusterLayoutPolicy.geometry(c,display,false),"Waze");

@@ -1,0 +1,134 @@
+name: Signed Sender 0.2.19 + Receiver 0.3.14 - route targets
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-navigation-targets-0314-0219.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: signed-drivelabauto-publication
+  cancel-in-progress: false
+jobs:
+  release:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      SENDER_STORE_PASSWORD: ${{ secrets.SENDER_STORE_PASSWORD }}
+      SENDER_KEY_ALIAS: ${{ secrets.SENDER_KEY_ALIAS }}
+      SENDER_KEY_PASSWORD: ${{ secrets.SENDER_KEY_PASSWORD }}
+      RECEIVER_STORE_PASSWORD: ${{ secrets.RECEIVER_STORE_PASSWORD }}
+      RECEIVER_KEY_ALIAS: ${{ secrets.RECEIVER_KEY_ALIAS }}
+      RECEIVER_KEY_PASSWORD: ${{ secrets.RECEIVER_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Android SDK and both signing identities
+        env:
+          SENDER_KEYSTORE_B64: ${{ secrets.SENDER_KEYSTORE_B64 }}
+          RECEIVER_KEYSTORE_B64: ${{ secrets.RECEIVER_KEYSTORE_B64 }}
+        run: |
+          set -euo pipefail
+          tool=$(command -v sdkmanager || find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)
+          "$tool" 'platforms;android-35' 'build-tools;35.0.0'
+          for name in SENDER RECEIVER; do
+            var="${name}_KEYSTORE_B64"
+            b64="${!var}"
+            test -n "$b64"
+            printf %s "$b64" | base64 -d > "$RUNNER_TEMP/${name,,}.p12"
+            chmod 600 "$RUNNER_TEMP/${name,,}.p12"
+            echo "${name}_KEYSTORE=$RUNNER_TEMP/${name,,}.p12" >> "$GITHUB_ENV"
+          done
+          test -n "$SENDER_STORE_PASSWORD" && test -n "$SENDER_KEY_ALIAS" && test -n "$SENDER_KEY_PASSWORD"
+          test -n "$RECEIVER_STORE_PASSWORD" && test -n "$RECEIVER_KEY_ALIAS" && test -n "$RECEIVER_KEY_PASSWORD"
+      - name: Validate route policy + sign both APKs
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = bruceferra/drivelab-auto-standalone
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.13
+          ! gh release view v0.3.14 >/dev/null 2>&1
+          ! gh release view v0.2.19 >/dev/null 2>&1
+          mkdir -p /tmp/nav-tests /tmp/previous-sender /tmp/previous-receiver output
+          gh release download v0.2.18 --pattern 'DriveLab-Auto-Sender-v0.2.18.apk' --dir /tmp/previous-sender
+          gh release download v0.3.13 --pattern 'DriveLab-Auto-Receiver-v0.3.13.apk' --dir /tmp/previous-receiver
+          gh release download v0.3.13 --pattern receiver.json --dir /tmp/previous-receiver
+          javac -encoding UTF-8 -d /tmp/nav-tests \
+            common/src/main/java/ar/com/rango5gps/drivelabauto/common/BridgeRouteTarget.java \
+            common/tests/BridgeRouteTargetTest.java \
+            common/tests/RoutePreferenceEndToEndSourceContractTest.java
+          java -cp /tmp/nav-tests ar.com.rango5gps.drivelabauto.common.BridgeRouteTargetTest
+          java -cp /tmp/nav-tests ar.com.rango5gps.drivelabauto.common.RoutePreferenceEndToEndSourceContractTest
+          javac -encoding UTF-8 -d /tmp/nav-tests \
+            common/src/main/java/ar/com/rango5gps/drivelabauto/common/BridgeCrypto.java \
+            common/tests/BridgeCryptoTest.java \
+            common/tests/BridgeCryptoClockSkewTest.java
+          java -cp /tmp/nav-tests BridgeCryptoTest
+          java -cp /tmp/nav-tests ar.com.rango5gps.drivelabauto.common.BridgeCryptoClockSkewTest
+          javac -encoding UTF-8 -d /tmp/nav-tests \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1AdbTaskParser.java \
+            receiver/tests/T1AdbTaskParserTest.java
+          java -cp /tmp/nav-tests ar.com.rango5gps.drivelabauto.receiver.T1AdbTaskParserTest
+          javac -encoding UTF-8 -d /tmp/nav-tests sender/tests/SenderBluetoothPickerSourceContractTest.java sender/tests/SenderAudioBootstrapSourceContractTest.java
+          java -cp /tmp/nav-tests ar.com.rango5gps.drivelabauto.sender.SenderBluetoothPickerSourceContractTest
+          java -cp /tmp/nav-tests ar.com.rango5gps.drivelabauto.sender.SenderAudioBootstrapSourceContractTest
+          gradle --no-daemon :sender:assembleRelease :receiver:assembleRelease
+          sig="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          for app in sender receiver; do
+            apk="$app/build/outputs/apk/release/$app-release.apk"
+            test -s "$apk"
+            "$sig" verify --print-certs "$apk"
+            if [[ "$app" = sender ]]; then
+              prev=/tmp/previous-sender/DriveLab-Auto-Sender-v0.2.18.apk
+              expected_name=0.2.19
+              expected_code=20
+              tag=v0.2.19
+              proper=Sender
+            else
+              prev=/tmp/previous-receiver/DriveLab-Auto-Receiver-v0.3.13.apk
+              expected_name=0.3.14
+              expected_code=115
+              tag=v0.3.14
+              proper=Receiver
+            fi
+            "$sig" verify --print-certs "$prev"
+            oldcert=$("$sig" verify --print-certs "$prev" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+            newcert=$("$sig" verify --print-certs "$apk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+            test -n "$oldcert" && test "$oldcert" = "$newcert"
+            badge=$("$aapt" dump badging "$apk" | head -1)
+            echo "$badge" | grep -F "package: name='ar.com.rango5gps.drivelabauto.$app'"
+            echo "$badge" | grep -F "versionCode='$expected_code'"
+            echo "$badge" | grep -F "versionName='$expected_name'"
+            asset="DriveLab-Auto-$proper-$tag.apk"
+            cp "$apk" "output/$asset"
+            sha=$(sha256sum "output/$asset" | awk '{print $1}')
+            APP_NAME="$app" APP_VERSION="$expected_name" APP_CODE="$expected_code" APP_HASH="$sha" APP_TAG="$tag" APP_ASSET="$asset" python3 - <<'PY'
+          import json,os
+          app=os.environ['APP_NAME']
+          obj={'packageName':'ar.com.rango5gps.drivelabauto.'+app,
+              'versionName':os.environ['APP_VERSION'],
+              'versionCode':int(os.environ['APP_CODE']),
+              'sha256':os.environ['APP_HASH'],
+              'apkUrl':'https://github.com/bruceferra/drivelab-auto-standalone/releases/download/'+os.environ['APP_TAG']+'/'+os.environ['APP_ASSET']}
+          with open('output/'+app+'.json','w') as f:json.dump(obj,f,indent=2)
+          PY
+            sha256sum "output/$asset" > "output/$app.sha256"
+          done
+      - name: Publish Sender historic then Receiver latest (OTA manifests)
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.13
+          gh release create v0.2.19 output/DriveLab-Auto-Sender-v0.2.19.apk output/sender.json output/sender.sha256 /tmp/previous-receiver/receiver.json --target "$GITHUB_SHA" --latest=false --title 'DriveLab Sender 0.2.19 · Uber elegir Waze Google o ambos' --notes 'Sender: destino predeterminado persistente Waze, Google Maps o Ambos al recibir Uber. Waze es la opcion inicial. Ambos exige Receiver 0.3.14 con split verificado; conserva vinculacion WiFi y audio Bluetooth. Se usa el cifrado previo y se agregan solo tipos de ruta autenticados. Sin apps emergentes sobre Uber.'
+          gh release create v0.3.14 output/DriveLab-Auto-Receiver-v0.3.14.apk output/receiver.json output/sender.json output/receiver.sha256 --target "$GITHUB_SHA" --latest --title 'DriveLab Receiver 0.3.14 · rutas Waze, Maps o ambos' --notes 'Receiver reconoce orden cifrada del Sender v0.2.19: solo Waze, solo Google Maps o ambos. Ambos exige diseño dividido previamente verificado con Waze izquierda y Google derecha; se solicitan dos navegaciones mediante Intents sobre el Display 1 sin modificar geometria por ADB al circular. Se conserva CLUSTER OFF aun en D, firma RSA y autorizacion, controles OEM y Sender vinculado. Navegacion simultanea real pendiente de validacion fisica; las solicitudes de Intents no son confirmacion visual.'
+          mkdir -p verify
+          gh release download v0.3.14 --pattern receiver.json --pattern sender.json --dir verify
+          cmp output/receiver.json verify/receiver.json
+          cmp output/sender.json verify/sender.json
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.14
