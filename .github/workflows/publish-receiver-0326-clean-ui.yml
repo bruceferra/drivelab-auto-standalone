@@ -53,6 +53,22 @@ jobs:
             javac -encoding UTF-8 -d /tmp/t1-tests "receiver/tests/$test.java"
             java -cp /tmp/t1-tests "ar.com.rango5gps.drivelabauto.receiver.$test"
           done
+      - name: Assert minimal daily UI and all diagnostics still reachable
+        run: |
+          set -euo pipefail
+          hub=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/ReceiverActivity.java
+          cluster=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ClusterWazeSettingsActivity.java
+          cockpit=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
+          vehicle=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/ReceiverVehicleActivity.java
+          grep -q 'MENÚ TÉCNICO · PRUEBAS Y AJUSTES' "$hub"
+          grep -q 'quickControls.attach(oldControls)' "$hub"
+          grep -q 'CONFIGURAR PANELES A/B · APLICAR' "$cluster"
+          grep -q 'if(showTechnical)' "$cluster"
+          grep -q 'MENÚ TÉCNICO · PRUEBAS OEM' "$cockpit"
+          grep -q 'advanced.addView(extra)' "$cockpit"
+          grep -q 'renderWiperAndRadarDiagnostics(body)' "$vehicle"
+          grep -q 'renderMirrorTechnical(body)' "$vehicle"
+          grep -q 'showIndividualWindows' "$vehicle"
       - name: Build and verify signed Receiver 0.3.26
         run: |
           set -euo pipefail
