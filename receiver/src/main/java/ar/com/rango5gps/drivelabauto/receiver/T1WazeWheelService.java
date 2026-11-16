@@ -165,6 +165,7 @@ public final class T1WazeWheelService extends AccessibilityService {
             refreshOemBridge();
             scanRequestedWindow();
             maybeConfirmMapsReplacement();
+            maybeStartMapsNavigation();
             main.postDelayed(this,1800L);
         }
     };
@@ -501,7 +502,9 @@ public final class T1WazeWheelService extends AccessibilityService {
     }
     /** Only Maps in the verified right split window; never default display. */
     private AccessibilityNodeInfo mapsRoot(){
-        if(!T1WheelTarget.mapsPresent(this))return null;
+        // Route confirmations must work even while the wheel is focused
+        // on the other pane; no input is sent to the selected wheel app.
+        if(!T1WheelTarget.mapsConfigured(this))return null;
         Display chosen=T1ClusterWazeRouter.selected(this);
         if(chosen==null)return null;
         final int displayId=chosen.getDisplayId();
@@ -1411,6 +1414,65 @@ public final class T1WazeWheelService extends AccessibilityService {
             "Maps: confirmación de salir de la ruta anterior SOLICITADA":
             "Maps: confirmación identificada, clic rechazado");
     }
+    /** Start turn-by-turn navigation only after a NEW authenticated
+     * Sender/voice destination, with a unique, visible, clickable START
+     * action owned by Google Maps on the verified cluster display.
+     * Never click generic OK, permissions, system controls or guessed pixels.
+     */
+    private static final class MapsStart {
+        AccessibilityNodeInfo button;
+        Rect bounds;
+        int unique;
+    }
+    private void inspectMapsStart(AccessibilityNodeInfo node,
+                                  MapsStart found,int depth,int[] visited){
+        if(node==null||depth>18||visited[0]++>450||
+           !node.isVisibleToUser())return;
+        if(T1GoogleMapsReplacement.startAction(labelOf(node))){
+            AccessibilityNodeInfo clickable=node.isClickable()?node:null;
+            if(clickable==null){
+                AccessibilityNodeInfo parent=node.getParent();
+                if(parent!=null&&parent.isClickable())clickable=parent;
+            }
+            if(clickable!=null&&clickable.isEnabled()){
+                Rect rect=new Rect();clickable.getBoundsInScreen(rect);
+                if(rect.width()>28&&rect.height()>20&&
+                   rect.width()<800&&rect.height()<300){
+                    if(found.bounds==null||!found.bounds.equals(rect)){
+                        found.unique++;
+                        found.bounds=rect;
+                        found.button=clickable;
+                    }
+                }
+            }
+        }
+        for(int i=0;i<node.getChildCount()&&visited[0]<450;i++)
+            inspectMapsStart(node.getChild(i),found,depth+1,visited);
+    }
+    private void maybeStartMapsNavigation(){
+        if(!T1GoogleMapsReplacement.startPending(this))return;
+        AccessibilityNodeInfo root=mapsRoot();
+        if(root==null||!MAPS.equals(String.valueOf(root.getPackageName())))
+            return;
+        // Never click an underlying Start button while a STOP/exit dialog
+        // is covering the route. The stop path has its own narrow consent.
+        StopPrompt stop=new StopPrompt();
+        findStopPrompt(root,stop,0,new int[]{0});
+        if(stop.question)return;
+        MapsStart start=new MapsStart();
+        inspectMapsStart(root,start,0,new int[]{0});
+        if(start.unique!=1||start.button==null)return;
+        // Consume BEFORE click to prevent duplicate click on redraw/events.
+        T1GoogleMapsReplacement.consumeStart(this);
+        boolean clicked=false;
+        try{
+            clicked=start.button.performAction(
+                AccessibilityNodeInfo.ACTION_CLICK);
+        }catch(Exception ignored){}
+        T1GoogleMapsReplacement.result(this,clicked?
+            "Google Maps · Iniciar navegación: clic accesible solicitado":
+            "Google Maps · botón Iniciar detectado, clic rechazado por Android");
+    }
     @Override public void onAccessibilityEvent(AccessibilityEvent event){
         if(event==null)return;
         rememberMapEvent(event);
@@ -1423,6 +1485,7 @@ public final class T1WazeWheelService extends AccessibilityService {
              MAPS.equals(String.valueOf(event.getPackageName()))))){
             refreshOemBridge();
             maybeConfirmMapsReplacement();
+            maybeStartMapsNavigation();
             if(activeRoot()==null)hideHint();
         }
     }
