@@ -24,7 +24,7 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
     private boolean connectionExpanded=false;
     private boolean technicalExpanded=false;
     private boolean technicalOemExpanded=false;
-    private long lastAutoCheckElapsed=0;
+    private static final String UPDATE_POLL_PREFS="drivelab_receiver_update_poll";
     private final Runnable pairUiRefresh=new Runnable(){
         @Override public void run(){
             if(!visible||isFinishing()||isDestroyed())return;
@@ -71,9 +71,14 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
         pairUiHandler.postDelayed(pairUiRefresh,450);
         Updater.reconcileInstalled(this);
         Updater.onResume(this,this::report);
-        long now=SystemClock.elapsedRealtime();
-        if(lastAutoCheckElapsed==0||now-lastAutoCheckElapsed>120000){
-            lastAutoCheckElapsed=now;
+        // A new Activity is created on many T1 screen changes. Do not
+        // exhaust the unauthenticated GitHub API rate limit by checking
+        // on every return from Cockpit, Maps or cluster settings.
+        // The manual "COMPROBAR ACTUALIZACIÓN" remains immediate.
+        SharedPreferences poll=getSharedPreferences(UPDATE_POLL_PREFS,MODE_PRIVATE);
+        long now=System.currentTimeMillis(),previous=poll.getLong("last",0L);
+        if(previous<=0||now<previous||now-previous>=30L*60L*1000L){
+            poll.edit().putLong("last",now).apply();
             Updater.checkOnOpen(this,"receiver",this::report);
         }
     }
