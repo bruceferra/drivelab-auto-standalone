@@ -157,6 +157,8 @@ public final class T1WazeWheelService extends AccessibilityService {
     private T1OemHardKeyBridge oemBridge;
     private final Handler main=new Handler(Looper.getMainLooper());
     private long lastOemKeyAt,lastScanAt,lastActiveWindowAt;
+    private AccessibilityNodeInfo eventWazeRoot,eventMapsRoot;
+    private long eventWazeAt,eventMapsAt;
     private int lastOemCode=-1;
     private final Runnable oemHeartbeat=new Runnable(){
         @Override public void run(){
@@ -316,6 +318,50 @@ public final class T1WazeWheelService extends AccessibilityService {
         }
         return null;
     }
+    /** Only event sources from the actual selected secondary display may
+     * be used as a fallback. The Android 11 event itself lacks getDisplayId();
+     * its AccessibilityWindowInfo has it since API 30.
+     */
+    private void rememberMapEvent(AccessibilityEvent event){
+        String pkg=String.valueOf(event.getPackageName());
+        if(!WAZE.equals(pkg)&&!MAPS.equals(pkg))return;
+        Display display=T1ClusterWazeRouter.selected(this);
+        if(display==null)return;
+        AccessibilityNodeInfo node=event.getSource();
+        if(node==null)return;
+        AccessibilityWindowInfo sourceWindow=node.getWindow();
+        if(sourceWindow==null||
+           sourceWindow.getDisplayId()!=display.getDisplayId())return;
+        AccessibilityNodeInfo top=node;
+        for(int i=0;i<25;i++){
+            AccessibilityNodeInfo parent=top.getParent();
+            if(parent==null||
+               !pkg.equals(String.valueOf(parent.getPackageName())))break;
+            top=parent;
+        }
+        if(!pkg.equals(String.valueOf(top.getPackageName()))||
+           !top.isVisibleToUser())return;
+        Rect bounds=new Rect();
+        top.getBoundsInScreen(bounds);
+        if(bounds.width()<120||bounds.height()<120)return;
+        if(WAZE.equals(pkg)){
+            eventWazeRoot=top;eventWazeAt=SystemClock.elapsedRealtime();
+        }else{
+            eventMapsRoot=top;eventMapsAt=SystemClock.elapsedRealtime();
+        }
+    }
+    private AccessibilityNodeInfo recentEventRoot(String pkg,int displayId){
+        AccessibilityNodeInfo node=WAZE.equals(pkg)?eventWazeRoot:eventMapsRoot;
+        long time=WAZE.equals(pkg)?eventWazeAt:eventMapsAt;
+        if(node==null||SystemClock.elapsedRealtime()-time>10000L)return null;
+        try{
+            if(!node.refresh()||!node.isVisibleToUser()||
+               !pkg.equals(String.valueOf(node.getPackageName())))return null;
+            AccessibilityWindowInfo window=node.getWindow();
+            if(window==null||window.getDisplayId()!=displayId)return null;
+            return node;
+        }catch(Exception ignored){return null;}
+    }
     /** Waze can run on Display 2 while another app stays focused on Display 0.
      * T1Launcher itself uses getWindowsOnAllDisplays: do not limit this service
      * to getRootInActiveWindow() or main screen package.
@@ -349,6 +395,15 @@ public final class T1WazeWheelService extends AccessibilityService {
             prefs().edit().putString(OEM_BINDER_STATUS,
                 "No se pudo consultar pantalla 2: "+e.getClass().getSimpleName())
                 .apply();
+        }
+        if(expected>0){
+            AccessibilityNodeInfo fromEvent=recentEventRoot(WAZE,expected);
+            if(fromEvent!=null){
+                wazeDisplayId=expected;
+                prefs().edit().putString("waze_display",
+                    "Waze por evento verificado en Display "+expected).apply();
+                return fromEvent;
+            }
         }
         AccessibilityNodeInfo current=expected>0?null:getRootInActiveWindow();
         if(current!=null&&WAZE.equals(
@@ -429,6 +484,12 @@ public final class T1WazeWheelService extends AccessibilityService {
             out.append("\nError inventario: ")
                 .append(ex.getClass().getSimpleName());
         }
+        out.append("\nEventos recientes (misma pantalla verificada): Waze ")
+            .append(eventWazeAt>0?
+                SystemClock.elapsedRealtime()-eventWazeAt+" ms":"ninguno")
+            .append(", Maps ")
+            .append(eventMapsAt>0?
+                SystemClock.elapsedRealtime()-eventMapsAt+" ms":"ninguno");
         return out.toString();
     }
     /** Only Maps in the verified right split window; never default display. */
@@ -457,6 +518,14 @@ public final class T1WazeWheelService extends AccessibilityService {
         }catch(Exception ex){
             status("PANEL B: Google Maps inaccesible · "+
                 ex.getClass().getSimpleName());
+        }
+        AccessibilityNodeInfo fromEvent=recentEventRoot(MAPS,displayId);
+        if(fromEvent!=null){
+            wazeDisplayId=displayId;
+            prefs().edit().putString("waze_display",
+                "Google Maps por evento verificado en Display "+displayId)
+                .apply();
+            return fromEvent;
         }
         wazeDisplayId=-1;
         return null;
@@ -1262,6 +1331,7 @@ public final class T1WazeWheelService extends AccessibilityService {
     }
     @Override public void onAccessibilityEvent(AccessibilityEvent event){
         if(event==null)return;
+        rememberMapEvent(event);
         // Waze can be visible ONLY on the cluster display. A different
         // foreground package does NOT prove that projected Waze disappeared.
         if(event.getEventType()==AccessibilityEvent.TYPE_WINDOWS_CHANGED||
