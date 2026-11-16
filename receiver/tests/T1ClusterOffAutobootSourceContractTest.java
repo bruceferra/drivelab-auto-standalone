@@ -36,11 +36,22 @@ public final class T1ClusterOffAutobootSourceContractTest {
         check(set>=0&&selected>set&&
             !layout.substring(set,selected).contains("AUTO_BOOT,false"),
             "Experimental geometry edits must not disable proven Waze autoboot");
-        check(adb.contains("if(T1ClusterWazeRouter.enabled(app))")&&
-            adb.contains("Cierre cancelado: CLÚSTER volvió a ON")&&
-            adb.contains("if(!parked(app))")&&
-            adb.contains("T1AdbTaskParser.unique(now,id,pkg)"),
-            "ADB close remains P-only and cannot intentionally close after ON");
+        int closeStart=adb.indexOf("static void closeClusterApps(Context c,Done done)");
+        int closeEnd=adb.indexOf("/** Closing tasks INVALIDATES",closeStart);
+        check(closeStart>0&&closeEnd>closeStart,"Cluster OFF method boundaries");
+        String off=adb.substring(closeStart,closeEnd);
+        check(off.contains("if(T1ClusterWazeRouter.enabled(app))")&&
+            off.contains("Cierre cancelado: CLÚSTER volvió a ON")&&
+            !off.contains("parked(app)")&&
+            !off.contains("gear()")&&
+            !off.contains("speedKmh()")&&
+            off.contains("T1AdbTaskParser.unique(now,id,pkg)")&&
+            off.contains("am stack remove "),
+            "Cluster OFF must restore OEM in D without P or speed restriction");
+        check(adb.contains("if(!parked(app))")&&
+            adb.contains("BLOQUEADO: solo redimensionar con P")&&
+            adb.contains("BLOQUEADO: restaurar pantalla solo detenido en P"),
+            "Resize and split layout MUST remain P-only");
         System.out.println("PASS CLUSTER OFF reversible with no ADB; Waze autoboot protected");
     }
 }

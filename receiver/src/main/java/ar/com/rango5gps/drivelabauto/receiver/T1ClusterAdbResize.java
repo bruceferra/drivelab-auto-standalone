@@ -158,12 +158,13 @@ final class T1ClusterAdbResize {
             }
         },"T1-ADB-restore-Waze-fullscreen").start();
     }
-    /** Return the physical cluster to its underneath OEM content by
-     * CLOSING ONLY those Waze/Maps tasks positively identified on the
-     * previously selected secondary display. This does NOT run HOME or
-     * kill any process, and it cannot guarantee the OEM paints a particular
-     * screen until the owner visually checks it.
-     * Called after cluster routing is disabled; no new trips are launched.
+    /** Return the physical cluster to its underlying OEM content by
+     * CLOSING ONLY Waze/Maps tasks positively identified on the selected
+     * secondary display. OFF is a restoration/exit action: unlike resize or
+     * layout testing, it must work even in D or while moving so the OEM
+     * instruments can be recovered immediately without stopping.
+     * No HOME/system processes are touched, nor may we claim OEM painting
+     * until physically confirmed. Future geometry changes remain P/0 ONLY.
      */
     static void closeClusterApps(Context c,Done done){
         Context app=c.getApplicationContext();
@@ -179,9 +180,9 @@ final class T1ClusterAdbResize {
             String result;
             boolean success=false;
             try{
-                if(!parked(app))
-                    throw new IllegalStateException(
-                        "Cierre de ventanas solo con T1 detenida en P/0");
+                // IMPORTANT: CLÚSTER OFF must restore OEM instrumentation
+                // in any gear, including D at speed. Do not add parked()
+                // back here: only dangerous resizing remains P/0 guarded.
                 Display display=T1ClusterWazeRouter.selected(app);
                 if(display==null||display.getDisplayId()<=0)
                     throw new IllegalStateException(
@@ -214,9 +215,8 @@ final class T1ClusterAdbResize {
                     T1AdbTaskParser.Task task=
                         T1AdbTaskParser.unique(now,id,pkg);
                     if(task==null)continue;
-                    if(!parked(app))
-                        throw new IllegalStateException(
-                            "Se abandonó P: cierre interrumpido");
+                    // OFF is permitted in D and while moving. The task was
+                    // re-queried and uniquely matched to this exact display.
                     if(T1ClusterWazeRouter.enabled(app))
                         throw new IllegalStateException(
                             "Cierre cancelado: CLÚSTER volvió a ON");
