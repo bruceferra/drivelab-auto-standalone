@@ -58,6 +58,22 @@ final class T1GoogleMapsReplacement {
             (n.contains("end")&&n.contains("navigat"))||
             (n.contains("stop")&&n.contains("this route"));
     }
+    /** An exact field-observed Google Maps question (not generic quit). */
+    static boolean exitQuestion(String value){
+        String n=norm(value).replaceAll("[^a-z0-9 ]+"," ");
+        return n.contains("quieres salir de la navegacion")||
+            n.contains("quiere salir de la navegacion")||
+            n.contains("want to exit navigation");
+    }
+    /** YES / OK is allowed ONLY with exact exitQuestion + explicit new
+     * destination; never for a generic Maps popup or a system dialog.
+     */
+    static boolean genericExitAction(String value){
+        String n=norm(value);
+        return n.equals("si")||n.equals("sí")||
+            n.equals("aceptar")||n.equals("ok")||
+            n.equals("yes")||n.equals("confirmar");
+    }
     static boolean stopAction(String value){
         String n=norm(value);
         return n.equals("salir")||n.equals("salir de la navegacion")||

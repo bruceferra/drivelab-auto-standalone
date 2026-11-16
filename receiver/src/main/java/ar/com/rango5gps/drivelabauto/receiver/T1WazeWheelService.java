@@ -1059,7 +1059,7 @@ public final class T1WazeWheelService extends AccessibilityService {
      * within a short intent-scoped window; no global back, generic YES or taps.
      */
     private static final class StopPrompt {
-        boolean question;
+        boolean question,exactExitQuestion,genericAction;
         AccessibilityNodeInfo button;
         Rect bounds;
         int differentButtons;
@@ -1069,7 +1069,9 @@ public final class T1WazeWheelService extends AccessibilityService {
         if(n==null||depth>16||visits[0]++>400||!n.isVisibleToUser())return;
         String label=labelOf(n);
         if(T1GoogleMapsReplacement.stopQuestion(label))prompt.question=true;
-        if(T1GoogleMapsReplacement.stopAction(label)){
+        if(T1GoogleMapsReplacement.exitQuestion(label))prompt.exactExitQuestion=true;
+        boolean generic=T1GoogleMapsReplacement.genericExitAction(label);
+        if(T1GoogleMapsReplacement.stopAction(label)||generic){
             AccessibilityNodeInfo clickable=n.isClickable()?n:null;
             if(clickable==null){
                 AccessibilityNodeInfo parent=n.getParent();
@@ -1080,6 +1082,7 @@ public final class T1WazeWheelService extends AccessibilityService {
                 if(b.width()>28&&b.height()>20&&b.width()<700&&b.height()<260){
                     if(prompt.bounds==null||!prompt.bounds.equals(b)){
                         prompt.differentButtons++;
+                        prompt.genericAction=generic;
                         prompt.bounds=b;
                         prompt.button=clickable;
                     }
@@ -1097,7 +1100,8 @@ public final class T1WazeWheelService extends AccessibilityService {
         StopPrompt prompt=new StopPrompt();
         findStopPrompt(root,prompt,0,new int[]{0});
         if(!prompt.question||prompt.differentButtons!=1||
-           prompt.button==null)return;
+           prompt.button==null||
+           (prompt.genericAction&&!prompt.exactExitQuestion))return;
         // Consume the permission BEFORE clicking so repeated AccessibilityEvents
         // cannot click twice. If Maps rejects it, leave a diagnostic instead.
         T1GoogleMapsReplacement.consume(this);
@@ -1106,8 +1110,8 @@ public final class T1WazeWheelService extends AccessibilityService {
             AccessibilityNodeInfo.ACTION_CLICK);}
         catch(Exception ignored){}
         T1GoogleMapsReplacement.result(this,clicked?
-            "Maps: se pulsó la confirmación explícita de reemplazo":
-            "Maps: botón de reemplazo reconocido, clic rechazado");
+            "Maps: confirmación de salir de la ruta anterior SOLICITADA":
+            "Maps: confirmación identificada, clic rechazado");
     }
     @Override public void onAccessibilityEvent(AccessibilityEvent event){
         if(event==null)return;

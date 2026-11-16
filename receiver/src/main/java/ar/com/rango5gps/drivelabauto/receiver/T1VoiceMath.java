@@ -85,9 +85,36 @@ final class T1VoiceMath {
         if(!any||sum+current>999999)return null;
         return BigDecimal.valueOf(sum+current);
     }
+    /** Vehicle fuel-economy conversions: local, bounded and offline. */
+    private static String fuelConversion(String s){
+        boolean to100=s.contains("litros cada 100")||
+            s.contains("litros por cada 100")||
+            s.contains("litros a los 100")||
+            s.contains("l/100")||
+            s.contains("litros por 100");
+        if(!to100)return null;
+        // Numeric speech recognition normally emits digits; recognize a
+        // short spoken word value as well (e.g. catorce).
+        Pattern kmPattern=Pattern.compile(
+            "([0-9]{1,4}(?:[.,][0-9]{1,3})?|[a-z]+(?: y [a-z]+)?)"+
+            "\\s*(?:km\\s*/\\s*l\\b|kilometros?\\s+por\\s+litros?\\b|"+
+            "km\\s+por\\s+litro\\b)");
+        Matcher km=kmPattern.matcher(s);
+        if(!km.find())return null;
+        BigDecimal value=parse(km.group(1));
+        if(value==null||value.compareTo(BigDecimal.ZERO)<=0||
+            value.compareTo(new BigDecimal("300"))>0)return null;
+        BigDecimal result=new BigDecimal("100").divide(
+            value,2,RoundingMode.HALF_UP);
+        return km.group(1)+" kilómetros por litro equivalen a "+
+            result.toPlainString().replace('.',',')+
+            " litros cada 100 kilómetros.";
+    }
     static String calculate(String spoken){
         if(spoken==null||spoken.length()>150)return null;
         String s=normalize(spoken);
+        String fuel=fuelConversion(s);
+        if(fuel!=null)return fuel;
         s=s.replaceFirst("^(?:(?:cuanto\\s+(?:es|son|da|dan))|"+
             "que\\s+(?:es|son|da)|calcula|calcular|"+
             "decime\\s+cuanto\\s+(?:es|da)|dime\\s+cuanto\\s+(?:es|da)|"+
