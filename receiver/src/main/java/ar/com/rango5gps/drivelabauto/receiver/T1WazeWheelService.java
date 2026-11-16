@@ -193,12 +193,18 @@ public final class T1WazeWheelService extends AccessibilityService {
     private SharedPreferences prefs(){
         return getSharedPreferences(PREFS,Context.MODE_PRIVATE);
     }
+    /** Per-application bindings for generic apps. The physical map key
+     * profile remains untouched when calibrating Spotify/YouTube/etc. */
+    static String settingKey(Context c,String action){
+        return T1WheelTarget.genericCandidate(c)?
+            "wheel_app_"+T1WheelTarget.packageName(c)+"_"+action:action;
+    }
     static void learn(Context c,String action){
         if(!NEXT.equals(action)&&!PREV.equals(action)&&
            !OK.equals(action)&&!BACK.equals(action)&&
            !ROUTES.equals(action))return;
         c.getSharedPreferences(PREFS,Context.MODE_PRIVATE).edit()
-            .putString(PENDING,action)
+            .putString(PENDING,settingKey(c,action))
             .putLong(PENDING_TIME,System.currentTimeMillis())
             .putString(LAST_STATUS,"Capturando "+action+
                 ": pulsá una tecla física; no hace falta abrir Waze")
@@ -232,11 +238,11 @@ public final class T1WazeWheelService extends AccessibilityService {
                 p.getString(SCAN_RESULT,"Tocá INSPECCIONAR CONTROLES WAZE.")+
             "\nÚltima ventana durante captura: "+
             p.getString(WINDOW,"sin datos")+
-            "\nSIGUIENTE="+p.getInt(NEXT,KeyEvent.KEYCODE_DPAD_RIGHT)+
-            " · ANTERIOR="+p.getInt(PREV,KeyEvent.KEYCODE_DPAD_LEFT)+
-            " · OK="+p.getInt(OK,KeyEvent.KEYCODE_DPAD_CENTER)+
-            " · ATRÁS="+p.getInt(BACK,KeyEvent.KEYCODE_BACK)+
-            " · RUTAS="+p.getInt(ROUTES,-1);
+            "\nSIGUIENTE="+p.getInt(settingKey(this,NEXT),KeyEvent.KEYCODE_DPAD_RIGHT)+
+            " · ANTERIOR="+p.getInt(settingKey(this,PREV),KeyEvent.KEYCODE_DPAD_LEFT)+
+            " · OK="+p.getInt(settingKey(this,OK),KeyEvent.KEYCODE_DPAD_CENTER)+
+            " · ATRÁS="+p.getInt(settingKey(this,BACK),KeyEvent.KEYCODE_BACK)+
+            " · RUTAS="+p.getInt(settingKey(this,ROUTES),-1);
     }
     /** Local in-screen keyboard/key diagnosis, independent of accessibility.
      * Runs ONLY during an explicit 45-second user calibration. Never
@@ -694,11 +700,11 @@ public final class T1WazeWheelService extends AccessibilityService {
         }
         p.edit().putInt(LAST,code).putLong(LAST_TIME,now).apply();
         if(!p.getBoolean(ENABLED,false))return false;
-        int next=p.getInt(NEXT,KeyEvent.KEYCODE_DPAD_RIGHT);
-        int prev=p.getInt(PREV,KeyEvent.KEYCODE_DPAD_LEFT);
-        int ok=p.getInt(OK,KeyEvent.KEYCODE_DPAD_CENTER);
-        int back=p.getInt(BACK,KeyEvent.KEYCODE_BACK);
-        int routes=p.getInt(ROUTES,-1);
+        int next=p.getInt(settingKey(this,NEXT),KeyEvent.KEYCODE_DPAD_RIGHT);
+        int prev=p.getInt(settingKey(this,PREV),KeyEvent.KEYCODE_DPAD_LEFT);
+        int ok=p.getInt(settingKey(this,OK),KeyEvent.KEYCODE_DPAD_CENTER);
+        int back=p.getInt(settingKey(this,BACK),KeyEvent.KEYCODE_BACK);
+        int routes=p.getInt(settingKey(this,ROUTES),-1);
         boolean routeShortcut=routes>0&&code==routes;
         boolean forward=code==next||
             (next==KeyEvent.KEYCODE_DPAD_RIGHT&&code==KeyEvent.KEYCODE_DPAD_DOWN);
