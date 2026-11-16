@@ -50,7 +50,7 @@ public final class T1ReplayAndHvacBackgroundSourceContractTest {
         ok(boot.contains("RecirculationGuardService.recoverLegacyReadError(context)")&&
             toolbar.contains("verifiedAge<12000")&&
             toolbar.contains("LAST_CONFIRMED")&&
-            toolbar.contains("AIRE AUTO · RECONECTANDO")&&
+            toolbar.contains("AIRE INTERIOR · SOLICITADO")&&
             quick.contains("recircConfirmed"),
             "Automatic restore on boot and green restricted to confirmed recent 1004=1");
         ok(waze.contains("getWindowsOnAllDisplays()")&&
@@ -58,10 +58,8 @@ public final class T1ReplayAndHvacBackgroundSourceContractTest {
             waze.contains("createDisplayContext(display)")&&
             waze.contains("T1WazePromptPolicy.dismiss")&&
             waze.contains("promptArmed")&&
-            waze.contains("private boolean backOnlyIfWazeFocused()")&&
-            waze.contains("win.isFocused()")&&
-            waze.contains("if(!focused)")&&
-            waze.contains("performGlobalAction(GLOBAL_ACTION_BACK)")&&
+            waze.contains("private boolean backOnlyOnWaze()")&&
+            !waze.contains("performGlobalAction(GLOBAL_ACTION_BACK)")&&
             xml.contains("android:canPerformGestures=\"true\""),
             "Waze prompt only: on-display labels, verified Waze-focus back and scoped gestures");
         ok(waze.contains("private void scanRequestedWindow()")&&

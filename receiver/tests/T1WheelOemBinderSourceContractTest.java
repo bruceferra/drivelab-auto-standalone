@@ -70,13 +70,13 @@ public final class T1WheelOemBinderSourceContractTest {
             !svc.contains("injectInputEvent(")&&
             !svc.contains("getevent -"),
             "Never click an arbitrary first map control or inject synthetic system input");
-        check(controls.contains("CONECTAR / DESCONECTAR RUEDITA OEM")&&
-            controls.contains("new android.app.AlertDialog.Builder(this)")&&
+        check(controls.contains("ACTIVAR VOLANTE OEM")&&
+            controls.contains("DESACTIVAR VOLANTE OEM")&&
             controls.contains("OEM_BINDER_ENABLED,true")&&
             controls.contains("OEM_BINDER_ENABLED,false")&&
-            controls.contains("UN solo receptor")&&
-            controls.contains("auto detenido en P"),
-            "OEM Binder requires explicit user consent and explains possible OEM exclusivity");
+            controls.contains("MODO RUEDITA ACTUAL")&&
+            controls.contains("ZOOM DEL MAPA"),
+            "Two explicit modes and idempotent opt-in for OEM wheel");
         check(xml.contains("flagRetrieveInteractiveWindows")&&
             xml.contains("android:canRetrieveWindowContent=\"true\"")&&
             manifest.contains("<package android:name=\"com.autolink.hardkeyservice\" />"),

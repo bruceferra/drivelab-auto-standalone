@@ -9,8 +9,8 @@ public final class T1VoiceCompactOemSourceContractTest {
         String service=Files.readString(Path.of(
             "receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OemMicrophoneService.java"));
         ck(mic.contains("Theme_Translucent_NoTitleBar")&&
-            mic.contains("getWindow().setContentView(status)")&&
-            mic.contains("getWindow().setLayout(T1JetourTheme.dp(this,260)")&&
+            mic.contains("getWindow().setContentView(card)")&&
+            mic.contains("getWindow().setLayout(T1JetourTheme.dp(this,520)")&&
             mic.contains("FLAG_DIM_BEHIND")&&
             mic.contains("FLAG_NOT_TOUCH_MODAL")&&
             mic.contains("voiceHandler.postDelayed(this::listen,250L)")&&
