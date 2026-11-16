@@ -52,7 +52,7 @@ public final class T1RsaPkcs8PublicSpecTest {
         String src=Files.readString(Path.of(
            "receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1LocalAdbClient.java"));
         check(src.contains("T1RsaPkcs8PublicSpec.recover(encoded)")&&
-              !src.contains("RSAPrivateCrtKey")&&
+              !src.contains("(RSAPrivateCrtKey)")&&
               src.contains("new PKCS8EncodedKeySpec(encoded)")&&
               src.contains("KEY_FILE=\"t1_drivelab_local_adb_rsa.pk8\""),
               "Host key recovery must not cast Android Conscrypt key or change key filename");

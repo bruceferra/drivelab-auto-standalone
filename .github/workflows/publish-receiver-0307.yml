@@ -239,3 +239,5 @@ jobs:
           cmp output/sender.json verify/sender.json
           test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.7
 # Publishing trigger: release workflow already registered on main; compile signed 0.3.7.
+
+# Regression suite covers APK provider-specific RSA private-key reload.
