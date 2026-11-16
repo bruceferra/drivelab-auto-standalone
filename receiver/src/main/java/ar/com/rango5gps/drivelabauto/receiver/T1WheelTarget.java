@@ -24,8 +24,12 @@ final class T1WheelTarget {
         return panelB(c)&&mapsPresent(c);
     }
     static boolean mapsPresent(Context c){
+        // A freshly inverted layout becomes PENDING until the driver
+        // verifies its real task bounds. That is a write/route safety guard,
+        // not proof Maps disappeared from the already-visible display.
+        // Actual wheel actions still require a visible com.google Maps node
+        // on the EXACT selected secondary display in mapsRoot().
         return T1ClusterWazeRouter.enabled(c)&&
-            T1ClusterLayoutPolicy.active(c)&&
             T1ClusterLayoutPolicy.MODE_SPLIT.equals(T1ClusterLayoutPolicy.mode(c))&&
             "com.google.android.apps.maps".equals(T1ClusterLayoutPolicy.secondPackage(c))&&
             T1ClusterWazeRouter.selected(c)!=null;

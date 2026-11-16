@@ -21,7 +21,7 @@ public final class T1WheelPanelAndSpeedSourceTest {
         String trip=source("T1TripTelemetry.java");
         String cockpit=source("T1PremiumCockpitActivity.java");
         require(p.contains("mapsAllowed(Context c)")&&
-            p.contains("T1ClusterLayoutPolicy.active(c)")&&
+            !p.contains("T1ClusterLayoutPolicy.active(c)")&&
             p.contains("com.google.android.apps.maps")&&
             p.contains("MODE_SPLIT.equals("),
             "Panel B can only target confirmed Maps split");

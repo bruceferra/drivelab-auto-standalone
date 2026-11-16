@@ -33,6 +33,11 @@ public final class T1ClusterInvertedPanelsAndWheelSourceTest {
             resize.contains("app,selected,!inverted")&&
             resize.contains("if(!parked(c))"),
             "Actual task bounds and Google route adapt only when P/0");
+        String target=src("T1WheelTarget.java");
+        check(!target.contains("T1ClusterLayoutPolicy.active(c)")&&
+            target.contains("T1ClusterWazeRouter.enabled(c)")&&
+            target.contains("T1ClusterWazeRouter.selected(c)!=null"),
+            "Do not gate read-only map discovery on pending ADB layout approval");
         check(ui.contains("INVERTIR PANELES")&&
             ui.contains("this::invertPanels")&&ui.contains("testLayout()")&&
             ui.contains("originalInvert==T1ClusterLayoutPolicy.inverted(this)")&&
