@@ -31,6 +31,7 @@ public final class ReceiverVehicleActivity extends T1ImmersiveActivity {
     @Override protected int overlayClearBackgroundColor(){return T1JetourTheme.NIGHT;}
     private final String[] tabNames={"VEHÍCULO","ENERGÍA","CODE","DIAGNÓSTICO"};
     private int activeTab=0;
+    private boolean showIndividualWindows;
     private ScrollView currentScroll;
     private VehicleWindowGroup windows;
     private MirrorPulsePilot mirror;
@@ -170,14 +171,12 @@ public final class ReceiverVehicleActivity extends T1ImmersiveActivity {
         LinearLayout root=column();root.setPadding(16,10,16,26);
         scroll.addView(root);
         label(root,"DRIVELAB AUTO · T1",23);
-        label(root,"DIAGNÓSTICOS T1 · lecturas OEM, controles manuales y subida QR",12);
-        button(root,"← VOLVER A MAPAS Y PUENTE",this::finish);
-        button(root,"PENDIENTES · ASISTENTE GUIADO DE PRUEBAS",()->
-            startActivity(new android.content.Intent(this,
-                T1ValidationWizardActivity.class)));
+        label(root,"Vehículo: controles habituales · Energía: datos del viaje. "+
+            "Las capturas y lecturas RAW están en Menú técnico.",12);
+        button(root,"VOLVER",this::finish);
         LinearLayout menu=new LinearLayout(this);
         menu.setOrientation(LinearLayout.HORIZONTAL);
-        for(int i=0;i<tabNames.length;i++){
+        for(int i=0;i<2;i++){
             final int idx=i;
             Button b=new Button(this);
             b.setText(tabNames[i]);b.setAllCaps(false);
@@ -188,7 +187,23 @@ public final class ReceiverVehicleActivity extends T1ImmersiveActivity {
             b.setOnClickListener(v->{activeTab=idx;render();});
             menu.addView(b,new LinearLayout.LayoutParams(0,60,1));
         }
+        Button technical=new Button(this);
+        technical.setText(activeTab>=2?"TÉCNICO · "+(activeTab==2?
+            "CÓDIGOS":"PRUEBAS"):"MENÚ TÉCNICO");
+        technical.setAllCaps(false);technical.setTextSize(11);
+        T1JetourTheme.button(technical,activeTab>=2?
+            T1JetourTheme.TURQUOISE:T1JetourTheme.PANEL);
+        technical.setOnClickListener(v->new AlertDialog.Builder(this)
+            .setTitle("MENÚ TÉCNICO · VEHÍCULO")
+            .setItems(new String[]{"Códigos OEM / CODE",
+                "Pruebas, lecturas RAW y diagnósticos"},(d,which)->{
+                activeTab=which==0?2:3;render();
+            }).setNegativeButton("CANCELAR",null).show());
+        menu.addView(technical,new LinearLayout.LayoutParams(0,60,1));
         root.addView(menu);
+        if(activeTab>=2)
+            button(root,"PENDIENTES · ASISTENTE GUIADO DE PRUEBAS",()->
+                startActivity(new Intent(this,T1ValidationWizardActivity.class)));
         if(activeTab==0)renderVehicle(root);
         else if(activeTab==1)renderEnergy(root);
         else if(activeTab==2)renderCode(root);
@@ -208,7 +223,9 @@ public final class ReceiverVehicleActivity extends T1ImmersiveActivity {
         return windows.busy()||mirror.busy()||mirrorProbe.busy()||pedestrian.busy()||
             changeScanner.isRunning()||batchReader.busy()||wiperParking.busy();
     }
-    private void renderVehicle(LinearLayout body){
+    /** Diagnostic pilots are kept in the existing technical tab.
+     * Daily vehicle controls never duplicate OEM test commands. */
+    private void renderWiperAndRadarDiagnostics(LinearLayout body){
         section(body,"LIMPIAPARABRISAS Y RADAR DELANTERO / TRASERO · DIAGNÓSTICO");
         label(body,"Lecturas OEM originales: 2126 sensibilidad de barrido AUTO, "+
             "2107 distancia de aviso por tramos, 2049 radar, 2125 limpia trasero. "+
@@ -225,7 +242,7 @@ public final class ReceiverVehicleActivity extends T1ImmersiveActivity {
                 for(Map.Entry<String,String> e:values.entrySet())
                     out.append(e.getKey()).append(" = ").append(e.getValue()).append("\n");
                 wiperParkingStatus=out.toString();
-                if(activeTab==0&&wiperParkingView!=null&&!isFinishing())
+                if(activeTab==3&&wiperParkingView!=null&&!isFinishing())
                     wiperParkingView.setText(wiperParkingStatus);
             })){
                 wiperParkingStatus="No se inició lectura OEM";
@@ -250,20 +267,8 @@ public final class ReceiverVehicleActivity extends T1ImmersiveActivity {
             "solo del radar trasero. No modificar avisos de seguridad "+
             "sin escala y valores permitidos verificados.",12);
 
-        section(body,"ESPEJOS · CONTROL MANUAL EN P");
-        mirrorView=status(body,mirrorStatus);
-        label(body,"Derecho 2069 e izquierdo 2068, ambos validados. "+
-            "Un toque mueve; el siguiente está disponible tras concluir la orden. "+
-            "Requiere P y velocidad cero.",13);
-        button(body,"LEER MARCHA Y VELOCIDAD · SIN MOVER",()->{
-            if(vehicleBusy()){
-                updateMirrorGear("Otra consulta OEM está en curso");return;
-            }
-            if(!mirror.readGearOnce(this::updateMirrorGear))
-                updateMirrorGear("No se inició lectura de marcha");
-            else updateMirrorGear("Consultando marcha 1033 y velocidad…");
-        });
-        mirrorGearView=status(body,mirrorGearStatus);
+    }
+    private void renderMirrorTechnical(LinearLayout body){
         section(body,"REGISTRO DE MARCHAS · AUNQUE APAREZCA LA CÁMARA");
         label(body,"P=1, R=2, N=3 y D=4 confirmados físicamente. "+
             "La grabación OEM puede seguir disponible como diagnóstico.",12);
@@ -301,35 +306,8 @@ public final class ReceiverVehicleActivity extends T1ImmersiveActivity {
             "Se retiraron las falsas memorias D/R; la futura reversa "+
             "usará pasos relativos configurables y necesita validar la marcha D.",12);
 
-        section(body,"DERECHO · CONTROL PROBADO");
-        LinearLayout rightRow=new LinearLayout(this);
-        rightRow.setOrientation(LinearLayout.HORIZONTAL);
-        Button upRight=new Button(this);upRight.setText("SUBIR ▲ 500 ms");
-        upRight.setAllCaps(false);
-        upRight.setOnClickListener(v->confirmMirrorPulse(2069,1,500));
-        rightRow.addView(upRight,new LinearLayout.LayoutParams(0,64,1));
-        Button downRight=new Button(this);downRight.setText("BAJAR ▼ 500 ms");
-        downRight.setAllCaps(false);
-        downRight.setOnClickListener(v->confirmMirrorPulse(2069,2,500));
-        rightRow.addView(downRight,new LinearLayout.LayoutParams(0,64,1));
-        body.addView(rightRow);
-        label(body,"Prueba física: 500, 1.000 y 2.000 ms producen el mismo "+
-            "desplazamiento observable. Se conserva solo 500 ms para no "+
-            "mandar una orden más larga sin beneficio.",12);
-        section(body,"IZQUIERDO · 2068 VALIDADO");
-        label(body,"Ambas direcciones confirmadas físicamente. "+ 
-            "El significado exacto de 1/2 se conserva como comando, no ángulo.",12);
-        LinearLayout leftRow=new LinearLayout(this);
-        leftRow.setOrientation(LinearLayout.HORIZONTAL);
-        Button leftOne=new Button(this);leftOne.setText("IZQ · 1 · 500 ms");
-        leftOne.setAllCaps(false);
-        leftOne.setOnClickListener(v->confirmMirrorPulse(2068,1,500));
-        leftRow.addView(leftOne,new LinearLayout.LayoutParams(0,64,1));
-        Button leftTwo=new Button(this);leftTwo.setText("IZQ · 2 · 500 ms");
-        leftTwo.setAllCaps(false);
-        leftTwo.setOnClickListener(v->confirmMirrorPulse(2068,2,500));
-        leftRow.addView(leftTwo,new LinearLayout.LayoutParams(0,64,1));
-        body.addView(leftRow);
+    }
+    private void renderFoldTechnical(LinearLayout body){
         section(body,"PLEGADO OEM · 2003 EXPERIMENTAL");
         label(body,"Plegar 2003=0 / desplegar 2003=1 validados. "+
             "Permitidos en marchas conocidas solo a 5 km/h o menos. "+
@@ -361,6 +339,51 @@ public final class ReceiverVehicleActivity extends T1ImmersiveActivity {
         label(body,"AUTO R disponible desde la pantalla principal: pasos "+
             "ajustables, al entrar en R baja una vez; marcha no-R y >10 km/h "+
             "estable 800 ms restaura. Desactivado por defecto.",12);
+    }
+    private void renderVehicle(LinearLayout body){
+        section(body,"ESPEJOS · CONTROL MANUAL EN P");
+        mirrorView=status(body,mirrorStatus);
+        label(body,"Derecho 2069 e izquierdo 2068, ambos validados. "+
+            "Un toque mueve; el siguiente está disponible tras concluir la orden. "+
+            "Requiere P y velocidad cero.",13);
+        button(body,"LEER MARCHA Y VELOCIDAD · SIN MOVER",()->{
+            if(vehicleBusy()){
+                updateMirrorGear("Otra consulta OEM está en curso");return;
+            }
+            if(!mirror.readGearOnce(this::updateMirrorGear))
+                updateMirrorGear("No se inició lectura de marcha");
+            else updateMirrorGear("Consultando marcha 1033 y velocidad…");
+        });
+        mirrorGearView=status(body,mirrorGearStatus);
+        section(body,"DERECHO · CONTROL PROBADO");
+        LinearLayout rightRow=new LinearLayout(this);
+        rightRow.setOrientation(LinearLayout.HORIZONTAL);
+        Button upRight=new Button(this);upRight.setText("SUBIR ▲ 500 ms");
+        upRight.setAllCaps(false);
+        upRight.setOnClickListener(v->confirmMirrorPulse(2069,1,500));
+        rightRow.addView(upRight,new LinearLayout.LayoutParams(0,64,1));
+        Button downRight=new Button(this);downRight.setText("BAJAR ▼ 500 ms");
+        downRight.setAllCaps(false);
+        downRight.setOnClickListener(v->confirmMirrorPulse(2069,2,500));
+        rightRow.addView(downRight,new LinearLayout.LayoutParams(0,64,1));
+        body.addView(rightRow);
+        label(body,"Prueba física: 500, 1.000 y 2.000 ms producen el mismo "+
+            "desplazamiento observable. Se conserva solo 500 ms para no "+
+            "mandar una orden más larga sin beneficio.",12);
+        section(body,"IZQUIERDO · 2068 VALIDADO");
+        label(body,"Ambas direcciones confirmadas físicamente. "+ 
+            "El significado exacto de 1/2 se conserva como comando, no ángulo.",12);
+        LinearLayout leftRow=new LinearLayout(this);
+        leftRow.setOrientation(LinearLayout.HORIZONTAL);
+        Button leftOne=new Button(this);leftOne.setText("IZQ · 1 · 500 ms");
+        leftOne.setAllCaps(false);
+        leftOne.setOnClickListener(v->confirmMirrorPulse(2068,1,500));
+        leftRow.addView(leftOne,new LinearLayout.LayoutParams(0,64,1));
+        Button leftTwo=new Button(this);leftTwo.setText("IZQ · 2 · 500 ms");
+        leftTwo.setAllCaps(false);
+        leftTwo.setOnClickListener(v->confirmMirrorPulse(2068,2,500));
+        leftRow.addView(leftTwo,new LinearLayout.LayoutParams(0,64,1));
+        body.addView(leftRow);
         section(body,"VENTANILLAS · CONTROLES MANUALES");
         label(body,"Accionamientos OEM para 2004–2007. Una operación por vez, "+
             "con lectura anterior/posterior. Probar detenido, en P y sin obstáculos.",13);
@@ -368,6 +391,11 @@ public final class ReceiverVehicleActivity extends T1ImmersiveActivity {
             ()->startWindows(-1,WindowGroupPolicy.VENT_QUARTER));
         button(body,"CIERRE TOTAL  (2004–2007)",
             ()->startWindows(-1,WindowGroupPolicy.CLOSE));
+        button(body,showIndividualWindows?"OCULTAR VENTANILLAS INDIVIDUALES":
+            "VENTANILLAS INDIVIDUALES · AJUSTAR",()->{
+            showIndividualWindows=!showIndividualWindows;render();
+        });
+        if(showIndividualWindows){
         for(int i=0;i<WindowGroupPolicy.IDS.length;i++){
             final int id=WindowGroupPolicy.IDS[i];
             section(body,WindowGroupPolicy.NAMES[i]+" · "+id);
@@ -379,6 +407,7 @@ public final class ReceiverVehicleActivity extends T1ImmersiveActivity {
             close.setOnClickListener(v->startWindows(id,WindowGroupPolicy.CLOSE));
             row.addView(close,new LinearLayout.LayoutParams(0,58,1));
             body.addView(row);
+        }
         }
         label(body,"Los estados OEM 1=cerrado y 3=banda del primer cuarto no indican "+
             "posición exacta. No se emiten comandos 0, ni se fuerza apertura total. "+
@@ -619,6 +648,9 @@ public final class ReceiverVehicleActivity extends T1ImmersiveActivity {
         return getSharedPreferences(T1PhevModeCaptureService.PREFS,MODE_PRIVATE);
     }
     private void renderDiagnostics(LinearLayout body){
+        renderWiperAndRadarDiagnostics(body);
+        renderMirrorTechnical(body);
+        renderFoldTechnical(body);
         section(body,"DIAGNÓSTICO PHEV · 1040 / 1041 / 1043 / 1045 / 1046");
         label(body,"Confirmado en esta T1: 1043=1 EV; 2 HEV; 3 EV MAX (azul). "+
             "1040=2 SMART; 4 FORZADO/CHARGE. 1040=3 aún no validado. "+
