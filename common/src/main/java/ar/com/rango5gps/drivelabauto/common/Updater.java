@@ -503,7 +503,10 @@ public final class Updater {
                 if(isT1Receiver(a))commitT1Session(a,UpdateApkProvider.apk(a),reporter);
                 else a.runOnUiThread(()->openInstaller(a,reporter));
             }catch(Exception e){
-                notify(a,reporter,"La APK ya no es válida. Tocá Actualizar nuevamente.");
+                notify(a,reporter,"La instalación por sesión falló: "+
+                    e.getClass().getSimpleName());
+                if(isT1Receiver(a)&&hasPendingInstall(a))
+                    a.runOnUiThread(()->openInstaller(a,reporter));
             }finally{permissionRecovery=false;}
         },"DriveLab-Update-Permission-Resume").start();
     }
@@ -516,12 +519,20 @@ public final class Updater {
                     commitT1Session(a,UpdateApkProvider.apk(a),reporter);
                 else a.runOnUiThread(()->openInstaller(a,reporter));
             }catch(Exception error){
-                notify(a,reporter,"No se pudo completar la instalación: "+
-                    error.getClass().getSimpleName());
-                if(isT1Receiver(a))
-                    status(a,"Sesión Android no iniciada ("+
-                        error.getClass().getSimpleName()+"). "+
-                        "Probá el instalador alternativo o los Ajustes de Receiver.");
+                if(isT1Receiver(a)){
+                    status(a,"La ROM rechazó sesión PackageInstaller ("+
+                        error.getClass().getSimpleName()+
+                        "). Intentando instalador Android por archivo…");
+                    notify(a,reporter,
+                        "La ROM bloqueó la sesión; abriendo instalador alternativo…");
+                    // Already verified, user-authorized APK. The OEM's
+                    // file-based installer may accept it even when the
+                    // Session API throws SecurityException.
+                    a.runOnUiThread(()->openInstaller(a,reporter));
+                }else{
+                    notify(a,reporter,"No se pudo completar la instalación: "+
+                        error.getClass().getSimpleName());
+                }
             }
         },"DriveLab-Verify-Install").start();
     }
@@ -636,7 +647,14 @@ public final class Updater {
         }
         if(!expected.equals(hex(digest.digest())))
             throw new SecurityException("La APK cambió después de descargarse");
-        verifyArchive(a,file,code);
+        // The immutable cached APK already matches the persisted SHA and
+        // version code. Re-verify its package and installed signing identity
+        // before handing it to either Android installer route.
+        PackageInfo archive=a.getPackageManager().getPackageArchiveInfo(
+            file.getAbsolutePath(),PackageManager.GET_SIGNING_CERTIFICATES);
+        if(archive==null||archive.versionName==null)
+            throw new SecurityException("APK de actualización no legible");
+        verifyArchive(a,file,new Offer(archive.versionName,"",expected,code));
     }
 
     private static void openInstaller(Activity a,Reporter reporter){
@@ -659,9 +677,12 @@ public final class Updater {
                 a.startActivity(fallback);
                 notify(a,reporter,"Instalador Android alternativo abierto.");
             }catch(Exception second){
-                notify(a,reporter,"Android no pudo abrir el instalador ("+
+                String failure="Android no pudo abrir el instalador ("+
                     first.getClass().getSimpleName()+" / "+
-                    second.getClass().getSimpleName()+")");
+                    second.getClass().getSimpleName()+"). "+
+                    "La APK firmada sigue guardada; la ROM puede requerir ADB.";
+                if(isT1Receiver(a))status(a,failure);
+                notify(a,reporter,failure);
             }
         }
     }
