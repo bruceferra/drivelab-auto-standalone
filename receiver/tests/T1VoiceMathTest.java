@@ -16,6 +16,10 @@ public final class T1VoiceMathTest {
         expect("275 dividido por 5","El resultado es 55.");
         expect("cuánto es 22 menos 12","El resultado es 10.");
         expect("cuánto es 10 dividido por 0","No se puede dividir por cero.");
+        expect("¿Cuánto serían 14 kilómetros por litro a litros cada 100 kilómetros?",
+            "14 kilómetros por litro equivalen a 7,14 litros cada 100 kilómetros.");
+        expect("catorce kilometros por litro a litros cada 100",
+            "catorce kilómetros por litro equivalen a 7,14 litros cada 100 kilómetros.");
         expect("navegá a el Obelisco",null);
         expect("cómo salió San Lorenzo",null);
         expect("qué onda con Trump",null);

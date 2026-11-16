@@ -36,9 +36,11 @@ public final class T1MirrorUncertainRecoverySourceContractTest {
             !confirmation.contains(".write(")&&
             !confirmation.contains(".putBoolean(AUTO,true)"),
             "Reference acknowledgement never actuates, guesses angle or auto-arms");
-        check(svc.contains("if(physical.startsWith(\"INCIERTA\")||physical.startsWith(\"R · inclinados\"))")&&
+        check(svc.contains("private static boolean unresolved(SharedPreferences p)")&&
+            svc.contains("if(unresolved(p))")&&
+            svc.contains("boolean hasUnresolved=unresolved(prefs());")&&
             !svc.contains("INCIERTA · espejos posiblemente bajos tras reinicio"),
-            "Keep prior tilted/uncertain pose through process restart");
+            "Only an actual in-flight or outstanding ledger blocks next ignition");
         check(svc.contains("RECUPERAR ESPEJOS · subiendo solo los pulsos registrados")&&
             svc.contains("manual==3?prefs().getInt(PENDING_LEFT,0)")&&
             svc.contains("manual==3?prefs().getInt(PENDING_RIGHT,0)")&&
@@ -73,7 +75,7 @@ public final class T1MirrorUncertainRecoverySourceContractTest {
         int onAuto=svc.indexOf("if(ACTION_AUTO.equals(action))");
         int activeFirst=svc.indexOf("if(running)return START_STICKY;",onAuto);
         int holdCheck=svc.indexOf(
-            "if(prefs().getBoolean(SAFETY_HOLD,true)||",onAuto);
+            "if(unresolved(prefs()))",onAuto);
         check(onAuto>=0&&activeFirst>onAuto&&holdCheck>activeFirst,
             "Duplicate AUTO while tilting must not stop the live worker "+
             "because pending pulses are legitimately outstanding");

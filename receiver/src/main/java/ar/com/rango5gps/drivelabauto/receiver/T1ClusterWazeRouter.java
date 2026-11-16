@@ -263,20 +263,24 @@ final class T1ClusterWazeRouter {
         status(c,result);
         return result.startsWith("Waze SOLICITADO");
     }
-    static void onReceiverBoot(Context c){
-        if(!autoBoot(c))return;
+    static String onReceiverBoot(Context c){
+        if(!autoBoot(c))return "Arranque del clúster desactivado";
         if(selected(c)==null){
-            status(c,"Arranque: display no coincide con el elegido. "+
-                "Se preservan la pantalla central y el launcher OEM.");
-            return;
+            String reason="Arranque: display no coincide con el elegido. "+
+                "Se preservan la pantalla central y el launcher OEM.";
+            status(c,reason);
+            return reason;
         }
         // Delayed ignition auto-boot must not clobber an unverified 50/50.
         if(T1ClusterLayoutPolicy.pendingUnverified(c)){
-            status(c,T1ClusterLayoutPolicy.pendingMessage(c));
-            return;
+            String reason=T1ClusterLayoutPolicy.pendingMessage(c);
+            status(c,reason);
+            return reason;
         }
-        if(T1ClusterLayoutPolicy.active(c))
-            status(c,T1ClusterLayoutPolicy.boot(c));
-        else status(c,launchSelectedApp(c,false,true));
+        String opened=T1ClusterLayoutPolicy.active(c)?
+            T1ClusterLayoutPolicy.boot(c):
+            launchSelectedApp(c,false,true);
+        status(c,opened);
+        return opened;
     }
 }

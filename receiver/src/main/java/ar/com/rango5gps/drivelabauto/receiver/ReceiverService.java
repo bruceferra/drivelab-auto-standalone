@@ -354,9 +354,31 @@ public final class ReceiverService extends Service {
      */
     private void scheduleNativeClusterWaze(){
         if(!T1ClusterWazeRouter.autoBoot(this))return;
-        new Handler(Looper.getMainLooper()).postDelayed(()->{
+        Handler boot=new Handler(Looper.getMainLooper());
+        // Intentional order: Receiver UI/Cockpit is launched at 12s,
+        // cluster map panes at 20s, and actual saved destinations 3s
+        // AFTER both map tasks exist. Manual CLÚSTER OFF/ON already does
+        // this final replay; boot previously omitted it entirely.
+        boot.postDelayed(()->{
             if(!running||!T1ClusterWazeRouter.autoBoot(this))return;
-            T1ClusterWazeRouter.onReceiverBoot(this);
+            String opened=T1ClusterWazeRouter.onReceiverBoot(this);
+            if(!opened.startsWith("APP SOLICITADA")&&
+               !opened.startsWith("Waze SOLICITADO"))return;
+            final long requestedAt=T1ClusterWazeRouter.prefs(this)
+                .getLong(T1ClusterWazeRouter.LAST_REQUEST_MS,0L);
+            boot.postDelayed(()->{
+                if(!running||!T1ClusterWazeRouter.autoBoot(this)||
+                   !T1ClusterWazeRouter.enabled(this)||
+                   T1ClusterWazeRouter.selected(this)==null||
+                   T1ClusterLayoutPolicy.pendingUnverified(this))return;
+                // A newer human/phone navigation request supersedes
+                // auto-replay of the OLD saved destination.
+                long currentAt=T1ClusterWazeRouter.prefs(this)
+                    .getLong(T1ClusterWazeRouter.LAST_REQUEST_MS,0L);
+                if(currentAt!=requestedAt)return;
+                String restored=T1LastRoute.restore(this);
+                prefs().edit().putString("boot_route_restore",restored).apply();
+            },3200L);
         },20000L);
     }
     private void scheduleBootApp(){
