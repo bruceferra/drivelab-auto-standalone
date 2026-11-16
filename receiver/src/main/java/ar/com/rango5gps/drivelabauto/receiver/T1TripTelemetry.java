@@ -118,6 +118,20 @@ final class T1TripTelemetry {
         catch(Exception e){return Double.NaN;}
     }
 
+    /** Short read-only OEM speed poll, never guessed from GPS. */
+    double speedOnly(){
+        AtomicReference<Double> result=new AtomicReference<>(Double.NaN);
+        try{
+            withService(VEHICLE_PKG,VEHICLE_CLS,VEHICLE_TOKEN,b->{
+                double value=safeFloat(()->floatValue(b,2148));
+                if(!Double.isFinite(value)||value<0||value>220)
+                    value=safeFloat(()->intValue(b,1089));
+                result.set(Double.isFinite(value)&&value>=0&&value<=220?
+                    value:Double.NaN);
+            });
+        }catch(Exception ignored){}
+        return result.get();
+    }
     Sample snapshot(){
         Sample s=new Sample();s.timestamp=System.currentTimeMillis();
         try{

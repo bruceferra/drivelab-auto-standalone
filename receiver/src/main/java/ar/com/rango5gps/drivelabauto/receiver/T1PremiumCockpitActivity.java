@@ -93,6 +93,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private long lastConsumptionAttempt=0;
     // Compact OEM gauges: keep fuel, SOC, engine and HV battery, no speedometer.
     private T1PremiumInstrumentView gauge;
+    private final AtomicBoolean speedReading=new AtomicBoolean(false);
+    private long lastSpeedRequest=0L;
 
     private TextView dayRecordingLamp,clientRecordingLamp,secondRecordingLamp;
     private Button dayStartButton,dayPauseButton,dayEndButton,
@@ -200,6 +202,20 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             if(System.currentTimeMillis()-lastThermalAttempt>12000){
             lastThermalAttempt=System.currentTimeMillis();
             readThermal(false);
+        }
+        long speedNow=android.os.SystemClock.uptimeMillis();
+        if(speedNow-lastSpeedRequest>=1300L&&
+                speedReading.compareAndSet(false,true)){
+            lastSpeedRequest=speedNow;
+            new Thread(()->{
+                double velocity=new T1TripTelemetry(
+                    T1PremiumCockpitActivity.this).speedOnly();
+                ui.post(()->{
+                    speedReading.set(false);
+                    if(visible&&!isFinishing()&&!isDestroyed()&&gauge!=null)
+                        gauge.updateSpeed(Double.isFinite(velocity)?velocity:null);
+                });
+            },"T1-OEM-Speed-ReadOnly").start();
         }
         if(System.currentTimeMillis()-lastTelem>3800&&
                 reading.compareAndSet(false,true)){
@@ -1077,9 +1093,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         // Unique navigation row: no duplicate rescue controls.
         // RAM/CPU access is preserved as a primary button.
 
-        // Restore the user's original instrument cards. Only remove the
-        // oversize speedometer; the 4 non-speed gauges retain their live OEM
-        // sources, colored bars, motor and HV battery flow indicators.
+        // Five digital/compact blocks: OEM speed, usable fuel, SOC,
+        // thermal engine and HV battery. Still an auxiliary dashboard.
         gauge=new T1PremiumInstrumentView(this);
         gauge.setCompactWithoutSpeed(true);
         LinearLayout.LayoutParams meterParams=new LinearLayout.LayoutParams(-1,-2);
