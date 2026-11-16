@@ -335,30 +335,76 @@ public final class Updater {
         if(!parent.isDirectory()&&!parent.mkdirs())
             throw new IOException("No se pudo crear la caché de actualizaciones");
         File partial=new File(parent,"drivelab-download.part");
-        partial.delete();
+        // On GitHub releases, github.com and api.github.com reach the same
+        // asset through different frontends. A failed transfer can try the
+        // other route, but every byte must still match the SHA-256 supplied
+        // by GitHub and the APK signing certificate already installed.
+        String[] sources=offer.backupUrl==null?
+            new String[]{offer.url}:
+            new String[]{offer.backupUrl,offer.url};
+        IOException firstNetworkFailure=null;
+        for(int source=0;source<sources.length;source++){
+            partial.delete();
+            try{
+                notify(a,reporter,source==0?
+                    "Descargando APK · canal GitHub "+(offer.backupUrl==null?
+                        "directo":"API")+"…":
+                    "Descarga alternativa · GitHub Releases…");
+                long verifiedCode=downloadVerifiedSource(a,sources[source],
+                    partial,offer,reporter);
+                if(target.isFile()&&!target.delete())
+                    throw new IOException("No se pudo reemplazar la descarga anterior");
+                if(!partial.renameTo(target))
+                    throw new IOException("No se pudo guardar la APK verificada");
+                SharedPreferences p=a.getSharedPreferences(PREFS,Activity.MODE_PRIVATE);
+                if(!p.edit().putString(READY_SHA,offer.hash)
+                    .putLong(READY_CODE,verifiedCode).commit())
+                    throw new IOException("No se pudo conservar el estado de instalación");
+                return target;
+            }catch(IOException e){
+                partial.delete();
+                if(firstNetworkFailure==null)firstNetworkFailure=e;
+                if(source==sources.length-1){
+                    throw new IOException("La APK no se pudo descargar desde "+
+                        (sources.length==1?"GitHub":"API ni GitHub")+" ("+
+                        shortError(firstNetworkFailure)+
+                        (sources.length>1?"; "+shortError(e):"")+")",e);
+                }
+            }catch(Exception error){
+                partial.delete();
+                throw error; // Never bypass SHA-256 or signature failures.
+            }
+        }
+        throw new IOException("Descarga sin canales disponibles");
+    }
+
+    private static long downloadVerifiedSource(Activity a,String url,
+                   File partial,Offer offer,Reporter reporter)throws Exception {
         MessageDigest digest=MessageDigest.getInstance("SHA-256");
         long bytes=0;
         int lastProgress=-1;
-        HttpURLConnection connection=openHttps(offer.url);
+        HttpURLConnection connection=openHttps(url);
         try{
             long length=connection.getContentLengthLong();
             if(length>MAX_APK)throw new IOException("La APK supera el tamaño máximo");
             String type=connection.getContentType();
-            if(type!=null&&type.toLowerCase(Locale.ROOT).contains("text/html"))
-                throw new IOException("El servidor devolvió HTML y no una APK");
+            if(type!=null&&(type.toLowerCase(Locale.ROOT).contains("text/html")||
+                            type.toLowerCase(Locale.ROOT).contains("application/json")))
+                throw new IOException("El servidor devolvió metadatos y no la APK");
             try(InputStream in=connection.getInputStream();
                 FileOutputStream out=new FileOutputStream(partial)){
                 byte[] buffer=new byte[32768];int read;
                 while((read=in.read(buffer))!=-1){
                     bytes+=read;
-                    if(bytes>MAX_APK)throw new IOException("La APK excede el máximo permitido");
+                    if(bytes>MAX_APK)
+                        throw new IOException("La APK excede el máximo permitido");
                     digest.update(buffer,0,read);
                     out.write(buffer,0,read);
                     if(length>0){
                         int progress=(int)Math.min(100,(bytes*100)/length);
                         if(progress/10!=lastProgress/10){
                             lastProgress=progress;
-                            notify(a,reporter,"Descargando actualización "+progress+" %");
+                            notify(a,reporter,"Descargando APK "+progress+" %");
                         }
                     }
                 }
@@ -369,23 +415,11 @@ public final class Updater {
                 throw new SecurityException("SHA-256 incorrecto; se canceló la instalación");
             if(!hasApkSignature(partial))
                 throw new SecurityException("El servidor no entregó una APK");
-            verifyArchive(a,partial,offer.code);
-            if(target.isFile()&&!target.delete())
-                throw new IOException("No se pudo reemplazar la descarga anterior");
-            if(!partial.renameTo(target))
-                throw new IOException("No se pudo guardar la APK verificada");
-            SharedPreferences p=a.getSharedPreferences(PREFS,Activity.MODE_PRIVATE);
-            if(!p.edit().putString(READY_SHA,offer.hash)
-                .putLong(READY_CODE,offer.code).commit())
-                throw new IOException("No se pudo conservar el estado de instalación");
-            return target;
-        }catch(Exception error){
-            partial.delete();
-            throw error;
+            return verifyArchive(a,partial,offer);
         }finally{connection.disconnect();}
     }
 
-    private static void verifyArchive(Activity a,File file,long code)throws Exception {
+    private static long verifyArchive(Activity a,File file,Offer offer)throws Exception {
         if(!file.isFile()||file.length()<1024||file.length()>MAX_APK)
             throw new SecurityException("Archivo de instalación inválido");
         if(!hasApkSignature(file))
@@ -395,11 +429,13 @@ public final class Updater {
         PackageInfo current=pm.getPackageInfo(a.getPackageName(),flags);
         PackageInfo candidate=pm.getPackageArchiveInfo(file.getAbsolutePath(),flags);
         if(candidate==null||!a.getPackageName().equals(candidate.packageName)||
-           candidate.getLongVersionCode()!=code||
+           !offer.name.equals(candidate.versionName)||
+           (offer.code>0&&candidate.getLongVersionCode()!=offer.code)||
            candidate.getLongVersionCode()<=current.getLongVersionCode())
             throw new SecurityException("APK de otro paquete o versión");
         if(!certificateHashes(current).equals(certificateHashes(candidate)))
             throw new SecurityException("La firma de la APK es distinta de la instalada");
+        return candidate.getLongVersionCode();
     }
 
     private static TreeSet<String> certificateHashes(PackageInfo packageInfo)
