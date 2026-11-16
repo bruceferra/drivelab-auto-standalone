@@ -384,7 +384,7 @@ final class T1GlobalToolbar {
         boolean active=T1ClusterWazeRouter.enabled(owner);
         boolean pending=p.getBoolean(T1ClusterWazeRouter.CLOSE_PENDING,false);
         clusterButton.setText(active?"CLÚSTER ON":
-            pending?"CLÚSTER · CERRAR":"CLÚSTER OFF");
+            pending?"CLÚSTER OFF · SIN CIERRE":"CLÚSTER OFF");
         T1JetourTheme.button(clusterButton,active?
             T1JetourTheme.GREEN_BUTTON:pending?
             T1JetourTheme.AMBER_BUTTON:T1JetourTheme.PANEL_HI);
@@ -392,25 +392,34 @@ final class T1GlobalToolbar {
             "Clúster de navegación habilitado. Tocar para cerrar Waze "+
                 "y volver al tablero OEM cuando Android permita.":
             pending?"Clúster desactivado pero cierre de apps pendiente; "+
-                "tocar para reintentar con ADB local autorizado":
+                "tocá para volver a CLÚSTER ON; Waze puede seguir visible sin ADB":
             "Clúster desactivado. Tocar para enviar Waze al Display elegido");
     }
     private void toggleCluster(){
         SharedPreferences p=T1ClusterWazeRouter.prefs(owner);
-        if(T1ClusterWazeRouter.enabled(owner)||
-            p.getBoolean(T1ClusterWazeRouter.CLOSE_PENDING,false)){
-            // Stop future navigation and boot launches immediately,
-            // even if the system doesn't yet allow us to close Waze.
+        if(T1ClusterWazeRouter.enabled(owner)){
+            // OFF stops routing but does not claim the Waze task disappears.
+            // The OEM dashboard is not verified without a physical test.
             p.edit().putBoolean(T1ClusterWazeRouter.ENABLED,false)
                 .putBoolean(T1ClusterWazeRouter.AUTO_BOOT,false)
                 .putBoolean(T1ClusterLayoutPolicy.ACTIVE,false)
                 .putBoolean(T1ClusterWazeRouter.CLOSE_PENDING,true)
                 .putString(T1ClusterWazeRouter.STATUS,
-                    "CLÚSTER OFF solicitado: cerrando tareas Waze/Maps "+
-                    "solo en Display seleccionado, pendiente de verificación.")
+                    T1ClusterAdbResize.enabled(owner)?
+                    "CLÚSTER OFF: destinos detenidos. Intentando cerrar "+
+                    "Waze/Maps con ADB autorizado.":
+                    "CLÚSTER OFF: destinos detenidos. Waze puede seguir "+
+                    "visible en el tablero; sin ADB no se cerró.")
                 .apply();
             refreshCluster();
+            if(!T1ClusterAdbResize.enabled(owner)){
+                note("RUTAS OFF · Waze puede seguir visible sin ADB. "+
+                    "Tocá nuevamente para CLÚSTER ON.");
+                return;
+            }
             T1ClusterAdbResize.closeClusterApps(owner,(message,confirmed)->{
+                // Ignore stale OFF callbacks after the user returned to ON.
+                if(T1ClusterWazeRouter.enabled(owner))return;
                 // Persist the result even when DriveLab is temporarily
                 // backgrounded during the task removal on Display 1.
                 T1ClusterWazeRouter.prefs(owner).edit()
@@ -429,6 +438,7 @@ final class T1GlobalToolbar {
             navigate(T1ClusterWazeSettingsActivity.class);
             return;
         }
+        // Pending ADB close does not block returning to CLÚSTER ON.
         p.edit().putBoolean(T1ClusterWazeRouter.ENABLED,true)
             .putBoolean(T1ClusterWazeRouter.AUTO_BOOT,true)
             .putBoolean(T1ClusterWazeRouter.CLOSE_PENDING,false)

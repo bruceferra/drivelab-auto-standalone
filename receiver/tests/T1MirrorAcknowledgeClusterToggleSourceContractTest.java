@@ -48,7 +48,7 @@ public final class T1MirrorAcknowledgeClusterToggleSourceContractTest {
         check(cluster>=0&&optimized>cluster&&
             toolbar.contains("CLÚSTER ON")&&
             toolbar.contains("CLÚSTER OFF")&&
-            toolbar.contains("CLÚSTER · CERRAR")&&
+            toolbar.contains("CLÚSTER OFF · SIN CIERRE")&&
             toolbar.contains("T1ClusterWazeRouter.launchSelectedApp(owner,true,false)")&&
             toolbar.contains("T1ClusterAdbResize.closeClusterApps(owner,")&&
             toolbar.contains(".putBoolean(T1ClusterWazeRouter.AUTO_BOOT,false)")&&

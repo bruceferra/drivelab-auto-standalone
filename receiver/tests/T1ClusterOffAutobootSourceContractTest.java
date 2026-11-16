@@ -1,0 +1,46 @@
+package ar.com.rango5gps.drivelabauto.receiver;
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+/** OFF without ADB is a routing change, not proof Waze vanished. */
+public final class T1ClusterOffAutobootSourceContractTest {
+    static String src(String file)throws Exception {
+        return Files.readString(Path.of("receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver",file));
+    }
+    static void check(boolean ok,String why){if(!ok)throw new AssertionError(why);}
+    public static void main(String[] args)throws Exception {
+        String toolbar=src("T1GlobalToolbar.java");
+        String adb=src("T1ClusterAdbResize.java");
+        String layout=src("T1ClusterLayoutPolicy.java");
+        int begin=toolbar.indexOf("private void toggleCluster()");
+        int end=toolbar.indexOf("private void refreshMirrorAuto()",begin);
+        check(begin>=0&&end>begin,"Cluster toggle exists");
+        String toggle=toolbar.substring(begin,end);
+        check(toggle.contains("if(T1ClusterWazeRouter.enabled(owner)){")&&
+            !toggle.contains("T1ClusterWazeRouter.enabled(owner)||")&&
+            toggle.contains(".putBoolean(T1ClusterWazeRouter.CLOSE_PENDING,false)")&&
+            toggle.contains(".putBoolean(T1ClusterWazeRouter.AUTO_BOOT,true)"),
+            "Pending OFF cannot prevent turning ON and restoring autoboot");
+        check(toolbar.contains("CLÚSTER OFF · SIN CIERRE")&&
+            toggle.contains("Waze puede seguir")&&
+            toggle.contains("if(!T1ClusterAdbResize.enabled(owner))")&&
+            toggle.contains("if(T1ClusterWazeRouter.enabled(owner))return;"),
+            "OFF cannot claim to close without ADB or undo a newer ON");
+        int enable=adb.indexOf("static void enable(Context c,boolean on)");
+        int probe=adb.indexOf("static void probe(Context c,Done done)",enable);
+        check(enable>=0&&probe>enable&&
+            !adb.substring(enable,probe).contains("AUTO_BOOT,false"),
+            "ADB enable/disable must not disable the proven Waze autoboot");
+        int set=layout.indexOf("static void setMode(Context c,String desired)");
+        int selected=layout.indexOf("static String secondPackage(Context c)",set);
+        check(set>=0&&selected>set&&
+            !layout.substring(set,selected).contains("AUTO_BOOT,false"),
+            "Experimental geometry edits must not disable proven Waze autoboot");
+        check(adb.contains("if(T1ClusterWazeRouter.enabled(app))")&&
+            adb.contains("Cierre cancelado: CLÚSTER volvió a ON")&&
+            adb.contains("if(!parked(app))")&&
+            adb.contains("T1AdbTaskParser.unique(now,id,pkg)"),
+            "ADB close remains P-only and cannot intentionally close after ON");
+        System.out.println("PASS CLUSTER OFF reversible with no ADB; Waze autoboot protected");
+    }
+}

@@ -30,7 +30,6 @@ final class T1ClusterAdbResize {
             .putBoolean(OPT_IN,on)
             .putLong(VERIFIED_AT,0L)
             .putBoolean(T1ClusterLayoutPolicy.ACTIVE,false)
-            .putBoolean(T1ClusterWazeRouter.AUTO_BOOT,false)
             .putString(RESULT,on?
                 "Puente habilitado. Autorizá depuración ADB local y PROBÁ "+
                 "en P. La conexión no funciona sin adbd TCP 5555.":
@@ -180,6 +179,9 @@ final class T1ClusterAdbResize {
                 }
                 int removed=0;
                 for(String pkg:new String[]{WAZE,MAPS}){
+                    if(T1ClusterWazeRouter.enabled(app))
+                        throw new IllegalStateException(
+                            "Cierre cancelado: CLÚSTER volvió a ON");
                     // Requery immediately before each change so we never
                     // act on an old ID reused by an OEM task.
                     String now=taskList(app);
@@ -189,6 +191,9 @@ final class T1ClusterAdbResize {
                     if(!parked(app))
                         throw new IllegalStateException(
                             "Se abandonó P: cierre interrumpido");
+                    if(T1ClusterWazeRouter.enabled(app))
+                        throw new IllegalStateException(
+                            "Cierre cancelado: CLÚSTER volvió a ON");
                     String output=T1LocalAdbClient.shell(app,
                         "am task remove "+task.id);
                     if(errorOutput(output))

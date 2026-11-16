@@ -59,7 +59,7 @@ final class T1ClusterLayoutPolicy {
         prefs(c).edit().putString(MODE,desired)
             .putBoolean(ACTIVE,false)
             .remove(TEST_AT).remove(TEST_MODE)
-            .putBoolean(T1ClusterWazeRouter.AUTO_BOOT,false)
+            
             .apply();
     }
     static void setPercent(Context c,String key,int value,int min,int max){
@@ -67,7 +67,7 @@ final class T1ClusterLayoutPolicy {
             T1ClusterLayoutMath.bounded(value,min,max))
             .putBoolean(ACTIVE,false)
             .remove(TEST_AT).remove(TEST_MODE)
-            .putBoolean(T1ClusterWazeRouter.AUTO_BOOT,false).apply();
+            .apply();
     }
     static void secondApp(Context c,String pkg,String label){
         if(!T1ClusterWazeRouter.isSelectablePackage(c,pkg))
@@ -76,7 +76,7 @@ final class T1ClusterLayoutPolicy {
             .putString(SECOND_LABEL,label)
             .putBoolean(ACTIVE,false)
             .remove(TEST_AT).remove(TEST_MODE)
-            .putBoolean(T1ClusterWazeRouter.AUTO_BOOT,false).apply();
+            .apply();
     }
     static String secondPackage(Context c){
         return prefs(c).getString(SECOND_APP,MAPS);
