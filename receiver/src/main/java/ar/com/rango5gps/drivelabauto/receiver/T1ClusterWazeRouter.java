@@ -277,6 +277,30 @@ final class T1ClusterWazeRouter {
         status(c,result);
         return result.startsWith("Waze SOLICITADO");
     }
+    /** Called from the boot worker, never the main/UI thread.
+     * Read only OEM speed, and retry unknown readings during display startup. */
+    private static boolean stoppedForSavedSplit(Context c){
+        for(int attempt=0;attempt<3;attempt++){
+            MirrorAutomationOem oem=null;
+            try{
+                oem=new MirrorAutomationOem(c);
+                double speed=oem.speedKmh();
+                if(Double.isFinite(speed))return speed>=0&&speed<=0.5;
+            }catch(Exception ignored){
+                // Startup can expose Display 1 before the OEM speed signal.
+            }finally{
+                if(oem!=null)oem.close();
+            }
+            if(attempt<2){
+                try{Thread.sleep(700L);}
+                catch(InterruptedException e){
+                    Thread.currentThread().interrupt();
+                    return false;
+                }
+            }
+        }
+        return false;
+    }
     static String onReceiverBoot(Context c){
         if(!autoBoot(c))return "Arranque del clúster desactivado";
         if(selected(c)==null){
@@ -285,7 +309,29 @@ final class T1ClusterWazeRouter {
             status(c,reason);
             return reason;
         }
-        // Delayed ignition auto-boot must not clobber an unverified 50/50.
+        // The owner already chose two FREEFORM panes. This ROM reports
+        // unsupported native split and sometimes hides ADB task bounds;
+        // neither condition should silently cancel a saved 50/50 on ignition.
+        // Request only the same saved freeform launch as explicit CLÚSTER ON.
+        // No ADB commands, wheel mutations or fullscreen Waze fallback.
+        if(T1ClusterLayoutPolicy.savedDualSplit(c)){
+            if(!Settings.canDrawOverlays(c)&&!ReceiverActivity.isVisible()){
+                String reason="Arranque FREEFORM pendiente: Android no permite "+
+                    "abrir las apps en segundo plano sin permiso.";
+                status(c,reason);
+                return reason;
+            }
+            if(!stoppedForSavedSplit(c)){
+                String reason="Arranque FREEFORM pendiente: velocidad 0 km/h "+
+                    "no confirmada; paneles guardados sin cambios.";
+                status(c,reason);
+                return reason;
+            }
+            String opened=T1ClusterLayoutPolicy.reopenSavedPanelsStopped(c);
+            status(c,opened);
+            return opened;
+        }
+        // For layouts without both saved panes, keep the safe pre-existing gate.
         if(T1ClusterLayoutPolicy.pendingUnverified(c)){
             String reason=T1ClusterLayoutPolicy.pendingMessage(c);
             status(c,reason);
