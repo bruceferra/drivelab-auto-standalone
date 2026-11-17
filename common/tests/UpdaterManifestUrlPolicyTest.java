@@ -48,10 +48,12 @@ public final class UpdaterManifestUrlPolicyTest {
             "common/src/main/java/ar/com/rango5gps/drivelabauto/common/Updater.java"));
         ok(updater.contains("UpdaterManifestUrlPolicy.allowed(app,version,url)"),
             "Android Updater must use strictly tested URL policy");
-        ok(updater.contains("verifyArchive(a,partial,offer.code)")&&
+        ok(updater.contains("verifyArchive(a,partial,offer)")&&
+            updater.contains("verifyArchive(a,file,new Offer(")&&
             updater.contains("certificateHashes(current).equals(certificateHashes(candidate))")&&
-            updater.contains("SHA-256 incorrecto"),
-            "Update must retain SHA256 and same-signature safety");
+            updater.contains("SHA-256 incorrecto")&&
+            updater.contains("candidate.getLongVersionCode()<=current.getLongVersionCode()"),
+            "Update must retain SHA256, installed signer and newer-version safety");
         System.out.println("PASS exact updater manifest URL policy legacy and sender-v tags");
     }
 }
