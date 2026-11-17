@@ -122,6 +122,9 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
     }
     @Override protected void onCreate(Bundle state){
         super.onCreate(state);
+        // Discard diagnostics left by the retired Nov17 wheel ADB fallback.
+        // They must never appear as new attempts after it was disabled.
+        prefs().edit().remove("adb_wheel_fallback_status").apply();
         ScrollView scroll=new ScrollView(this);
         scroll.setBackgroundColor(T1JetourTheme.NIGHT);
         scroll.setFillViewport(true);
