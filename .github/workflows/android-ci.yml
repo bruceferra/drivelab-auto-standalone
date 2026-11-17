@@ -384,7 +384,9 @@ jobs:
           javac -encoding UTF-8 -d /tmp/t1-dual-soc-rules \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModePolicy.java \
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedDualRulePolicy.java \
-            receiver/tests/T1OptimizedDualRulePolicyTest.java
+            receiver/tests/T1OptimizedDualRulePolicyTest.java \
+            receiver/tests/T1OptimizedModePolicyTest.java
+          java -cp /tmp/t1-dual-soc-rules ar.com.rango5gps.drivelabauto.receiver.T1OptimizedModePolicyTest
           java -cp /tmp/t1-dual-soc-rules ar.com.rango5gps.drivelabauto.receiver.T1OptimizedDualRulePolicyTest
           python3 - <<'PY'
           from pathlib import Path
