@@ -75,6 +75,20 @@ jobs:
             receiver/tests/T1ClusterWindowAndMicSourceContractTest.java
           java -cp /tmp/t1-native-layout ar.com.rango5gps.drivelabauto.receiver.T1ClusterLayoutMathTest
           java -cp /tmp/t1-native-layout ar.com.rango5gps.drivelabauto.receiver.T1ClusterWindowAndMicSourceContractTest
+      - name: Verify boot-only clean map restart and hidden REBOOT
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-clean-reboot
+          javac -encoding UTF-8 -d /tmp/t1-clean-reboot receiver/tests/T1ClusterColdBootAndManualRebootContractTest.java
+          java -cp /tmp/t1-clean-reboot ar.com.rango5gps.drivelabauto.receiver.T1ClusterColdBootAndManualRebootContractTest
+      - name: Verify noninteractive 0 to 120px edge fade
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-edge-fade
+          javac -encoding UTF-8 -d /tmp/t1-edge-fade receiver/tests/T1ClusterEdgeFadeContractTest.java
+          java -cp /tmp/t1-edge-fade ar.com.rango5gps.drivelabauto.receiver.T1ClusterEdgeFadeContractTest
       - name: Preserve cluster top controls and visible focus error diagnosis
         shell: bash
         run: |
