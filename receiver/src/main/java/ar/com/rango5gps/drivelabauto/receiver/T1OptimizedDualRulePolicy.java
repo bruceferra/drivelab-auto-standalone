@@ -45,7 +45,15 @@ final class T1OptimizedDualRulePolicy {
         int aHigh=a.maxEnabled?a.maxBattery:100;
         int bLow=b.minEnabled?b.minBattery:0;
         int bHigh=b.maxEnabled?b.maxBattery:100;
-        return Math.max(aLow,bLow)<=Math.min(aHigh,bHigh);
+        int low=Math.max(aLow,bLow),high=Math.min(aHigh,bHigh);
+        if(low<high)return true;
+        if(low>high)return false;
+        // Touching boundaries overlap ONLY if both rules match that SOC.
+        // Example A <=20 and B >20: no conflict.
+        return T1OptimizedModePolicy.evaluate(
+                T1OptimizedModePolicy.Road.CITY,a,low).conditionSatisfied&&
+            T1OptimizedModePolicy.evaluate(
+                T1OptimizedModePolicy.Road.CITY,b,low).conditionSatisfied;
     }
 
     static Choice select(T1OptimizedModePolicy.Rule first,
