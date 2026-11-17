@@ -31,8 +31,8 @@ public final class T1ClusterInvertedPanelsAndWheelSourceTest {
         check(router.contains("!T1ClusterLayoutPolicy.inverted(c)")&&
             resize.contains("boolean inverted=split&&T1ClusterLayoutPolicy.inverted(app)")&&
             resize.contains("app,selected,!inverted")&&
-            resize.contains("if(!parked(c))"),
-            "Actual task bounds and Google route adapt only when P/0");
+            resize.contains("if(!stopped(c))"),
+            "Actual task bounds and Google route adapt at 0 km/h");
         String target=src("T1WheelTarget.java");
         check(!target.contains("T1ClusterLayoutPolicy.active(c)")&&
             target.contains("T1ClusterWazeRouter.enabled(c)")&&
