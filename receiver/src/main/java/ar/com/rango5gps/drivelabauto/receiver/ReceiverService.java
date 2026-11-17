@@ -372,17 +372,25 @@ public final class ReceiverService extends Service {
                    T1ClusterWazeRouter.selected(this)==null||
                    T1ClusterLayoutPolicy.pendingUnverified(this))return;
                 // A newer human/phone navigation request supersedes
-                // auto-replay of the OLD saved destination.
+                // auto-replay of the OLD saved destination, NOT the wheel.
+                // Previously this early-return also prevented post-boot
+                // microphone/accessibility recovery after a fresh route.
                 long currentAt=T1ClusterWazeRouter.prefs(this)
                     .getLong(T1ClusterWazeRouter.LAST_REQUEST_MS,0L);
-                if(currentAt!=requestedAt)return;
-                String restored=T1LastRoute.restore(this);
-                prefs().edit().putString("boot_route_restore",restored).apply();
-                // Maps/Waze are now on-screen and the old route has been
-                // reissued. Requery Accessibility on the real display and
-                // reuse the existing unified physical wheel Binder.
+                if(currentAt==requestedAt){
+                    String restored=T1LastRoute.restore(this);
+                    prefs().edit().putString("boot_route_restore",restored).apply();
+                }else{
+                    prefs().edit().putString("boot_route_restore",
+                        "Destino nuevo: no se repite ruta anterior").apply();
+                }
+                // Always rebind wheel and refresh Accessibility after the
+                // actual map tasks open, even if Sender/voice updated a route.
+                // The optional ADB step only requests focus; it never sends
+                // any key, tap or OEM command during ignition.
                 T1OemMicrophoneService.ensureRunning(this);
                 T1WazeWheelService.requestClusterReady(this);
+                T1WheelAdbFallback.restoreFocusAfterBoot(this);
             },3200L);
         },20000L);
     }
