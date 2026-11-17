@@ -28,11 +28,12 @@ public final class T1ClusterFreeformAutobootRegressionTest {
             policy.contains("MODE_SPLIT.equals(mode(c))&&panelAOn(c)&&panelBOn(c)"),
             "Only an explicitly selected two-panel freeform layout is restored");
         String boot=router.substring(saved,pending);
-        ck(boot.contains("stoppedForSavedSplit(c)")&&
+        ck(boot.contains("T1ClusterFreshStart.prepare(c)")&&
+            !boot.contains("stoppedForSavedSplit(c)")&&
             boot.contains("Settings.canDrawOverlays(c)")&&
             !boot.contains("launchApp(")&&!boot.contains("T1ClusterAdbResize")&&
             !boot.contains("am task")&&!boot.contains("gear()"),
-            "Cold boot only relaunches saved freeform with 0 km/h safety");
+            "Real boot tries clean stop then reopens saved FREEFORM without a speed gate");
         int manual=bar.indexOf("private void toggleCluster()");
         int restore=bar.indexOf("if(T1ClusterLayoutPolicy.savedDualSplit(owner))",manual);
         int fallback=bar.indexOf("if(pendingLayout)",restore);
