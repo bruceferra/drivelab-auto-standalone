@@ -507,30 +507,29 @@ final class T1GlobalToolbar {
         // owner's existing 60/40 permanently blocked. The explicit ON click
         // may relaunch the saved panels through ActivityOptions FREEFORM,
         // without requiring ADB cleanup or silently approving geometry.
-        // As with PROBAR DISEÑO, check OEM P/0 off the UI thread first.
+        // As with PROBAR DISEÑO, check OEM zero speed off the UI thread first.
         boolean pendingLayout=T1ClusterLayoutPolicy.pendingUnverified(owner);
         if(pendingLayout&&T1ClusterLayoutPolicy.MODE_SPLIT.equals(
                 T1ClusterLayoutPolicy.mode(owner))&&
            T1ClusterLayoutPolicy.panelAOn(owner)&&
            T1ClusterLayoutPolicy.panelBOn(owner)){
             p.edit().putString(T1ClusterWazeRouter.STATUS,
-                "CLÚSTER ON: recuperando paneles guardados; verificando P/0")
+                "CLÚSTER ON: recuperando paneles guardados; verificando 0 km/h")
                 .apply();
             new Thread(()->{
                 MirrorAutomationOem oem=null;
-                boolean parked=false;
+                boolean stopped=false;
                 try{
                     oem=new MirrorAutomationOem(owner);
-                    int gear=oem.gear();
                     double speed=oem.speedKmh();
-                    parked=gear==1&&Double.isFinite(speed)&&
+                    stopped=Double.isFinite(speed)&&
                         speed>=0&&speed<=0.5;
                 }catch(Exception ignored){
                     // Uncertain OEM data must never move a freeform pane.
                 }finally{
                     if(oem!=null)oem.close();
                 }
-                final boolean safe=parked;
+                final boolean safe=stopped;
                 owner.runOnUiThread(()->{
                     if(owner.isFinishing()||owner.isDestroyed()||
                        !T1ClusterWazeRouter.enabled(owner))return;
@@ -538,7 +537,7 @@ final class T1GlobalToolbar {
                         p.edit().putBoolean(T1ClusterWazeRouter.ENABLED,false)
                             .putBoolean(T1ClusterWazeRouter.AUTO_BOOT,false)
                             .apply();
-                        String blocked="CLÚSTER: no se confirmó P/0; "+
+                        String blocked="CLÚSTER: no se confirmó 0 km/h; "+
                             "no se modificaron las ventanas";
                         T1ClusterWazeRouter.status(owner,blocked);
                         refreshCluster();note(blocked);
