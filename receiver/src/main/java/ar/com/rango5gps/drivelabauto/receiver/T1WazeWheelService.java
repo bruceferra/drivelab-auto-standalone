@@ -643,9 +643,15 @@ public final class T1WazeWheelService extends AccessibilityService {
             case 1003:mapped=KeyEvent.KEYCODE_DPAD_CENTER;break;
             default:return;
         }
-        // Reuse the SAME Waze-only accessibility selection policy as ordinary
-        // Android keys; never fabricate clicks on Google Maps or OEM windows.
-        onKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN,mapped));
+        // Prefer real Accessibility nodes. This Jetour ROM can render BOTH
+        // freeform maps on Display 1 without exposing their Accessibility
+        // windows after cold boot. In that specific case, try a strict ADB
+        // DPAD fallback only if the map task and its INPUT focus are VERIFIED
+        // on the selected secondary display. No blind touch or OEM input.
+        boolean handled=onKeyEvent(new KeyEvent(KeyEvent.ACTION_DOWN,mapped));
+        if(!handled&&activeRoot()==null&&
+           prefs().getString(PENDING,"").isEmpty())
+            T1WheelAdbFallback.request(this,code);
     }
     @Override public boolean onKeyEvent(KeyEvent event){
         if(event==null||event.getAction()!=KeyEvent.ACTION_DOWN||
