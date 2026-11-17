@@ -49,7 +49,14 @@ public final class RouteActivity extends Activity {
             Toast.makeText(this,"DriveLab: Android bloqueó enviar destino",
                 Toast.LENGTH_SHORT).show();
         }finally{
-            finish();
+            // External sharing (including Uber) can launch this transparent
+            // trampoline in its own task. Remove only that temporary task,
+            // so Android returns to the app that initiated the share rather
+            // than exposing a previously opened SenderActivity underneath.
+            // A trampoline inside the caller's task is NOT its root: finish
+            // only this Activity, preserving Uber/Maps and existing history.
+            if(isTaskRoot())finishAndRemoveTask();
+            else finish();
             overridePendingTransition(0,0);
         }
     }
