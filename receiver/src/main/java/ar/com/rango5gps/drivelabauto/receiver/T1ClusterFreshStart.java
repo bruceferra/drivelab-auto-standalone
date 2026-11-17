@@ -7,13 +7,12 @@ import java.util.Locale;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * Jetour T1 user-verified recovery: Android's Settings > Force stop for
- * BOTH Waze and Maps, followed by reopening, restored the steering wheel.
- * Perform the equivalent two narrowly whitelisted local ADB force-stops
- * BEFORE boot/manual CLUSTER ON opens the saved dual FREEFORM panes.
+ * Jetour owner verified that manually force-stopping Waze and Maps and then
+ * reopening restored the wheel. ADB equivalent is pending physical testing.
+ * Only called on real cold boot or a deliberate hidden manual REBOOT action.
  *
- * No main-thread ADB, OEM process, display changes, steering injections,
- * force-stop in motion, repeat loop, arbitrary packages or silent fallback.
+ * No main-thread ADB, OEM process, vehicle-gear/speed access, steering
+ * injections, repeat loop, arbitrary packages or silent fallback.
  * ADB authorization for DriveLab's own RSA key is required separately from
  * Termux's trusted key. Failure prevents the subsequent auto relaunch.
  */
@@ -62,13 +61,10 @@ final class T1ClusterFreshStart {
             if(!T1ClusterAdbResize.enabled(c))
                 return store(c,false,
                     "CIERRE LIMPIO NO EJECUTADO: activá el puente ADB local");
-            if(!stopped(c))
-                return store(c,false,
-                    "CIERRE LIMPIO BLOQUEADO: no se confirmó velocidad 0 km/h");
             for(String pkg:new String[]{WAZE,MAPS}){
-                if(!T1ClusterWazeRouter.enabled(c)||!stopped(c))
+                if(!T1ClusterWazeRouter.enabled(c))
                     return store(c,false,
-                        "CIERRE LIMPIO INTERRUMPIDO: clúster OFF o vehículo en movimiento");
+                        "CIERRE LIMPIO INTERRUMPIDO: clúster OFF");
                 String result=T1LocalAdbClient.shell(c,"am force-stop "+pkg);
                 if(error(result))
                     return store(c,false,
@@ -83,11 +79,11 @@ final class T1ClusterFreshStart {
                         "CIERRE LIMPIO SIN CONFIRMAR: "+pkg+
                         " sigue activo o pidof falló: "+shortText(pid));
             }
-            if(!T1ClusterWazeRouter.enabled(c)||!stopped(c))
+            if(!T1ClusterWazeRouter.enabled(c))
                 return store(c,false,
-                    "CIERRE LIMPIO DETENIDO: no reabrir mientras el auto se mueve");
+                    "CIERRE LIMPIO INTERRUMPIDO: clúster OFF");
             return store(c,true,
-                "ADB CONFIRMÓ SIN PROCESOS WAZE/MAPS en Display 1: "+
+                "ADB CONFIRMÓ SIN PROCESOS WAZE/MAPS: "+
                 "se solicitará apertura nueva 50/50; confirmar rueda y capa OEM.");
         }catch(Exception ex){
             return store(c,false,
@@ -110,14 +106,5 @@ final class T1ClusterFreshStart {
             lower.contains("exception:")||
             lower.contains("not found")||
             lower.contains("unknown command");
-    }
-    private static boolean stopped(Context c){
-        MirrorAutomationOem oem=null;
-        try{
-            oem=new MirrorAutomationOem(c);
-            double speed=oem.speedKmh();
-            return Double.isFinite(speed)&&speed>=0&&speed<=0.5;
-        }catch(Exception ignored){return false;}
-        finally{if(oem!=null)oem.close();}
     }
 }
