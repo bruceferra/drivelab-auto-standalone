@@ -9,6 +9,7 @@ import android.content.pm.ResolveInfo;
 import android.os.Bundle;
 import android.view.Display;
 import android.widget.Button;
+import android.view.Gravity;
 import android.widget.LinearLayout;
 import android.widget.ScrollView;
 import android.widget.TextView;
@@ -72,6 +73,31 @@ public final class T1ClusterWazeSettingsActivity extends T1ImmersiveActivity {
             showTechnical=!showTechnical;render();
         });
         if(showTechnical){
+            // Small, hidden maintenance action: never consume the fixed top
+            // toolbar or add another driving shortcut.
+            LinearLayout rebootLine=new LinearLayout(this);
+            rebootLine.setGravity(Gravity.RIGHT|Gravity.CENTER_VERTICAL);
+            body.addView(rebootLine);
+            Button reboot=new Button(this);
+            reboot.setText("REBOOT");
+            reboot.setAllCaps(false);
+            reboot.setTextSize(11f);
+            rebootLine.addView(reboot,new LinearLayout.LayoutParams(
+                (int)(104*getResources().getDisplayMetrics().density),
+                (int)(42*getResources().getDisplayMetrics().density)));
+            reboot.setOnClickListener(v->new AlertDialog.Builder(this)
+                .setTitle("REBOOT · DRIVELAB / MAPAS")
+                .setMessage("Cierra completamente Waze y Google Maps, "+
+                    "interrumpe su navegación actual y los abre otra vez "+
+                    "con el 50/50 guardado. También relanza la pantalla "+
+                    "DriveLab sin apagar el servicio del Sender. "+
+                    "No exige P ni 0 km/h. ¿Continuar?")
+                .setNegativeButton("CANCELAR",null)
+                .setPositiveButton("REBOOT",(dialog,which)->{
+                    T1ClusterManualReboot.run(this);
+                    render();
+                }).show());
+            label(body,"ÚLTIMO REBOOT · "+T1ClusterManualReboot.last(this),13);
             label(body,"DIAGNÓSTICOS ANTIGUOS · NO NECESARIOS PARA EL USO NORMAL",14);
         label(body,"Pantallas secundarias públicas detectadas: "+
             T1ClusterWazeRouter.candidates(this).size()+
