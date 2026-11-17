@@ -47,10 +47,10 @@ final class T1WheelAdbFocusPolicy {
     }
 
     /** A focused OEM instrument window after ignition is normal on this ROM.
-     * A user wheel turn may request map task focus ONLY while parked, with a
-     * unique, visible, key-capable map window on the chosen display and no
-     * third-party popup currently focused. The caller verifies the map task
-     * itself and must RECHECK actual focus after am task focus.
+     * A user wheel turn may request map task focus even while driving, only
+     * with a unique, visible, key-capable map window on the chosen display
+     * and no third-party popup currently focused. The caller verifies the
+     * selected map task and MUST RECHECK actual focus before sending DPAD.
      */
     static boolean mayFocusMap(String dump,int display,String pkg){
         if(!supported(display,pkg)||dump==null||dump.length()>96000)
