@@ -25,14 +25,15 @@ public final class T1ClusterPendingRecoverySourceTest {
         yes(pending>=0&&reopen>pending&&fallback>reopen,
             "User's explicit CLÚSTER ON must recover split before pending layout block");
         String method=bar.substring(pending,fallback);
-        yes(method.contains("MirrorAutomationOem")&&
+        yes(!method.contains("MirrorAutomationOem")&&
             !method.contains("oem.gear()")&&
-            method.contains("speed<=0.5")&&
+            !method.contains("speedKmh()")&&
+            !method.contains("T1ClusterFreshStart.prepare(")&&
             method.contains("owner.runOnUiThread")&&
             method.contains("T1LastRoute.restore(owner)")&&
             method.contains("!both")&&
             method.contains("AUTO_BOOT,false"),
-            "Saved split recovery is zero-speed only, fails safely and restores route");
+            "Normal CLUSTER ON only relaunches navigation, never force-stops or restricts gear/speed");
         yes(!method.contains("T1ClusterAdbResize.closeClusterApps")&&
             !method.contains("T1ClusterAdbResize.apply")&&
             !method.contains("T1WheelAdbFallback")&&
@@ -63,6 +64,6 @@ public final class T1ClusterPendingRecoverySourceTest {
             "Disabling navigation in settings must preserve approved panel geometry");
         yes(router.contains("if(T1ClusterLayoutPolicy.pendingUnverified(c))"),
             "Unverified geometry still must not auto-launch on cold boot");
-        System.out.println("PASS: manual stopped pending split recovery, prior approval preserved on failed close, no ADB geometry edits");
+        System.out.println("PASS: navigation-only manual split recovery, prior approval preserved on failed close, no ADB geometry edits");
     }
 }
