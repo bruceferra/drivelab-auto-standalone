@@ -136,6 +136,7 @@ public final class T1ClusterLayoutSettingsActivity extends T1ImmersiveActivity {
         }
         render();
         testLayout();
+        T1ClusterEdgeFade.refresh(this);
     }
     private void render(){
         loadDraft();
