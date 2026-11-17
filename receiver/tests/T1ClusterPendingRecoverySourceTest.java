@@ -26,13 +26,13 @@ public final class T1ClusterPendingRecoverySourceTest {
             "User's explicit CLÚSTER ON must recover split before pending layout block");
         String method=bar.substring(pending,fallback);
         yes(method.contains("MirrorAutomationOem")&&
-            method.contains("gear==1")&&
+            !method.contains("oem.gear()")&&
             method.contains("speed<=0.5")&&
             method.contains("owner.runOnUiThread")&&
             method.contains("T1LastRoute.restore(owner)")&&
             method.contains("!both")&&
             method.contains("AUTO_BOOT,false"),
-            "Saved split recovery is parked-only, fails safely and restores route");
+            "Saved split recovery is zero-speed only, fails safely and restores route");
         yes(!method.contains("T1ClusterAdbResize.closeClusterApps")&&
             !method.contains("T1ClusterAdbResize.apply")&&
             !method.contains("T1WheelAdbFallback")&&
