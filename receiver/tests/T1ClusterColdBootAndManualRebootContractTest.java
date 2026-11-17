@@ -56,7 +56,10 @@ public final class T1ClusterColdBootAndManualRebootContractTest {
             settings.contains("T1ClusterManualReboot.run(this)")&&
             settings.contains("setNegativeButton(\"CANCELAR\",null)"),
             "REBOOT must stay small, hidden in technical submenu and confirmed");
-        yes(reboot.contains("T1ClusterFreshStart.prepare(owner)")&&
+        yes(reboot.contains("static final long OFF_VISIBLE_MS=5000L")&&
+            reboot.contains("MAIN.postDelayed(()->performOn(owner,update,confirmed),")&&
+            router.contains("Thread.sleep(T1ClusterManualReboot.OFF_VISIBLE_MS)")&&
+            reboot.contains("T1ClusterFreshStart.prepare(owner)")&&
             reboot.contains("reopenSavedPanelsStopped(owner)")&&
             reboot.contains("T1ClusterAdbResize.closeClusterApps(owner,")&&
             reboot.contains("putBoolean(T1ClusterWazeRouter.ENABLED,false)")&&

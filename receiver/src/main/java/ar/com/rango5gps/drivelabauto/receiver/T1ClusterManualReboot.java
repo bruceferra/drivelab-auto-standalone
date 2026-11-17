@@ -13,7 +13,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 final class T1ClusterManualReboot {
     static final String RESULT="cluster_manual_reboot_result_v1";
     static final String TRACE="cluster_manual_reboot_trace_v2";
-    private static final long OFF_VISIBLE_MS=1100L;
+    // The owner's manual success required a full 5 seconds of CLÚSTER OFF.
+    static final long OFF_VISIBLE_MS=5000L;
     private static final long CLOSE_TIMEOUT_MS=16000L;
     private static final AtomicBoolean RUNNING=new AtomicBoolean(false);
     private static final Handler MAIN=new Handler(Looper.getMainLooper());
@@ -84,9 +85,10 @@ final class T1ClusterManualReboot {
             .putBoolean(T1ClusterWazeRouter.AUTO_BOOT,false)
             .putBoolean(T1ClusterWazeRouter.CLOSE_PENDING,true)
             .putString(T1ClusterWazeRouter.STATUS,
-                "R: CLÚSTER OFF · cerrando tareas del display").commit();
+                "R: CLÚSTER OFF · cerrando tareas; esperar 5 segundos").commit();
         T1ClusterEdgeFade.hide(owner);
-        note(owner,"R 2/4 · CLÚSTER OFF, cerrando tareas por ADB",update);
+        note(owner,"R 2/4 · CLÚSTER OFF, cerrando tareas por ADB. "+
+            "Mantener OFF cinco segundos antes de ON.",update);
         AtomicBoolean closeReturned=new AtomicBoolean(false);
         T1ClusterAdbResize.closeClusterApps(owner,(message,confirmed)->{
             if(!closeReturned.compareAndSet(false,true))return;
@@ -94,6 +96,9 @@ final class T1ClusterManualReboot {
                 .commit();
             note(owner,(confirmed?"R 2/4 · OFF confirmado: ":
                 "R 2/4 · OFF no confirmado: ")+message,update);
+            // Do not shorten this delay: 0.3.47 used 1.1 seconds, and the
+            // owner's physical test only recovered the Spotify layer after
+            // five full seconds with the cluster OFF.
             MAIN.postDelayed(()->performOn(owner,update,confirmed),
                 OFF_VISIBLE_MS);
         });
@@ -112,7 +117,7 @@ final class T1ClusterManualReboot {
             .putBoolean(T1ClusterWazeRouter.AUTO_BOOT,true)
             .putBoolean(T1ClusterWazeRouter.CLOSE_PENDING,false)
             .putString(T1ClusterWazeRouter.STATUS,
-                "R: CLÚSTER ON · abriendo diseño guardado").commit();
+                "R: CLÚSTER ON después de espera de 5 segundos").commit();
         note(owner,"R 3/4 · CLÚSTER ON · reabriendo Waze y Maps",update);
         String opened=T1ClusterLayoutPolicy.reopenSavedPanelsStopped(owner);
         if(opened.split("APP SOLICITADA",-1).length!=3){

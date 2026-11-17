@@ -460,7 +460,7 @@ final class T1GlobalToolbar {
         new AlertDialog.Builder(owner)
             .setTitle("RECARGAR CLÚSTER")
             .setMessage("¿Estás seguro? Se detendrán Waze y Google Maps, "+
-                "se hará CLÚSTER OFF y después CLÚSTER ON. "+
+                "se hará CLÚSTER OFF durante 5 segundos y después ON. "+
                 "Se puede interrumpir la navegación actual.")
             .setNegativeButton("NO",null)
             .setPositiveButton("SÍ",(dialog,which)->{

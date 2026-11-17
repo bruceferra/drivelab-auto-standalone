@@ -350,7 +350,7 @@ final class T1ClusterWazeRouter {
             p.edit().putBoolean(ENABLED,false).putBoolean(AUTO_BOOT,false)
                 .putBoolean(CLOSE_PENDING,true)
                 .putString(BOOT_RELOAD_RESULT,
-                    "AUTO 1/3: force-stop confirmado; CLÚSTER OFF")
+                    "AUTO 1/3: force-stop confirmado; CLÚSTER OFF; espera 5 s")
                 .commit();
             T1ClusterEdgeFade.hide(c);
             final java.util.concurrent.CountDownLatch closed=
@@ -367,9 +367,10 @@ final class T1ClusterWazeRouter {
             boolean closeResponded=false;
             try{
                 closeResponded=closed.await(16L,java.util.concurrent.TimeUnit.SECONDS);
-                // Real OFF interval: unlike the former instantaneous restart,
-                // the actual instrument/OEM layer can briefly become visible.
-                Thread.sleep(1100L);
+                // Match the owner's physically successful manual interval,
+                // even after task closure returned quickly: five full seconds
+                // before permitting CLÚSTER ON. The former 1.1 s was too short.
+                Thread.sleep(T1ClusterManualReboot.OFF_VISIBLE_MS);
             }catch(InterruptedException ex){
                 Thread.currentThread().interrupt();
             }
