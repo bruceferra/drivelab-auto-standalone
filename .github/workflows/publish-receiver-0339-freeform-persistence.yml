@@ -1,4 +1,4 @@
-# 2026-11-17: latest source contracts now include closed visible-map test and SOC operators.
+# 2026-11-17: signed 0.3.39 build includes saved FREEFORM boot persistence regression (line-break-safe matcher).
 name: Signed Receiver 0.3.39 - persistent FREEFORM dual maps
 on:
   push:
