@@ -75,6 +75,13 @@ jobs:
             receiver/tests/T1ClusterWindowAndMicSourceContractTest.java
           java -cp /tmp/t1-native-layout ar.com.rango5gps.drivelabauto.receiver.T1ClusterLayoutMathTest
           java -cp /tmp/t1-native-layout ar.com.rango5gps.drivelabauto.receiver.T1ClusterWindowAndMicSourceContractTest
+      - name: Manual map focus recovery preserves OEM and wheel behavior
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-focus
+          javac -encoding UTF-8 -d /tmp/t1-focus receiver/tests/T1ClusterForegroundRecoveryContractTest.java
+          java -cp /tmp/t1-focus ar.com.rango5gps.drivelabauto.receiver.T1ClusterForegroundRecoveryContractTest
       - name: Saved Jetour dual FREEFORM panes recover at ignition without native split
         shell: bash
         run: |
