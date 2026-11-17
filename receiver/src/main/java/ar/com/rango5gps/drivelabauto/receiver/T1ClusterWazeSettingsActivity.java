@@ -88,8 +88,9 @@ public final class T1ClusterWazeSettingsActivity extends Activity {
         button(body,on?"3 · DESACTIVAR CLÚSTER DRIVELAB":
             "3 · ACTIVAR DESTINOS WAZE AL CLÚSTER",()->{
             if(on){
+                // OFF pauses routing. It does not change the approved
+                // panel geometry and must not erase a prior split layout.
                 p.edit().putBoolean(T1ClusterWazeRouter.ENABLED,false)
-                    .putBoolean(T1ClusterLayoutPolicy.ACTIVE,false)
                     .putBoolean(T1ClusterWazeRouter.AUTO_BOOT,false)
                     .putString(T1ClusterWazeRouter.STATUS,
                         "Desactivado. Destinos vuelven a Waze normal de DriveLab.")
