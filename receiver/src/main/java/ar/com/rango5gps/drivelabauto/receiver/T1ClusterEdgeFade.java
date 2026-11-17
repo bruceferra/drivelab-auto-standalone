@@ -129,7 +129,7 @@ final class T1ClusterEdgeFade {
     private static final class FadeView extends View {
         private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
         private int widthPx,ratio;
-        private static final int VEIL=0xd9151a22;
+        private static final int VEIL=0x99151a22;
         FadeView(Context c,int px,int pct){
             super(c);
             widthPx=px;ratio=pct;
