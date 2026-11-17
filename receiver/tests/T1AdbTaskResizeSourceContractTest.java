@@ -40,12 +40,12 @@ public final class T1AdbTaskResizeSourceContractTest {
               resize.contains("\"dumpsys activity activities\"")&&
               resize.contains("nowA.bounds.near(boxA,20)")&&
               resize.contains("nowB.bounds.near(boxB,20)")&&
-              resize.contains("if(!parked(c))")&&
-              resize.contains("oem.gear()==1")&&
+              resize.contains("if(!stopped(c))")&&
+              resize.contains("Double.isFinite(speed)")&&
               resize.contains("oem.speedKmh()")&&
               resize.contains("restoreFull(Context c,Done done)")&&
               !resize.contains("am task resize 0 "),
-              "Resize only verified user-selected app task IDs on the selected display while parked");
+              "Resize only user-selected app task IDs at zero vehicle speed");
         check(policy.contains("if(!T1ClusterAdbResize.enabled(c))")&&
               policy.contains("T1ClusterAdbResize.apply(c,")&&
               policy.contains("MODE_SPLIT.equals(mode(c))?firstPackage(c):")&&
@@ -71,14 +71,14 @@ public final class T1AdbTaskResizeSourceContractTest {
               ui.contains("T1ClusterAdbResize.apply(this,")&&
               ui.contains("T1ClusterAdbResize.restoreFull(this,verified)")&&
               ui.contains("T1ClusterLayoutPolicy.TEST_AT")&&
-              ui.contains("oem.gear()")&&
               ui.contains("oem.speedKmh()")&&
-              ui.contains("gear!=1")&&
+              ui.contains("oem.speedKmh()")&&
+              ui.contains("!Double.isFinite(speed)")&&
               ui.contains("speed>0.5")&&
               ui.contains("50,30,70")&&
               math.contains("Frame left(")&&
               router.contains("T1ClusterLayoutPolicy.routeWazeIfActive("),
-              "One-Apply A/B 30-70 geometry, independent technical ADB, P-only resizing");
+              "One-Apply A/B geometry, independent ADB, zero-speed resize");
         System.out.println("PASS localhost ADB task resize and Waze/Maps split safety contract");
     }
 }
