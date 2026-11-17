@@ -38,7 +38,7 @@ final class T1ClusterAdbResize {
             .putBoolean(T1ClusterLayoutPolicy.ACTIVE,false)
             .putString(RESULT,on?
                 "Puente habilitado. Autorizá depuración ADB local y PROBÁ "+
-                "en P. DriveLab busca automáticamente ADB en 5556 o 5555.":
+                "con el vehículo detenido. DriveLab busca ADB en 5556 o 5555.":
                 "Puente ADB desactivado. Waze fullscreen sigue disponible.")
             .apply();
     }
@@ -188,7 +188,7 @@ final class T1ClusterAdbResize {
             boolean success=false;
             try{
                 // IMPORTANT: CLÚSTER OFF must restore OEM instrumentation
-                // in any gear, including D at speed. Do not add parked()
+                // in any gear, including D at speed. Do not add stopped()
                 // back here: geometry changes remain speed-zero guarded.
                 Display display=T1ClusterWazeRouter.selected(app);
                 if(display==null||display.getDisplayId()<=0)
