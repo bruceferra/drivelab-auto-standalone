@@ -1,3 +1,4 @@
+# 2026-11-17: source contracts updated for visible-map voice and SOC operators.
 name: Signed Receiver 0.3.38 - visible map voice and no P gate
 on:
   push:
