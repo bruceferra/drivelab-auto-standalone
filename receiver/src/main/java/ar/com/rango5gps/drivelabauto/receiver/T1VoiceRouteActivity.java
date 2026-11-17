@@ -424,10 +424,8 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         String target=T1VoiceIntentPolicy.routeDestination(phrase);
         if(target!=null){
             status.setText("NAVEGACIÓN DETECTADA · "+target+
-                " · clúster: "+(T1ClusterLayoutPolicy.active(this)&&
-                    T1ClusterLayoutPolicy.MODE_SPLIT.equals(
-                        T1ClusterLayoutPolicy.mode(this))?
-                    "dos mapas":"Waze"));
+                " · clúster: "+(T1NavigationTargets.dualMapPanelsConfigured(this)?
+                    "Waze + Google Maps":"Waze"));
             if(fromVoice){
                 // The explicit "ir a"/"navegar a" utterance is itself
                 // authorization. Waze still resolves the actual location.
@@ -738,11 +736,11 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
             Uri.parse("waze://?q="+Uri.encode(place)+"&navigate=yes"))
             .setPackage("com.waze");
         if(T1ClusterWazeRouter.enabled(this)){
-            boolean both=T1ClusterLayoutPolicy.active(this)&&
-                T1ClusterLayoutPolicy.MODE_SPLIT.equals(
-                    T1ClusterLayoutPolicy.mode(this))&&
-                "com.google.android.apps.maps".equals(
-                    T1ClusterLayoutPolicy.secondPackage(this));
+            // ADB close/resize may leave the APPROVAL flag pending even
+            // while both stored freeform panes are visibly open. Routing
+            // the microphone only to Waze in that case was a regression.
+            // Match the apps/panels, NOT the geometry approval flag.
+            boolean both=T1NavigationTargets.dualMapPanelsConfigured(this);
             if(both){
                 // The same dual target dispatch already proven by Sender.
                 T1NavigationTargets.Result result=T1NavigationTargets.send(
