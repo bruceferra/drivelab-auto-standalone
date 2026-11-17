@@ -31,14 +31,20 @@ public final class T1ClusterBootVisibleThenForceStopContractTest {
         int second=part.indexOf("String opened=T1ClusterLayoutPolicy.reopenSavedPanelsStopped(c)");
         check(initial>=0&&stop>initial&&second>stop,
             "Cold boot MUST first open both apps, then force-stop with cluster ON, then reopen");
+        int off=part.indexOf("putBoolean(ENABLED,false)");
+        int taskClose=part.indexOf("T1ClusterAdbResize.closeClusterApps(c,");
+        int on=part.indexOf("putBoolean(ENABLED,true)");
         check(part.contains("Thread.sleep(1600L)")&&
             part.contains("if(!autoBoot(c))")&&
             part.contains("if(!clean.changed)")&&
             part.contains("return initial;")&&
-            !part.contains("putBoolean(ENABLED,false)")&&
+            off>stop&&taskClose>off&&on>taskClose&&second>on&&
+            part.contains("Thread.sleep(1100L)")&&
+            part.contains("closed.await(16L,java.util.concurrent.TimeUnit.SECONDS)")&&
+            part.contains("BOOT_RELOAD_RESULT")&&
             !part.contains("speedKmh()")&&
             !part.contains("gear()"),
-            "No CLUSTER OFF or P/0 km/h gate in boot sequence; preserve maps if ADB unavailable");
+            "Boot must reproduce R force-stop, real OFF task close, pause, ON and saved split");
         check(fresh.contains("T1LocalAdbClient.shell(c,\"am force-stop \"+pkg)")&&
             fresh.contains("T1LocalAdbClient.shell(c,\"pidof \"+pkg)")&&
             reboot.contains("T1ClusterFreshStart.prepare(owner)")&&
@@ -54,6 +60,6 @@ public final class T1ClusterBootVisibleThenForceStopContractTest {
         check(service.contains("T1ClusterWazeRouter.onReceiverBoot(this)")&&
             service.contains("T1LastRoute.restore(this)"),
             "Boot restores last route only after cluster sequence");
-        System.out.println("PASS cluster ON -> maps visible -> force-stop both -> relaunch -> restore route");
+        System.out.println("PASS cold boot: maps visible -> force-stop -> OFF close -> wait -> ON -> restore");
     }
 }

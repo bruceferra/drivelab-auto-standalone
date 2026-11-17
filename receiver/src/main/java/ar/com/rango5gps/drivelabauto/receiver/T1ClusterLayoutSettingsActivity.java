@@ -200,6 +200,9 @@ public final class T1ClusterLayoutSettingsActivity extends T1ImmersiveActivity {
         text("CIERRE LIMPIO MAPAS · "+T1ClusterFreshStart.last(this),14);
         text("DEGRADADO · "+T1ClusterEdgeFade.last(this),12);
         text("ÚLTIMA RECARGA R · "+T1ClusterManualReboot.last(this),14);
+        text("ARRANQUE AUTO OFF/ON · "+cfg().getString(
+            T1ClusterWazeRouter.BOOT_RELOAD_RESULT,
+            "Aún no probado tras reiniciar la camioneta"),14);
         String result=T1ClusterAdbResize.result(this);
         text("Estado: "+(result.startsWith("VERIFICADO")?
             "Tamaños confirmados por ADB; comprobá el tablero":

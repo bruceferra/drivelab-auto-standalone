@@ -35,6 +35,7 @@ final class T1ClusterWazeRouter {
     static final String STATUS="status";
     static final String CLOSE_PENDING="cluster_close_pending";
     static final String VISUAL_OEM_CONFIRMED="cluster_oem_visually_confirmed";
+    static final String BOOT_RELOAD_RESULT="cluster_boot_off_on_result_v1";
     static final String LAST_REQUEST_MS="last_request_ms";
     private static final String WAZE="com.waze";
     private T1ClusterWazeRouter(){}
@@ -318,33 +319,79 @@ final class T1ClusterWazeRouter {
                 status(c,"Clúster OFF durante arranque; no se forzó detención");
                 return initial;
             }
-            // 3. Force-stop Waze and Maps via the authorized local ADB port
-            //    while CLUSTER stays ON, replicating the owner's verified
-            //    manual T1Launcher Settings sequence.
+            // 3. EXACT same operations as the owner-verified manual R:
+            // force-stop both with CLUSTER ON; then OFF with task close;
+            // visibly keep OEM cluster OFF; then ON and reopen both panes.
+            // This code runs on ReceiverService's dedicated boot worker,
+            // never on the Android main/UI thread.
             T1ClusterFreshStart.Result clean=T1ClusterFreshStart.prepare(c);
             if(!autoBoot(c)){
-                status(c,"Clúster OFF durante cierre limpio; no se reabrió");
+                status(c,"Arranque interrumpido: CLÚSTER ya no está en ON");
                 return initial;
             }
             if(!clean.ready){
-                // Without ADB do not take down navigation: the initially
-                // requested windows remain visible. If one map was already
-                // stopped before a partial error, reopen BOTH below.
                 if(!clean.changed){
-                    status(c,"ARRANQUE COMPATIBLE: mapas abiertos. "+
-                        "No se pudo ejecutar cierre limpio: "+clean.message);
+                    String diagnostic="ARRANQUE SIN RECARGA: ADB no confirmó "+
+                        "force-stop. "+clean.message;
+                    prefs(c).edit().putString(BOOT_RELOAD_RESULT,diagnostic).commit();
+                    status(c,diagnostic);
                     T1ClusterEdgeFade.refresh(c);
                     return initial;
                 }
+                String repaired=T1ClusterLayoutPolicy.reopenSavedPanelsStopped(c);
+                String diagnostic="ARRANQUE PARCIAL: force-stop incompleto, "+
+                    "mapas recuperados. "+clean.message;
+                prefs(c).edit().putString(BOOT_RELOAD_RESULT,diagnostic).commit();
+                status(c,diagnostic);
+                return repaired;
             }
-            // 4. Relaunch both windows only AFTER force-stop, in saved A/B
-            //    geometry, then ReceiverService will replay last route and
-            //    refresh steering accessibility. Do not turn CLUSTER OFF.
+            SharedPreferences p=prefs(c);
+            // Real CLUSTER OFF: same flags and same ADB task removal as R.
+            p.edit().putBoolean(ENABLED,false).putBoolean(AUTO_BOOT,false)
+                .putBoolean(CLOSE_PENDING,true)
+                .putString(BOOT_RELOAD_RESULT,
+                    "AUTO 1/3: force-stop confirmado; CLÚSTER OFF")
+                .commit();
+            T1ClusterEdgeFade.hide(c);
+            final java.util.concurrent.CountDownLatch closed=
+                new java.util.concurrent.CountDownLatch(1);
+            final java.util.concurrent.atomic.AtomicBoolean offConfirmed=
+                new java.util.concurrent.atomic.AtomicBoolean(false);
+            final java.util.concurrent.atomic.AtomicReference<String> offMessage=
+                new java.util.concurrent.atomic.AtomicReference<>("sin respuesta");
+            T1ClusterAdbResize.closeClusterApps(c,(message,confirmed)->{
+                offMessage.set(message);
+                offConfirmed.set(confirmed);
+                closed.countDown();
+            });
+            boolean closeResponded=false;
+            try{
+                closeResponded=closed.await(16L,java.util.concurrent.TimeUnit.SECONDS);
+                // Real OFF interval: unlike the former instantaneous restart,
+                // the actual instrument/OEM layer can briefly become visible.
+                Thread.sleep(1100L);
+            }catch(InterruptedException ex){
+                Thread.currentThread().interrupt();
+            }
+            // No speed/gear writes and no OEM process manipulation.
+            // Recover ON even if ADB close times out or cannot confirm.
+            p.edit().putBoolean(ENABLED,true).putBoolean(AUTO_BOOT,true)
+                .putBoolean(CLOSE_PENDING,false)
+                .putString(BOOT_RELOAD_RESULT,
+                    "AUTO 2/3: CLÚSTER ON; OFF ADB "+
+                    (closeResponded&&offConfirmed.get()?"confirmado":"NO confirmado")+
+                    " · "+offMessage.get())
+                .commit();
             String opened=T1ClusterLayoutPolicy.reopenSavedPanelsStopped(c);
             if(opened.split("APP SOLICITADA",-1).length==3)
                 T1ClusterEdgeFade.refresh(c);
-            status(c,(clean.ready?"ARRANQUE LIMPIO: ":
-                "ARRANQUE PARCIAL: "+clean.message+" · ")+opened);
+            String report=(closeResponded&&offConfirmed.get()?
+                "ARRANQUE OFF/ON COMPLETADO":"ARRANQUE OFF/ON PARCIAL")+
+                ": ADB "+(closeResponded?"respondió":"agotó tiempo")+
+                "; cierre tareas "+(offConfirmed.get()?"confirmado":"NO confirmado")+
+                "; ventanas "+opened;
+            p.edit().putString(BOOT_RELOAD_RESULT,report).commit();
+            status(c,report);
             return opened;
         }
         // For layouts without both saved panes, keep the safe pre-existing gate.

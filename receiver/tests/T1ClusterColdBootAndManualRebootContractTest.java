@@ -62,12 +62,16 @@ public final class T1ClusterColdBootAndManualRebootContractTest {
             reboot.contains("putBoolean(T1ClusterWazeRouter.ENABLED,false)")&&
             reboot.contains("putBoolean(T1ClusterWazeRouter.ENABLED,true)")&&
             reboot.contains("T1LastRoute.restore(owner)")&&
-            reboot.contains("new Intent(owner,ReceiverActivity.class)")&&
+            !reboot.contains("new Intent(owner,ReceiverActivity.class)")&&
+            !reboot.contains("Intent.FLAG_ACTIVITY_CLEAR_TASK")&&
+            router.contains("T1ClusterAdbResize.closeClusterApps(c,")&&
+            router.contains("putBoolean(ENABLED,false)")&&
+            router.contains("putBoolean(ENABLED,true)")&&
             reboot.contains("ReceiverService.ACTION_START")&&
             !reboot.contains("speedKmh()")&&
             !reboot.contains("oem.gear()")&&
             !reboot.contains("am force-stop ar.com.rango5gps.drivelabauto.receiver"),
-            "Explicit manual soft reboot restarts maps and UI, preserving Sender");
+            "Both manual and cold boot refresh maps; manual R must not blank DriveLab UI");
         System.out.println("PASS: boot and hidden REBOOT exclusively refresh maps, no speed/P gate");
     }
 }

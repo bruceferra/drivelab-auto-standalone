@@ -143,12 +143,9 @@ final class T1ClusterManualReboot {
                     (offConfirmed?"confirmado":"NO confirmado")+
                     "; Waze/Maps solicitados; ruta: "+route+
                     ". Spotify y rueda pendientes de prueba física.");
-                if(!owner.isFinishing()&&!owner.isDestroyed()){
-                    Intent main=new Intent(owner,ReceiverActivity.class)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|
-                            Intent.FLAG_ACTIVITY_CLEAR_TASK);
-                    owner.startActivity(main);
-                }
+                // Do NOT restart DriveLab's Activity. CLEAR_TASK briefly
+                // displayed a white background and never helped cluster focus.
+                // Leave the currently visible toolbar/cockpit intact.
             }catch(Exception ex){
                 finish(owner,update,"R PARCIAL: "+
                     ex.getClass().getSimpleName()+" · "+ex.getMessage());

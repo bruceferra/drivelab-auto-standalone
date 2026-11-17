@@ -62,6 +62,9 @@ public final class T1ClusterWazeSettingsActivity extends T1ImmersiveActivity {
                 "Sin prueba; ningún display elegido"),14);
         label(body,"CIERRE LIMPIO MAPAS · "+T1ClusterFreshStart.last(this),14);
         label(body,"ÚLTIMA RECARGA R · "+T1ClusterManualReboot.last(this),14);
+        label(body,"ARRANQUE AUTO OFF/ON · "+p.getString(
+            T1ClusterWazeRouter.BOOT_RELOAD_RESULT,
+            "Aún no probado tras reiniciar la camioneta"),14);
         button(body,"CONFIGURAR PANELES A/B · APLICAR",()->
             startActivity(new Intent(this,T1ClusterLayoutSettingsActivity.class)));
         if(T1ClusterWazeRouter.selected(this)==null)

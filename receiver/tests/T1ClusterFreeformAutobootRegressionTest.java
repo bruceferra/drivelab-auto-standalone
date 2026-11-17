@@ -31,9 +31,12 @@ public final class T1ClusterFreeformAutobootRegressionTest {
         ck(boot.contains("T1ClusterFreshStart.prepare(c)")&&
             !boot.contains("stoppedForSavedSplit(c)")&&
             boot.contains("Settings.canDrawOverlays(c)")&&
-            !boot.contains("launchApp(")&&!boot.contains("T1ClusterAdbResize")&&
+            !boot.contains("launchApp(")&&
+            boot.contains("T1ClusterAdbResize.closeClusterApps(c,")&&
+            boot.contains("putBoolean(ENABLED,false)")&&
+            boot.contains("putBoolean(ENABLED,true)")&&
             !boot.contains("am task")&&!boot.contains("gear()"),
-            "Real boot tries clean stop then reopens saved FREEFORM without a speed gate");
+            "Cold boot performs actual OFF/ON and recovers saved FREEFORM without speed gate");
         int manual=bar.indexOf("private void toggleCluster()");
         int restore=bar.indexOf("if(T1ClusterLayoutPolicy.savedDualSplit(owner))",manual);
         int fallback=bar.indexOf("if(pendingLayout)",restore);
