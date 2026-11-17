@@ -30,7 +30,7 @@ public final class T1ClusterRouteResumptionSourceTest {
         check(receiver.contains("if(!launchWanted&&!cluster)")&&
             receiver.contains("if(attempted&&cluster)T1LastRoute.remember("),
             "Off-cluster auto-open switch must not block Sender to active cluster");
-        check(voice.contains("if(result.attempted)T1LastRoute.remember(")&&
+        check(voice.contains("if(maps.attempted)T1LastRoute.remember(")&&
             voice.contains("if(T1ClusterWazeRouter.routeDestination(this,waze))")&&
             voice.contains("visibleNavigationOnCluster(this)")&&
             voice.contains("BridgeRouteTarget.MAPS")&&
