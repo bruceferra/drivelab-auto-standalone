@@ -17,6 +17,26 @@ final class T1NavigationTargets {
         Result(boolean ok,String text){attempted=ok;status=text;}
     }
     private T1NavigationTargets(){}
+
+    /** Visible user-configured dual map layout, even if an unrelated ADB
+     * close/resize could not verify geometry. CLÚSTER ON already recovers
+     * saved panes from that pending state; voice must use the SAME panels.
+     * Neither this predicate nor dual dispatch changes approval/geometry.
+     */
+    static boolean dualMapPanelsConfigured(Context c){
+        if(!T1ClusterWazeRouter.enabled(c)||
+           T1ClusterWazeRouter.selected(c)==null||
+           !T1ClusterLayoutPolicy.MODE_SPLIT.equals(
+                T1ClusterLayoutPolicy.mode(c))||
+           !T1ClusterLayoutPolicy.panelAOn(c)||
+           !T1ClusterLayoutPolicy.panelBOn(c))return false;
+        String a=T1ClusterLayoutPolicy.firstPackage(c);
+        String b=T1ClusterLayoutPolicy.secondPackage(c);
+        return ("com.waze".equals(a)&&
+                "com.google.android.apps.maps".equals(b))||
+               ("com.waze".equals(b)&&
+                "com.google.android.apps.maps".equals(a));
+    }
     private static Intent intent(String pkg,String base,String value){
         boolean coord="coord".equals(base);
         Uri uri="com.waze".equals(pkg)?
@@ -53,21 +73,10 @@ final class T1NavigationTargets {
         }
         if(!BridgeRouteTarget.BOTH.equals(target))
             return new Result(false,"Destino de mapa no admitido");
-        if(!T1ClusterLayoutPolicy.MODE_SPLIT.equals(
-                T1ClusterLayoutPolicy.mode(c)))
+        if(!dualMapPanelsConfigured(c))
             return new Result(false,
-                "Para AMBOS elegí un diseño de dos aplicaciones.");
-        boolean aWaze="com.waze".equals(
-            T1ClusterLayoutPolicy.firstPackage(c));
-        boolean bWaze="com.waze".equals(
-            T1ClusterLayoutPolicy.secondPackage(c));
-        boolean aMaps="com.google.android.apps.maps".equals(
-            T1ClusterLayoutPolicy.firstPackage(c));
-        boolean bMaps="com.google.android.apps.maps".equals(
-            T1ClusterLayoutPolicy.secondPackage(c));
-        if(!(aWaze&&bMaps||bWaze&&aMaps))
-            return new Result(false,
-                "AMBOS necesita Waze y Google Maps en los dos paneles");
+                "AMBOS requiere CLÚSTER ON y Waze/Google Maps "+
+                "en dos paneles. No cambió el diseño.");
         // Target each selected app in its own existing freeform bounds,
         // regardless of A/B orientation or vendor ADB bounds reporting.
         // Never launch fullscreen or touch an unrelated OEM task.
