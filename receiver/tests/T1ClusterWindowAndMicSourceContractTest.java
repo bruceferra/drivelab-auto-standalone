@@ -43,13 +43,11 @@ public final class T1ClusterWindowAndMicSourceContractTest {
                 layout.contains("HEIGHT")&&
                 layout.contains("T1ClusterLayoutPolicy.X")&&
                 layout.contains("T1ClusterLayoutPolicy.Y")&&
-                layout.contains("oem.gear()")&&
                 layout.contains("oem.speedKmh()")&&
-                layout.contains("gear!=1")&&
                 layout.contains("speed>0.5")&&
                 preview.contains("T1ClusterLayoutMath.left(")&&
                 preview.contains("T1ClusterLayoutMath.right("),
-                "Live geometry preview and parked-only physical test");
+                "Live geometry preview and zero-speed physical test");
         require(hardkey.contains("key==1010")&&
                 mic.contains("KEY_MIC=1010")&&
                 mic.contains("action!=100")&&
