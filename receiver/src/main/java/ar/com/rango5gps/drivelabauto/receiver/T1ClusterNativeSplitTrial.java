@@ -9,7 +9,7 @@ import android.view.Display;
 
 /**
  * One-shot Android 11 SPLIT_SCREEN_PRIMARY/SECONDARY experiment on Display 1.
- * Runs ONLY from an explicit technical-menu press, with OEM P/0 before EACH
+ * Runs ONLY from an explicit technical-menu press, with OEM 0 km/h before EACH
  * shell mutation. Never changes saved FREEFORM layout, wheel, mic or routes.
  *
  * The global "supports-split-screen-multi-window" answer does NOT prove
@@ -47,9 +47,9 @@ final class T1ClusterNativeSplitTrial {
                 if(!T1ClusterAdbResize.enabled(app))
                     throw new IllegalStateException(
                         "Se necesita el puente ADB local ya autorizado");
-                if(!parked(app))
+                if(!stopped(app))
                     throw new IllegalStateException(
-                        "BLOQUEADO: no se confirmaron P y 0 km/h");
+                        "BLOQUEADO: no se confirmó velocidad 0 km/h");
                 String supported=T1LocalAdbClient.shell(app,
                     "am supports-split-screen-multi-window");
                 if(!"true".equalsIgnoreCase(supported.trim()))
@@ -60,17 +60,17 @@ final class T1ClusterNativeSplitTrial {
                 // arbitrary activities or shell fragments from the UI.
                 String waze=component(app,WAZE);
                 String maps=component(app,MAPS);
-                if(!parked(app))
+                if(!stopped(app))
                     throw new IllegalStateException(
-                        "BLOQUEADO: P/0 cambió antes de Waze");
+                        "BLOQUEADO: cambió la velocidad antes de Waze");
                 String one=T1LocalAdbClient.shell(app,
                     "am start --display 1 --windowingMode 3 -n "+waze);
                 if(rejected(one))throw new IllegalStateException(
                     "Android rechazó Waze primario: "+shorten(one));
                 Thread.sleep(700L);
-                if(!parked(app))
+                if(!stopped(app))
                     throw new IllegalStateException(
-                        "PRUEBA PARCIAL: P/0 cambió; Maps no se abrió");
+                        "PRUEBA PARCIAL: vehículo en movimiento; Maps no se abrió");
                 String two=T1LocalAdbClient.shell(app,
                     "am start --display 1 --windowingMode 4 -n "+maps);
                 if(rejected(two))throw new IllegalStateException(
@@ -99,7 +99,7 @@ final class T1ClusterNativeSplitTrial {
                 result="PRUEBA NATIVA NO CONFIRMADA: "+shorten(
                     T1LocalAdbClient.connectivityHint(ex))+
                     ". La configuración FREEFORM quedó guardada; "+
-                    "APLICAR la recupera en P.";
+                    "APLICAR recupera el diseño guardado al detenerse.";
             }
             final String message=result;
             T1ClusterWazeRouter.prefs(app).edit()
@@ -117,12 +117,12 @@ final class T1ClusterNativeSplitTrial {
             throw new IllegalStateException("Actividad no válida: "+pkg);
         return name.flattenToShortString();
     }
-    private static boolean parked(Context c){
+    private static boolean stopped(Context c){
         MirrorAutomationOem oem=null;
         try{
             oem=new MirrorAutomationOem(c);
             double speed=oem.speedKmh();
-            return oem.gear()==1&&Double.isFinite(speed)&&
+            return Double.isFinite(speed)&&
                 speed>=0&&speed<=0.5;
         }catch(Exception ex){return false;}
         finally{if(oem!=null)oem.close();}
