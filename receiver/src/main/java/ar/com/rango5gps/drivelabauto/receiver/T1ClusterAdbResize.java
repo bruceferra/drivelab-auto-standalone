@@ -104,9 +104,9 @@ final class T1ClusterAdbResize {
                     T1ClusterLayoutPolicy.mode(app)) && split)
                     throw new IllegalStateException(
                         "El modo dividido cambió durante la prueba");
-                if(!parked(app))
+                if(!stopped(app))
                     throw new IllegalStateException(
-                        "BLOQUEADO: solo redimensionar con P y 0 km/h confirmados");
+                        "BLOQUEADO: redimensionar solo a 0 km/h confirmado");
                 // Geometries belong to APPLICATIONS, never fixed screen sides.
                 // Inverted 40/60: Maps left, Waze right.
                 boolean inverted=split&&T1ClusterLayoutPolicy.inverted(app);
@@ -129,12 +129,12 @@ final class T1ClusterAdbResize {
     /** Cluster task changes are experimental UI changes, not needed
      * for navigation itself. Don't move windows in a moving car.
      */
-    private static boolean parked(Context c){
+    private static boolean stopped(Context c){
         MirrorAutomationOem oem=null;
         try{
             oem=new MirrorAutomationOem(c);
             double speed=oem.speedKmh();
-            return oem.gear()==1&&Double.isFinite(speed)&&
+            return Double.isFinite(speed)&&
                 speed>=0&&speed<=0.5;
         }catch(Exception ex){return false;}
         finally{if(oem!=null)oem.close();}
@@ -148,9 +148,9 @@ final class T1ClusterAdbResize {
         Context app=c.getApplicationContext();
         new Thread(()->{
             try{
-                if(!parked(app))
+                if(!stopped(app))
                     throw new IllegalStateException(
-                        "BLOQUEADO: restaurar pantalla solo detenido en P");
+                        "BLOQUEADO: restaurar pantalla solo a 0 km/h");
                 Display d=T1ClusterWazeRouter.selected(app);
                 if(d==null)throw new IllegalStateException(
                     "Display del clúster no disponible");
@@ -171,7 +171,7 @@ final class T1ClusterAdbResize {
      * layout testing, it must work even in D or while moving so the OEM
      * instruments can be recovered immediately without stopping.
      * No HOME/system processes are touched, nor may we claim OEM painting
-     * until physically confirmed. Future geometry changes remain P/0 ONLY.
+     * until physically confirmed. Future geometry changes require 0 km/h only.
      */
     static void closeClusterApps(Context c,Done done){
         Context app=c.getApplicationContext();
@@ -189,7 +189,7 @@ final class T1ClusterAdbResize {
             try{
                 // IMPORTANT: CLÚSTER OFF must restore OEM instrumentation
                 // in any gear, including D at speed. Do not add parked()
-                // back here: only dangerous resizing remains P/0 guarded.
+                // back here: geometry changes remain speed-zero guarded.
                 Display display=T1ClusterWazeRouter.selected(app);
                 if(display==null||display.getDisplayId()<=0)
                     throw new IllegalStateException(
@@ -300,7 +300,7 @@ final class T1ClusterAdbResize {
         return T1AdbTaskParser.unique(dump,display,pkg);
     }
     /** Resize only explicitly selected user apps on the chosen secondary
-     * display. Validate package, task uniqueness, and P/0 before each
+     * display. Validate package, task uniqueness, and 0 km/h before each
      * mutation. No OEM, HOME or main-display task can be touched. */
     private static String applyMeasured(Context c,int display,boolean split,
                                         Rect left,Rect right)throws Exception{
@@ -321,15 +321,15 @@ final class T1ClusterAdbResize {
         if(split&&(taskB==null||taskB.id==taskA.id))
             return "NO APLICADO: tarea de Panel B no identificada "+
                 "de forma única en Display "+display+" ("+second+")";
-        if(!parked(c))
-            return "BLOQUEADO: ya no está en P/0. No se movió ninguna tarea.";
+        if(!stopped(c))
+            return "BLOQUEADO: vehículo no detenido. No se movió ninguna tarea.";
         String changed=T1LocalAdbClient.shell(c,command(taskA.id,left));
         if(errorOutput(changed))
             return "PANEL A NO REDIMENSIONADO: "+
                 changed.substring(0,Math.min(200,changed.length()));
         if(split){
-            if(!parked(c))
-                return "PARCIAL: Panel A redimensionado; sin P/0 para Panel B.";
+            if(!stopped(c))
+                return "PARCIAL: Panel A redimensionado; vehículo no detenido para Panel B.";
             String changedB=T1LocalAdbClient.shell(c,
                 command(taskB.id,right));
             if(errorOutput(changedB))
