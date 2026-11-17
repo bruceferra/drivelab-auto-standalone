@@ -313,7 +313,8 @@ final class T1ClusterWazeRouter {
         // unsupported native split and sometimes hides ADB task bounds;
         // neither condition should silently cancel a saved 50/50 on ignition.
         // Request only the same saved freeform launch as explicit CLÚSTER ON.
-        // No ADB commands, wheel mutations or fullscreen Waze fallback.
+        // First force-stop both apps via authorized local ADB, then request
+        // fresh FREEFORM windows. No wheel mutations or fullscreen fallback.
         if(T1ClusterLayoutPolicy.savedDualSplit(c)){
             if(!Settings.canDrawOverlays(c)&&!ReceiverActivity.isVisible()){
                 String reason="Arranque FREEFORM pendiente: Android no permite "+
@@ -326,6 +327,20 @@ final class T1ClusterWazeRouter {
                     "no confirmada; paneles guardados sin cambios.";
                 status(c,reason);
                 return reason;
+            }
+            // Owner-verified physical fix: do not reuse stale Waze/Maps
+            // Android processes from the preceding ignition. This runs
+            // only at confirmed 0 km/h with the previously authorized local
+            // ADB bridge. No fallback launch if force-stop is not confirmed.
+            T1ClusterFreshStart.Result clean=T1ClusterFreshStart.prepare(c);
+            if(!clean.ready){
+                status(c,clean.message);
+                return clean.message;
+            }
+            if(!autoBoot(c)){
+                String cancel="Clúster apagado durante cierre limpio; no se reabrió";
+                status(c,cancel);
+                return cancel;
             }
             String opened=T1ClusterLayoutPolicy.reopenSavedPanelsStopped(c);
             status(c,opened);
