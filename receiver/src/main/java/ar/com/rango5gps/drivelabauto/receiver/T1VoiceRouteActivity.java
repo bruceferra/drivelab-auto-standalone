@@ -424,7 +424,7 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         String target=T1VoiceIntentPolicy.routeDestination(phrase);
         if(target!=null){
             status.setText("NAVEGACIÓN DETECTADA · "+target+
-                " · se enviará al navegador visible en el clúster");
+                " · se enviará a los mapas activos del clúster");
             if(fromVoice){
                 // The explicit "ir a"/"navegar a" utterance is itself
                 // authorization. Waze still resolves the actual location.
@@ -732,10 +732,23 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
     }
     private void navigate(String place){
         if(T1ClusterWazeRouter.enabled(this)){
-            // The OEM microphone follows the ACTUAL currently visible
-            // navigation window on Display 1, not a saved Waze preference.
-            // In a dual pane layout, only the active/selected visible
-            // navigator receives the destination: NEVER open both by default.
+            // Match the Sender: when the user has both Waze + Google Maps
+            // in the two approved active cluster panels, send the voice route
+            // to BOTH with their saved A/B bounds, regardless of focus.
+            // The wheel-selected Maps panel must not silently exclude Waze.
+            if(T1NavigationTargets.dualMapPanelsConfigured(this)){
+                T1NavigationTargets.Result both=T1NavigationTargets.send(
+                    this,ar.com.rango5gps.drivelabauto.common.BridgeRouteTarget.BOTH,
+                    "search",place,true);
+                if(both.attempted)T1LastRoute.remember(this,
+                    ar.com.rango5gps.drivelabauto.common.BridgeRouteTarget.BOTH,
+                    "search",place);
+                status.setText(both.status);
+                return;
+            }
+            // With one active map panel, preserve the existing real Android
+            // accessibility-based visible navigator selection, not a stale
+            // default Waze preference.
             String pkg=T1WazeWheelService.visibleNavigationOnCluster(this);
             if(pkg==null){
                 status.setText("No se pudo identificar el mapa abierto en "+
