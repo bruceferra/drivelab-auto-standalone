@@ -305,8 +305,11 @@ final class T1ClusterWazeRouter {
             // If ADB fails, do not silently reuse the stale processes.
             T1ClusterFreshStart.Result clean=T1ClusterFreshStart.prepare(c);
             if(!clean.ready){
-                status(c,clean.message);
-                return clean.message;
+                // Reliability first: if car-local ADB is temporarily absent,
+                // do not leave the driver without either map. Retain the
+                // clean-start diagnostic and request the saved split anyway.
+                status(c,"CIERRE LIMPIO NO CONFIRMADO: "+clean.message+
+                    " · recuperando mapas en modo compatibilidad");
             }
             if(!autoBoot(c)){
                 String cancel="Clúster apagado durante cierre limpio; no se reabrió";
