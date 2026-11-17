@@ -3,7 +3,7 @@ name: Signed Receiver 0.3.40 - manual cluster map foreground recovery
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/publish-receiver-0339-freeform-persistence.yml']
+    paths: ['.github/workflows/publish-receiver-0340-manual-focus.yml']
   workflow_dispatch:
 permissions:
   contents: write
