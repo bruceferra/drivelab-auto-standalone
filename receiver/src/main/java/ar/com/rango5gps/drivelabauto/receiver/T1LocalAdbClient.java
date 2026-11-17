@@ -75,7 +75,9 @@ final class T1LocalAdbClient {
     static int connectedPort(){return lastLocalPort;}
     static String shell(Context context,String command)throws Exception{
         // STRICT command whitelist, no shell metacharacters or package names.
-        // Only listing, bounded geometry, verified nonprimary-display DPAD,\n        // and an exact component-only accessibility list for recovery.\n        // No commands can include spaces/shell operators in list values.
+        // Only task/geometry management and the exact accessibility-list
+        // recovery command are authorized. No steering wheel key injection
+        // or ADB task-focus changes are permitted.
         // No global BACK, tap, display 0, arbitrary shell, or OEM writes.
         if(!command.equals("am stack list")&&
            !command.equals("dumpsys activity activities")&&
@@ -83,8 +85,6 @@ final class T1LocalAdbClient {
            !command.matches(
                "settings put secure enabled_accessibility_services "+
                "[A-Za-z0-9_.$/:]{1,1024}")&&
-           !command.matches("am task focus [1-9][0-9]{0,6}")&&
-           !command.matches("input dpad -d [1-9] keyevent (21|22|23)")&&
            !command.matches(
               "am task resize [1-9][0-9]{0,6}( [0-9]{1,5}){4}")&&
            !command.matches("am stack remove [1-9][0-9]{0,6}"))
