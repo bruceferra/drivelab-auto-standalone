@@ -112,7 +112,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         new ArrayList<>();
     private long lastHistoryAuditAt=0L;
     private TextView historyDetailTitle,historyRepairStatus,
-        historyDeleteStatus;
+        historyDeleteStatus,historyEnergyCostStatus;
     private String selectedHistoryKey="";
     // Prevent an in-flight history read from repainting records that
     // the user just deleted; revision applies to every async snapshot.
@@ -1201,6 +1201,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         rangeDetails.addView(autonomyDetail);
         LinearLayout adjustRow=row();rangeDetails.addView(adjustRow);
         compactButton(adjustRow,"AJUSTAR AUTONOMÍA",BLUE,this::adjustAutonomy);
+        compactButton(adjustRow,"PRECIOS · NAFTA / kWh",BLUE,
+            this::configureTripPrices);
         LinearLayout electricTile=col();
         electricTile.setBackground(bg(CARD,14));secondary.addView(electricTile);
         electricTile.addView(text("MOTOR ELÉCTRICO",12,MUTED,false));
@@ -1291,6 +1293,12 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         historyDetailTitle=text("Elegí un viaje o una jornada.",14,WHITE,true);
         secondary.addView(historyDetailTitle);
         historyDetailRow=row();secondary.addView(historyDetailRow);
+        historyEnergyCostStatus=text(
+            "COSTO PONDERADO · elegí un viaje y configurá precios",
+            13,WHITE,true);
+        historyEnergyCostStatus.setPadding(12,9,12,9);
+        historyEnergyCostStatus.setBackground(bg(CARD,12));
+        secondary.addView(historyEnergyCostStatus);
         historyEcoStatus=text("ECO DEL VIAJE · seleccioná un registro",
             12,T1JetourTheme.CYAN,false);
         // Selectable TextViews become focusable on Android 11. Each long
@@ -1828,17 +1836,19 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             all.add(new HistoryRecord(0,e.id,
                 "JORNADA "+e.id+" · "+e.status,
                 e.started,e.ended,e.km,e.originalKm,e.evKm,e.liters,
-                e.electricityKwh,fuelCost,e.corrected,false,
+                e.electricityKwh,e.recoveredKwh,fuelCost,e.corrected,false,
                 e.fuelEvents,e.id));
         }
         for(T1JourneyStore.Entry e:T1JourneyStore.history(this))
             all.add(new HistoryRecord(1,e.id,e.label,e.started,e.ended,
-                e.km,e.originalKm,e.evKm,e.liters,e.electricNet,e.fuelCost,
-                e.correctedKm,e.estimatedDistance,e.fuelEvents,e.tripId));
+                e.km,e.originalKm,e.evKm,e.liters,e.electricNet,
+                Double.NaN,e.fuelCost,e.correctedKm,e.estimatedDistance,
+                e.fuelEvents,e.tripId));
         for(T1JourneyStore2.Entry e:T1JourneyStore2.history(this))
             all.add(new HistoryRecord(2,e.id,e.label,e.started,e.ended,
-                e.km,e.originalKm,e.evKm,e.liters,e.electricNet,e.fuelCost,
-                e.correctedKm,e.estimatedDistance,e.fuelEvents,e.tripId));
+                e.km,e.originalKm,e.evKm,e.liters,e.electricNet,
+                Double.NaN,e.fuelCost,e.correctedKm,e.estimatedDistance,
+                e.fuelEvents,e.tripId));
         all.sort((x,y)->Long.compare(y.ended,x.ended));
         out.all=all;
         SimpleDateFormat dt=new SimpleDateFormat(
@@ -1933,11 +1943,13 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             historyDetailRow.removeAllViews();
             if(historyEcoStatus!=null)
                 historyEcoStatus.setText("ECO DEL VIAJE · sin registro");
+            if(historyEnergyCostStatus!=null)
+                historyEnergyCostStatus.setText("COSTO PONDERADO · sin viaje");
             return;
         }
         String detailFingerprint=chosen.key()+"|"+chosen.ended+"|"+
             chosen.km+"|"+chosen.liters+"|"+chosen.evKm+"|"+
-            chosen.kwh+"|"+chosen.corrected;
+            chosen.kwh+"|"+chosen.chargedKwh+"|"+chosen.corrected;
         if(!detailFingerprint.equals(renderedHistoryDetailSignature)){
             renderedHistoryDetailSignature=detailFingerprint;
             showHistoryDetails(chosen);
@@ -1979,7 +1991,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             selectedHistoryKey=item.key();
             renderedHistoryDetailSignature=item.key()+"|"+item.ended+"|"+
                 item.km+"|"+item.liters+"|"+item.evKm+"|"+
-                item.kwh+"|"+item.corrected;
+                item.kwh+"|"+item.chargedKwh+"|"+item.corrected;
             paintHistoryButtons();
             showHistoryDetails(item);
             // No removeAllViews and no requestFocus/scrollTo on selection.
@@ -1989,17 +2001,18 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         final int slot,fuelEvents;
         final String id,label,tripChain;
         final long started,ended;
-        final double km,oldKm,evKm,liters,kwh,cost;
+        final double km,oldKm,evKm,liters,kwh,chargedKwh,cost;
         final boolean corrected,estimated;
         HistoryRecord(int slot,String id,String label,long started,long ended,
                       double km,double oldKm,double evKm,double liters,
-                      double kwh,double cost,boolean corrected,
+                      double kwh,double chargedKwh,double cost,boolean corrected,
                       boolean estimated,int events,String chain){
             this.slot=slot;this.id=id;this.label=label;
             this.tripChain=chain;
             this.started=started;this.ended=ended;
             this.km=km;this.oldKm=oldKm;this.evKm=evKm;
-            this.liters=liters;this.kwh=kwh;this.cost=cost;
+            this.liters=liters;this.kwh=kwh;
+            this.chargedKwh=chargedKwh;this.cost=cost;
             this.corrected=corrected;this.estimated=estimated;
             fuelEvents=events;
         }
@@ -2017,6 +2030,18 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                     "CORREGIDO OEM VERIFICADO")+")":"")+
             "\n"+x.label);
         historyDetailRow.removeAllViews();
+        SharedPreferences tariffs=getSharedPreferences(
+            T1TripRecorderService.PREFS,MODE_PRIVATE);
+        double gasPrice=tariffs.getFloat(T1TripRecorderService.FUEL_PRICE,2129f);
+        boolean kwhPriceKnown=tariffs.contains(T1TripRecorderService.KWH_PRICE);
+        double kwhPrice=tariffs.getFloat(T1TripRecorderService.KWH_PRICE,0f);
+        // The total-day CSV stores gross HV-out and HV-in, but each client
+        // 500m ledger already stores SIGNED NET energy. Never subtract twice.
+        T1TripCostModel.Result econ=x.slot==0?
+            T1TripCostModel.fromGross(x.km,x.liters,x.kwh,
+                x.chargedKwh,gasPrice,kwhPrice,kwhPriceKnown):
+            T1TripCostModel.fromNet(x.km,x.liters,x.kwh,
+                gasPrice,kwhPrice,kwhPriceKnown);
         boolean fuelOk=x.km>0&&Double.isFinite(x.liters)&&x.liters>0;
         String consumption=fuelOk?
             f(100*x.liters/x.km,2)+" L/100 · "+
@@ -2027,10 +2052,45 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             Double.isFinite(x.evKm)?f(x.evKm,2)+" km":"SIN DATO");
         compactMetric(historyDetailRow,"COMBUSTIBLE CONSUMIDO",
             Double.isFinite(x.liters)?f(x.liters,3)+" L exp.":"SIN DATO");
-        compactMetric(historyDetailRow,"ELECTRICIDAD CONSUMIDA",
-            Double.isFinite(x.kwh)?f(x.kwh,3)+" kWh exp.":"SIN DATO");
-        compactMetric(historyDetailRow,"COSTO COMBUSTIBLE",
-            Double.isFinite(x.cost)?"$ "+f(x.cost,0)+" exp.":"SIN DATO");
+        compactMetric(historyDetailRow,"ELECTRICIDAD NETA HV",
+            Double.isFinite(econ.netKwh)?
+                f(econ.netKwh,3)+" kWh exp.":"SIN DATO");
+        compactMetric(historyDetailRow,"COSTO NAFTA",
+            Double.isFinite(econ.gasolineCost)?
+                "$ "+f(econ.gasolineCost,0)+" exp.":"SIN DATO");
+        if(historyEnergyCostStatus!=null)
+            historyEnergyCostStatus.setText(
+                "BALANCE ENERGÉTICO DEL VIAJE · "+
+                (x.slot==0?
+                    "HV DESCARGADOS "+(Double.isFinite(econ.grossKwh)?
+                        f(econ.grossKwh,3)+" kWh":"SIN DATO")+
+                    " · ENTRADA HV "+(Double.isFinite(econ.chargeKwh)?
+                        f(econ.chargeKwh,3)+" kWh":"NO MEDIDA")+
+                    " (regeneración y/o generador térmico)":
+                    "CLIENTE: kWh netos OEM 500 m; entrada HV "+
+                    "no separada por viaje")+
+                "\nELECTRICIDAD NETA "+(Double.isFinite(econ.netKwh)?
+                    f(econ.netKwh,3)+" kWh":"SIN DATO")+
+                " · FACTURABLE ESTIMADA "+
+                (Double.isFinite(econ.billableKwh)?
+                    f(econ.billableKwh,3)+" kWh":"SIN DATO")+
+                "\nNAFTA $ "+(Double.isFinite(econ.gasolineCost)?
+                    f(econ.gasolineCost,0):"SIN DATO")+
+                " · ELECTRICIDAD $ "+(Double.isFinite(econ.electricCost)?
+                    f(econ.electricCost,0):"SIN TARIFA / SIN DATO")+
+                " · TOTAL $ "+(Double.isFinite(econ.totalCost)?
+                    f(econ.totalCost,0):"SIN DATO")+
+                "\nEQUIVALENTE ECONÓMICO "+(Double.isFinite(econ.equivalentLiters)?
+                    f(econ.equivalentLiters,3)+" L":"SIN DATO")+
+                " · "+(Double.isFinite(econ.lPer100)?
+                    f(econ.lPer100,2)+" L/100 km":"L/100 SIN DATO")+
+                " · "+(Double.isFinite(econ.kmPerLiter)?
+                    f(econ.kmPerLiter,2)+" km/L":"km/L SIN DATO")+
+                "\nPrecios actuales: $ "+f(gasPrice,2)+"/L y "+
+                (kwhPriceKnown?"$ "+f(kwhPrice,2)+"/kWh":
+                    "kWh SIN CONFIGURAR")+
+                ". Estimación: el HV neto NO equivale a compra de red. "+
+                "No se puede separar cuánto cargó el motor térmico.");
         // Historical end-of-trip range was not persisted. Never substitute
         // the current vehicle's autonomy into a completed trip.
         compactMetric(historyDetailRow,"AUTONOMÍA TOTAL","NO GUARDADA");
@@ -2602,9 +2662,12 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         T1PhevTotalRange.Estimate e=T1PhevTotalRange.estimate(
             lastSample.fuel,lastSample.socDisplay,selected,fullEv,
             fullAnchor,kmSinceFull);
+        double stockKm=settings.getFloat("oem_range_manual_km",Float.NaN);
+        String carRange=Double.isFinite(stockKm)&&stockKm>=0?
+            f(stockKm,0)+" km TABLERO MANUAL":"— TABLERO SIN LECTURA";
         autonomyNow.setText(Double.isFinite(e.remainingKm)?
-            "~ "+f(e.remainingKm,0)+" km · MIXTA ESTABLE":
-            "SIN ESTIMACIÓN MIXTA");
+            "~ "+f(e.remainingKm,0)+" / "+carRange:
+            "SIN ESTIMACIÓN / "+carRange);
         String source=stable.source;
         String rawWindow=history.size()+"/100 muestras OEM 500 m"+
             (history.size()>0?
@@ -2635,6 +2698,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             T1FuelDisplay.liters(lastSample.fuel)+" L"+
             (T1FuelDisplay.topUncalibrated(lastSample.fuel)?
                 "\nAviso: CI186 saturado en nivel alto": "")+
+            "\nTABLERO ORIGINAL · "+carRange+
+            " (comparación manual; señal OEM no verificada)"+
             "\nMIXTA RESTANTE · "+(Double.isFinite(e.remainingKm)?
                 "~ "+f(e.remainingKm,0)+" km":"SIN DATO")+
             " · "+e.source+
@@ -2661,6 +2726,83 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             "Si hubo nuevas cargas desde enchufe, el rendimiento puede variar. "+
             "CI186 y su saturación superior siguen siendo provisionales. "+
             "Sin autonomía certificada ni equivalencia exacta con Jetour.");
+    }
+    private void configureTripPrices(){
+        LinearLayout form=col();form.setPadding(24,8,24,4);
+        form.addView(text("Precios actuales en pesos. Los viajes "+
+            "históricos se recalculan sin alterar los CSV. El costo "+
+            "eléctrico usa kWh netos HV (estimación, no factura de red). "+
+            "La energía recuperada no se cobra dos veces; la señal OEM no "+
+            "distingue frenado de generación térmica.",13,Color.DKGRAY,false));
+        SharedPreferences trip=getSharedPreferences(
+            T1TripRecorderService.PREFS,MODE_PRIVATE);
+        EditText gas=new EditText(this);
+        gas.setHint("Nafta, precio por litro (ARS)");
+        gas.setInputType(InputType.TYPE_CLASS_NUMBER|
+            InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        gas.setText(String.format(Locale.ROOT,"%.2f",
+            trip.getFloat(T1TripRecorderService.FUEL_PRICE,2129f)));
+        form.addView(gas);
+        EditText kwh=new EditText(this);
+        kwh.setHint("Electricidad, precio por kWh (ARS)");
+        kwh.setInputType(InputType.TYPE_CLASS_NUMBER|
+            InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        if(trip.contains(T1TripRecorderService.KWH_PRICE))
+            kwh.setText(String.format(Locale.ROOT,"%.2f",
+                trip.getFloat(T1TripRecorderService.KWH_PRICE,0f)));
+        form.addView(kwh);
+        form.addView(text("Autonomía tablero original: hasta identificar "+
+            "su señal OEM, copiá el número que muestra la camioneta. "+
+            "Se indicará MANUAL en la tarjeta principal.",12,
+            Color.DKGRAY,false));
+        EditText oem=new EditText(this);
+        oem.setHint("Autonomía del tablero (km; opcional)");
+        oem.setInputType(InputType.TYPE_CLASS_NUMBER|
+            InputType.TYPE_NUMBER_FLAG_DECIMAL);
+        SharedPreferences range=getSharedPreferences(RANGE_PREFS,MODE_PRIVATE);
+        float prior=range.getFloat("oem_range_manual_km",Float.NaN);
+        if(Float.isFinite(prior))
+            oem.setText(String.format(Locale.ROOT,"%.0f",prior));
+        form.addView(oem);
+        new AlertDialog.Builder(this).setTitle("PRECIOS Y AUTONOMÍA TABLERO")
+            .setView(form).setNegativeButton("CANCELAR",null)
+            .setPositiveButton("GUARDAR",(d,w)->{
+                try{
+                    double liter=Double.parseDouble(
+                        gas.getText().toString().trim().replace(",","."));
+                    double power=Double.parseDouble(
+                        kwh.getText().toString().trim().replace(",","."));
+                    if(!Double.isFinite(liter)||liter<=0||liter>100000||
+                        !Double.isFinite(power)||power<0||power>100000)
+                        throw new IllegalArgumentException("Precio fuera de rango");
+                    String raw=oem.getText().toString().trim().replace(",",".");
+                    double vehicle=raw.isEmpty()?Double.NaN:
+                        Double.parseDouble(raw);
+                    if(!Double.isNaN(vehicle)&&
+                       (!Double.isFinite(vehicle)||vehicle<0||vehicle>3000))
+                        throw new IllegalArgumentException("Autonomía fuera de rango");
+                    boolean saved=trip.edit()
+                        .putFloat(T1TripRecorderService.FUEL_PRICE,(float)liter)
+                        .putFloat(T1TripRecorderService.KWH_PRICE,(float)power)
+                        .commit();
+                    if(!saved)throw new IllegalStateException("No se guardó");
+                    SharedPreferences.Editor edit=range.edit();
+                    if(Double.isNaN(vehicle))edit.remove("oem_range_manual_km");
+                    else edit.putFloat("oem_range_manual_km",(float)vehicle);
+                    edit.putLong("oem_range_manual_at",
+                        System.currentTimeMillis()).apply();
+                    renderedHistoryDetailSignature="";
+                    lastTotals=0;
+                    updateAutonomy();
+                    updateHistory();
+                    message("Precios guardados: $ "+f(liter,2)+
+                        "/L; $ "+f(power,2)+"/kWh. "+
+                        "Historial recalculado (estimación).");
+                }catch(Exception ex){
+                    message("No se aplicaron los precios: revisá valores "+
+                        "de nafta, electricidad y km del tablero.");
+                }
+            }).show();
     }
     private void adjustAutonomy(){
         LinearLayout form=col();form.setPadding(25,12,25,5);
