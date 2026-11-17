@@ -78,8 +78,8 @@ public final class T1ClusterWazeSettingsActivity extends Activity {
         button(body,"2 · PROBAR WAZE EN EL DISPLAY ELEGIDO · DETENIDO",
             this::testWaze);
         label(body,"Podés elegir Waze, Google Maps u otra app instalada. "+
-            "Los destinos recibidos desde Xiaomi o voz seguirán abriendo "+
-            "Waze, independientemente de la app elegida para el arranque.",13);
+            "Los destinos del Xiaomi conservan su selección; el micrófono "+
+            "envía la ruta al mapa realmente visible en Display 1.",13);
         button(body,"TAMAÑO / POSICIÓN / DIVISIÓN Y MICRÓFONO OEM",
             ()->startActivity(new Intent(this,
                 T1ClusterLayoutSettingsActivity.class)));
