@@ -59,6 +59,7 @@ public final class T1ClusterWazeSettingsActivity extends T1ImmersiveActivity {
             "\nApp al encender: "+(boot?"ACTIVO":"APAGADO")+
             "\nResultado: "+p.getString(T1ClusterWazeRouter.STATUS,
                 "Sin prueba; ningún display elegido"),14);
+        label(body,"CIERRE LIMPIO MAPAS · "+T1ClusterFreshStart.last(this),14);
         String foreground=p.getString(T1ClusterForegroundRecovery.RESULT,"");
         if(!foreground.isEmpty())
             label(body,"ÚLTIMO TOMAR CONTROL · "+foreground,14);
