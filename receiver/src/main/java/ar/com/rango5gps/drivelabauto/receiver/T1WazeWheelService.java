@@ -632,7 +632,8 @@ public final class T1WazeWheelService extends AccessibilityService {
         if(action!=100)return;
         long now=SystemClock.elapsedRealtime();
         prefs().edit().putString(OEM_LAST,
-            code+" · estado "+action+" · tercer dato "+extra).apply();
+            code+" · estado "+action+" · tercer dato "+extra)
+            .putLong("oem_wheel_event_at",System.currentTimeMillis()).apply();
         if(code==lastOemCode&&now-lastOemKeyAt<225)return;
         lastOemCode=code;lastOemKeyAt=now;
         int mapped;
