@@ -34,7 +34,8 @@ final class T1WheelAccessibilityRecovery {
            !T1OemMicrophoneService.prefs(app).getBoolean(
                 T1OemMicrophoneService.ENABLED,false))return;
         long now=SystemClock.elapsedRealtime();
-        if(now-lastAttempt<RETRY_MS&&now>=lastAttempt)return;
+        if(lastAttempt>0L&&now>=lastAttempt&&
+           now-lastAttempt<RETRY_MS)return;
         if(!RUNNING.compareAndSet(false,true))return;
         lastAttempt=now;
         new Thread(()->{
