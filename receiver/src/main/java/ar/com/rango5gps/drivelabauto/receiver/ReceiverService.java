@@ -397,6 +397,17 @@ public final class ReceiverService extends Service {
         new Handler(Looper.getMainLooper()).postDelayed(()->{
             if(!running||!prefs().getBoolean("launch_app_on_boot",false))return;
             String pkg=prefs().getString("launch_package","");
+            // The old generic 12s boot launcher must not reopen Waze/Maps
+            // before the cluster's clean process restart at 20s.
+            // DriveLab UI itself still auto-opens as before.
+            if(T1ClusterWazeRouter.autoBoot(this)&&
+               ("com.waze".equals(pkg)||
+                "com.google.android.apps.maps".equals(pkg))){
+                prefs().edit().putString("boot_status",
+                    "Navegación delegada al arranque limpio del clúster")
+                    .apply();
+                return;
+            }
             if(pkg.isEmpty()||!Settings.canDrawOverlays(this)){
                 prefs().edit().putString("boot_status","App de inicio sin permiso o sin selección").apply();return;
             }
