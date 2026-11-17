@@ -19,9 +19,10 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *     InputDispatcher, immediately before the shell key.
  * Never use an ordinary input key without -d. No BACK, taps, coordinates,
  * OEM controls, unsolicited OK, task resizing, or window re-launch.
- * Recovery after a physical wheel turn may request am task focus only while
- * parked in OEM P/0 and with a verified target map window. The post-request
- * focused-window dump MUST confirm the change before any DPAD injection.
+ * Recovery after a physical wheel turn may request am task focus with
+ * a verified selected map window, regardless of transmission gear or speed.
+ * The post-request focused-window dump MUST confirm the change before DPAD.
+ * Window geometry changes remain separately parked-only.
  * An ADB command finishing does NOT prove that Waze moved focus.
  */
 final class T1WheelAdbFallback {
@@ -94,17 +95,16 @@ final class T1WheelAdbFallback {
                     // com.autolink.instrument while both freeform map windows
                     // were visible, key-capable and unfocused. An app/task
                     // without window focus cannot receive DPAD.
-                    // Only a physical wheel ROTATION may restore task focus,
-                    // only when OEM P and zero speed are confirmed, and only
-                    // when the focus is currently OEM or another map; a
-                    // dialog/other app can NEVER be displaced.
+                    // Only a physical wheel ROTATION may restore task focus
+                    // of the user-selected navigation map on Display 1.
+                    // Unlike window geometry editing, steering controls are
+                    // needed while driving and MUST NOT depend on P or speed.
+                    // Only OEM or another map focus may be displaced; unknown
+                    // dialogs/other apps remain protected.
                     if(key==23||!T1WheelAdbFocusPolicy.mayFocusMap(input,id,pkg))
                         throw new IllegalStateException(
                             "Foco en OEM/u otra ventana; no se autoriza "+
                             "cambiarlo ni enviar tecla");
-                    if(!T1ClusterAdbResize.parkedForWheel(app))
-                        throw new IllegalStateException(
-                            "Foco de mapa pendiente: solo recuperar en P y 0 km/h");
                     String focusReply=T1LocalAdbClient.shell(app,
                         T1WheelAdbFocusPolicy.focusCommand(map.id));
                     String feedback=focusReply==null?"":focusReply.toLowerCase(Locale.ROOT);
