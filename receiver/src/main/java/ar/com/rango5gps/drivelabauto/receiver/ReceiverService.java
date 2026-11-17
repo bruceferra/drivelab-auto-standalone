@@ -384,16 +384,11 @@ public final class ReceiverService extends Service {
                     prefs().edit().putString("boot_route_restore",
                         "Destino nuevo: no se repite ruta anterior").apply();
                 }
-                // Always rebind wheel and refresh Accessibility after the
-                // actual map tasks open, even if Sender/voice updated a route.
-                // The optional ADB step only requests focus; it never sends
-                // any key, tap or OEM command during ignition.
+                // Refresh microphone and Android Accessibility only after
+                // the map tasks launch. The retired ADB task-focus/DPAD
+                // fallback is removed; no synthetic steering keys are sent.
                 T1OemMicrophoneService.ensureRunning(this);
                 T1WazeWheelService.requestClusterReady(this);
-                // Nov 16 proven-safe behavior: bind Accessibility after
-                // opening the maps. Do NOT invoke am task focus on boot;
-                // Jetour leaves com.autolink.instrument as InputDispatcher
-                // focus and may redraw a Waze panel as OEM background.
             },3200L);
         },20000L);
     }
