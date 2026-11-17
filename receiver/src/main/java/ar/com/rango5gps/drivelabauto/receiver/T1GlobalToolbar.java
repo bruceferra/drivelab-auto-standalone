@@ -484,6 +484,7 @@ final class T1GlobalToolbar {
                     "visible en el tablero; sin ADB no se cerró.")
                 .apply();
             refreshCluster();
+            T1ClusterEdgeFade.hide(owner);
             if(!T1ClusterAdbResize.enabled(owner)){
                 note("RUTAS OFF · Waze puede seguir visible sin ADB. "+
                     "Tocá nuevamente para CLÚSTER ON.");
@@ -545,6 +546,7 @@ final class T1GlobalToolbar {
                     T1ClusterWazeRouter.status(owner,opened);
                     refreshCluster();note(opened);
                     if(both){
+                        T1ClusterEdgeFade.refresh(owner);
                         // Explicit manual recovery: preserve the last route
                         // within the existing 60/40, not a fullscreen fallback.
                         main.postDelayed(()->{
