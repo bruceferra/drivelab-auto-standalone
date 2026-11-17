@@ -16,7 +16,7 @@ import java.util.List;
 import java.util.TreeMap;
 
 /** Explicit, reversible setup; no invisible window or cloned launcher UI. */
-public final class T1ClusterWazeSettingsActivity extends Activity {
+public final class T1ClusterWazeSettingsActivity extends T1ImmersiveActivity {
     private boolean showTechnical;
     private void label(LinearLayout parent,String text,int size){
         TextView t=new TextView(this);
@@ -59,6 +59,9 @@ public final class T1ClusterWazeSettingsActivity extends Activity {
             "\nApp al encender: "+(boot?"ACTIVO":"APAGADO")+
             "\nResultado: "+p.getString(T1ClusterWazeRouter.STATUS,
                 "Sin prueba; ningún display elegido"),14);
+        String foreground=p.getString(T1ClusterForegroundRecovery.RESULT,"");
+        if(!foreground.isEmpty())
+            label(body,"ÚLTIMO TOMAR CONTROL · "+foreground,14);
         button(body,"CONFIGURAR PANELES A/B · APLICAR",()->
             startActivity(new Intent(this,T1ClusterLayoutSettingsActivity.class)));
         if(T1ClusterWazeRouter.selected(this)==null)
