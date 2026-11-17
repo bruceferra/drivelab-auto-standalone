@@ -60,6 +60,7 @@ final class T1ClusterManualReboot {
                         RUNNING.set(false);
                         return;
                     }
+                    T1ClusterEdgeFade.refresh(owner);
                     note(owner,"REBOOT: dos mapas nuevos solicitados; "+
                         "restaurando ruta y reiniciando pantalla DriveLab. "+
                         "La rueda y la capa OEM requieren prueba física.");
