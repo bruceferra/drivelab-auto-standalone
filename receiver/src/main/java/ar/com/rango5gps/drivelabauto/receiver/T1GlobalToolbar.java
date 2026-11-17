@@ -33,7 +33,7 @@ final class T1GlobalToolbar {
     private final Button[] modes=new Button[3];
     private Button clusterButton,wheelPanelButton,optimizer,mirrorButton,mirrorAutoButton,mirrorRecoverButton,airButton,avsButton,roadModeButton,ventilationButton;
     // Permanent first-row read-only OEM 1046 / 1040 / 1041 indicators.
-    private Button regenIndicator,batteryIndicator,socTargetIndicator;
+    private Button regenIndicator,batteryIndicator,socTargetIndicator,drivingModeIndicator;
     private TextView info,clockDate,clockTime;
     private final Runnable clockTick=new Runnable(){
         @Override public void run(){
@@ -124,6 +124,10 @@ final class T1GlobalToolbar {
         modes[0]=button(header,"EV",T1JetourTheme.PANEL_HI,85,()->changeMode(1));
         modes[1]=button(header,"HEV",T1JetourTheme.PANEL_HI,85,()->changeMode(2));
         modes[2]=button(header,"EV MAX",T1JetourTheme.PANEL_HI,100,()->changeMode(3));
+        // OEM 2053: ONE read-only button changes its label and palette color.
+        // 0 ECO green, 1 NORMAL blue, 2 SPORT red, 3 SNOW light/white.
+        // Same width as HEV, immediately after EV MAX; never sends commands.
+        drivingModeIndicator=readOnlyIndicator(header,"SIN DATO",85);
         // Read-only dynamic road-mode chip: CITY/ROAD/MOTORWAY/UNKNOWN.
         // The OEM powertrain buttons above remain active manual controls;
         // this one never sends vehicle commands and cannot be tapped.
@@ -352,6 +356,28 @@ final class T1GlobalToolbar {
         }catch(Exception ex){note("Aire sin reactivar: "+
             ex.getClass().getSimpleName());}
     }
+    /** OEM 2053, physically verified mapping; this button is always read-only. */
+    private void refreshDrivingMode(int raw){
+        if(drivingModeIndicator==null)return;
+        drivingModeIndicator.setText(T1DrivingMode2053.label(raw));
+        int tint;
+        switch(raw){
+            case 0:tint=T1JetourTheme.GREEN_BUTTON;break;
+            case 1:tint=T1JetourTheme.TURQUOISE;break;
+            case 2:tint=T1JetourTheme.RED_BUTTON;break;
+            case 3:tint=T1JetourTheme.WHITE;break;
+            default:tint=T1JetourTheme.PANEL_HI;break;
+        }
+        T1JetourTheme.button(drivingModeIndicator,tint);
+        // SNOW uses a light background; dark text keeps contrast readable.
+        if(raw==3)drivingModeIndicator.setTextColor(T1JetourTheme.NIGHT);
+        drivingModeIndicator.setContentDescription(
+            "Modo de manejo OEM 2053: "+T1DrivingMode2053.label(raw)+
+            " (valor "+raw+"). Solo lectura; no cambia el vehículo.");
+        drivingModeIndicator.setOnClickListener(null);
+        drivingModeIndicator.setClickable(false);
+        drivingModeIndicator.setFocusable(false);
+    }
     private void readDisplayMode(){
         new Thread(()->{
             T1TripTelemetry.Sample snapshot=new T1TripTelemetry(owner).snapshot();
@@ -361,6 +387,7 @@ final class T1GlobalToolbar {
                 for(int i=0;i<3;i++)
                     T1JetourTheme.button(modes[i],mode==i+1?
                         T1JetourTheme.GREEN_BUTTON:T1JetourTheme.PANEL_HI);
+                refreshDrivingMode(snapshot.driveMode2053);
                 paintReadOnly(regenIndicator,
                     T1TopRowEnergyStatus.regeneration(snapshot.regen1046),
                     snapshot.regen1046>=1&&snapshot.regen1046<=3,

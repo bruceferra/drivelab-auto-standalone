@@ -2485,13 +2485,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             }).show();
     }
     private static String driveModeName2053(int raw){
-        switch(raw){
-            case 0:return "ECO";
-            case 1:return "NORMAL";
-            case 2:return "SPORT";
-            case 3:return "SNOW";
-            default:return raw==Integer.MIN_VALUE?"SIN DATO":"DESCONOCIDO";
-        }
+        return T1DrivingMode2053.label(raw);
     }
     private static String rawCode(int raw){
         return raw==Integer.MIN_VALUE?"SIN DATO":Integer.toString(raw);
