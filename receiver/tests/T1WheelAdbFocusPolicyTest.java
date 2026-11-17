@@ -14,6 +14,11 @@ public final class T1WheelAdbFocusPolicyTest {
         return "INPUT MANAGER\nInput Dispatcher State:\n  DispatchEnabled: 1\n"+
             "  Windows:\n"+String.join("\n",windows)+"\n";
     }
+    private static String instrument(){
+        return "  0: name='Window{a12 u0 com.autolink.instrument}', "+
+            "displayId=1, paused=false, hasFocus=true, "+
+            "visible=true, canReceiveKeys=true, type=0x00000005";
+    }
     public static void main(String[] args){
         String w="com.waze",m="com.google.android.apps.maps";
         yes(T1WheelAdbFocusPolicy.focusedOn(dump(
@@ -42,6 +47,35 @@ public final class T1WheelAdbFocusPolicyTest {
             "Default display not allowed");
         yes(!T1WheelAdbFocusPolicy.focusedOn("Input Dispatcher State:\n  Windows:\n",
                 1,w),"No focus evidence must fail closed");
+        // Actual 2026-11-17 Jetour T1: two key-capable visible maps,
+        // neither focused; com.autolink.instrument retains Display 1 focus.
+        yes(T1WheelAdbFocusPolicy.mayFocusMap(dump(
+                instrument(),win(w,1,false,true),win(m,1,false,true)),1,w),
+            "Allow one-time map focus request from verified OEM instrument");
+        yes(T1WheelAdbFocusPolicy.mayFocusMap(dump(
+                instrument(),win(w,1,false,true),win(m,1,false,true)),1,m),
+            "Allow selected right panel map focus while OEM owns key window");
+        yes(T1WheelAdbFocusPolicy.mayFocusMap(dump(
+                win(w,1,true,true),win(m,1,false,true)),1,m),
+            "Allow deliberate switching between two visible maps");
+        yes(!T1WheelAdbFocusPolicy.mayFocusMap(dump(
+                win("com.suspicious.overlay",1,true,true),
+                win(m,1,false,true)),1,m),
+            "Never displace an unknown focused popup");
+        yes(!T1WheelAdbFocusPolicy.mayFocusMap(dump(
+                instrument(),win(m,1,false,false)),1,m),
+            "Do not focus map window that cannot receive keys");
+        yes(!T1WheelAdbFocusPolicy.mayFocusMap(dump(
+                instrument(),win(m,0,false,true)),1,m),
+            "No map task visible in selected display");
+        yes(T1WheelAdbFocusPolicy.focusCommand(2272).equals("am task focus 2272"),
+            "Task focus uses only bounded verified numeric task id");
+        for(int invalid:new int[]{-1,0,10000000}){
+            boolean fail=false;
+            try{T1WheelAdbFocusPolicy.focusCommand(invalid);}
+            catch(IllegalArgumentException expected){fail=true;}
+            yes(fail,"Unknown task must not be focusable");
+        }
         yes(T1WheelAdbFocusPolicy.command(1,22).equals(
             "input dpad -d 1 keyevent 22"),"Only explicit DPAD on secondary display");
         for(int[] x:new int[][]{{0,22},{1,4},{1,3},{1,66},{10,22}}){
