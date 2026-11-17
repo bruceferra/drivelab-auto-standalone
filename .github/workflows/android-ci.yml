@@ -274,6 +274,21 @@ jobs:
             receiver/tests/T1TripEnergyAuditTest.java
           java -cp /tmp/t1-trip-cost ar.com.rango5gps.drivelabauto.receiver.T1TripCostModelTest
           java -cp /tmp/t1-trip-cost ar.com.rango5gps.drivelabauto.receiver.T1TripEnergyAuditTest
+      - name: Grid-origin-only accounting and recorded plug charge ledger (pure JVM)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-grid-only
+          javac -encoding UTF-8 -d /tmp/t1-grid-only \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripCostModel.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PlugChargeLedger.java \
+            receiver/tests/T1TripCostModelTest.java \
+            receiver/tests/T1PlugChargeLedgerTest.java
+          java -cp /tmp/t1-grid-only ar.com.rango5gps.drivelabauto.receiver.T1TripCostModelTest
+          java -cp /tmp/t1-grid-only ar.com.rango5gps.drivelabauto.receiver.T1PlugChargeLedgerTest
+          ! grep -Fq 'evCost=hvOut*kwhPrice' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripRecorderService.java
+          grep -Fq 'double gasCost=liters*gasPrice,evCost=Double.NaN;' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripRecorderService.java
+          grep -Fq 'assignRecordedPlugEnergy(all)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
       - name: OEM 500m paired fuel, energy and distance audit (pure JVM)
         shell: bash
         run: |
