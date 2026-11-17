@@ -138,8 +138,10 @@ final class T1ClusterManualReboot {
                     note(owner,"R: ReceiverService sin confirmar: "+
                         ex.getClass().getSimpleName(),update);
                 }
-                finish(owner,update,"R TERMINADA · OFF/ON ejecutados; "+
-                    "Waze/Maps solicitados; ruta: "+route+
+                finish(owner,update,(offConfirmed?"R TERMINADA":"R PARCIAL")+
+                    " · CLÚSTER OFF/ON ejecutados, cierre ADB "+
+                    (offConfirmed?"confirmado":"NO confirmado")+
+                    "; Waze/Maps solicitados; ruta: "+route+
                     ". Spotify y rueda pendientes de prueba física.");
                 if(!owner.isFinishing()&&!owner.isDestroyed()){
                     Intent main=new Intent(owner,ReceiverActivity.class)
