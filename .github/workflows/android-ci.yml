@@ -140,8 +140,15 @@ jobs:
           grep -Fq '        maybeReconcileContinuity();' "$cockpit"
           grep -Fq 'p.minEnabled.setChecked(existing.minEnabled);' "$editor"
           grep -Fq 'p.maxEnabled.setChecked(existing.maxEnabled);' "$editor"
-          grep -Fq 'minimumEnabled&&maximumEnabled&&lower>upper' "$editor"
-          grep -Fq 'minOn,minimum,maxOn,maximum' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeStore.java
+          grep -Fq 'if(!selected.rangeValid())' "$editor"
+          grep -Fq 'minimumEnabled,lower,minOp,maximumEnabled,upper,maxOp,regen' "$editor"
+          grep -Fq 'minOn,minimum,minimumOp,maxOn,maximum,maximumOp' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeStore.java
+          grep -Fq 'p.minOperator=lowerOperatorSelector(existing.minComparison)' "$editor"
+          grep -Fq 'p.maxOperator=upperOperatorSelector(existing.maxComparison)' "$editor"
+          grep -Fq 'q.minOperator=lowerOperatorSelector(existing.minComparison)' "$editor"
+          grep -Fq 'q.maxOperator=upperOperatorSelector(existing.maxComparison)' "$editor"
+          grep -Fq 'min_comparison_v3' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeStore.java
+          grep -Fq 'max_comparison_v3' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeStore.java
           grep -Fq 'k+"min_enabled_v2"' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeStore.java
           grep -Fq 'k+"max_enabled_v2"' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeStore.java
       - name: Cockpit full-system RAM/CPU and recovering NAV touch telemetry
