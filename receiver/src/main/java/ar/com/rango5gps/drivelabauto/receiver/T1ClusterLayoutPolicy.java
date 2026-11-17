@@ -125,6 +125,11 @@ final class T1ClusterLayoutPolicy {
     static boolean panelBOn(Context c){
         return prefs(c).getBoolean(PANEL_B_ON,MODE_SPLIT.equals(mode(c)));
     }
+    /** A user explicitly configured both FREEFORM panes; do not erase this
+     * preference merely because this ROM's ADB omits real task bounds. */
+    static boolean savedDualSplit(Context c){
+        return MODE_SPLIT.equals(mode(c))&&panelAOn(c)&&panelBOn(c);
+    }
     static String appInPanel(Context c,boolean panelB){
         return panelB?secondPackage(c):firstPackage(c);
     }
