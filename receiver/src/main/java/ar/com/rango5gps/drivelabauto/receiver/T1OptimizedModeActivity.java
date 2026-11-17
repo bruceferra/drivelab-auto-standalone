@@ -35,7 +35,7 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
     private T1OptimizedModePolicy.Road road=T1OptimizedModePolicy.Road.UNKNOWN;
     @Override protected int overlayClearBackgroundColor(){return BG;}
     static class RuleEditor {
-        Spinner power,strategy,regen,forced,minPct,maxPct;
+        Spinner power,strategy,regen,forced,minPct,maxPct,minOperator,maxOperator;
         CheckBox minEnabled,maxEnabled;
     }
     static final class Profile extends RuleEditor {
@@ -87,6 +87,16 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
             Math.max(0,(int)Math.round((previouslySaved-PCT_MIN)/
                 (double)PCT_STEP)));
         return selector(options,selected);
+    }
+    private Spinner lowerOperatorSelector(
+            T1OptimizedModePolicy.Comparison prior){
+        return selector(new String[]{"≥"," >"},
+            prior==T1OptimizedModePolicy.Comparison.GREATER?1:0);
+    }
+    private Spinner upperOperatorSelector(
+            T1OptimizedModePolicy.Comparison prior){
+        return selector(new String[]{"≤"," <"},
+            prior==T1OptimizedModePolicy.Comparison.LESS?1:0);
     }
     private Spinner forcedSocSelector(int oldValue){
         int[] allowed=T1SocRegenWritePolicy.forcedSocPresets();
@@ -181,29 +191,33 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         LinearLayout threshold=vertical();
         threshold.addView(text("RANGO DE BATERÍA · SOC ACTUAL",
             12,0xFF334B5A,true));
-        threshold.addView(text("Activá uno o ambos límites. Con ambos activos "+
-            "se usa el rango inclusivo: SOC ≥ mínimo Y SOC ≤ máximo. "+
-            "Si apagás uno, el otro funciona por sí solo.",
+        threshold.addView(text("Elegí si cada extremo incluye el valor "+
+            "(≥ / ≤) o lo excluye (> / <). Los límites se combinan "+
+            "si activás ambos.",
             11,0xFF40566B,false));
         LinearLayout lower=horizontal();
         p.minEnabled=new CheckBox(this);
-        p.minEnabled.setText("MÍNIMO ≥");
+        p.minEnabled.setText("MÍNIMO");
         p.minEnabled.setTextColor(T1JetourTheme.WHITE);
         p.minEnabled.setButtonTintList(android.content.res.ColorStateList.valueOf(
             T1JetourTheme.CYAN));
         p.minEnabled.setChecked(existing.minEnabled);
         column(lower,p.minEnabled,2);
+        p.minOperator=lowerOperatorSelector(existing.minComparison);
+        column(lower,p.minOperator,1);
         p.minPct=percentageSelector(existing.minBattery);
         column(lower,p.minPct,1);
         threshold.addView(lower);
         LinearLayout upper=horizontal();
         p.maxEnabled=new CheckBox(this);
-        p.maxEnabled.setText("MÁXIMO ≤");
+        p.maxEnabled.setText("MÁXIMO");
         p.maxEnabled.setTextColor(T1JetourTheme.WHITE);
         p.maxEnabled.setButtonTintList(android.content.res.ColorStateList.valueOf(
             T1JetourTheme.CYAN));
         p.maxEnabled.setChecked(existing.maxEnabled);
         column(upper,p.maxEnabled,2);
+        p.maxOperator=upperOperatorSelector(existing.maxComparison);
+        column(upper,p.maxOperator,1);
         p.maxPct=percentageSelector(existing.maxBattery);
         column(upper,p.maxPct,1);
         threshold.addView(upper);
@@ -223,12 +237,18 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         target.addView(targetEditor);
         column(second,target,1);
         profiles.put(which,p);
-        p.minEnabled.setOnCheckedChangeListener((b,checked)->
-            p.minPct.setEnabled(checked));
-        p.maxEnabled.setOnCheckedChangeListener((b,checked)->
-            p.maxPct.setEnabled(checked));
+        p.minEnabled.setOnCheckedChangeListener((b,checked)->{
+            p.minPct.setEnabled(checked);
+            p.minOperator.setEnabled(checked);
+        });
+        p.maxEnabled.setOnCheckedChangeListener((b,checked)->{
+            p.maxPct.setEnabled(checked);
+            p.maxOperator.setEnabled(checked);
+        });
         p.minPct.setEnabled(existing.minEnabled);
+        p.minOperator.setEnabled(existing.minEnabled);
         p.maxPct.setEnabled(existing.maxEnabled);
+        p.maxOperator.setEnabled(existing.maxEnabled);
         final Runnable syncSocAvailability=()->{
             boolean electric=p.power.getSelectedItemPosition()!=
                 T1OptimizedModePolicy.Power.HEV.ordinal();
@@ -307,22 +327,26 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
             12,Color.WHITE,true));
         LinearLayout low=horizontal();condition.addView(low);
         q.minEnabled=new CheckBox(this);
-        q.minEnabled.setText("MÍNIMO ≥");
+        q.minEnabled.setText("MÍNIMO");
         q.minEnabled.setTextColor(Color.WHITE);
         q.minEnabled.setButtonTintList(
             android.content.res.ColorStateList.valueOf(T1JetourTheme.CYAN));
         q.minEnabled.setChecked(existing.minEnabled);
         column(low,q.minEnabled,2);
+        q.minOperator=lowerOperatorSelector(existing.minComparison);
+        column(low,q.minOperator,1);
         q.minPct=percentageSelector(existing.minBattery);
         column(low,q.minPct,1);
         LinearLayout high=horizontal();condition.addView(high);
         q.maxEnabled=new CheckBox(this);
-        q.maxEnabled.setText("MÁXIMO ≤");
+        q.maxEnabled.setText("MÁXIMO");
         q.maxEnabled.setTextColor(Color.WHITE);
         q.maxEnabled.setButtonTintList(
             android.content.res.ColorStateList.valueOf(T1JetourTheme.CYAN));
         q.maxEnabled.setChecked(existing.maxEnabled);
         column(high,q.maxEnabled,2);
+        q.maxOperator=upperOperatorSelector(existing.maxComparison);
+        column(high,q.maxOperator,1);
         q.maxPct=percentageSelector(existing.maxBattery);
         column(high,q.maxPct,1);
         column(battery,condition,2);
@@ -333,11 +357,17 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         forced.addView(q.forced);
         column(battery,forced,1);
         q.minPct.setEnabled(existing.minEnabled);
+        q.minOperator.setEnabled(existing.minEnabled);
         q.maxPct.setEnabled(existing.maxEnabled);
-        q.minEnabled.setOnCheckedChangeListener(
-            (button,checked)->q.minPct.setEnabled(checked));
-        q.maxEnabled.setOnCheckedChangeListener(
-            (button,checked)->q.maxPct.setEnabled(checked));
+        q.maxOperator.setEnabled(existing.maxEnabled);
+        q.minEnabled.setOnCheckedChangeListener((button,checked)->{
+            q.minPct.setEnabled(checked);
+            q.minOperator.setEnabled(checked);
+        });
+        q.maxEnabled.setOnCheckedChangeListener((button,checked)->{
+            q.maxPct.setEnabled(checked);
+            q.maxOperator.setEnabled(checked);
+        });
         final Runnable syncStrategy=()->{
             boolean electric=q.power.getSelectedItemPosition()!=
                 T1OptimizedModePolicy.Power.HEV.ordinal();
@@ -464,14 +494,22 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         int lower=percentage(p.minPct),upper=percentage(p.maxPct);
         boolean minimumEnabled=p.minEnabled.isChecked(),
             maximumEnabled=p.maxEnabled.isChecked();
-        if(minimumEnabled&&maximumEnabled&&lower>upper)
-            throw new IllegalArgumentException(
-                "Rango de batería inválido: mínimo "+lower+
-                " % mayor al máximo "+upper+
-                " %. Ajustá uno de los desplegables.");
-        return new T1OptimizedModePolicy.Rule(
+        T1OptimizedModePolicy.Comparison minOp=
+            p.minOperator.getSelectedItemPosition()==1?
+                T1OptimizedModePolicy.Comparison.GREATER:
+                T1OptimizedModePolicy.Comparison.GREATER_OR_EQUAL;
+        T1OptimizedModePolicy.Comparison maxOp=
+            p.maxOperator.getSelectedItemPosition()==1?
+                T1OptimizedModePolicy.Comparison.LESS:
+                T1OptimizedModePolicy.Comparison.LESS_OR_EQUAL;
+        T1OptimizedModePolicy.Rule selected=new T1OptimizedModePolicy.Rule(
             power,strategy,forcedSocValue(p.forced),
-            minimumEnabled,lower,maximumEnabled,upper,regen);
+            minimumEnabled,lower,minOp,maximumEnabled,upper,maxOp,regen);
+        if(!selected.rangeValid())
+            throw new IllegalArgumentException(
+                "Rango de batería vacío: "+selected.rangeSummary()+
+                ". Ajustá los operadores o porcentajes.");
+        return selected;
     }
     private boolean saveProfiles(){
         try{
