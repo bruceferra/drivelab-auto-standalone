@@ -34,6 +34,9 @@ final class T1ClusterWazeRouter {
     static final String APP_LABEL="app_label";
     static final String STATUS="status";
     static final String CLOSE_PENDING="cluster_close_pending";
+    // Amber CLÚSTER OFF indication must persist throughout automatic/manual
+    // ten-second hold, even when ADB successfully finished task closing.
+    static final String RELOAD_HOLD="cluster_reload_off_hold_v1";
     static final String VISUAL_OEM_CONFIRMED="cluster_oem_visually_confirmed";
     static final String BOOT_RELOAD_RESULT="cluster_boot_off_on_result_v1";
     static final String LAST_REQUEST_MS="last_request_ms";
@@ -349,9 +352,11 @@ final class T1ClusterWazeRouter {
             // Real CLUSTER OFF: same flags and same ADB task removal as R.
             p.edit().putBoolean(ENABLED,false).putBoolean(AUTO_BOOT,false)
                 .putBoolean(CLOSE_PENDING,true)
+                .putBoolean(RELOAD_HOLD,true)
                 .putString(BOOT_RELOAD_RESULT,
-                    "AUTO 1/3: force-stop confirmado; CLÚSTER OFF; espera 5 s")
-                .commit();
+                    "AUTO 1/3: CLÚSTER OFF naranja; cerrando tareas, luego 10 s")
+                .putString(STATUS,
+                    "ARRANQUE: CLÚSTER OFF naranja; cerrando Waze/Maps").commit();
             T1ClusterEdgeFade.hide(c);
             final java.util.concurrent.CountDownLatch closed=
                 new java.util.concurrent.CountDownLatch(1);
@@ -367,9 +372,15 @@ final class T1ClusterWazeRouter {
             boolean closeResponded=false;
             try{
                 closeResponded=closed.await(16L,java.util.concurrent.TimeUnit.SECONDS);
-                // Match the owner's physically successful manual interval,
-                // even after task closure returned quickly: five full seconds
-                // before permitting CLÚSTER ON. The former 1.1 s was too short.
+                // Start the TEN-second hold only AFTER the ADB task-close
+                // attempt returns (or its 16 s timeout). Never include task
+                // removal time in the hold and never jump directly to ON.
+                p.edit().putString(BOOT_RELOAD_RESULT,
+                    "AUTO 1/3: CLÚSTER OFF naranja; ESPERANDO 10 s"+
+                    (closeResponded?" tras cierre ADB":" tras timeout ADB"))
+                    .putString(STATUS,
+                    "ARRANQUE: CLÚSTER OFF naranja · ESPERANDO 10 s")
+                    .commit();
                 Thread.sleep(T1ClusterManualReboot.OFF_VISIBLE_MS);
             }catch(InterruptedException ex){
                 Thread.currentThread().interrupt();
@@ -378,8 +389,9 @@ final class T1ClusterWazeRouter {
             // Recover ON even if ADB close times out or cannot confirm.
             p.edit().putBoolean(ENABLED,true).putBoolean(AUTO_BOOT,true)
                 .putBoolean(CLOSE_PENDING,false)
+                .putBoolean(RELOAD_HOLD,false)
                 .putString(BOOT_RELOAD_RESULT,
-                    "AUTO 2/3: CLÚSTER ON; OFF ADB "+
+                    "AUTO 2/3: CLÚSTER ON tras 10 s OFF; OFF ADB "+
                     (closeResponded&&offConfirmed.get()?"confirmado":"NO confirmado")+
                     " · "+offMessage.get())
                 .commit();

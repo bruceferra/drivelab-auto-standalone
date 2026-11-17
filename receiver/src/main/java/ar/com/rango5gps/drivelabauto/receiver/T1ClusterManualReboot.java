@@ -7,14 +7,15 @@ import android.os.Looper;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /** Manual user-confirmed R: stop maps with CLUSTER ON, perform a real
- * CLUSTER OFF (including ADB task close), wait briefly, then CLUSTER ON
+ * CLUSTER OFF (including ADB task close), hold 10 s, then CLUSTER ON
  * with the saved freeform panes. No vehicle, OEM or Spotify process changes.
  * Requires authorized local ADB. Never claimed as visually verified. */
 final class T1ClusterManualReboot {
     static final String RESULT="cluster_manual_reboot_result_v1";
     static final String TRACE="cluster_manual_reboot_trace_v2";
-    // The owner's manual success required a full 5 seconds of CLÚSTER OFF.
-    static final long OFF_VISIBLE_MS=5000L;
+    // Ten COMPLETE seconds after task close finishes, matching the owner's
+    // manually verified recovery of the OEM Spotify overlay.
+    static final long OFF_VISIBLE_MS=10000L;
     private static final long CLOSE_TIMEOUT_MS=16000L;
     private static final AtomicBoolean RUNNING=new AtomicBoolean(false);
     private static final Handler MAIN=new Handler(Looper.getMainLooper());
@@ -84,30 +85,37 @@ final class T1ClusterManualReboot {
         p.edit().putBoolean(T1ClusterWazeRouter.ENABLED,false)
             .putBoolean(T1ClusterWazeRouter.AUTO_BOOT,false)
             .putBoolean(T1ClusterWazeRouter.CLOSE_PENDING,true)
+            .putBoolean(T1ClusterWazeRouter.RELOAD_HOLD,true)
             .putString(T1ClusterWazeRouter.STATUS,
-                "R: CLÚSTER OFF · cerrando tareas; esperar 5 segundos").commit();
+                "R: CLÚSTER OFF (naranja) · cerrando tareas; luego 10 s").commit();
         T1ClusterEdgeFade.hide(owner);
-        note(owner,"R 2/4 · CLÚSTER OFF, cerrando tareas por ADB. "+
-            "Mantener OFF cinco segundos antes de ON.",update);
+        note(owner,"R 2/4 · CLÚSTER OFF naranja; cerrando tareas ADB. "+
+            "La espera de 10 s empieza AL TERMINAR el cierre.",update);
         AtomicBoolean closeReturned=new AtomicBoolean(false);
         T1ClusterAdbResize.closeClusterApps(owner,(message,confirmed)->{
             if(!closeReturned.compareAndSet(false,true))return;
+            // Keep the chip amber even after successful ADB close, while
+            // we hold CLÚSTER OFF for the owner's FULL ten seconds.
             p.edit().putBoolean(T1ClusterWazeRouter.CLOSE_PENDING,!confirmed)
-                .commit();
-            note(owner,(confirmed?"R 2/4 · OFF confirmado: ":
-                "R 2/4 · OFF no confirmado: ")+message,update);
-            // Do not shorten this delay: 0.3.47 used 1.1 seconds, and the
-            // owner's physical test only recovered the Spotify layer after
-            // five full seconds with the cluster OFF.
+                .putBoolean(T1ClusterWazeRouter.RELOAD_HOLD,true)
+                .putString(T1ClusterWazeRouter.STATUS,
+                    "R: CLÚSTER OFF · ESPERANDO 10 s tras cierre ADB").commit();
+            note(owner,(confirmed?"R 2/4 · cierre ADB confirmado: ":
+                "R 2/4 · cierre ADB NO confirmado: ")+message+
+                " · ESPERANDO 10 s en CLÚSTER OFF naranja",update);
             MAIN.postDelayed(()->performOn(owner,update,confirmed),
                 OFF_VISIBLE_MS);
         });
-        // Restore ON if ADB stalls. Late close actions bail out once ON.
+        // Do NOT bypass the OFF interval when ADB times out. The previous
+        // immediate-ON timeout produced a shorter-than-requested OFF period.
         MAIN.postDelayed(()->{
             if(!closeReturned.compareAndSet(false,true))return;
-            note(owner,"R 2/4 · Cierre ADB demoró más de 16 s; "+
-                "restaurando ON sin confirmar OFF",update);
-            performOn(owner,update,false);
+            p.edit().putString(T1ClusterWazeRouter.STATUS,
+                "R: ADB sin respuesta; CLÚSTER OFF · ESPERANDO 10 s").commit();
+            note(owner,"R 2/4 · ADB sin respuesta a 16 s; "+
+                "manteniendo CLÚSTER OFF otros 10 s",update);
+            MAIN.postDelayed(()->performOn(owner,update,false),
+                OFF_VISIBLE_MS);
         },CLOSE_TIMEOUT_MS);
     }
     private static void performOn(T1ImmersiveActivity owner,Update update,
@@ -116,8 +124,9 @@ final class T1ClusterManualReboot {
         p.edit().putBoolean(T1ClusterWazeRouter.ENABLED,true)
             .putBoolean(T1ClusterWazeRouter.AUTO_BOOT,true)
             .putBoolean(T1ClusterWazeRouter.CLOSE_PENDING,false)
+            .putBoolean(T1ClusterWazeRouter.RELOAD_HOLD,false)
             .putString(T1ClusterWazeRouter.STATUS,
-                "R: CLÚSTER ON después de espera de 5 segundos").commit();
+                "R: CLÚSTER ON después de 10 s completos en OFF").commit();
         note(owner,"R 3/4 · CLÚSTER ON · reabriendo Waze y Maps",update);
         String opened=T1ClusterLayoutPolicy.reopenSavedPanelsStopped(owner);
         if(opened.split("APP SOLICITADA",-1).length!=3){

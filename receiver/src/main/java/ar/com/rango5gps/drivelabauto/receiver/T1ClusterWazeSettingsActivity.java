@@ -89,8 +89,8 @@ public final class T1ClusterWazeSettingsActivity extends T1ImmersiveActivity {
             reboot.setOnClickListener(v->new AlertDialog.Builder(this)
                 .setTitle("REBOOT · DRIVELAB / MAPAS")
                 .setMessage("¿Estás seguro? Detiene Waze y Maps, "+
-                    "hace CLÚSTER OFF, espera el cierre de tareas y hace "+
-                    "CLÚSTER ON con el diseño guardado. Interrumpe rutas.")
+                    "hace CLÚSTER OFF, cierra tareas, espera 10 s completos "+
+                    "y hace CLÚSTER ON con el diseño guardado. Interrumpe rutas.")
                 .setNegativeButton("CANCELAR",null)
                 .setPositiveButton("REBOOT",(dialog,which)->{
                     T1ClusterManualReboot.run(this);

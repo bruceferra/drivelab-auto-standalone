@@ -457,13 +457,18 @@ final class T1GlobalToolbar {
         boolean active=T1ClusterWazeRouter.enabled(owner);
         boolean pending=p.getBoolean(T1ClusterWazeRouter.CLOSE_PENDING,false);
         clusterButton.setText(active?"CLÚSTER ON":
+            p.getBoolean(T1ClusterWazeRouter.RELOAD_HOLD,false)?
+                "CLÚSTER OFF · 10 s":
             pending?"CLÚSTER OFF · SIN CIERRE":"CLÚSTER OFF");
+        boolean hold=p.getBoolean(T1ClusterWazeRouter.RELOAD_HOLD,false);
         T1JetourTheme.button(clusterButton,active?
-            T1JetourTheme.GREEN_BUTTON:pending?
+            T1JetourTheme.GREEN_BUTTON:(hold||pending)?
             T1JetourTheme.AMBER_BUTTON:T1JetourTheme.PANEL_HI);
         clusterButton.setContentDescription(active?
             "Clúster de navegación habilitado. Tocar para cerrar Waze "+
                 "y volver al tablero OEM cuando Android permita.":
+            hold?"Clúster OFF naranja: recuperación en curso; esperar "+
+                "diez segundos completos después del cierre ADB":
             pending?"Clúster desactivado pero cierre de apps pendiente; "+
                 "tocá para volver a CLÚSTER ON; Waze puede seguir visible sin ADB":
             "Clúster desactivado. Tocar para enviar Waze al Display elegido");
@@ -487,7 +492,8 @@ final class T1GlobalToolbar {
         new AlertDialog.Builder(owner)
             .setTitle("RECARGAR CLÚSTER")
             .setMessage("¿Estás seguro? Se detendrán Waze y Google Maps, "+
-                "se hará CLÚSTER OFF durante 5 segundos y después ON. "+
+                "se hará CLÚSTER OFF, se cerrarán las tareas, "+
+                "se esperarán 10 segundos completos y después ON. "+
                 "Se puede interrumpir la navegación actual.")
             .setNegativeButton("NO",null)
             .setPositiveButton("SÍ",(dialog,which)->{
@@ -503,6 +509,10 @@ final class T1GlobalToolbar {
 
     private void toggleCluster(){
         SharedPreferences p=T1ClusterWazeRouter.prefs(owner);
+        if(p.getBoolean(T1ClusterWazeRouter.RELOAD_HOLD,false)){
+            note("RECARGA EN CURSO · CLÚSTER OFF naranja, esperar 10 s");
+            return;
+        }
         if(T1ClusterWazeRouter.enabled(owner)){
             // OFF stops routing but does not claim the Waze task disappears.
             // The OEM dashboard is not verified without a physical test.
