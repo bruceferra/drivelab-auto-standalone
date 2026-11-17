@@ -2090,20 +2090,20 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         T1TripEnergyAudit.Result audited=tripEnergyAudit.get(x.key());
         boolean clientHv=x.slot!=0&&audited!=null&&audited.available();
         T1TripCostModel.Result econ=x.slot==0?
-            Double.isFinite(x.plugKwh)?
+            Double.isFinite(x.plugKwh)&&kwhPriceKnown?
                 T1TripCostModel.withDocumentedPlugKwh(x.km,x.liters,x.kwh,
                     x.chargedKwh,x.plugKwh,gasPrice,kwhPrice):
                 T1TripCostModel.fromGross(x.km,x.liters,x.kwh,
                     x.chargedKwh,gasPrice,kwhPrice,kwhPriceKnown):
             clientHv?
-                Double.isFinite(x.plugKwh)?
+                Double.isFinite(x.plugKwh)&&kwhPriceKnown?
                     T1TripCostModel.withDocumentedPlugKwh(x.km,x.liters,
                         audited.grossKwh,audited.chargedKwh,
                         x.plugKwh,gasPrice,kwhPrice):
                     T1TripCostModel.fromGross(x.km,x.liters,
                         audited.grossKwh,audited.chargedKwh,
                         gasPrice,kwhPrice,kwhPriceKnown):
-            Double.isFinite(x.plugKwh)?
+            Double.isFinite(x.plugKwh)&&kwhPriceKnown?
                 T1TripCostModel.withDocumentedPlugNet(x.km,x.liters,x.kwh,
                     x.plugKwh,gasPrice,kwhPrice):
                 T1TripCostModel.fromNet(x.km,x.liters,x.kwh,

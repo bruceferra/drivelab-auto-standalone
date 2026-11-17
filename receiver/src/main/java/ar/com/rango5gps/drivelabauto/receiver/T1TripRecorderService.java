@@ -412,8 +412,10 @@ public final class T1TripRecorderService extends Service {
                 if(anchored)T1FuelCalibration.p(this).edit()
                     .putFloat(T1FuelCalibration.SINCE_KM,(float)(baselineKm+km)).apply();
                 double gasPrice=p().getFloat(FUEL_PRICE,2129f);
-                double kwhPrice=p().getFloat(KWH_PRICE,0f);
-                double gasCost=liters*gasPrice,evCost=hvOut*kwhPrice;
+                // Keep the legacy CSV column for compatibility but NEVER
+                // fill it from gross HV discharge as a grid electricity bill.
+                // Only the explicit home plug-charge ledger proves paid kWh.
+                double gasCost=liters*gasPrice,evCost=Double.NaN;
                 // Distinct from measured accelerometer signals: these are
                 // derived from velocity and heading differences with a
                 // validated time interval. No invented OEM accel IDs.
