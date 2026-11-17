@@ -75,6 +75,13 @@ jobs:
             receiver/tests/T1ClusterWindowAndMicSourceContractTest.java
           java -cp /tmp/t1-native-layout ar.com.rango5gps.drivelabauto.receiver.T1ClusterLayoutMathTest
           java -cp /tmp/t1-native-layout ar.com.rango5gps.drivelabauto.receiver.T1ClusterWindowAndMicSourceContractTest
+      - name: Preserve cluster top controls and visible focus error diagnosis
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-cluster-header
+          javac -encoding UTF-8 -d /tmp/t1-cluster-header receiver/tests/T1ClusterFixedToolbarAndFocusResultContractTest.java
+          java -cp /tmp/t1-cluster-header ar.com.rango5gps.drivelabauto.receiver.T1ClusterFixedToolbarAndFocusResultContractTest
       - name: Manual map focus recovery preserves OEM and wheel behavior
         shell: bash
         run: |
