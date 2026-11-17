@@ -317,6 +317,8 @@ final class T1ClusterWazeRouter {
                 return cancel;
             }
             String opened=T1ClusterLayoutPolicy.reopenSavedPanelsStopped(c);
+            if(opened.split("APP SOLICITADA",-1).length==3)
+                T1ClusterEdgeFade.refresh(c);
             status(c,opened);
             return opened;
         }
