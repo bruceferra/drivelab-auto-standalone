@@ -40,6 +40,7 @@ jobs:
           printf %s "$SENDER_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/sender.p12"
           chmod 600 "$RUNNER_TEMP/sender.p12"
           echo "SENDER_KEYSTORE=$RUNNER_TEMP/sender.p12" >> "$GITHUB_ENV"
+      # Rebuild after the updated v0.3.27 signature-verification regression contract.
       - name: Run share navigation regression and sign Sender 0.2.22 only
         shell: bash
         run: |
