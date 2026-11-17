@@ -290,12 +290,14 @@ final class T1ClusterLayoutPolicy {
         String right=start(c,display,b,geometry(c,display,!inverted),
             secondLabel(c));
         if(!right.startsWith("APP SOLICITADA"))
-            return left+"\\n"+right;
+            return left+"\n"+right;
         // Never mark layout ACTIVE without the normal verification; this
         // is a recovery of requested windows, not a measurement result.
-        return left+"\\n"+right+
-            "\\nReapertura manual 60/40 guardada solicitada; "+
-            "sin cerrar tareas por ADB ni cambiar la aprobación del diseño.";
+        int ratio=number(c,SPLIT_PERCENT,50,30,70);
+        return left+"\n"+right+
+            "\nReapertura manual "+ratio+"/"+(100-ratio)+
+            " guardada solicitada; sin cerrar tareas por ADB "+
+            "ni cambiar la aprobación del diseño.";
     }
 
     /** A previously verified user-defined layout on next ignition. */
