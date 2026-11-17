@@ -39,8 +39,8 @@ public final class T1ClusterBootVisibleThenForceStopContractTest {
             !part.contains("speedKmh()")&&
             !part.contains("gear()"),
             "No CLUSTER OFF or P/0 km/h gate in boot sequence; preserve maps if ADB unavailable");
-        check(fresh.contains("am force-stop " + "\"+pkg\"")&&
-            fresh.contains("pidof " + "\"+pkg\"")&&
+        check(fresh.contains("T1LocalAdbClient.shell(c,\"am force-stop \"+pkg)")&&
+            fresh.contains("T1LocalAdbClient.shell(c,\"pidof \"+pkg)")&&
             reboot.contains("T1ClusterFreshStart.prepare(owner)")&&
             reboot.contains("reopenSavedPanelsStopped(owner)"),
             "Scoped ADB stop and REBOOT still follow active-cluster method");
