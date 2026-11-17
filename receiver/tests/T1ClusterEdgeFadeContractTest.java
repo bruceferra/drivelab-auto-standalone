@@ -19,21 +19,34 @@ public final class T1ClusterEdgeFadeContractTest {
         yes(fade.contains("DEFAULT_PX=60")&&
             fade.contains("MAX_PX=300")&&
             fade.contains("Math.min(MAX_PX,stored)")&&
-            fade.contains("Math.min(MAX_PX,pixels)")&&
+            fade.contains("Math.min(MAX_PX,px)")&&
             settings.contains("DESVANECIDO AMBOS PANELES")&&
             settings.contains("fadeSeek.setMax(T1ClusterEdgeFade.MAX_PX)")&&
             settings.contains("T1ClusterEdgeFade.setWidth("),
             "Owner can adjust fade from 0 to 300px for both freeform panels");
-        yes(fade.contains("createWindowContext(d,")&&
-            fade.contains("leftWidth=Math.round(physicalWidth*ratio/100f)")&&
-            fade.contains("rightWidth=physicalWidth-leftWidth")&&
-            fade.contains("wm.addView(leftView,params(leftWidth,physicalHeight,0,")&&
-            fade.contains("wm.addView(rightView,params(rightWidth,physicalHeight,leftWidth,")&&
-            fade.contains("removeViewImmediate(leftView)")&&
-            fade.contains("removeViewImmediate(rightView)")&&
-            fade.contains("int e=Math.min(widthPx,Math.max(0,panelWidth/2))")&&
-            !fade.contains("Math.max(0,w/8)"),
-            "Separate physical-display overlays must draw in both panels, no 240px cap");
+        int start=fade.indexOf("static void setWidth(Context c,int px)");
+        int end=fade.indexOf("static String last(Context c)",start);
+        yes(start>0&&end>start,
+            "SeekBar setter remains available without altering navigation");
+        String slider=fade.substring(start,end);
+        yes(!slider.contains("addView(")&&
+            !slider.contains("removeView")&&
+            !slider.contains("refresh(")&&
+            !slider.contains("apply(app)")&&
+            !slider.contains("postDelayed")&&
+            slider.contains("view.update(safe,"),
+            "Dragging slider must NEVER create or remove overlay windows");
+        int add=fade.indexOf("wm.addView(");
+        yes(add>0&&fade.indexOf("wm.addView(",add+1)==-1&&
+            fade.contains("createDisplayContext(d)")&&
+            !fade.contains("createWindowContext(d,")&&
+            fade.contains("physicalWidth,physicalHeight,")&&
+            fade.contains("float seam=w*")&&
+            fade.contains("strip(canvas,0,left,VEIL,clear)")&&
+            fade.contains("strip(canvas,seam-left,seam,clear,VEIL)")&&
+            fade.contains("strip(canvas,seam,seam+right,VEIL,clear)")&&
+            fade.contains("strip(canvas,w-right,w,clear,VEIL)"),
+            "One physically full-width overlay paints all four side gradients");
         yes(fade.contains("d.getDisplayId()!=1")&&
             fade.contains("TYPE_APPLICATION_OVERLAY")&&
             fade.contains("FLAG_NOT_FOCUSABLE")&&
@@ -50,9 +63,9 @@ public final class T1ClusterEdgeFadeContractTest {
             toolbar.contains("T1ClusterEdgeFade.refresh(owner)")&&
             reboot.contains("T1ClusterEdgeFade.refresh(owner)"),
             "Fade present after both maps launch, removed on CLUSTER OFF");
-        yes(fade.contains("NOT alpha control")||
+        yes(fade.contains("not transparency")||
             fade.contains("NOT true transparency")||fade.contains("not true transparency"),
             "Document that edge mask does not reveal underlying OEM surface");
-        System.out.println("PASS 0..300px dual freeform overlays, touch-through, cluster scoped");
+        System.out.println("PASS single full-width four-edge gradient, no WindowManager side effects on slider");
     }
 }
