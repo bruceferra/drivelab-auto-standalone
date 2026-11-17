@@ -79,7 +79,10 @@ final class T1LocalAdbClient {
         // recovery command are authorized. No steering wheel key injection
         // or ADB task-focus changes are permitted.
         // No global BACK, tap, display 0, arbitrary shell, or OEM writes.
-        if(!command.equals("am stack list")&&
+        if(!command.equals("am supports-split-screen-multi-window")&&
+           !command.matches("am start --display 1 --windowingMode 3 -n com\\.waze/[A-Za-z0-9_.$/]{1,220}")&&
+           !command.matches("am start --display 1 --windowingMode 4 -n com\\.google\\.android\\.apps\\.maps/[A-Za-z0-9_.$/]{1,220}")&&
+           !command.equals("am stack list")&&
            !command.equals("dumpsys activity activities")&&
            !command.equals("dumpsys input")&&
            !command.matches(
