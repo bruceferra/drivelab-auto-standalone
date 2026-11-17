@@ -36,7 +36,6 @@ final class T1ClusterEdgeFade {
     private static FadeView view;
     private static int displayId=-1;
     private static int attachedW=-1,attachedH=-1;
-    private static Runnable queued;
     private T1ClusterEdgeFade(){}
 
     static int width(Context c){
@@ -47,31 +46,19 @@ final class T1ClusterEdgeFade {
         Context app=c.getApplicationContext();
         int safe=Math.max(0,Math.min(MAX_PX,px));
         T1ClusterWazeRouter.prefs(app).edit().putInt(WIDTH_PX,safe).apply();
-        // Updating an existing View never calls WindowManager.addView and
-        // cannot change the Activity or the selected navigation tasks.
+        // Changing this SeekBar must NEVER add/remove any window.
+        // The v0.3.43 dual addView at touch-up dismissed the settings
+        // screen on Jetour. Repaint existing view or just save.
         MAIN.post(()->{
             if(view!=null&&manager!=null&&displayId==1){
-                if(safe==0)remove();
-                else view.update(safe,T1ClusterLayoutPolicy.number(app,
+                view.update(safe,T1ClusterLayoutPolicy.number(app,
                     T1ClusterLayoutPolicy.SPLIT_PERCENT,50,30,70));
                 status(app,safe==0?"DESVANECIDO OFF · 0 px":
-                    "DESVANECIDO AJUSTADO: "+safe+
-                    " px; misma ventana, sin recreación");
-                return;
+                    "DESVANECIDO "+safe+" px actualizado sin salir del menú");
+            }else{
+                status(app,"DESVANECIDO "+safe+
+                    " px guardado. Se aplicará al próximo inicio del clúster");
             }
-            if(safe==0){
-                remove();
-                status(app,"DESVANECIDO OFF · 0 px");
-                return;
-            }
-            // Jetour's vendor WindowManager is sensitive to windows
-            // being inserted from a slider touch-up callback. Defer only
-            // the first overlay creation, never replace it on dragging.
-            if(queued!=null)MAIN.removeCallbacks(queued);
-            queued=()->{queued=null;apply(app);};
-            MAIN.postDelayed(queued,350L);
-            status(app,"DESVANECIDO "+safe+
-                " px guardado; preparando una sola capa para ambos paneles");
         });
     }
     static String last(Context c){
@@ -84,14 +71,12 @@ final class T1ClusterEdgeFade {
     static void refresh(Context c){
         Context app=c.getApplicationContext();
         MAIN.post(()->{
-            if(queued!=null){MAIN.removeCallbacks(queued);queued=null;}
             apply(app);
         });
     }
     static void hide(Context c){
         Context app=c.getApplicationContext();
         MAIN.post(()->{
-            if(queued!=null){MAIN.removeCallbacks(queued);queued=null;}
             remove();
             status(app,"DESVANECIDO OFF: capa retirada del Display 1");
         });
