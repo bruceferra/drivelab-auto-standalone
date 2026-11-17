@@ -79,7 +79,7 @@ final class T1ClusterLayoutPolicy {
     }
     static String pendingMessage(Context c){
         return "DISEÑO "+(MODE_SPLIT.equals(mode(c))?"DIVIDIDO":"VENTANA")+
-            " PENDIENTE: falta verificar tamaños por ADB en P/0 y "+
+            " PENDIENTE: falta verificar tamaños por ADB con 0 km/h y "+
             "CONFIRMAR DISEÑO VISIBLE. No abriré Waze a pantalla completa.";
     }
     static void setMode(Context c,String desired){
@@ -217,7 +217,7 @@ final class T1ClusterLayoutPolicy {
                 ". No se abrió pantalla completa como alternativa.";
         }
     }
-    /** Always manual, require parked check in the caller. */
+    /** Always manual, require zero-speed check in the caller. */
     static String test(Context c){
         Display display=T1ClusterWazeRouter.selected(c);
         if(display==null)return "Elegí primero el display real del tablero";
@@ -311,11 +311,11 @@ final class T1ClusterLayoutPolicy {
         if(launched.startsWith("APP SOLICITADA")&&
            T1ClusterAdbResize.enabled(c)){
             // Reuse ONLY the user's approved layout. ADB measurement is
-            // performed asynchronously and rechecks P/0 before moving
+            // performed asynchronously and rechecks zero vehicle speed before moving
             // any task; after a cold start ADB TCP may need re-enabling.
             T1ClusterAdbResize.apply(c,
                 MODE_SPLIT.equals(mode(c)),1800L,null);
-            return launched+" · ADB comprobará límites si está autorizado y P/0.";
+            return launched+" · ADB comprobará límites si está autorizado y a 0 km/h.";
         }
         return launched;
     }
