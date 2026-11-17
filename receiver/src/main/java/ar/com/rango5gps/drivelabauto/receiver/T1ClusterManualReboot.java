@@ -38,11 +38,14 @@ final class T1ClusterManualReboot {
         new Thread(()->{
             try{
                 T1ClusterFreshStart.Result clean=T1ClusterFreshStart.prepare(owner);
-                if(!clean.ready){
-                    note(owner,"REBOOT CANCELADO: "+clean.message);
+                if(!clean.ready&&!clean.changed){
+                    note(owner,"REBOOT NO EJECUTADO: "+clean.message);
                     RUNNING.set(false);
                     return;
                 }
+                if(!clean.ready)
+                    note(owner,"REBOOT PARCIAL, recuperando navegación: "+
+                        clean.message);
                 MAIN.post(()->{
                     if(owner.isFinishing()||owner.isDestroyed()||
                        !T1ClusterWazeRouter.enabled(owner)){
