@@ -45,3 +45,4 @@ public final class T1VoiceDualMapPendingSourceTest {
             "Existing explicit Sender Maps/Both targets remain intact");
         System.out.println("PASS microphone follows visible Waze/Maps on Display 1; no forced dual navigation");
     }
+}
