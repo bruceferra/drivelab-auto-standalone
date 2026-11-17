@@ -81,7 +81,8 @@ public final class T1OptimizedAutoService extends Service {
         if(rule==null)return "";
         return rule.power+":"+rule.strategy+":"+rule.forcedSoc+":"+
             rule.regeneration+":"+rule.minEnabled+":"+rule.minBattery+":"+
-            rule.maxEnabled+":"+rule.maxBattery;
+            rule.minComparison+":"+rule.maxEnabled+":"+rule.maxBattery+":"+
+            rule.maxComparison;
     }
     /** ONLY a fully verified active profile is allowed to paint the chip green.
      * Unlike T1OptimizedModeStore.lastRoad, this is NOT a GPS guess.
