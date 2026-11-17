@@ -36,6 +36,93 @@ final class T1WheelAdbFallback {
     private static volatile long armedAt=0L;
     private T1WheelAdbFallback(){}
 
+    /** Ignition-only focus warmup AFTER both map panes and any destination.
+     * Unlike physical wheel handling this sends NO DPAD or touch; the T1 can
+     * permanently keep OEM instrument focus despite a task-focus request.
+     * Do not claim success until the map owns the actual input window.
+     * One attempt, no polling loops or UI/route relaunches.
+     */
+    static void restoreFocusAfterBoot(Context context){
+        final Context app=context.getApplicationContext();
+        if(!T1ClusterWazeRouter.autoBoot(app)||
+           !T1ClusterAdbResize.enabled(app)||
+           !T1ClusterWazeRouter.enabled(app))return;
+        final SharedPreferences prefs=app.getSharedPreferences(
+            T1WazeWheelService.PREFS,Context.MODE_PRIVATE);
+        if(!prefs.getBoolean(T1WazeWheelService.ENABLED,false)||
+           !prefs.getBoolean(T1WazeWheelService.OEM_BINDER_ENABLED,false))
+            return;
+        final Display targetDisplay=T1ClusterWazeRouter.selected(app);
+        final int id=targetDisplay==null?-1:targetDisplay.getDisplayId();
+        final String pkg=T1WheelTarget.packageName(app);
+        if(!T1WheelTarget.selectedPanelEnabled(app)||
+           !T1WheelAdbFocusPolicy.supported(id,pkg))return;
+        // A short settle allows the just-restored route/freeform pane to
+        // acquire a real input window; never block the main boot thread.
+        new Thread(()->{
+            try{
+                Thread.sleep(2500L);
+                if(!T1ClusterWazeRouter.autoBoot(app)||
+                   !T1ClusterAdbResize.enabled(app)||
+                   !T1WheelTarget.selectedPanelEnabled(app)||
+                   !pkg.equals(T1WheelTarget.packageName(app)))
+                    return;
+                Display fresh=T1ClusterWazeRouter.selected(app);
+                if(fresh==null||fresh.getDisplayId()!=id)return;
+                // A wheel press after boot owns the interaction. Never
+                // override a person's newly chosen focus.
+                long recent=prefs.getLong("oem_wheel_event_at",0L);
+                if(recent>0&&System.currentTimeMillis()-recent<10000L){
+                    note(app,"Arranque: recuperacion de foco omitida; "+
+                        "el volante ya fue utilizado");
+                    return;
+                }
+                String tasks=T1LocalAdbClient.shell(app,"am stack list");
+                T1AdbTaskParser.Task map=T1AdbTaskParser.unique(tasks,id,pkg);
+                if(map==null){
+                    tasks=T1LocalAdbClient.shell(app,
+                        "dumpsys activity activities");
+                    map=T1AdbTaskParser.unique(tasks,id,pkg);
+                }
+                if(map==null){
+                    note(app,"Arranque: sin tarea única de mapa en Display "+id+
+                        "; no se modificó el foco");
+                    return;
+                }
+                String input=T1LocalAdbClient.shell(app,"dumpsys input");
+                if(T1WheelAdbFocusPolicy.focusedOn(input,id,pkg)){
+                    note(app,"Arranque: "+pkg+" ya tiene foco real en Display "+id);
+                    return;
+                }
+                if(!T1WheelAdbFocusPolicy.mayFocusMap(input,id,pkg)){
+                    note(app,"Arranque: ventana OEM/otra no verificable; "+
+                        "sin transferencia de foco");
+                    return;
+                }
+                String result=T1LocalAdbClient.shell(app,
+                    T1WheelAdbFocusPolicy.focusCommand(map.id));
+                String lower=result==null?"":result.toLowerCase(Locale.ROOT);
+                if(lower.contains("error")||lower.contains("denied")||
+                   lower.contains("exception")||lower.contains("unknown")){
+                    note(app,"Arranque: Android rechazó recuperar foco del mapa");
+                    return;
+                }
+                Thread.sleep(250L);
+                input=T1LocalAdbClient.shell(app,"dumpsys input");
+                if(T1WheelAdbFocusPolicy.focusedOn(input,id,pkg))
+                    note(app,"Arranque: foco verificado en "+pkg+
+                        " · Display "+id+" · sin enviar teclas");
+                else
+                    note(app,"Arranque: la ROM mantuvo foco OEM; "+
+                        "sin enviar teclas ni cambiar ventanas");
+            }catch(Exception ex){
+                note(app,"Arranque: foco no recuperado · "+
+                    ex.getClass().getSimpleName()+
+                    (ex.getMessage()==null?"":" · "+ex.getMessage()));
+            }
+        },"T1-Wheel-Ignition-Focus-Check").start();
+    }
+
     static void request(Context context,int oemCode){
         final Context app=context.getApplicationContext();
         SharedPreferences prefs=app.getSharedPreferences(
