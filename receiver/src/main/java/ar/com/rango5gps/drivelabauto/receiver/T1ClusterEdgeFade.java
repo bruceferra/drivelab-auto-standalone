@@ -9,6 +9,7 @@ import android.graphics.PixelFormat;
 import android.graphics.Shader;
 import android.os.Handler;
 import android.os.Looper;
+import android.os.SystemClock;
 import android.provider.Settings;
 import android.view.Display;
 import android.view.Gravity;
@@ -36,6 +37,13 @@ final class T1ClusterEdgeFade {
     private static FadeView view;
     private static int displayId=-1;
     private static int attachedW=-1,attachedH=-1;
+    // Reordering Android FREEFORM navigation windows may drop or cover
+    // the existing overlay despite the stored SeekBar width. Only map window
+    // transitions on selected Display 1 request a delayed single rebind.
+    private static final long NAV_REBIND_DELAY_MS=650L;
+    private static final long NAV_REBIND_GUARD_MS=2500L;
+    private static long lastNavigationRebindAt;
+    private static Runnable navigationRebind;
     private T1ClusterEdgeFade(){}
 
     static int width(Context c){
@@ -45,7 +53,14 @@ final class T1ClusterEdgeFade {
     static void setWidth(Context c,int px){
         Context app=c.getApplicationContext();
         int safe=Math.max(0,Math.min(MAX_PX,px));
-        T1ClusterWazeRouter.prefs(app).edit().putInt(WIDTH_PX,safe).apply();
+        // Commit the selected width before the user leaves the settings
+        // screen. Live slider updates remain window-free.
+        boolean saved=T1ClusterWazeRouter.prefs(app).edit()
+            .putInt(WIDTH_PX,safe).commit();
+        if(!saved){
+            status(app,"DESVANECIDO: no se pudo guardar "+safe+" px");
+            return;
+        }
         // Changing this SeekBar must NEVER add/remove any window.
         // The v0.3.43 dual addView at touch-up dismissed the settings
         // screen on Jetour. Repaint existing view or just save.
@@ -70,13 +85,44 @@ final class T1ClusterEdgeFade {
     }
     static void refresh(Context c){
         Context app=c.getApplicationContext();
+        MAIN.post(()->apply(app,false));
+    }
+    /**
+     * Called only for Waze/Maps WINDOW_STATE/WINDOWS_CHANGED events whose
+     * source was verified on the selected secondary display. Restore the
+     * original width after freeform focus/ordering changes; no new task,
+     * app restart, overlay focus, input or OEM command is involved.
+     */
+    static void navigationWindowChanged(Context c){
+        Context app=c.getApplicationContext();
         MAIN.post(()->{
-            apply(app);
+            if(width(app)==0||!T1ClusterWazeRouter.enabled(app)||
+               !T1ClusterLayoutPolicy.savedDualSplit(app))return;
+            if(navigationRebind!=null)MAIN.removeCallbacks(navigationRebind);
+            navigationRebind=()->{
+                navigationRebind=null;
+                if(width(app)==0||!T1ClusterWazeRouter.enabled(app)||
+                   !T1ClusterLayoutPolicy.savedDualSplit(app))return;
+                long now=SystemClock.elapsedRealtime();
+                boolean detached=view==null||!view.isAttachedToWindow();
+                if(!detached&&now-lastNavigationRebindAt<
+                    NAV_REBIND_GUARD_MS)return;
+                lastNavigationRebindAt=now;
+                // Remove the previous SINGLE token before adding the next,
+                // unlike the former two-overlays-at-once Jetour regression.
+                apply(app,true);
+            };
+            MAIN.postDelayed(navigationRebind,NAV_REBIND_DELAY_MS);
         });
     }
     static void hide(Context c){
         Context app=c.getApplicationContext();
         MAIN.post(()->{
+            if(navigationRebind!=null){
+                MAIN.removeCallbacks(navigationRebind);
+                navigationRebind=null;
+            }
+            lastNavigationRebindAt=0L;
             remove();
             status(app,"DESVANECIDO OFF: capa retirada del Display 1");
         });
@@ -92,7 +138,7 @@ final class T1ClusterEdgeFade {
         attachedW=-1;
         attachedH=-1;
     }
-    private static void apply(Context c){
+    private static void apply(Context c,boolean raiseAfterWindowChange){
         int edge=width(c);
         if(!T1ClusterWazeRouter.enabled(c)||
            !T1ClusterLayoutPolicy.savedDualSplit(c)||edge==0){
@@ -121,7 +167,8 @@ final class T1ClusterEdgeFade {
             return;
         }
         try{
-            if(view!=null&&manager!=null&&displayId==d.getDisplayId()&&
+            if(!raiseAfterWindowChange&&view!=null&&manager!=null&&
+                view.isAttachedToWindow()&&displayId==d.getDisplayId()&&
                 attachedW==physicalWidth&&attachedH==physicalHeight){
                 view.update(edge,ratio);
                 status(c,"DESVANECIDO "+edge+
@@ -155,8 +202,8 @@ final class T1ClusterEdgeFade {
             displayId=d.getDisplayId();
             attachedW=physicalWidth;attachedH=physicalHeight;
             status(c,"DESVANECIDO "+edge+
-                " px solicitado a ambos paneles con una sola ventana. "+
-                "Pendiente de comprobar el resultado visual en la T1");
+                " px restaurado/solicitado a ambos paneles con una sola capa. "+
+                "Pendiente de comprobar visualmente en la T1");
         }catch(Exception ex){
             remove();
             status(c,"DESVANECIDO NO APLICADO · "+

@@ -395,6 +395,14 @@ public final class T1WazeWheelService extends AccessibilityService {
         AccessibilityWindowInfo sourceWindow=node.getWindow();
         if(sourceWindow==null||
            sourceWindow.getDisplayId()!=display.getDisplayId())return;
+        // Navigation task switching can cover or detach the decorative
+        // overlay. Restore it from the saved width only after a verified
+        // Waze/Maps window transition on the physical cluster display.
+        // Ignore window content updates and all Display 0 events.
+        int type=event.getEventType();
+        if(type==AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED||
+           type==AccessibilityEvent.TYPE_WINDOWS_CHANGED)
+            T1ClusterEdgeFade.navigationWindowChanged(this);
         AccessibilityNodeInfo top=node;
         for(int i=0;i<25;i++){
             AccessibilityNodeInfo parent=top.getParent();

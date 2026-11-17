@@ -16,6 +16,8 @@ public final class T1ClusterEdgeFadeContractTest {
         String router=read("T1ClusterWazeRouter.java");
         String toolbar=read("T1GlobalToolbar.java");
         String reboot=read("T1ClusterManualReboot.java");
+        String wheel=read("T1WazeWheelService.java");
+        String immersive=read("T1ImmersiveActivity.java");
         yes(fade.contains("DEFAULT_PX=60")&&
             fade.contains("MAX_PX=300")&&
             fade.contains("Math.min(MAX_PX,stored)")&&
@@ -63,6 +65,19 @@ public final class T1ClusterEdgeFadeContractTest {
             toolbar.contains("T1ClusterEdgeFade.refresh(owner)")&&
             reboot.contains("T1ClusterEdgeFade.refresh(owner)"),
             "Fade present after both maps launch, removed on CLUSTER OFF");
+        yes(fade.contains(".putInt(WIDTH_PX,safe).commit()")&&
+            fade.contains("view.isAttachedToWindow()")&&
+            fade.contains("static void navigationWindowChanged(Context c)")&&
+            fade.contains("apply(app,true)")&&
+            fade.contains("MAIN.postDelayed(navigationRebind,NAV_REBIND_DELAY_MS)")&&
+            fade.contains("NAV_REBIND_GUARD_MS=2500L")&&
+            fade.contains("if(navigationRebind!=null)")&&
+            immersive.contains("T1ClusterEdgeFade.refresh(this)")&&
+            wheel.contains("T1ClusterEdgeFade.navigationWindowChanged(this)")&&
+            wheel.contains("sourceWindow.getDisplayId()!=display.getDisplayId()")&&
+            wheel.contains("type==AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED")&&
+            wheel.contains("type==AccessibilityEvent.TYPE_WINDOWS_CHANGED"),
+            "Persisted width restores on activity resume and selected cluster map window transitions");
         yes(fade.contains("not transparency")||
             fade.contains("NOT true transparency")||fade.contains("not true transparency"),
             "Document that edge mask does not reveal underlying OEM surface");

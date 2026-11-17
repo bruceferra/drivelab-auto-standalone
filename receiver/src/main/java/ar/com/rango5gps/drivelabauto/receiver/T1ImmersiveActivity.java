@@ -53,6 +53,9 @@ public abstract class T1ImmersiveActivity extends Activity {
         RecirculationGuardService.ensureRunning(this);
         MirrorAutomationService.ensureRunning(this);
         if(globalToolbar!=null)globalToolbar.onResume();
+        // When returning from another DriveLab screen, recheck the real
+        // Display 1 overlay token. Width stays in SharedPreferences.
+        T1ClusterEdgeFade.refresh(this);
         T1OemMicrophoneService.ensureRunning(this);
     }
     @Override protected void onPause(){
