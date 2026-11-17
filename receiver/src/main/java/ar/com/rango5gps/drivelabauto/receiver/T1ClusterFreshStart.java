@@ -23,9 +23,11 @@ final class T1ClusterFreshStart {
     private static final String MAPS="com.google.android.apps.maps";
     private static final AtomicBoolean BUSY=new AtomicBoolean(false);
     static final class Result {
-        final boolean ready;
+        final boolean ready,changed;
         final String message;
-        Result(boolean ok,String why){ready=ok;message=why;}
+        Result(boolean ok,boolean touched,String why){
+            ready=ok;changed=touched;message=why;
+        }
     }
     private T1ClusterFreshStart(){}
 
@@ -34,15 +36,20 @@ final class T1ClusterFreshStart {
             "Aún no se ejecutó el cierre limpio Waze + Google Maps");
     }
     private static Result store(Context c,boolean ok,String message){
+        return store(c,ok,message,false);
+    }
+    private static Result store(Context c,boolean ok,String message,
+                                boolean changed){
         T1ClusterWazeRouter.prefs(c).edit()
             .putString(RESULT,message)
             .putLong(AT,System.currentTimeMillis()).commit();
-        return new Result(ok,message);
+        return new Result(ok,changed,message);
     }
     static Result prepare(Context context){
         Context c=context.getApplicationContext();
         if(!BUSY.compareAndSet(false,true))
             return store(c,false,"CIERRE LIMPIO PENDIENTE: ya hay otro intento activo");
+        int changed=0;
         try{
             if(!T1ClusterWazeRouter.enabled(c)||
                !T1ClusterLayoutPolicy.savedDualSplit(c))
@@ -69,7 +76,8 @@ final class T1ClusterFreshStart {
                 if(error(result))
                     return store(c,false,
                         "CIERRE LIMPIO RECHAZADO por Android para "+pkg+
-                        ": "+shortText(result));
+                        ": "+shortText(result),changed>0);
+                changed++;
                 // Distinguish successful ADB transport from the actual
                 // absence of a running app. If Android refuses to stop it,
                 // never claim a fresh launch succeeded.
@@ -77,18 +85,18 @@ final class T1ClusterFreshStart {
                 if(error(pid)||!pid.trim().isEmpty())
                     return store(c,false,
                         "CIERRE LIMPIO SIN CONFIRMAR: "+pkg+
-                        " sigue activo o pidof falló: "+shortText(pid));
+                        " sigue activo o pidof falló: "+shortText(pid),changed>0);
             }
             if(!T1ClusterWazeRouter.enabled(c))
                 return store(c,false,
                     "CIERRE LIMPIO INTERRUMPIDO: clúster OFF");
             return store(c,true,
                 "ADB CONFIRMÓ SIN PROCESOS WAZE/MAPS: "+
-                "se solicitará apertura nueva 50/50; confirmar rueda y capa OEM.");
+                "se solicitará apertura nueva 50/50; confirmar rueda y capa OEM.",true);
         }catch(Exception ex){
             return store(c,false,
                 "CIERRE LIMPIO NO EJECUTADO: "+
-                T1LocalAdbClient.connectivityHint(ex));
+                T1LocalAdbClient.connectivityHint(ex),changed>0);
         }finally{
             BUSY.set(false);
         }
