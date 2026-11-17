@@ -27,7 +27,7 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
     private LinearLayout column;
     private T1ClusterLayoutPreview preview;
     private TextView previewState;
-    private boolean adbProbeRunning;
+    private boolean adbProbeRunning,nativeTrialRunning;
     private boolean showAdvanced,draftLoaded;
     private boolean aEnabled,bEnabled;
     private int ratio;
@@ -229,6 +229,10 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
         text("Herramientas técnicas: mediciones, conexión ADB "+
             "y diagnóstico. No hacen falta en cada uso.",13);
         button("PROBAR GEOMETRÍA EN P Y 0 KM/H",this::testLayout);
+        button("PROBAR SPLIT NATIVO EN DISPLAY 1 · EXPERIMENTAL",
+            this::tryNativeSplit);
+        text("Prueba nativa: "+cfg().getString(
+            T1ClusterNativeSplitTrial.RESULT,"Todavía no realizada"),12);
         adbBottomStatus=new TextView(this);
         adbBottomStatus.setTextSize(15);
         adbBottomStatus.setPadding(12,8,12,8);
@@ -509,6 +513,18 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
                     1000L,verified);
             });
         },"T1-ClusterLayout-Park-ReadOnly").start();
+    }
+    private void tryNativeSplit(){
+        if(nativeTrialRunning)return;
+        nativeTrialRunning=true;
+        T1ClusterWazeRouter.status(this,
+            "Probando compatibilidad de split nativo solo en P/0…");
+        T1ClusterNativeSplitTrial.run(this,message->{
+            nativeTrialRunning=false;
+            if(isFinishing()||isDestroyed())return;
+            T1ClusterWazeRouter.status(this,message);
+            render();
+        });
     }
     private void toggleMicrophone(){
         SharedPreferences mic=T1OemMicrophoneService.prefs(this);
