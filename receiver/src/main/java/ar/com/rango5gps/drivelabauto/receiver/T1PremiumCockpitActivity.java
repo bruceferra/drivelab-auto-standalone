@@ -2083,13 +2083,14 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                         "no disponible en archivos históricos"))+
                 "\nELECTRICIDAD NETA "+(Double.isFinite(econ.netKwh)?
                     f(econ.netKwh,3)+" kWh":"SIN DATO")+
-                " · FACTURABLE ESTIMADA "+
+                " · ENCHUFE IMPUTADO "+
                 (Double.isFinite(econ.billableKwh)?
                     f(econ.billableKwh,3)+" kWh":"SIN DATO")+
                 "\nNAFTA $ "+(Double.isFinite(econ.gasolineCost)?
                     f(econ.gasolineCost,0):"SIN DATO")+
-                " · ELECTRICIDAD $ "+(Double.isFinite(econ.electricCost)?
-                    f(econ.electricCost,0):"SIN TARIFA / SIN DATO")+
+                " · ELECTRICIDAD DE ENCHUFE $ "+
+                (Double.isFinite(econ.electricCost)?
+                    f(econ.electricCost,0):"NO IMPUTADA A ESTE VIAJE")+
                 " · TOTAL $ "+(Double.isFinite(econ.totalCost)?
                     f(econ.totalCost,0):"SIN DATO")+
                 "\nEQUIVALENTE ECONÓMICO "+(Double.isFinite(econ.equivalentLiters)?
@@ -2101,8 +2102,10 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 "\nPrecios actuales: $ "+f(gasPrice,2)+"/L y "+
                 (kwhPriceKnown?"$ "+f(kwhPrice,2)+"/kWh":
                     "kWh SIN CONFIGURAR")+
-                ". Estimación: el HV neto NO equivale a compra de red. "+
-                "No se puede separar cuánto cargó el motor térmico.");
+                ". El HV neto NO equivale a electricidad comprada: "+
+                "solo se cobra kWh de ENCHUFE documentados y atribuidos. "+
+                "La entrada por frenado O motor es energía INTERNA. "+
+                "Las cargas registradas aún no están asignadas a un viaje.");
         // Historical end-of-trip range was not persisted. Never substitute
         // the current vehicle's autonomy into a completed trip.
         compactMetric(historyDetailRow,"AUTONOMÍA TOTAL","NO GUARDADA");
@@ -2762,10 +2765,11 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private void configureTripPrices(){
         LinearLayout form=col();form.setPadding(24,8,24,4);
         form.addView(text("Precios actuales en pesos. Los viajes "+
-            "históricos se recalculan sin alterar los CSV. El costo "+
-            "eléctrico usa kWh netos HV (estimación, no factura de red). "+
-            "La energía recuperada no se cobra dos veces; la señal OEM no "+
-            "distingue frenado de generación térmica.",13,Color.DKGRAY,false));
+            "históricos se recalculan sin alterar los CSV. La energía "+
+            "de frenado y la generada por el motor son INTERNAS y no "+
+            "se cobran como electricidad. Solo las cargas de ENCHUFE "+
+            "registradas representan energía pagada; todavía no están "+
+            "atribuidas por viaje.",13,Color.DKGRAY,false));
         SharedPreferences trip=getSharedPreferences(
             T1TripRecorderService.PREFS,MODE_PRIVATE);
         EditText gas=new EditText(this);

@@ -4,24 +4,38 @@ public final class T1TripCostModelTest {
         Math.abs(a-b)>0.000001)throw new AssertionError(a+" vs "+b);}
     private static void yes(boolean a){if(!a)throw new AssertionError();}
     public static void main(String[] args){
-        T1TripCostModel.Result r=T1TripCostModel.fromGross(
-            76,3.47,8,3,2000,250,true);
-        near(r.netKwh,5);near(r.billableKwh,5);
-        near(r.gasolineCost,6940);near(r.electricCost,1250);
-        near(r.totalCost,8190);near(r.equivalentLiters,4.095);
-        near(r.lPer100,4.095*100/76);near(r.kmPerLiter,76/4.095);
-        T1TripCostModel.Result incoming=T1TripCostModel.fromGross(
-            20,1,2,5,2000,250,true);
-        near(incoming.billableKwh,0);near(incoming.totalCost,2000);
-        near(T1TripCostModel.fromNet(20,1,-1.5,2000,250,true).billableKwh,0);
+        // 76 km, 3.47L, gross 8kWh, internal charging 3kWh:
+        // 5kWh net DOES NOT mean 5kWh came from a domestic plug!
         T1TripCostModel.Result unknown=T1TripCostModel.fromGross(
-            20,1,5,Double.NaN,2000,250,true);
-        yes(Double.isNaN(unknown.netKwh)&&Double.isNaN(unknown.totalCost));
-        T1TripCostModel.Result missing=T1TripCostModel.fromNet(
-            76,3.47,5,2000,0,false);
-        yes(Double.isNaN(missing.totalCost)&&Double.isNaN(missing.equivalentLiters));
-        T1TripCostModel.Result zero=T1TripCostModel.fromNet(0,0,0,2000,250,true);
-        yes(Double.isNaN(zero.lPer100)&&Double.isNaN(zero.kmPerLiter));
-        System.out.println("PASS HV net energy costs + money-equivalent liters");
+            76,3.47,8,3,2000,250,true);
+        near(unknown.netKwh,5);
+        near(unknown.gasolineCost,6940);
+        yes(Double.isNaN(unknown.billableKwh));
+        yes(Double.isNaN(unknown.electricCost));
+        yes(Double.isNaN(unknown.totalCost));
+        yes(Double.isNaN(unknown.equivalentLiters));
+        // Even a valid tariff cannot prove origin; same for client net.
+        T1TripCostModel.Result client=T1TripCostModel.fromNet(
+            76,3.47,5,2000,250,true);
+        yes(Double.isNaN(client.billableKwh));
+        // Only source-confirmed, journey-attributed plug kWh may be costed.
+        T1TripCostModel.Result paid=T1TripCostModel.withDocumentedPlugKwh(
+            76,3.47,8,3,2,2000,250);
+        near(paid.billableKwh,2);
+        near(paid.gasolineCost,6940);
+        near(paid.electricCost,500);
+        near(paid.totalCost,7440);
+        near(paid.equivalentLiters,3.72);
+        near(paid.lPer100,3.72*100/76);
+        near(paid.kmPerLiter,76/3.72);
+        // Internally regenerated/engine-generated 5kWh is not billed.
+        T1TripCostModel.Result internal=T1TripCostModel.withDocumentedPlugKwh(
+            20,1,2,5,0,2000,250);
+        near(internal.electricCost,0);
+        near(internal.totalCost,2000);
+        // No known plug allocation, not even a zero-price bill.
+        yes(Double.isNaN(T1TripCostModel.fromNet(
+            20,1,-1.5,2000,0,true).totalCost));
+        System.out.println("PASS grid-origin only; HV net is NOT plug energy");
     }
 }
