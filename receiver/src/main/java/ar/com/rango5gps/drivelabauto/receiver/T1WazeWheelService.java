@@ -79,6 +79,9 @@ public final class T1WazeWheelService extends AccessibilityService {
     // vendor Binder callback, and forwards 1000..1003 here. Never register
     // two OEM callbacks concurrently while microphone mode is enabled.
     private static volatile T1WazeWheelService connectedInstance;
+    /** Real Android bind state, NOT the user's green preference toggle. */
+    static boolean isServiceConnected(){return connectedInstance!=null;}
+
     static void releaseForSharedMicrophone(){
         T1WazeWheelService service=connectedInstance;
         if(service!=null&&service.oemBridge!=null)service.oemBridge.stop();
@@ -91,9 +94,15 @@ public final class T1WazeWheelService extends AccessibilityService {
            !p.getBoolean(ENABLED,false))return;
         T1WazeWheelService active=connectedInstance;
         if(active==null){
+            // The OEM Binder is alive; Android has NOT bound our
+            // AccessibilityService, even if its preference is green.
+            // Never tell the owner to enable a service that's already
+            // authorized. Retry only the previously enabled service,
+            // asynchronously through the already authorized ADB bridge.
             p.edit().putString(OEM_BINDER_STATUS,
-                "Botón OEM "+code+" recibido; habilitá Accesibilidad "+
-                "DriveLab · Waze y volante para controlarlo").apply();
+                "Botón OEM "+code+" recibido; Accesibilidad sin "+
+                "conexión activa. Recuperación automática solicitada").apply();
+            T1WheelAccessibilityRecovery.request(app);
             return;
         }
         active.handleOemKey(code,action,extra);
@@ -107,8 +116,10 @@ public final class T1WazeWheelService extends AccessibilityService {
         if(live==null){
             context.getSharedPreferences(PREFS,Context.MODE_PRIVATE)
                 .edit().putString(LAST_STATUS,
-                    "Clúster abierto; Android aún no conectó Accesibilidad")
+                    "Clúster abierto; Android aún no conectó Accesibilidad. "+
+                    "Solicitando recuperación del servicio autorizado")
                 .apply();
+            T1WheelAccessibilityRecovery.request(context);
             return;
         }
         live.main.post(()->{
@@ -1499,6 +1510,13 @@ public final class T1WazeWheelService extends AccessibilityService {
     @Override public void onInterrupt(){
         hideHint();
         if(oemBridge!=null)oemBridge.stop();
+    }
+    @Override public boolean onUnbind(android.content.Intent intent){
+        if(connectedInstance==this)connectedInstance=null;
+        main.removeCallbacks(oemHeartbeat);
+        hideHint();
+        if(oemBridge!=null)oemBridge.stop();
+        return super.onUnbind(intent);
     }
     @Override public void onDestroy(){
         if(connectedInstance==this)connectedInstance=null;
