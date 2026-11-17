@@ -48,6 +48,7 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
         boolean zoom=p.getBoolean(T1WazeWheelService.ZOOM_MAP,false);
         boolean on=p.getBoolean(T1WazeWheelService.ENABLED,false);
         boolean link=p.getBoolean(T1WazeWheelService.OEM_BINDER_ENABLED,false);
+        boolean connected=T1WazeWheelService.isServiceConnected();
         modeState.setText("OBJETIVO: "+T1WheelTarget.name(this)+" · "+
             T1WheelTarget.application(this)+
             "\nMODO RUEDITA ACTUAL: "+
@@ -60,12 +61,15 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
             T1JetourTheme.PANEL_HI:T1JetourTheme.GREEN_BUTTON);
         T1JetourTheme.button(zoomButton,zoom?
             T1JetourTheme.GREEN_BUTTON:T1JetourTheme.PANEL_HI);
-        bridgeState.setText("CONTROL "+T1WheelTarget.name(this)+" "+(on?"ACTIVO":"APAGADO")+
+        bridgeState.setText("CONTROL "+T1WheelTarget.name(this)+" "+(on?"CONFIGURADO":"APAGADO")+
             " · PUENTE OEM "+(link?"HABILITADO":"APAGADO")+
+            "\nACCESIBILIDAD: "+(connected?"CONECTADA":"SIN CONEXIÓN")+
             "\n"+p.getString(T1WazeWheelService.OEM_BINDER_STATUS,
                 "Sin conexión"));
-        T1JetourTheme.button(bridgeOn,on&&link?
-            T1JetourTheme.GREEN_BUTTON:T1JetourTheme.PANEL_HI);
+        // A preference alone never paints a connected/working bridge green.
+        T1JetourTheme.button(bridgeOn,on&&link&&connected?
+            T1JetourTheme.GREEN_BUTTON:on&&link?
+            T1JetourTheme.AMBER_BUTTON:T1JetourTheme.PANEL_HI);
         T1JetourTheme.button(bridgeOff,!link?
             T1JetourTheme.AMBER_BUTTON:T1JetourTheme.PANEL_HI);
         if(genericControls!=null){
@@ -82,6 +86,8 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
             p.getString(T1WazeWheelService.OEM_LAST,"ninguna")+
             "\nÚLTIMA ACCIÓN: "+
             p.getString(T1WazeWheelService.LAST_STATUS,"ninguna")+
+            "\nRECUPERACIÓN ACCESIBILIDAD: "+
+            T1WheelAccessibilityRecovery.describe(this)+
             "\nRESPALDO ADB DISPLAY: "+
             p.getString(T1WheelAdbFallback.STATUS,
                 "Sin intentos; se priorizan controles accesibles"));
@@ -261,6 +267,7 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
     }
     @Override protected void onResume(){
         super.onResume();visible=true;
+        T1WheelAccessibilityRecovery.request(this);
         ui.removeCallbacks(ticker);ui.post(ticker);
     }
     @Override protected void onPause(){
