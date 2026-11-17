@@ -75,6 +75,15 @@ jobs:
             receiver/tests/T1ClusterWindowAndMicSourceContractTest.java
           java -cp /tmp/t1-native-layout ar.com.rango5gps.drivelabauto.receiver.T1ClusterLayoutMathTest
           java -cp /tmp/t1-native-layout ar.com.rango5gps.drivelabauto.receiver.T1ClusterWindowAndMicSourceContractTest
+      - name: Validate OEM 2053 ECO NORMAL SPORT SNOW single header indicator
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-driving-mode
+          javac -encoding UTF-8 -d /tmp/t1-driving-mode \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1DrivingMode2053.java \
+            receiver/tests/T1DrivingMode2053Test.java
+          java -cp /tmp/t1-driving-mode ar.com.rango5gps.drivelabauto.receiver.T1DrivingMode2053Test
       - name: Verify boot-only clean map restart and hidden REBOOT
         shell: bash
         run: |
