@@ -75,13 +75,17 @@ final class T1LocalAdbClient {
     static int connectedPort(){return lastLocalPort;}
     static String shell(Context context,String command)throws Exception{
         // STRICT command whitelist, no shell metacharacters or package names.
-        // Only task/geometry management and the exact accessibility-list
-        // recovery command are authorized. No steering wheel key injection
-        // or ADB task-focus changes are permitted.
+        // Only known Waze/Maps force-stop + process checks, task/geometry
+        // management, and exact accessibility-list recovery are authorized.
+        // No steering wheel key injection or arbitrary ADB commands.
         // No global BACK, tap, display 0, arbitrary shell, or OEM writes.
         if(!command.equals("am supports-split-screen-multi-window")&&
            !command.matches("am start --display 1 --windowingMode 3 -n com\\.waze/[A-Za-z0-9_.$/]{1,220}")&&
            !command.matches("am start --display 1 --windowingMode 4 -n com\\.google\\.android\\.apps\\.maps/[A-Za-z0-9_.$/]{1,220}")&&
+           !command.equals("am force-stop com.waze")&&
+           !command.equals("am force-stop com.google.android.apps.maps")&&
+           !command.equals("pidof com.waze")&&
+           !command.equals("pidof com.google.android.apps.maps")&&
            !command.equals("am stack list")&&
            !command.equals("dumpsys activity activities")&&
            !command.equals("dumpsys input")&&
