@@ -1,0 +1,57 @@
+package ar.com.rango5gps.drivelabauto.receiver;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+
+/** Owner-established order: force-stop from T1Launcher Settings cleared OEM
+ * Spotify overlay ONLY when Waze and Maps were still displayed on an ON
+ * cluster. This contract verifies code order; it cannot verify Jetour ROM.
+ */
+public final class T1ClusterBootVisibleThenForceStopContractTest {
+    private static String source(String n)throws Exception{
+        return Files.readString(Path.of(
+            "receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver",n));
+    }
+    private static void check(boolean ok,String message){
+        if(!ok)throw new AssertionError(message);
+    }
+    public static void main(String[] args)throws Exception{
+        String router=source("T1ClusterWazeRouter.java");
+        String fresh=source("T1ClusterFreshStart.java");
+        String bar=source("T1GlobalToolbar.java");
+        String reboot=source("T1ClusterManualReboot.java");
+        String service=source("ReceiverService.java");
+        int boot=router.indexOf("static String onReceiverBoot(Context c)");
+        int saved=router.indexOf("if(T1ClusterLayoutPolicy.savedDualSplit(c))",boot);
+        int end=router.indexOf("if(T1ClusterLayoutPolicy.pendingUnverified(c))",saved);
+        check(boot>=0&&saved>boot&&end>saved,"Boot split branch available");
+        String part=router.substring(saved,end);
+        int initial=part.indexOf("String initial=T1ClusterLayoutPolicy.reopenSavedPanelsStopped(c)");
+        int stop=part.indexOf("T1ClusterFreshStart.prepare(c)");
+        int second=part.indexOf("String opened=T1ClusterLayoutPolicy.reopenSavedPanelsStopped(c)");
+        check(initial>=0&&stop>initial&&second>stop,
+            "Cold boot MUST first open both apps, then force-stop with cluster ON, then reopen");
+        check(part.contains("Thread.sleep(1600L)")&&
+            part.contains("if(!autoBoot(c))")&&
+            part.contains("if(!clean.changed)")&&
+            part.contains("return initial;")&&
+            !part.contains("putBoolean(ENABLED,false)")&&
+            !part.contains("speedKmh()")&&
+            !part.contains("gear()"),
+            "No CLUSTER OFF or P/0 km/h gate in boot sequence; preserve maps if ADB unavailable");
+        check(fresh.contains("am force-stop " + "\"+pkg\"")&&
+            fresh.contains("pidof " + "\"+pkg\"")&&
+            reboot.contains("T1ClusterFreshStart.prepare(owner)")&&
+            reboot.contains("reopenSavedPanelsStopped(owner)"),
+            "Scoped ADB stop and REBOOT still follow active-cluster method");
+        int manualStart=bar.indexOf("private void toggleCluster()");
+        int manualEnd=bar.indexOf("private void refreshMirrorAuto()",manualStart);
+        check(manualStart>=0&&manualEnd>manualStart&&
+            !bar.substring(manualStart,manualEnd).contains("T1ClusterFreshStart.prepare("),
+            "CLUSTER ON normal never kills active navigation");
+        check(service.contains("T1ClusterWazeRouter.onReceiverBoot(this)")&&
+            service.contains("T1LastRoute.restore(this)"),
+            "Boot restores last route only after cluster sequence");
+        System.out.println("PASS cluster ON -> maps visible -> force-stop both -> relaunch -> restore route");
+    }
+}
