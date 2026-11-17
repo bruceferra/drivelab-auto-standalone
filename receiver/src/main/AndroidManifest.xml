@@ -7,6 +7,8 @@
     <!-- Only user-triggered, verified signed updates; system confirmation required. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Manual, user-requested foreground recovery of verified map tasks only. -->
+    <uses-permission android:name="android.permission.REORDER_TASKS" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <!-- GPS is optional: TRIP falls back to flagged OEM-speed distance. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
