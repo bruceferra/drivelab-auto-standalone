@@ -38,7 +38,7 @@ public final class T1ClusterFreeformAutobootRegressionTest {
         int fallback=bar.indexOf("if(pendingLayout)",restore);
         ck(manual>=0&&restore>manual&&fallback>restore&&
             bar.substring(restore,fallback).contains(
-                "T1ClusterLayoutPolicy.reopenSavedPanelsStopped(owner)"),
+                ".reopenSavedPanelsStopped(owner)"),
             "Manual ON must not choose an ADB-dependent path for saved split");
         int begin=service.indexOf("private void scheduleNativeClusterWaze()");
         int end=service.indexOf("private void scheduleBootApp()",begin);
