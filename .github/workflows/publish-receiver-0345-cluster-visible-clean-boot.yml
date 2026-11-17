@@ -1,0 +1,184 @@
+# 2026-11-17: signed 0.3.45 build includes saved FREEFORM boot persistence regression (line-break-safe matcher).
+name: Signed Receiver 0.3.45 - boot visible force-stop then relaunch maps
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-receiver-0345-cluster-visible-clean-boot.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: signed-drivelabauto-publication
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    env:
+      RECEIVER_STORE_PASSWORD: ${{ secrets.RECEIVER_STORE_PASSWORD }}
+      RECEIVER_KEY_ALIAS: ${{ secrets.RECEIVER_KEY_ALIAS }}
+      RECEIVER_KEY_PASSWORD: ${{ secrets.RECEIVER_KEY_PASSWORD }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Android SDK and existing signing identity
+        env:
+          RECEIVER_KEYSTORE_B64: ${{ secrets.RECEIVER_KEYSTORE_B64 }}
+        run: |
+          set -euo pipefail
+          tool=$(command -v sdkmanager || find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)
+          "$tool" 'platforms;android-35' 'build-tools;35.0.0'
+          test -n "$RECEIVER_KEYSTORE_B64" && test -n "$RECEIVER_STORE_PASSWORD"
+          test -n "$RECEIVER_KEY_ALIAS" && test -n "$RECEIVER_KEY_PASSWORD"
+          printf %s "$RECEIVER_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/receiver.p12"
+          chmod 600 "$RUNNER_TEMP/receiver.p12"
+          echo "RECEIVER_KEYSTORE=$RUNNER_TEMP/receiver.p12" >> "$GITHUB_ENV"
+      - name: Pure geometry and wheel behavior regression
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-tests
+          javac -encoding UTF-8 -d /tmp/t1-tests \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ClusterLayoutMath.java \
+            receiver/tests/T1ClusterLayoutMathTest.java \
+            receiver/tests/T1ClusterInvertedPanelsAndWheelSourceTest.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1WheelAccessListPolicy.java \
+            receiver/tests/T1WheelAccessListPolicyTest.java
+          java -cp /tmp/t1-tests ar.com.rango5gps.drivelabauto.receiver.T1ClusterLayoutMathTest
+          java -cp /tmp/t1-tests ar.com.rango5gps.drivelabauto.receiver.T1ClusterInvertedPanelsAndWheelSourceTest
+          java -cp /tmp/t1-tests ar.com.rango5gps.drivelabauto.receiver.T1WheelAccessListPolicyTest
+          for test in T1UpdaterFallbackSourceContractTest MirrorControlsVisibilitySourceContractTest T1GoogleMapsReplaceSourceContractTest T1AdbTaskResizeSourceContractTest T1WheelCalibrationSourceContractTest T1WheelOemBinderSourceContractTest T1WheelOemReconnectContractTest T1UnifiedWheelQuietVoiceSourceContractTest T1WheelPanelAndSpeedSourceTest T1WheelWazeFocusedBackTest T1WheelAutomaticBootResumeTest T1WheelBootDisplayInventoryTest T1ClusterRouteResumptionSourceTest T1WheelAccessibilityRecoverySourceTest T1ClusterPendingRecoverySourceTest T1WheelNov16RollbackSourceTest T1VoiceDualMapPendingSourceTest T1WheelNoAdbFallbackSourceTest; do
+            javac -encoding UTF-8 -d /tmp/t1-tests "receiver/tests/$test.java"
+            java -cp /tmp/t1-tests "ar.com.rango5gps.drivelabauto.receiver.$test"
+          done
+      - name: Verify user-discovered visible-cluster force-stop ordering
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-visible-boot
+          javac -encoding UTF-8 -d /tmp/t1-visible-boot receiver/tests/T1ClusterBootVisibleThenForceStopContractTest.java
+          java -cp /tmp/t1-visible-boot ar.com.rango5gps.drivelabauto.receiver.T1ClusterBootVisibleThenForceStopContractTest
+      - name: Verify boot-only force-stop and hidden UI reboot
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-clean-boot
+          javac -encoding UTF-8 -d /tmp/t1-clean-boot receiver/tests/T1ClusterColdBootAndManualRebootContractTest.java
+          java -cp /tmp/t1-clean-boot ar.com.rango5gps.drivelabauto.receiver.T1ClusterColdBootAndManualRebootContractTest
+      - name: Verify 0-120px touch-through cluster fade
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-fade
+          javac -encoding UTF-8 -d /tmp/t1-fade receiver/tests/T1ClusterEdgeFadeContractTest.java
+          java -cp /tmp/t1-fade ar.com.rango5gps.drivelabauto.receiver.T1ClusterEdgeFadeContractTest
+      - name: Verify fixed cluster toolbar and permanent focus diagnostics
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-cluster-header
+          javac -encoding UTF-8 -d /tmp/t1-cluster-header receiver/tests/T1ClusterFixedToolbarAndFocusResultContractTest.java
+          java -cp /tmp/t1-cluster-header ar.com.rango5gps.drivelabauto.receiver.T1ClusterFixedToolbarAndFocusResultContractTest
+      - name: Verify manual focus without OEM or steering side effects
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-focus
+          javac -encoding UTF-8 -d /tmp/t1-focus receiver/tests/T1ClusterForegroundRecoveryContractTest.java
+          java -cp /tmp/t1-focus ar.com.rango5gps.drivelabauto.receiver.T1ClusterForegroundRecoveryContractTest
+      - name: Verify persistent FREEFORM 50/50 without ADB dependency
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-freeform-boot
+          javac -encoding UTF-8 -d /tmp/t1-freeform-boot receiver/tests/T1ClusterFreeformAutobootRegressionTest.java
+          java -cp /tmp/t1-freeform-boot ar.com.rango5gps.drivelabauto.receiver.T1ClusterFreeformAutobootRegressionTest
+      - name: Verify inclusive and strict SOC rules and no threshold overlap
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-soc-ops
+          javac -encoding UTF-8 -d /tmp/t1-soc-ops \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModePolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedDualRulePolicy.java \
+            receiver/tests/T1OptimizedModePolicyTest.java \
+            receiver/tests/T1OptimizedDualRulePolicyTest.java
+          java -cp /tmp/t1-soc-ops ar.com.rango5gps.drivelabauto.receiver.T1OptimizedModePolicyTest
+          java -cp /tmp/t1-soc-ops ar.com.rango5gps.drivelabauto.receiver.T1OptimizedDualRulePolicyTest
+          grep -Fq 'q.minOperator=lowerOperatorSelector(existing.minComparison)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeActivity.java
+          grep -Fq 'q.maxOperator=upperOperatorSelector(existing.maxComparison)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeActivity.java
+          grep -Fq 'min_comparison_v3' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeStore.java
+          grep -Fq 'max_comparison_v3' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeStore.java
+      - name: Assert minimal daily UI and all diagnostics still reachable
+        run: |
+          set -euo pipefail
+          hub=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/ReceiverActivity.java
+          cluster=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ClusterWazeSettingsActivity.java
+          cockpit=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
+          vehicle=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/ReceiverVehicleActivity.java
+          grep -q 'MENÚ TÉCNICO · PRUEBAS Y AJUSTES' "$hub"
+          grep -q 'quickControls.attach(oldControls)' "$hub"
+          grep -q 'CONFIGURAR PANELES A/B · APLICAR' "$cluster"
+          grep -q 'if(showTechnical)' "$cluster"
+          grep -q 'MENÚ TÉCNICO · PRUEBAS OEM' "$cockpit"
+          grep -q 'advanced.addView(extra)' "$cockpit"
+          grep -q 'renderWiperAndRadarDiagnostics(body)' "$vehicle"
+          grep -q 'renderMirrorTechnical(body)' "$vehicle"
+          grep -q 'showIndividualWindows' "$vehicle"
+      - name: Build and verify signed Receiver 0.3.45
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'bruceferra/drivelab-auto-standalone'
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.44
+          ! gh release view v0.3.45 >/dev/null 2>&1
+          gradle --no-daemon :receiver:assembleRelease
+          apk=receiver/build/outputs/apk/release/receiver-release.apk
+          test -s "$apk"
+          sig="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          "$sig" verify --print-certs "$apk"
+          mkdir -p /tmp/old output
+          gh release download v0.3.44 --pattern 'DriveLab-Auto-Receiver-v0.3.44.apk' --dir /tmp/old
+          gh release download v0.3.44 --pattern 'sender.json' --dir output
+          "$sig" verify --print-certs /tmp/old/DriveLab-Auto-Receiver-v0.3.44.apk
+          before=$("$sig" verify --print-certs /tmp/old/DriveLab-Auto-Receiver-v0.3.44.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          after=$("$sig" verify --print-certs "$apk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          test -n "$before" && test "$before" = "$after"
+          badge=$("$aapt" dump badging "$apk" | head -1)
+          echo "$badge" | grep -F "package: name='ar.com.rango5gps.drivelabauto.receiver'"
+          echo "$badge" | grep -F "versionCode='146'"
+          echo "$badge" | grep -F "versionName='0.3.45'"
+          name=DriveLab-Auto-Receiver-v0.3.45.apk
+          cp "$apk" "output/$name"
+          export RECEIVER_SHA=$(sha256sum "output/$name" | awk '{print $1}')
+          python3 - <<'PY'
+          import os,json
+          manifest={
+            'packageName':'ar.com.rango5gps.drivelabauto.receiver',
+            'versionName':'0.3.45','versionCode':146,
+            'sha256':os.environ['RECEIVER_SHA'],
+            'apkUrl':'https://github.com/bruceferra/drivelab-auto-standalone/releases/download/v0.3.45/DriveLab-Auto-Receiver-v0.3.45.apk'}
+          assert len(manifest['sha256'])==64
+          with open('output/receiver.json','w') as f:
+            json.dump(manifest,f,indent=2)
+          with open('output/sender.json') as f:
+            sender=json.load(f)
+          assert sender['versionCode']==23 and sender['versionName']=='0.2.22'
+          PY
+          sha256sum "output/$name" > output/receiver.sha256
+      - name: Publish Receiver only and preserve Sender 0.2.22 OTA
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.44
+          ! gh release view v0.3.45 >/dev/null 2>&1
+          gh release create v0.3.45 \
+            output/DriveLab-Auto-Receiver-v0.3.45.apk \
+            output/receiver.json output/sender.json output/receiver.sha256 \
+            --target "$GITHUB_SHA" --latest \
+            --title 'DriveLab Auto Receiver 0.3.45 · Primero mapas en clúster y luego cierre limpio' \
+            --notes 'Receiver 0.3.45/code146: corrige ORDEN de arranque limpio descubierto en la Jetour T1: al encender con CLÚSTER ON y layout dual Waze+Maps, DriveLab solicita PRIMERO ambas aplicaciones en Display 1, deja 1.6 s para el gestor de tareas OEM, entonces ejecuta el ADB local autorizado am force-stop de cada mapa con CLÚSTER todavía ON, comprueba pidof y vuelve a abrir las dos ventanas FREEFORM en la geometría guardada. Tras eso restaura último destino y vuelve a consultar ventanas de accesibilidad. Si ADB no está conectado/autorizado, deja los mapas inicialmente solicitados en vez de cerrarlos o dejar al usuario sin navegación. Si se desactiva clúster mientras prepara la operación, no los fuerza. CLÚSTER ON normal no fuerza detenciones. REBOOT manual sigue haciendo force-stop cuando CLÚSTER ya está encendido y mapas visibles. No exige P ni velocidad. No se toca el Sender, el volante, la división ni el deslizador de desvanecido. Requiere prueba física para verificar que ADB reproduce la acción Forzar detención de T1 Launcher. Sender permanece v0.2.22.'
+          mkdir -p verify
+          gh release download v0.3.45 --pattern receiver.json --dir verify
+          gh release download v0.3.45 --pattern sender.json --dir verify
+          cmp output/receiver.json verify/receiver.json
+          cmp output/sender.json verify/sender.json
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.45
