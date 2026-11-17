@@ -19,6 +19,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *     InputDispatcher, immediately before the shell key.
  * Never use an ordinary input key without -d. No BACK, taps, coordinates,
  * OEM controls, unsolicited OK, task resizing, or window re-launch.
+ * Recovery after a physical wheel turn may request am task focus only while
+ * parked in OEM P/0 and with a verified target map window. The post-request
+ * focused-window dump MUST confirm the change before any DPAD injection.
  * An ADB command finishing does NOT prove that Waze moved focus.
  */
 final class T1WheelAdbFallback {
@@ -85,10 +88,38 @@ final class T1WheelAdbFallback {
                 if(map==null)throw new IllegalStateException(
                     "Waze/Maps sin tarea única comprobada en Display "+id);
                 String input=T1LocalAdbClient.shell(app,"dumpsys input");
-                if(!T1WheelAdbFocusPolicy.focusedOn(input,id,pkg))
-                    throw new IllegalStateException(
-                        "Sin foco de teclado VERIFICADO en "+pkg+
-                        " · Display "+id+"; OEM protegido");
+                if(!T1WheelAdbFocusPolicy.focusedOn(input,id,pkg)){
+                    // User's real 2026-11-17 ignition trace: FocusedApplication
+                    // was Waze, but FocusedWindow on Display 1 remained
+                    // com.autolink.instrument while both freeform map windows
+                    // were visible, key-capable and unfocused. An app/task
+                    // without window focus cannot receive DPAD.
+                    // Only a physical wheel ROTATION may restore task focus,
+                    // only when OEM P and zero speed are confirmed, and only
+                    // when the focus is currently OEM or another map; a
+                    // dialog/other app can NEVER be displaced.
+                    if(key==23||!T1WheelAdbFocusPolicy.mayFocusMap(input,id,pkg))
+                        throw new IllegalStateException(
+                            "Foco en OEM/u otra ventana; no se autoriza "+
+                            "cambiarlo ni enviar tecla");
+                    if(!T1ClusterAdbResize.parkedForWheel(app))
+                        throw new IllegalStateException(
+                            "Foco de mapa pendiente: solo recuperar en P y 0 km/h");
+                    String focusReply=T1LocalAdbClient.shell(app,
+                        T1WheelAdbFocusPolicy.focusCommand(map.id));
+                    String feedback=focusReply==null?"":focusReply.toLowerCase(Locale.ROOT);
+                    if(feedback.contains("error")||feedback.contains("denied")||
+                       feedback.contains("exception")||feedback.contains("unknown"))
+                        throw new IllegalStateException("Android rechazó enfocar mapa");
+                    // Task focus is not window focus on the Jetour ROM;
+                    // accept only hard InputDispatcher evidence AFTER request.
+                    Thread.sleep(200L);
+                    input=T1LocalAdbClient.shell(app,"dumpsys input");
+                    if(!T1WheelAdbFocusPolicy.focusedOn(input,id,pkg))
+                        throw new IllegalStateException(
+                            "Android mantuvo com.autolink.instrument con foco; "+
+                            "no se envió tecla al vehículo");
+                }
                 // Input -d scopes the event to the existing focused display.
                 // Do not inject unless task, focus AND user panel still match.
                 Display now=T1ClusterWazeRouter.selected(app);
