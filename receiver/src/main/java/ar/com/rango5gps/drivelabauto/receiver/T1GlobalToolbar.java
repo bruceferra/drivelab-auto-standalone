@@ -185,6 +185,10 @@ final class T1GlobalToolbar {
             T1JetourTheme.PANEL_HI,140,this::toggleCluster);
         wheelPanelButton=button(actions,"VOLANTE · PANEL A",
             T1JetourTheme.PANEL_HI,158,this::toggleWheelPanel);
+        // Recovery only when the OEM surface steals focus on cold boot.
+        // Does NOT rerun split geometry or change wheel mappings.
+        button(actions,"TOMAR CONTROL",
+            T1JetourTheme.PANEL_HI,154,this::takeClusterControl);
         refreshWheelPanel();
         button(actions,"COCKPIT",T1JetourTheme.GREEN_BUTTON,114,
             ()->navigate(T1PremiumCockpitActivity.class));
@@ -451,6 +455,16 @@ final class T1GlobalToolbar {
         refreshWheelPanel();
         note(T1WheelTarget.name(owner)+" · "+T1WheelTarget.application(owner));
     }
+    private void takeClusterControl(){
+        if(!T1ClusterWazeRouter.enabled(owner)){
+            note("Primero encendé CLÚSTER ON");return;
+        }
+        note("Tomar control: solicitando prioridad de ambos mapas en Display 1");
+        T1ClusterForegroundRecovery.request(owner,message->{
+            if(foreground)note(message);
+        });
+    }
+
     private void toggleCluster(){
         SharedPreferences p=T1ClusterWazeRouter.prefs(owner);
         if(T1ClusterWazeRouter.enabled(owner)){
