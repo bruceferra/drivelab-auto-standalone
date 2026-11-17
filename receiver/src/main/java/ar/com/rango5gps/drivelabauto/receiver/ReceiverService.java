@@ -355,41 +355,41 @@ public final class ReceiverService extends Service {
     private void scheduleNativeClusterWaze(){
         if(!T1ClusterWazeRouter.autoBoot(this))return;
         Handler boot=new Handler(Looper.getMainLooper());
-        // Intentional order: Receiver UI/Cockpit is launched at 12s,
-        // cluster map panes at 20s, and actual saved destinations 3s
-        // AFTER both map tasks exist. Manual CLÚSTER OFF/ON already does
-        // this final replay; boot previously omitted it entirely.
+        // Open the saved FREEFORM panes only after the cockpit/display starts.
+        // Speed reading may block during ignition, so never use the UI thread.
         boot.postDelayed(()->{
             if(!running||!T1ClusterWazeRouter.autoBoot(this))return;
-            String opened=T1ClusterWazeRouter.onReceiverBoot(this);
-            if(!opened.startsWith("APP SOLICITADA")&&
-               !opened.startsWith("Waze SOLICITADO"))return;
-            final long requestedAt=T1ClusterWazeRouter.prefs(this)
-                .getLong(T1ClusterWazeRouter.LAST_REQUEST_MS,0L);
-            boot.postDelayed(()->{
-                if(!running||!T1ClusterWazeRouter.autoBoot(this)||
-                   !T1ClusterWazeRouter.enabled(this)||
-                   T1ClusterWazeRouter.selected(this)==null||
-                   T1ClusterLayoutPolicy.pendingUnverified(this))return;
-                // A newer human/phone navigation request supersedes
-                // auto-replay of the OLD saved destination, NOT the wheel.
-                // Previously this early-return also prevented post-boot
-                // microphone/accessibility recovery after a fresh route.
-                long currentAt=T1ClusterWazeRouter.prefs(this)
-                    .getLong(T1ClusterWazeRouter.LAST_REQUEST_MS,0L);
-                if(currentAt==requestedAt){
-                    String restored=T1LastRoute.restore(this);
-                    prefs().edit().putString("boot_route_restore",restored).apply();
-                }else{
-                    prefs().edit().putString("boot_route_restore",
-                        "Destino nuevo: no se repite ruta anterior").apply();
-                }
-                // Refresh microphone and Android Accessibility only after
-                // the map tasks launch. The retired ADB task-focus/DPAD
-                // fallback is removed; no synthetic steering keys are sent.
-                T1OemMicrophoneService.ensureRunning(this);
-                T1WazeWheelService.requestClusterReady(this);
-            },3200L);
+            new Thread(()->{
+                String opened=T1ClusterWazeRouter.onReceiverBoot(this);
+                boot.post(()->{
+                    if(!running||!T1ClusterWazeRouter.autoBoot(this))return;
+                    if(!opened.startsWith("APP SOLICITADA")&&
+                       !opened.startsWith("Waze SOLICITADO"))return;
+                    final long requestedAt=T1ClusterWazeRouter.prefs(this)
+                        .getLong(T1ClusterWazeRouter.LAST_REQUEST_MS,0L);
+                    boot.postDelayed(()->{
+                        if(!running||!T1ClusterWazeRouter.autoBoot(this)||
+                           !T1ClusterWazeRouter.enabled(this)||
+                           T1ClusterWazeRouter.selected(this)==null||
+                           (T1ClusterLayoutPolicy.pendingUnverified(this)&&
+                            !T1ClusterLayoutPolicy.savedDualSplit(this)))return;
+                        long currentAt=T1ClusterWazeRouter.prefs(this)
+                            .getLong(T1ClusterWazeRouter.LAST_REQUEST_MS,0L);
+                        if(currentAt==requestedAt){
+                            String restored=T1LastRoute.restore(this);
+                            prefs().edit().putString("boot_route_restore",restored)
+                                .apply();
+                        }else{
+                            prefs().edit().putString("boot_route_restore",
+                                "Destino nuevo: no se repite ruta anterior").apply();
+                        }
+                        // Read-only accessibility refresh; never steal OEM
+                        // buttons, issue DPAD, or force Waze fullscreen.
+                        T1OemMicrophoneService.ensureRunning(this);
+                        T1WazeWheelService.requestClusterReady(this);
+                    },3200L);
+                });
+            },"T1-Cluster-Boot-SavedFreeform").start();
         },20000L);
     }
     private void scheduleBootApp(){
