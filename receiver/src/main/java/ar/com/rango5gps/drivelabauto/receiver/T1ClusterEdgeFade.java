@@ -7,7 +7,6 @@ import android.graphics.LinearGradient;
 import android.graphics.Paint;
 import android.graphics.PixelFormat;
 import android.graphics.Shader;
-import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.provider.Settings;
@@ -17,93 +16,103 @@ import android.view.View;
 import android.view.WindowManager;
 
 /**
- * Two INDEPENDENT, non-touchable window-context overlays, one above each
- * saved FREEFORM pane of Display 1. The older single MATCH_PARENT overlay
- * could be confined to one freeform window by Jetour's window manager.
- * Explicit per-panel overlays and Android 11 createWindowContext avoid
- * inheriting the calling Activity's half-screen window bounds.
+ * Draw all four navigation panel edge gradients in ONE NON-FOCUSABLE
+ * window on the secondary Display 1. The former v0.3.43 implementation
+ * called WindowManager.addView twice while releasing the SeekBar: on
+ * the Jetour ROM this disturbed the active settings screen and did not
+ * show the right panel. Never create two window tokens for this feature.
  *
- * Decoration only. Gradient is a translucent dark mask, NOT alpha control
- * of Waze/Maps or an x-ray to the OEM instrument layer underneath.
- * No focus, key, accessibility, task, speed, or vehicle operations.
+ * Decoration only, not transparency of foreign Waze/Maps surfaces.
+ * No OEM/car operations, Android activity relaunch, task changes,
+ * focus/key injection or access to the navigation apps.
  */
 final class T1ClusterEdgeFade {
     static final String WIDTH_PX="cluster_edge_fade_width_px_v1";
     static final String RESULT="cluster_edge_fade_result_v1";
     static final int MAX_PX=300;
-    private static final Handler MAIN=new Handler(Looper.getMainLooper());
     private static final int DEFAULT_PX=60;
-
+    private static final Handler MAIN=new Handler(Looper.getMainLooper());
     private static WindowManager manager;
-    private static PanelFadeView leftView,rightView;
-    private static int displayId=-1,appliedRatio=-1;
+    private static FadeView view;
+    private static int displayId=-1;
+    private static int attachedW=-1,attachedH=-1;
+    private static Runnable queued;
     private T1ClusterEdgeFade(){}
 
     static int width(Context c){
         int stored=T1ClusterWazeRouter.prefs(c).getInt(WIDTH_PX,DEFAULT_PX);
         return Math.max(0,Math.min(MAX_PX,stored));
     }
-    static void setWidth(Context c,int pixels){
-        int safe=Math.max(0,Math.min(MAX_PX,pixels));
-        T1ClusterWazeRouter.prefs(c).edit().putInt(WIDTH_PX,safe).apply();
-        refresh(c);
-    }
-    private static void status(Context c,String message){
-        T1ClusterWazeRouter.prefs(c).edit().putString(RESULT,message).apply();
+    static void setWidth(Context c,int px){
+        Context app=c.getApplicationContext();
+        int safe=Math.max(0,Math.min(MAX_PX,px));
+        T1ClusterWazeRouter.prefs(app).edit().putInt(WIDTH_PX,safe).apply();
+        // Updating an existing View never calls WindowManager.addView and
+        // cannot change the Activity or the selected navigation tasks.
+        MAIN.post(()->{
+            if(view!=null&&manager!=null&&displayId==1){
+                if(safe==0)remove();
+                else view.update(safe,T1ClusterLayoutPolicy.number(app,
+                    T1ClusterLayoutPolicy.SPLIT_PERCENT,50,30,70));
+                status(app,safe==0?"DESVANECIDO OFF · 0 px":
+                    "DESVANECIDO AJUSTADO: "+safe+
+                    " px; misma ventana, sin recreación");
+                return;
+            }
+            if(safe==0){
+                remove();
+                status(app,"DESVANECIDO OFF · 0 px");
+                return;
+            }
+            // Jetour's vendor WindowManager is sensitive to windows
+            // being inserted from a slider touch-up callback. Defer only
+            // the first overlay creation, never replace it on dragging.
+            if(queued!=null)MAIN.removeCallbacks(queued);
+            queued=()->{queued=null;apply(app);};
+            MAIN.postDelayed(queued,350L);
+            status(app,"DESVANECIDO "+safe+
+                " px guardado; preparando una sola capa para ambos paneles");
+        });
     }
     static String last(Context c){
         return T1ClusterWazeRouter.prefs(c).getString(RESULT,
-            "Desvanecido en ambos paneles todavía sin prueba física");
+            "Desvanecido pendiente de comprobación en Display 1");
+    }
+    private static void status(Context c,String text){
+        T1ClusterWazeRouter.prefs(c).edit().putString(RESULT,text).apply();
     }
     static void refresh(Context c){
         Context app=c.getApplicationContext();
-        MAIN.post(()->apply(app));
+        MAIN.post(()->{
+            if(queued!=null){MAIN.removeCallbacks(queued);queued=null;}
+            apply(app);
+        });
     }
     static void hide(Context c){
         Context app=c.getApplicationContext();
         MAIN.post(()->{
+            if(queued!=null){MAIN.removeCallbacks(queued);queued=null;}
             remove();
-            status(app,"DESVANECIDO OFF: ambos paneles liberados");
+            status(app,"DESVANECIDO OFF: capa retirada del Display 1");
         });
     }
     private static void remove(){
-        if(manager!=null){
-            if(leftView!=null){
-                try{manager.removeViewImmediate(leftView);}
-                catch(RuntimeException ignored){}
-            }
-            if(rightView!=null){
-                try{manager.removeViewImmediate(rightView);}
-                catch(RuntimeException ignored){}
-            }
+        if(view!=null&&manager!=null){
+            try{manager.removeViewImmediate(view);}
+            catch(RuntimeException ignored){}
         }
-        leftView=null;
-        rightView=null;
+        view=null;
         manager=null;
         displayId=-1;
-        appliedRatio=-1;
-    }
-    private static WindowManager.LayoutParams params(int width,int height,
-                                                     int x,String label){
-        WindowManager.LayoutParams p=new WindowManager.LayoutParams(
-            width,height,
-            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|
-                WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE|
-                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
-            PixelFormat.TRANSLUCENT);
-        p.gravity=Gravity.TOP|Gravity.LEFT;
-        p.x=x;
-        p.y=0;
-        p.setTitle(label);
-        return p;
+        attachedW=-1;
+        attachedH=-1;
     }
     private static void apply(Context c){
         int edge=width(c);
         if(!T1ClusterWazeRouter.enabled(c)||
            !T1ClusterLayoutPolicy.savedDualSplit(c)||edge==0){
             remove();
-            status(c,"DESVANECIDO OFF · 0 px o clúster sin dos paneles");
+            status(c,"DESVANECIDO OFF · clúster sin dos mapas o 0 px");
             return;
         }
         Display d=T1ClusterWazeRouter.selected(c);
@@ -114,97 +123,98 @@ final class T1ClusterEdgeFade {
         }
         if(!Settings.canDrawOverlays(c)){
             remove();
-            status(c,"DESVANECIDO no aplicado: falta permiso superposición");
+            status(c,"DESVANECIDO no aplicado: falta permiso de superposición");
             return;
         }
         int ratio=T1ClusterLayoutPolicy.number(c,
             T1ClusterLayoutPolicy.SPLIT_PERCENT,50,30,70);
         int physicalWidth=d.getMode().getPhysicalWidth();
         int physicalHeight=d.getMode().getPhysicalHeight();
-        int leftWidth=Math.round(physicalWidth*ratio/100f);
-        int rightWidth=physicalWidth-leftWidth;
-        if(leftWidth<=0||rightWidth<=0||physicalHeight<=0){
+        if(physicalWidth<2||physicalHeight<1){
             remove();
-            status(c,"DESVANECIDO no aplicado: dimensiones inválidas");
+            status(c,"DESVANECIDO no aplicado: tamaño físico desconocido");
             return;
         }
         try{
-            if(leftView!=null&&rightView!=null&&manager!=null&&
-               displayId==d.getDisplayId()&&appliedRatio==ratio){
-                leftView.update(edge);
-                rightView.update(edge);
+            if(view!=null&&manager!=null&&displayId==d.getDisplayId()&&
+                attachedW==physicalWidth&&attachedH==physicalHeight){
+                view.update(edge,ratio);
                 status(c,"DESVANECIDO "+edge+
-                    " px solicitado en AMBOS paneles de Display 1 "+
-                    "(máscara visual, no transparencia OEM)");
+                    " px actualizado en la misma capa de Display 1");
                 return;
             }
             remove();
-            // Android 11's window context is tied to the PHYSICAL display
-            // overlay layer, not to DriveLab's current freeform Activity
-            // window. Both explicit overlay windows have independent bounds.
-            Context windowContext=Build.VERSION.SDK_INT>=30?
-                c.createWindowContext(d,
-                    WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,null):
-                c.createDisplayContext(d);
-            WindowManager wm=(WindowManager)windowContext.getSystemService(
+            // Restore the original v0.3.42 WindowManager path, which
+            // did not make the settings Activity disappear on this ROM.
+            // Unlike MATCH_PARENT, use the full PHYSICAL 1920x720 size
+            // to request both saved panels, never a freeform half-width.
+            Context displayContext=c.createDisplayContext(d);
+            WindowManager wm=(WindowManager)displayContext.getSystemService(
                 Context.WINDOW_SERVICE);
             if(wm==null)throw new IllegalStateException(
                 "WindowManager no disponible");
+            FadeView overlay=new FadeView(displayContext,edge,ratio);
+            WindowManager.LayoutParams p=new WindowManager.LayoutParams(
+                physicalWidth,physicalHeight,
+                WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE|
+                    WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN,
+                PixelFormat.TRANSLUCENT);
+            p.gravity=Gravity.TOP|Gravity.LEFT;
+            p.x=0;p.y=0;
+            p.setTitle("DriveLab · un solo desvanecido para paneles A/B");
+            wm.addView(overlay,p);
             manager=wm;
-            leftView=new PanelFadeView(windowContext,edge);
-            wm.addView(leftView,params(leftWidth,physicalHeight,0,
-                "DriveLab desvanecido · panel A"));
-            rightView=new PanelFadeView(windowContext,edge);
-            wm.addView(rightView,params(rightWidth,physicalHeight,leftWidth,
-                "DriveLab desvanecido · panel B"));
+            view=overlay;
             displayId=d.getDisplayId();
-            appliedRatio=ratio;
+            attachedW=physicalWidth;attachedH=physicalHeight;
             status(c,"DESVANECIDO "+edge+
-                " px solicitado en panel A y panel B de Display 1. "+
-                "Confirmá visualmente ambos lados; Android puede "+
-                "mantener superficies OEM encima.");
+                " px solicitado a ambos paneles con una sola ventana. "+
+                "Pendiente de comprobar el resultado visual en la T1");
         }catch(Exception ex){
             remove();
-            status(c,"DESVANECIDO no aplicado: "+
-                ex.getClass().getSimpleName()+" · "+
+            status(c,"DESVANECIDO NO APLICADO · "+
+                ex.getClass().getSimpleName()+": "+
                 String.valueOf(ex.getMessage()));
         }
     }
-
-    private static final class PanelFadeView extends View {
+    private static final class FadeView extends View {
         private final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
-        // Keep the gradient subtle, including at 300 px.
         private static final int VEIL=0x99151a22;
-        private int widthPx;
-        PanelFadeView(Context c,int px){
+        private int edge,ratio;
+        FadeView(Context c,int px,int pct){
             super(c);
-            widthPx=px;
+            edge=px;ratio=pct;
             setBackgroundColor(Color.TRANSPARENT);
-            setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
             setClickable(false);
             setFocusable(false);
+            setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
         }
-        void update(int px){widthPx=px;invalidate();}
-        private void strip(Canvas canvas,float start,float end,
-                           int color0,int color1){
-            if(end<=start)return;
-            paint.setShader(new LinearGradient(start,0,end,0,
-                color0,color1,Shader.TileMode.CLAMP));
-            canvas.drawRect(start,0,end,getHeight(),paint);
+        void update(int px,int pct){edge=px;ratio=pct;invalidate();}
+        private void strip(Canvas canvas,float a,float b,
+                           int c0,int c1){
+            if(b<=a)return;
+            paint.setShader(new LinearGradient(a,0,b,0,
+                c0,c1,Shader.TileMode.CLAMP));
+            canvas.drawRect(a,0,b,getHeight(),paint);
             paint.setShader(null);
         }
         @Override protected void onDraw(Canvas canvas){
             super.onDraw(canvas);
-            int panelWidth=getWidth();
-            // Prior version capped at fullDisplayWidth/8: a 300px setting
-            // would visibly stop changing at 240px on a 1920px cluster.
-            int e=Math.min(widthPx,Math.max(0,panelWidth/2));
-            if(e==0)return;
+            final int w=getWidth();
+            if(w<=0||edge<=0)return;
+            float seam=w*Math.max(30,Math.min(70,ratio))/100f;
+            // Four independent gradients are painted in one single View:
+            // left panel external, left panel seam, right panel seam,
+            // right panel external. No half-display 240px ceiling.
+            float left=Math.min(edge,seam/2f);
+            float right=Math.min(edge,(w-seam)/2f);
             int clear=Color.TRANSPARENT;
-            // Draw BOTH edges in EACH panel. Thus the outside edges
-            // and the two sides of the central seam all fade.
-            strip(canvas,0,e,VEIL,clear);
-            strip(canvas,panelWidth-e,panelWidth,clear,VEIL);
+            strip(canvas,0,left,VEIL,clear);
+            strip(canvas,seam-left,seam,clear,VEIL);
+            strip(canvas,seam,seam+right,VEIL,clear);
+            strip(canvas,w-right,w,clear,VEIL);
         }
     }
 }
