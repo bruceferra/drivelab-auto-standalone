@@ -34,7 +34,8 @@ final class T1LastRoute {
             return "No se restauró ruta: clúster OFF";
         if(T1ClusterWazeRouter.selected(c)==null)
             return "No se restauró ruta: Display de clúster no disponible";
-        if(T1ClusterLayoutPolicy.pendingUnverified(c))
+        if(T1ClusterLayoutPolicy.pendingUnverified(c)&&
+           !T1ClusterLayoutPolicy.savedDualSplit(c))
             return "Ruta pendiente: diseño del clúster sin verificar";
         SharedPreferences p=prefs(c);
         long age=System.currentTimeMillis()-p.getLong(AT,0L);
