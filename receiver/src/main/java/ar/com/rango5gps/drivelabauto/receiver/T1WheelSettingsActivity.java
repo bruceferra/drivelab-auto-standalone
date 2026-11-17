@@ -81,7 +81,10 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
         eventState.setText("ÚLTIMA TECLA: "+
             p.getString(T1WazeWheelService.OEM_LAST,"ninguna")+
             "\nÚLTIMA ACCIÓN: "+
-            p.getString(T1WazeWheelService.LAST_STATUS,"ninguna"));
+            p.getString(T1WazeWheelService.LAST_STATUS,"ninguna")+
+            "\nRESPALDO ADB DISPLAY: "+
+            p.getString(T1WheelAdbFallback.STATUS,
+                "Sin intentos; se priorizan controles accesibles"));
     }
     private TextView text(LinearLayout col,String title,int size){
         TextView t=new TextView(this);
