@@ -528,37 +528,12 @@ final class T1GlobalToolbar {
         // Do not switch to the ADB-dependent boot() path on manual ON.
         if(T1ClusterLayoutPolicy.savedDualSplit(owner)){
             p.edit().putString(T1ClusterWazeRouter.STATUS,
-                "CLÚSTER ON: recuperando paneles guardados; verificando 0 km/h")
-                .apply();
-            new Thread(()->{
-                MirrorAutomationOem oem=null;
-                boolean stopped=false;
-                try{
-                    oem=new MirrorAutomationOem(owner);
-                    double speed=oem.speedKmh();
-                    stopped=Double.isFinite(speed)&&
-                        speed>=0&&speed<=0.5;
-                }catch(Exception ignored){
-                    // Uncertain OEM data must never move a freeform pane.
-                }finally{
-                    if(oem!=null)oem.close();
-                }
-                // Manual CLÚSTER ON is non-destructive. Never force-stop
-                // an active Waze/Maps route outside the real car cold boot.
-                final boolean safe=stopped;
-                owner.runOnUiThread(()->{
-                    if(owner.isFinishing()||owner.isDestroyed()||
-                       !T1ClusterWazeRouter.enabled(owner))return;
-                    if(!safe){
-                        p.edit().putBoolean(T1ClusterWazeRouter.ENABLED,false)
-                            .putBoolean(T1ClusterWazeRouter.AUTO_BOOT,false)
-                            .apply();
-                        String blocked="CLÚSTER: no se confirmó 0 km/h; "+
-                            "no se modificaron las ventanas";
-                        T1ClusterWazeRouter.status(owner,blocked);
-                        refreshCluster();note(blocked);
-                        return;
-                    }
+                "CLÚSTER ON: reabriendo los paneles guardados").apply();
+            // This is navigation-only. Do not force-stop active routes
+            // or require P / 0 km/h when the owner toggles CLÚSTER ON.
+            owner.runOnUiThread(()->{
+                if(owner.isFinishing()||owner.isDestroyed()||
+                   !T1ClusterWazeRouter.enabled(owner))return;
                     String opened=T1ClusterLayoutPolicy
                         .reopenSavedPanelsStopped(owner);
                     boolean both=opened.split("APP SOLICITADA", -1).length==3;
@@ -582,8 +557,7 @@ final class T1GlobalToolbar {
                             T1WazeWheelService.requestClusterReady(owner);
                         },3200L);
                     }
-                });
-            },"T1-Cluster-Saved-Split-Manual-Reopen").start();
+            });
             return;
         }
         String result;
