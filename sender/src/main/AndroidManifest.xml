@@ -43,8 +43,12 @@
         </activity>
         <service android:name=".RouteDispatchService" android:exported="false"
             android:foregroundServiceType="dataSync" />
+        <!-- External Uber/share intents may arrive with FLAG_ACTIVITY_NEW_TASK.
+             An empty affinity prevents this trampoline from being resumed in
+             SenderActivity's task, which would leave the Sender UI visible. -->
         <activity android:name=".RouteActivity" android:exported="true"
             android:label="DriveLab Auto Sender · Navegación" android:launchMode="singleTop"
+            android:taskAffinity=""
             android:theme="@android:style/Theme.Translucent.NoTitleBar"
             android:excludeFromRecents="true" android:noHistory="true">
             <intent-filter>
