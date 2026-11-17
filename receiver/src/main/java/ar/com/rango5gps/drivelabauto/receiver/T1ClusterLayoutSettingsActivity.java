@@ -176,15 +176,15 @@ public final class T1ClusterLayoutSettingsActivity extends T1ImmersiveActivity {
             TextView fadeLabel=new TextView(this);
             fadeLabel.setTextSize(16);
             fadeLabel.setPadding(12,12,12,4);
-            fadeLabel.setText("DESVANECIDO LATERAL · "+savedFade+" / 120 px");
+            fadeLabel.setText("DESVANECIDO AMBOS PANELES · "+savedFade+" / 300 px");
             column.addView(fadeLabel);
             SeekBar fadeSeek=new SeekBar(this);
-            fadeSeek.setMax(120);
+            fadeSeek.setMax(T1ClusterEdgeFade.MAX_PX);
             fadeSeek.setProgress(savedFade);
             fadeSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
                 @Override public void onProgressChanged(SeekBar bar,int value,
                     boolean fromUser){
-                    fadeLabel.setText("DESVANECIDO LATERAL · "+value+" / 120 px");
+                    fadeLabel.setText("DESVANECIDO AMBOS PANELES · "+value+" / 300 px");
                 }
                 @Override public void onStartTrackingTouch(SeekBar bar){}
                 @Override public void onStopTrackingTouch(SeekBar bar){
@@ -193,8 +193,8 @@ public final class T1ClusterLayoutSettingsActivity extends T1ImmersiveActivity {
                 }
             });
             column.addView(fadeSeek);
-            text("0 = sin efecto. Suaviza visualmente los bordes; "+
-                "no revela la capa OEM que está debajo de Waze/Maps.",12);
+            text("0 = sin efecto. Desvanece los dos bordes del Panel A y los "+
+                "dos del Panel B; no revela la capa OEM debajo del mapa.",12);
         }
         button("APLICAR",this::applyPanels);
         text("CIERRE LIMPIO MAPAS · "+T1ClusterFreshStart.last(this),14);
