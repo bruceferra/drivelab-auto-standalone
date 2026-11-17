@@ -503,9 +503,71 @@ final class T1GlobalToolbar {
             .putString(T1ClusterWazeRouter.STATUS,
                 "CLÚSTER ON: abriendo navegación en el display elegido")
             .apply();
-        // Keep ON enabled for the parked layout confirmation, but never
-        // launch full-screen Waze as a fallback over the chosen split.
+        // A failed ADB close or lost verification must NOT leave the
+        // owner's existing 60/40 permanently blocked. The explicit ON click
+        // may relaunch the saved panels through ActivityOptions FREEFORM,
+        // without requiring ADB cleanup or silently approving geometry.
+        // As with PROBAR DISEÑO, check OEM P/0 off the UI thread first.
         boolean pendingLayout=T1ClusterLayoutPolicy.pendingUnverified(owner);
+        if(pendingLayout&&T1ClusterLayoutPolicy.MODE_SPLIT.equals(
+                T1ClusterLayoutPolicy.mode(owner))&&
+           T1ClusterLayoutPolicy.panelAOn(owner)&&
+           T1ClusterLayoutPolicy.panelBOn(owner)){
+            p.edit().putString(T1ClusterWazeRouter.STATUS,
+                "CLÚSTER ON: recuperando paneles guardados; verificando P/0")
+                .apply();
+            new Thread(()->{
+                MirrorAutomationOem oem=null;
+                boolean parked=false;
+                try{
+                    oem=new MirrorAutomationOem(owner);
+                    int gear=oem.gear();
+                    double speed=oem.speedKmh();
+                    parked=gear==1&&Double.isFinite(speed)&&
+                        speed>=0&&speed<=0.5;
+                }catch(Exception ignored){
+                    // Uncertain OEM data must never move a freeform pane.
+                }finally{
+                    if(oem!=null)oem.close();
+                }
+                final boolean safe=parked;
+                owner.runOnUiThread(()->{
+                    if(owner.isFinishing()||owner.isDestroyed()||
+                       !T1ClusterWazeRouter.enabled(owner))return;
+                    if(!safe){
+                        p.edit().putBoolean(T1ClusterWazeRouter.ENABLED,false)
+                            .putBoolean(T1ClusterWazeRouter.AUTO_BOOT,false)
+                            .apply();
+                        String blocked="CLÚSTER: no se confirmó P/0; "+
+                            "no se modificaron las ventanas";
+                        T1ClusterWazeRouter.status(owner,blocked);
+                        refreshCluster();note(blocked);
+                        return;
+                    }
+                    String opened=T1ClusterLayoutPolicy
+                        .reopenSavedPanelsStopped(owner);
+                    boolean both=opened.split("APP SOLICITADA", -1).length==3;
+                    if(!both){
+                        p.edit().putBoolean(T1ClusterWazeRouter.ENABLED,false)
+                            .putBoolean(T1ClusterWazeRouter.AUTO_BOOT,false)
+                            .apply();
+                    }
+                    T1ClusterWazeRouter.status(owner,opened);
+                    refreshCluster();note(opened);
+                    if(both){
+                        // Explicit manual recovery: preserve the last route
+                        // within the existing 60/40, not a fullscreen fallback.
+                        main.postDelayed(()->{
+                            if(!T1ClusterWazeRouter.enabled(owner)||
+                               !foreground)return;
+                            String restored=T1LastRoute.restore(owner);
+                            note(restored);
+                        },3200L);
+                    }
+                });
+            },"T1-Cluster-Saved-Split-Manual-Reopen").start();
+            return;
+        }
         String result;
         if(pendingLayout)
             result=T1ClusterLayoutPolicy.pendingMessage(owner);
