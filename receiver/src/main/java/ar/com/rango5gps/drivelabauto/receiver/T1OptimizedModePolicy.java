@@ -10,10 +10,29 @@ final class T1OptimizedModePolicy {
     enum Strategy { SMART, FORCED }
     enum Regen { LOW, MEDIUM, HIGH }
     enum Comparison {
-        GREATER_OR_EQUAL, LESS_OR_EQUAL;
-        String symbol(){return this==GREATER_OR_EQUAL?"≥":"≤";}
+        GREATER_OR_EQUAL, LESS_OR_EQUAL, GREATER, LESS;
+        String symbol(){
+            switch(this){
+                case GREATER_OR_EQUAL:return "≥";
+                case LESS_OR_EQUAL:return "≤";
+                case GREATER:return ">";
+                case LESS:return "<";
+                default:throw new IllegalStateException("Operador inválido");
+            }
+        }
+        boolean lower(){return this==GREATER_OR_EQUAL||this==GREATER;}
+        boolean upper(){return this==LESS_OR_EQUAL||this==LESS;}
+        boolean inclusive(){
+            return this==GREATER_OR_EQUAL||this==LESS_OR_EQUAL;
+        }
         boolean matches(double current,int threshold){
-            return this==GREATER_OR_EQUAL?current>=threshold:current<=threshold;
+            switch(this){
+                case GREATER_OR_EQUAL:return current>=threshold;
+                case LESS_OR_EQUAL:return current<=threshold;
+                case GREATER:return current>threshold;
+                case LESS:return current<threshold;
+                default:return false;
+            }
         }
     }
 
@@ -28,14 +47,19 @@ final class T1OptimizedModePolicy {
         final Regen regeneration;
         final boolean minEnabled,maxEnabled;
         final int maxBattery;
+        final Comparison minComparison,maxComparison;
         Rule(Power p, Strategy s, int target, boolean condition, int minimum, Regen r){
             this(p,s,target,condition,minimum,Comparison.GREATER_OR_EQUAL,r);
         }
         Rule(Power p, Strategy s, int target, boolean condition, int threshold,
              Comparison comparator, Regen r){
             this(p,s,target,
-                condition&&comparator!=Comparison.LESS_OR_EQUAL,threshold,
-                condition&&comparator==Comparison.LESS_OR_EQUAL,threshold,r);
+                condition&&(comparator==null||comparator.lower()),threshold,
+                comparator==Comparison.GREATER?Comparison.GREATER:
+                    Comparison.GREATER_OR_EQUAL,
+                condition&&comparator!=null&&comparator.upper(),threshold,
+                comparator==Comparison.LESS?Comparison.LESS:
+                    Comparison.LESS_OR_EQUAL,r);
         }
         /** Both battery limits can be enabled independently.
          * This is a filter on ACTUAL OEM SOC, not forced target 1041.
@@ -44,6 +68,13 @@ final class T1OptimizedModePolicy {
         Rule(Power p,Strategy s,int target,
              boolean lowerEnabled,int lowerLimit,
              boolean upperEnabled,int upperLimit,Regen r){
+            this(p,s,target,lowerEnabled,lowerLimit,Comparison.GREATER_OR_EQUAL,
+                upperEnabled,upperLimit,Comparison.LESS_OR_EQUAL,r);
+        }
+        Rule(Power p,Strategy s,int target,
+             boolean lowerEnabled,int lowerLimit,Comparison lowerOperator,
+             boolean upperEnabled,int upperLimit,Comparison upperOperator,
+             Regen r){
             power=p==null?Power.HEV:p;
             strategy=s==null?Strategy.SMART:s;
             forcedSoc=clamp(target,0,100);
@@ -51,19 +82,32 @@ final class T1OptimizedModePolicy {
             maxEnabled=upperEnabled;
             minBattery=clamp(lowerLimit,0,100);
             maxBattery=clamp(upperLimit,0,100);
+            minComparison=lowerOperator!=null&&lowerOperator.lower()?
+                lowerOperator:Comparison.GREATER_OR_EQUAL;
+            maxComparison=upperOperator!=null&&upperOperator.upper()?
+                upperOperator:Comparison.LESS_OR_EQUAL;
             thresholdEnabled=minEnabled||maxEnabled;
-            comparison=minEnabled?
-                Comparison.GREATER_OR_EQUAL:Comparison.LESS_OR_EQUAL;
+            comparison=minEnabled?minComparison:maxComparison;
             regeneration=r==null?Regen.MEDIUM:r;
         }
         boolean rangeValid(){
-            return !minEnabled||!maxEnabled||minBattery<=maxBattery;
+            // Actual battery SOC is a real number from 0 to 100, so a
+            // single point is valid only with both endpoints inclusive.
+            if(minEnabled&&minBattery==100&&
+               minComparison==Comparison.GREATER)return false;
+            if(maxEnabled&&maxBattery==0&&
+               maxComparison==Comparison.LESS)return false;
+            if(!minEnabled||!maxEnabled)return true;
+            return minBattery<maxBattery||(minBattery==maxBattery&&
+                minComparison.inclusive()&&maxComparison.inclusive());
         }
         String rangeSummary(){
             if(!thresholdEnabled)return "sin condición SOC";
             StringBuilder result=new StringBuilder("batería");
-            if(minEnabled)result.append(" ≥ ").append(minBattery).append(" %");
-            if(maxEnabled)result.append(" ≤ ").append(maxBattery).append(" %");
+            if(minEnabled)result.append(" ").append(minComparison.symbol())
+                .append(" ").append(minBattery).append(" %");
+            if(maxEnabled)result.append(" ").append(maxComparison.symbol())
+                .append(" ").append(maxBattery).append(" %");
             return result.toString();
         }
     }
@@ -100,14 +144,15 @@ final class T1OptimizedModePolicy {
         if(rule.thresholdEnabled){
             if(!rule.rangeValid())
                 return new Decision(road,rule,false,false,
-                    "Condición SOC inválida: mínimo "+rule.minBattery+
-                    " % superior al máximo "+rule.maxBattery+" %");
+                    "Condición SOC inválida o vacía: "+rule.rangeSummary());
             if(!Double.isFinite(batteryPercent)||batteryPercent<0||
                 batteryPercent>100)
                 return new Decision(road,rule,false,false,
                     "SOC OEM desconocido; no se cumple condición");
-            if((rule.minEnabled&&batteryPercent<rule.minBattery)||
-               (rule.maxEnabled&&batteryPercent>rule.maxBattery))
+            if((rule.minEnabled&&
+                    !rule.minComparison.matches(batteryPercent,rule.minBattery))||
+               (rule.maxEnabled&&
+                    !rule.maxComparison.matches(batteryPercent,rule.maxBattery)))
                 return new Decision(road,rule,false,true,
                     "SOC batería "+String.format(java.util.Locale.ROOT,"%.1f",
                         batteryPercent)+" % no cumple "+rule.rangeSummary());
