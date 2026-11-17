@@ -32,9 +32,9 @@ final class T1TripCostModel {
             Double.NaN,fuelPrice,kwhPrice,priceKnown);
     }
     /**
-     * Only call when an external grid-charge record has been explicitly
-     * assigned to this journey. Calling fromNet/fromGross alone NEVER bills
-     * electricity regardless of net HV consumption or configured tariff.
+     * Use only after linking the journey to documented external plug
+     * electricity. A chronological allocation is an ACCOUNTING ESTIMATE,
+     * not a vehicle-origin sensor. fromNet/fromGross NEVER bill electricity.
      */
     static Result withDocumentedPlugKwh(double km,double liters,
                                        double gross,double charge,
@@ -44,6 +44,12 @@ final class T1TripCostModel {
             gross-charge:Double.NaN;
         return calculate(km,liters,gross,charge,net,plugKwh,
             fuelPrice,kwhPrice,true);
+    }
+    static Result withDocumentedPlugNet(double km,double liters,
+                                       double signedNet,double plugKwh,
+                                       double fuelPrice,double kwhPrice){
+        return calculate(km,liters,Double.NaN,Double.NaN,signedNet,
+            plugKwh,fuelPrice,kwhPrice,true);
     }
     private static boolean finiteNonnegative(double x){
         return Double.isFinite(x)&&x>=0;

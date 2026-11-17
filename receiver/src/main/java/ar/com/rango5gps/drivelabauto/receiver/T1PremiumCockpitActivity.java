@@ -1826,7 +1826,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             (month.fuelKnownTrips>0?"$ "+f(month.fuelCost,0)+" nafta exp.":
                 "Nafta: sin tramo OEM válido")+
             "\nRed comprada: "+f(month.gridKwh,1)+" kWh ($"+
-            f(month.gridCost,0)+") · no imputada";
+            f(month.gridCost,0)+") · atribución por viaje estimada; "+
+            "no sumar dos veces compras y consumo";
 
         ArrayList<HistoryRecord> all=new ArrayList<>();
         // Viaje Total and two independent client slots retain their original
@@ -1854,6 +1855,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 e.km,e.originalKm,e.evKm,e.liters,e.electricNet,
                 Double.NaN,e.fuelCost,e.correctedKm,e.estimatedDistance,
                 e.fuelEvents,e.tripId));
+        assignRecordedPlugEnergy(all);
         all.sort((x,y)->Long.compare(y.ended,x.ended));
         out.all=all;
         SimpleDateFormat dt=new SimpleDateFormat(
@@ -1899,6 +1901,46 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 " Viaje 2 reciente protegido.";
         }
         return out;
+    }
+    /**
+     * Reuse ONLY grid_charges.csv purchases as external-energy evidence.
+     * Master and individual journeys are overlapping views: estimate their
+     * budgets independently and NEVER add the two screens' cost totals.
+     * No import from the 1063/1064 negative charge signal is allowed here.
+     */
+    private void assignRecordedPlugEnergy(ArrayList<HistoryRecord> all){
+        java.io.File purchases=new java.io.File(
+            T1TripRecorderService.tripDir(this),"grid_charges.csv");
+        java.util.List<T1PlugChargeLedger.Charge> charges=
+            T1PlugChargeLedger.read(purchases);
+        if(charges.isEmpty())return;
+        for(int scope=0;scope<2;scope++){
+            java.util.List<T1PlugChargeLedger.Trip> trips=
+                new java.util.ArrayList<>();
+            for(HistoryRecord h:all){
+                if((scope==0)!=(h.slot==0))continue;
+                double net=Double.NaN;
+                if(h.slot==0&&Double.isFinite(h.kwh)&&
+                   Double.isFinite(h.chargedKwh))
+                    net=h.kwh-h.chargedKwh;
+                if(h.slot!=0){
+                    T1TripEnergyAudit.Result a=tripEnergyAudit.get(h.key());
+                    if(a!=null&&a.available())net=a.grossKwh-a.chargedKwh;
+                    else net=h.kwh; // Signed OEM 500m fallback, provisional.
+                }
+                trips.add(new T1PlugChargeLedger.Trip(h.key(),h.started,net));
+            }
+            java.util.Map<String,T1PlugChargeLedger.Attribution> allocations=
+                T1PlugChargeLedger.estimate(charges,trips);
+            for(HistoryRecord h:all){
+                T1PlugChargeLedger.Attribution allocation=
+                    allocations.get(h.key());
+                if(allocation!=null){
+                    h.plugKwh=allocation.plugKwh;
+                    h.unattributedKwh=allocation.remainingKwh;
+                }
+            }
+        }
     }
     private void applyHistorySnapshot(HistoryUiSnapshot snapshot){
         // This method executes on UI; all file reading happened already.
@@ -1954,7 +1996,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         }
         String detailFingerprint=chosen.key()+"|"+chosen.ended+"|"+
             chosen.km+"|"+chosen.liters+"|"+chosen.evKm+"|"+
-            chosen.kwh+"|"+chosen.chargedKwh+"|"+chosen.corrected;
+            chosen.kwh+"|"+chosen.chargedKwh+"|"+chosen.plugKwh+
+            "|"+chosen.corrected;
         if(!detailFingerprint.equals(renderedHistoryDetailSignature)){
             renderedHistoryDetailSignature=detailFingerprint;
             showHistoryDetails(chosen);
@@ -1996,7 +2039,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             selectedHistoryKey=item.key();
             renderedHistoryDetailSignature=item.key()+"|"+item.ended+"|"+
                 item.km+"|"+item.liters+"|"+item.evKm+"|"+
-                item.kwh+"|"+item.chargedKwh+"|"+item.corrected;
+                item.kwh+"|"+item.chargedKwh+"|"+item.plugKwh+
+                "|"+item.corrected;
             paintHistoryButtons();
             showHistoryDetails(item);
             // No removeAllViews and no requestFocus/scrollTo on selection.
@@ -2007,6 +2051,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         final String id,label,tripChain;
         final long started,ended;
         final double km,oldKm,evKm,liters,kwh,chargedKwh,cost;
+        double plugKwh=Double.NaN,unattributedKwh=Double.NaN;
         final boolean corrected,estimated;
         HistoryRecord(int slot,String id,String label,long started,long ended,
                       double km,double oldKm,double evKm,double liters,
@@ -2045,13 +2090,24 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         T1TripEnergyAudit.Result audited=tripEnergyAudit.get(x.key());
         boolean clientHv=x.slot!=0&&audited!=null&&audited.available();
         T1TripCostModel.Result econ=x.slot==0?
-            T1TripCostModel.fromGross(x.km,x.liters,x.kwh,
-                x.chargedKwh,gasPrice,kwhPrice,kwhPriceKnown):
-            clientHv?T1TripCostModel.fromGross(x.km,x.liters,
-                audited.grossKwh,audited.chargedKwh,
-                gasPrice,kwhPrice,kwhPriceKnown):
-            T1TripCostModel.fromNet(x.km,x.liters,x.kwh,
-                gasPrice,kwhPrice,kwhPriceKnown);
+            Double.isFinite(x.plugKwh)?
+                T1TripCostModel.withDocumentedPlugKwh(x.km,x.liters,x.kwh,
+                    x.chargedKwh,x.plugKwh,gasPrice,kwhPrice):
+                T1TripCostModel.fromGross(x.km,x.liters,x.kwh,
+                    x.chargedKwh,gasPrice,kwhPrice,kwhPriceKnown):
+            clientHv?
+                Double.isFinite(x.plugKwh)?
+                    T1TripCostModel.withDocumentedPlugKwh(x.km,x.liters,
+                        audited.grossKwh,audited.chargedKwh,
+                        x.plugKwh,gasPrice,kwhPrice):
+                    T1TripCostModel.fromGross(x.km,x.liters,
+                        audited.grossKwh,audited.chargedKwh,
+                        gasPrice,kwhPrice,kwhPriceKnown):
+            Double.isFinite(x.plugKwh)?
+                T1TripCostModel.withDocumentedPlugNet(x.km,x.liters,x.kwh,
+                    x.plugKwh,gasPrice,kwhPrice):
+                T1TripCostModel.fromNet(x.km,x.liters,x.kwh,
+                    gasPrice,kwhPrice,kwhPriceKnown);
         boolean fuelOk=x.km>0&&Double.isFinite(x.liters)&&x.liters>0;
         String consumption=fuelOk?
             f(100*x.liters/x.km,2)+" L/100 · "+
@@ -2083,9 +2139,9 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                         "no disponible en archivos históricos"))+
                 "\nELECTRICIDAD NETA "+(Double.isFinite(econ.netKwh)?
                     f(econ.netKwh,3)+" kWh":"SIN DATO")+
-                " · ENCHUFE IMPUTADO "+
+                " · ENCHUFE IMPUTADO (EST.) "+
                 (Double.isFinite(econ.billableKwh)?
-                    f(econ.billableKwh,3)+" kWh":"SIN DATO")+
+                    f(econ.billableKwh,3)+" kWh":"SIN CARGA ATRIBUIBLE")+
                 "\nNAFTA $ "+(Double.isFinite(econ.gasolineCost)?
                     f(econ.gasolineCost,0):"SIN DATO")+
                 " · ELECTRICIDAD DE ENCHUFE $ "+
@@ -2102,10 +2158,12 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 "\nPrecios actuales: $ "+f(gasPrice,2)+"/L y "+
                 (kwhPriceKnown?"$ "+f(kwhPrice,2)+"/kWh":
                     "kWh SIN CONFIGURAR")+
-                ". El HV neto NO equivale a electricidad comprada: "+
-                "solo se cobra kWh de ENCHUFE documentados y atribuidos. "+
-                "La entrada por frenado O motor es energía INTERNA. "+
-                "Las cargas registradas aún no están asignadas a un viaje.");
+                ". Los kWh de ENCHUFE se atribuyen por orden cronológico "+
+                "desde cargas registradas en la app, nunca por carga interna. "+
+                "Si faltan cargas previas o balance inicial, SIN DATO; "+
+                "estimación contable, NO prueba del origen físico. "+
+                "Las vistas Total y Viajes 1/2 se superponen: no sumar sus "+
+                "costos entre sí.");
         // Historical end-of-trip range was not persisted. Never substitute
         // the current vehicle's autonomy into a completed trip.
         compactMetric(historyDetailRow,"AUTONOMÍA TOTAL","NO GUARDADA");
@@ -2124,7 +2182,9 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 ui.post(()->{
                     if(visible&&x.key().equals(selectedHistoryKey)){
                         renderedHistoryDetailSignature="";
-                        showHistoryDetails(x);
+                        // Recompute source attribution after receiving the
+                        // client's original HV discharge/charge intervals.
+                        updateHistory();
                     }
                 });
             },"T1-History-HV-Net-Audit").start();
@@ -2765,11 +2825,12 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private void configureTripPrices(){
         LinearLayout form=col();form.setPadding(24,8,24,4);
         form.addView(text("Precios actuales en pesos. Los viajes "+
-            "históricos se recalculan sin alterar los CSV. La energía "+
-            "de frenado y la generada por el motor son INTERNAS y no "+
-            "se cobran como electricidad. Solo las cargas de ENCHUFE "+
-            "registradas representan energía pagada; todavía no están "+
-            "atribuidas por viaje.",13,Color.DKGRAY,false));
+            "históricos se recalculan sin alterar los CSV. Frenado y "+
+            "generación por motor son energía INTERNA, sin costo de enchufe. "+
+            "La app atribuye tentativamente las cargas de enchufe "+
+            "REGISTRADAS a viajes posteriores, sin superar el total "+
+            "comprado; no puede conocer el origen físico exacto de "+
+            "cada kWh.",13,Color.DKGRAY,false));
         SharedPreferences trip=getSharedPreferences(
             T1TripRecorderService.PREFS,MODE_PRIVATE);
         EditText gas=new EditText(this);
