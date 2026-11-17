@@ -29,6 +29,9 @@ final class T1ClusterAdbResize {
         return T1ClusterWazeRouter.prefs(c).getBoolean(OPT_IN,false);
     }
     static void enable(Context c,boolean on){
+        // Re-tapping an already enabled ADB switch is NOT a geometry
+        // change and must not revoke the user's verified 60/40 layout.
+        if(enabled(c)==on)return;
         T1ClusterWazeRouter.prefs(c).edit()
             .putBoolean(OPT_IN,on)
             .putLong(VERIFIED_AT,0L)
@@ -255,9 +258,12 @@ final class T1ClusterAdbResize {
     /** Closing tasks INVALIDATES any earlier split measurements. */
     private static void deliverClose(Context c,String message,
                                      boolean success,Done done){
-        T1ClusterWazeRouter.prefs(c).edit()
-            .putString(RESULT,message)
-            .putLong(VERIFIED_AT,0L).apply();
+        SharedPreferences.Editor edit=T1ClusterWazeRouter.prefs(c).edit()
+            .putString(RESULT,message);
+        // A failed close changes NO geometry; don't erase a prior
+        // valid ADB measurement just because Jetour denied task closing.
+        if(success)edit.putLong(VERIFIED_AT,0L);
+        edit.apply();
         MAIN.post(()->{if(done!=null)done.completed(message,success);});
     }
     private static boolean errorOutput(String s){
