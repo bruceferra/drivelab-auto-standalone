@@ -285,12 +285,13 @@ final class T1ClusterWazeRouter {
             status(c,reason);
             return reason;
         }
-        // The owner already chose two FREEFORM panes. This ROM reports
-        // unsupported native split and sometimes hides ADB task bounds;
-        // neither condition should silently cancel a saved 50/50 on ignition.
-        // Request only the same saved freeform launch as explicit CLÚSTER ON.
-        // First force-stop both apps via authorized local ADB, then request
-        // fresh FREEFORM windows. No wheel mutations or fullscreen fallback.
+        // The owner identified the missing ordering constraint on the T1:
+        // Android Settings > Force stop Waze/Maps works when their tasks are
+        // ALREADY PRESENT on Display 1 and CLUSTER is still ON. If we first
+        // force-stop while those apps are absent from the cluster, the OEM
+        // Spotify layer can remain above newly created FREEFORM windows.
+        // Only run this sequence on the actual boot path; CLUSTER ON normal
+        // and Sender destinations never force-stop a running route.
         if(T1ClusterLayoutPolicy.savedDualSplit(c)){
             if(!Settings.canDrawOverlays(c)&&!ReceiverActivity.isVisible()){
                 String reason="Arranque FREEFORM pendiente: Android no permite "+
@@ -298,28 +299,52 @@ final class T1ClusterWazeRouter {
                 status(c,reason);
                 return reason;
             }
-            // The owner physically confirmed Android Settings force-stop
-            // of both apps restored the wheel. Try equivalent ADB only on
-            // genuine boot, without gear/speed checks. Never force-stop
-            // on an ordinary CLÚSTER ON tap or destination from Sender.
-            // If ADB fails, do not silently reuse the stale processes.
-            T1ClusterFreshStart.Result clean=T1ClusterFreshStart.prepare(c);
-            if(!clean.ready){
-                // Reliability first: if car-local ADB is temporarily absent,
-                // do not leave the driver without either map. Retain the
-                // clean-start diagnostic and request the saved split anyway.
-                status(c,"CIERRE LIMPIO NO CONFIRMADO: "+clean.message+
-                    " · recuperando mapas en modo compatibilidad");
+            // 1. Make both map tasks exist in Display 1 while CLUSTER=ON.
+            String initial=T1ClusterLayoutPolicy.reopenSavedPanelsStopped(c);
+            if(initial.split("APP SOLICITADA",-1).length!=3){
+                status(c,"ARRANQUE: falta alguno de los mapas iniciales. "+initial);
+                return initial;
+            }
+            // 2. Give Android's vendor task manager a short chance to place
+            //    the FREEFORM windows on the instrument display. This worker
+            //    is off the UI thread. No gear/speed restriction or OEM write.
+            try{Thread.sleep(1600L);}
+            catch(InterruptedException ex){
+                Thread.currentThread().interrupt();
+                status(c,"Arranque de clúster interrumpido; mapas iniciales conservados");
+                return initial;
             }
             if(!autoBoot(c)){
-                String cancel="Clúster apagado durante cierre limpio; no se reabrió";
-                status(c,cancel);
-                return cancel;
+                status(c,"Clúster OFF durante arranque; no se forzó detención");
+                return initial;
             }
+            // 3. Force-stop Waze and Maps via the authorized local ADB port
+            //    while CLUSTER stays ON, replicating the owner's verified
+            //    manual T1Launcher Settings sequence.
+            T1ClusterFreshStart.Result clean=T1ClusterFreshStart.prepare(c);
+            if(!autoBoot(c)){
+                status(c,"Clúster OFF durante cierre limpio; no se reabrió");
+                return initial;
+            }
+            if(!clean.ready){
+                // Without ADB do not take down navigation: the initially
+                // requested windows remain visible. If one map was already
+                // stopped before a partial error, reopen BOTH below.
+                if(!clean.changed){
+                    status(c,"ARRANQUE COMPATIBLE: mapas abiertos. "+
+                        "No se pudo ejecutar cierre limpio: "+clean.message);
+                    T1ClusterEdgeFade.refresh(c);
+                    return initial;
+                }
+            }
+            // 4. Relaunch both windows only AFTER force-stop, in saved A/B
+            //    geometry, then ReceiverService will replay last route and
+            //    refresh steering accessibility. Do not turn CLUSTER OFF.
             String opened=T1ClusterLayoutPolicy.reopenSavedPanelsStopped(c);
             if(opened.split("APP SOLICITADA",-1).length==3)
                 T1ClusterEdgeFade.refresh(c);
-            status(c,opened);
+            status(c,(clean.ready?"ARRANQUE LIMPIO: ":
+                "ARRANQUE PARCIAL: "+clean.message+" · ")+opened);
             return opened;
         }
         // For layouts without both saved panes, keep the safe pre-existing gate.
