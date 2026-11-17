@@ -390,7 +390,10 @@ public final class ReceiverService extends Service {
                 // any key, tap or OEM command during ignition.
                 T1OemMicrophoneService.ensureRunning(this);
                 T1WazeWheelService.requestClusterReady(this);
-                T1WheelAdbFallback.restoreFocusAfterBoot(this);
+                // Nov 16 proven-safe behavior: bind Accessibility after
+                // opening the maps. Do NOT invoke am task focus on boot;
+                // Jetour leaves com.autolink.instrument as InputDispatcher
+                // focus and may redraw a Waze panel as OEM background.
             },3200L);
         },20000L);
     }
