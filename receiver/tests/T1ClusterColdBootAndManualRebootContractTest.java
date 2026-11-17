@@ -61,7 +61,7 @@ public final class T1ClusterColdBootAndManualRebootContractTest {
             reboot.contains("MAIN.postDelayed(()->performOn(owner,update,false),")&&
             reboot.contains("putBoolean(T1ClusterWazeRouter.RELOAD_HOLD,true)")&&
             reboot.contains("putBoolean(T1ClusterWazeRouter.RELOAD_HOLD,false)")&&
-            router.contains("Thread.sleep(T1ClusterManualReboot.OFF_VISIBLE_MS)")&&
+            router.contains("android.os.SystemClock.sleep(T1ClusterManualReboot.OFF_VISIBLE_MS)")&&
             reboot.contains("T1ClusterFreshStart.prepare(owner)")&&
             reboot.contains("reopenSavedPanelsStopped(owner)")&&
             reboot.contains("T1ClusterAdbResize.closeClusterApps(owner,")&&

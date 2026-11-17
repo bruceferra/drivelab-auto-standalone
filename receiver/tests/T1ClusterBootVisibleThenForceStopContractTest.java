@@ -39,9 +39,9 @@ public final class T1ClusterBootVisibleThenForceStopContractTest {
             part.contains("if(!clean.changed)")&&
             part.contains("return initial;")&&
             off>stop&&taskClose>off&&on>taskClose&&second>on&&
-            part.contains("Thread.sleep(T1ClusterManualReboot.OFF_VISIBLE_MS)")&&
+            part.contains("android.os.SystemClock.sleep(T1ClusterManualReboot.OFF_VISIBLE_MS)")&&
             part.indexOf("closed.await(16L,")<
-                part.indexOf("Thread.sleep(T1ClusterManualReboot.OFF_VISIBLE_MS)")&&
+                part.indexOf("android.os.SystemClock.sleep(T1ClusterManualReboot.OFF_VISIBLE_MS)")&&
             part.contains(".putBoolean(RELOAD_HOLD,true)")&&
             part.contains(".putBoolean(RELOAD_HOLD,false)")&&
             reboot.contains("static final long OFF_VISIBLE_MS=10000L")&&

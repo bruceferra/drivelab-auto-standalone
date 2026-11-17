@@ -372,19 +372,18 @@ final class T1ClusterWazeRouter {
             boolean closeResponded=false;
             try{
                 closeResponded=closed.await(16L,java.util.concurrent.TimeUnit.SECONDS);
-                // Start the TEN-second hold only AFTER the ADB task-close
-                // attempt returns (or its 16 s timeout). Never include task
-                // removal time in the hold and never jump directly to ON.
-                p.edit().putString(BOOT_RELOAD_RESULT,
-                    "AUTO 1/3: CLÚSTER OFF naranja; ESPERANDO 10 s"+
-                    (closeResponded?" tras cierre ADB":" tras timeout ADB"))
-                    .putString(STATUS,
-                    "ARRANQUE: CLÚSTER OFF naranja · ESPERANDO 10 s")
-                    .commit();
-                Thread.sleep(T1ClusterManualReboot.OFF_VISIBLE_MS);
             }catch(InterruptedException ex){
                 Thread.currentThread().interrupt();
             }
+            // The full ten seconds start AFTER closing returns or times out.
+            // SystemClock.sleep guarantees at least this delay even if the
+            // worker is interrupted: never skip straight back to ON.
+            p.edit().putString(BOOT_RELOAD_RESULT,
+                "AUTO 1/3: CLÚSTER OFF naranja; ESPERANDO 10 s"+
+                (closeResponded?" tras cierre ADB":" tras timeout ADB"))
+                .putString(STATUS,
+                "ARRANQUE: CLÚSTER OFF naranja · ESPERANDO 10 s").commit();
+            android.os.SystemClock.sleep(T1ClusterManualReboot.OFF_VISIBLE_MS);
             // No speed/gear writes and no OEM process manipulation.
             // Recover ON even if ADB close times out or cannot confirm.
             p.edit().putBoolean(ENABLED,true).putBoolean(AUTO_BOOT,true)
