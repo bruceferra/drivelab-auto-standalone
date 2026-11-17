@@ -1,4 +1,4 @@
-# 2026-11-17: signed 0.3.45 build includes saved FREEFORM boot persistence regression (line-break-safe matcher).
+# 2026-11-17: signed 0.3.45 retest after precise ADB-shell source assertion correction.
 name: Signed Receiver 0.3.45 - boot visible force-stop then relaunch maps
 on:
   push:
