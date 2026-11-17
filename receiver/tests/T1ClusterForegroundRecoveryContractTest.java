@@ -18,9 +18,12 @@ public final class T1ClusterForegroundRecoveryContractTest {
         String manifest=Files.readString(Path.of("receiver/src/main/AndroidManifest.xml"));
         check(manifest.contains("android.permission.REORDER_TASKS"),
             "Task foreground permission is required");
-        check(toolbar.contains("button(actions,\"TOMAR CONTROL\"")&&
-            toolbar.contains("T1ClusterForegroundRecovery.request(owner,message->"),
-            "Single manual recovery control must be accessible next to CLUSTER");
+        check(!toolbar.contains("button(actions,\"TOMAR CONTROL\"")&&
+            !toolbar.contains("this::takeClusterControl")&&
+            toolbar.contains("this::confirmClusterReload")&&
+            toolbar.contains(".setPositiveButton(\"SÍ\"")&&
+            toolbar.contains(".setNegativeButton(\"NO\""),
+            "Retired TOMAR CONTROL button replaced by confirmed R after clock");
         check(foreground.contains("T1ClusterLayoutPolicy.savedDualSplit(app)")&&
             foreground.contains("d.getDisplayId()!=1")&&
             foreground.contains("WAZE.equals(a)&&MAPS.equals(b)")&&

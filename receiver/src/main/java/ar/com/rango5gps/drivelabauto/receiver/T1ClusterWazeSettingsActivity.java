@@ -61,9 +61,7 @@ public final class T1ClusterWazeSettingsActivity extends T1ImmersiveActivity {
             "\nResultado: "+p.getString(T1ClusterWazeRouter.STATUS,
                 "Sin prueba; ningún display elegido"),14);
         label(body,"CIERRE LIMPIO MAPAS · "+T1ClusterFreshStart.last(this),14);
-        String foreground=p.getString(T1ClusterForegroundRecovery.RESULT,"");
-        if(!foreground.isEmpty())
-            label(body,"ÚLTIMO TOMAR CONTROL · "+foreground,14);
+        label(body,"ÚLTIMA RECARGA R · "+T1ClusterManualReboot.last(this),14);
         button(body,"CONFIGURAR PANELES A/B · APLICAR",()->
             startActivity(new Intent(this,T1ClusterLayoutSettingsActivity.class)));
         if(T1ClusterWazeRouter.selected(this)==null)
@@ -87,17 +85,15 @@ public final class T1ClusterWazeSettingsActivity extends T1ImmersiveActivity {
                 (int)(42*getResources().getDisplayMetrics().density)));
             reboot.setOnClickListener(v->new AlertDialog.Builder(this)
                 .setTitle("REBOOT · DRIVELAB / MAPAS")
-                .setMessage("Cierra completamente Waze y Google Maps, "+
-                    "interrumpe su navegación actual y los abre otra vez "+
-                    "con el 50/50 guardado. También relanza la pantalla "+
-                    "DriveLab sin apagar el servicio del Sender. "+
-                    "No exige P ni 0 km/h. ¿Continuar?")
+                .setMessage("¿Estás seguro? Detiene Waze y Maps, "+
+                    "hace CLÚSTER OFF, espera el cierre de tareas y hace "+
+                    "CLÚSTER ON con el diseño guardado. Interrumpe rutas.")
                 .setNegativeButton("CANCELAR",null)
                 .setPositiveButton("REBOOT",(dialog,which)->{
                     T1ClusterManualReboot.run(this);
                     render();
                 }).show());
-            label(body,"ÚLTIMO REBOOT · "+T1ClusterManualReboot.last(this),13);
+            label(body,"PASOS ÚLTIMA R · "+T1ClusterManualReboot.trace(this),13);
             label(body,"DIAGNÓSTICOS ANTIGUOS · NO NECESARIOS PARA EL USO NORMAL",14);
         label(body,"Pantallas secundarias públicas detectadas: "+
             T1ClusterWazeRouter.candidates(this).size()+

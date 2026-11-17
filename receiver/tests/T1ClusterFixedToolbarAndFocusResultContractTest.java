@@ -28,11 +28,11 @@ public final class T1ClusterFixedToolbarAndFocusResultContractTest {
             recovery.contains(".putString(RESULT,answer)")&&
             recovery.contains(".putLong(RESULT_AT,System.currentTimeMillis()).commit()"),
             "Manual recovery diagnostics must persist independently of route status");
-        ck(layout.contains("T1ClusterForegroundRecovery.RESULT")&&
-            layout.contains("ÚLTIMO TOMAR CONTROL")&&
-            cluster.contains("T1ClusterForegroundRecovery.RESULT")&&
-            cluster.contains("ÚLTIMO TOMAR CONTROL"),
-            "Read permanent focus diagnostic from both regular cluster menus");
+        ck(layout.contains("T1ClusterManualReboot.last(this)")&&
+            layout.contains("ÚLTIMA RECARGA R")&&
+            cluster.contains("T1ClusterManualReboot.last(this)")&&
+            cluster.contains("ÚLTIMA RECARGA R"),
+            "Read last R outcome from both regular cluster menus");
         ck(recovery.contains("am.moveTaskToFront(task.id,")&&
             !recovery.contains("am stack remove")&&
             !recovery.contains("am task resize"),

@@ -163,7 +163,12 @@ final class T1GlobalToolbar {
         clockTime.setTextSize(19f);
         clockBox.addView(clockDate);
         clockBox.addView(clockTime);
-        header.addView(clockBox,new LinearLayout.LayoutParams(dp(255),-1));
+        header.addView(clockBox,new LinearLayout.LayoutParams(dp(180),-1));
+        // Permanent R button at top right, directly AFTER the clock.
+        Button reload=button(header,"R",T1JetourTheme.PANEL_HI,48,
+            this::confirmClusterReload);
+        reload.setTextSize(19f);
+        reload.setContentDescription("Recargar Waze y Google Maps con CLÚSTER OFF/ON");
         refreshClock();
 
         HorizontalScrollView strip=new HorizontalScrollView(owner);
@@ -185,10 +190,6 @@ final class T1GlobalToolbar {
             T1JetourTheme.PANEL_HI,140,this::toggleCluster);
         wheelPanelButton=button(actions,"VOLANTE · PANEL A",
             T1JetourTheme.PANEL_HI,158,this::toggleWheelPanel);
-        // Recovery only when the OEM surface steals focus on cold boot.
-        // Does NOT rerun split geometry or change wheel mappings.
-        button(actions,"TOMAR CONTROL",
-            T1JetourTheme.PANEL_HI,154,this::takeClusterControl);
         refreshWheelPanel();
         button(actions,"COCKPIT",T1JetourTheme.GREEN_BUTTON,114,
             ()->navigate(T1PremiumCockpitActivity.class));
@@ -455,14 +456,22 @@ final class T1GlobalToolbar {
         refreshWheelPanel();
         note(T1WheelTarget.name(owner)+" · "+T1WheelTarget.application(owner));
     }
-    private void takeClusterControl(){
-        if(!T1ClusterWazeRouter.enabled(owner)){
-            note("Primero encendé CLÚSTER ON");return;
-        }
-        note("Tomar control: solicitando prioridad de ambos mapas en Display 1");
-        T1ClusterForegroundRecovery.request(owner,message->{
-            if(foreground)note(message);
-        });
+    private void confirmClusterReload(){
+        new AlertDialog.Builder(owner)
+            .setTitle("RECARGAR CLÚSTER")
+            .setMessage("¿Estás seguro? Se detendrán Waze y Google Maps, "+
+                "se hará CLÚSTER OFF y después CLÚSTER ON. "+
+                "Se puede interrumpir la navegación actual.")
+            .setNegativeButton("NO",null)
+            .setPositiveButton("SÍ",(dialog,which)->{
+                note("R: iniciando recarga de Waze, Maps y clúster");
+                T1ClusterManualReboot.run(owner,message->{
+                    if(foreground){
+                        refreshCluster();
+                        note(message);
+                    }
+                });
+            }).show();
     }
 
     private void toggleCluster(){

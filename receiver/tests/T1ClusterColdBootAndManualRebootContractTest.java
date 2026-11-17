@@ -58,6 +58,9 @@ public final class T1ClusterColdBootAndManualRebootContractTest {
             "REBOOT must stay small, hidden in technical submenu and confirmed");
         yes(reboot.contains("T1ClusterFreshStart.prepare(owner)")&&
             reboot.contains("reopenSavedPanelsStopped(owner)")&&
+            reboot.contains("T1ClusterAdbResize.closeClusterApps(owner,")&&
+            reboot.contains("putBoolean(T1ClusterWazeRouter.ENABLED,false)")&&
+            reboot.contains("putBoolean(T1ClusterWazeRouter.ENABLED,true)")&&
             reboot.contains("T1LastRoute.restore(owner)")&&
             reboot.contains("new Intent(owner,ReceiverActivity.class)")&&
             reboot.contains("ReceiverService.ACTION_START")&&

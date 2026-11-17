@@ -199,10 +199,7 @@ public final class T1ClusterLayoutSettingsActivity extends T1ImmersiveActivity {
         button("APLICAR",this::applyPanels);
         text("CIERRE LIMPIO MAPAS · "+T1ClusterFreshStart.last(this),14);
         text("DEGRADADO · "+T1ClusterEdgeFade.last(this),12);
-        String foreground=cfg().getString(
-            T1ClusterForegroundRecovery.RESULT,"");
-        if(!foreground.isEmpty())
-            text("ÚLTIMO TOMAR CONTROL · "+foreground,14);
+        text("ÚLTIMA RECARGA R · "+T1ClusterManualReboot.last(this),14);
         String result=T1ClusterAdbResize.result(this);
         text("Estado: "+(result.startsWith("VERIFICADO")?
             "Tamaños confirmados por ADB; comprobá el tablero":

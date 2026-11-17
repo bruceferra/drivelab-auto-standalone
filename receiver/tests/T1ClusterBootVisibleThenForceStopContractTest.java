@@ -42,7 +42,9 @@ public final class T1ClusterBootVisibleThenForceStopContractTest {
         check(fresh.contains("T1LocalAdbClient.shell(c,\"am force-stop \"+pkg)")&&
             fresh.contains("T1LocalAdbClient.shell(c,\"pidof \"+pkg)")&&
             reboot.contains("T1ClusterFreshStart.prepare(owner)")&&
-            reboot.contains("reopenSavedPanelsStopped(owner)"),
+            reboot.contains("reopenSavedPanelsStopped(owner)")&&
+            reboot.contains("T1ClusterAdbResize.closeClusterApps(owner,")&&
+            reboot.contains("performOn(owner,update,confirmed)"),
             "Scoped ADB stop and REBOOT still follow active-cluster method");
         int manualStart=bar.indexOf("private void toggleCluster()");
         int manualEnd=bar.indexOf("private void refreshMirrorAuto()",manualStart);
