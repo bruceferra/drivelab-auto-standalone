@@ -126,10 +126,6 @@ final class T1ClusterAdbResize {
     /** Cluster task changes are experimental UI changes, not needed
      * for navigation itself. Don't move windows in a moving car.
      */
-    /** The sole wheel-focus recovery is a UI foreground change; only permit
-     * this when the same OEM P/0 check used for layout operations passes.
-     * Normal already-focused DPAD requires no focus mutation. */
-    static boolean parkedForWheel(Context c){return parked(c);}
     private static boolean parked(Context c){
         MirrorAutomationOem oem=null;
         try{
