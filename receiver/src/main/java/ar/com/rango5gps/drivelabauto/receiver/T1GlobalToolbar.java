@@ -509,10 +509,10 @@ final class T1GlobalToolbar {
         // without requiring ADB cleanup or silently approving geometry.
         // As with PROBAR DISEÑO, check OEM zero speed off the UI thread first.
         boolean pendingLayout=T1ClusterLayoutPolicy.pendingUnverified(owner);
-        if(pendingLayout&&T1ClusterLayoutPolicy.MODE_SPLIT.equals(
-                T1ClusterLayoutPolicy.mode(owner))&&
-           T1ClusterLayoutPolicy.panelAOn(owner)&&
-           T1ClusterLayoutPolicy.panelBOn(owner)){
+        // Always use the same saved FREEFORM reopen for dual panes,
+        // regardless of whether Android previously exposed ADB bounds.
+        // Do not switch to the ADB-dependent boot() path on manual ON.
+        if(T1ClusterLayoutPolicy.savedDualSplit(owner)){
             p.edit().putString(T1ClusterWazeRouter.STATUS,
                 "CLÚSTER ON: recuperando paneles guardados; verificando 0 km/h")
                 .apply();
