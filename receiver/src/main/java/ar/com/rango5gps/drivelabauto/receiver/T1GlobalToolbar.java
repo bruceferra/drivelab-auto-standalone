@@ -562,6 +562,9 @@ final class T1GlobalToolbar {
                                owner.isFinishing()||owner.isDestroyed())return;
                             String restored=T1LastRoute.restore(owner);
                             if(foreground)note(restored);
+                            // Nov16 Accessibility refresh is read-only. Maps
+                            // may publish their view trees after freeform paint.
+                            T1WazeWheelService.requestClusterReady(owner);
                         },3200L);
                     }
                 });
@@ -595,6 +598,7 @@ final class T1GlobalToolbar {
                    T1ClusterLayoutPolicy.pendingUnverified(owner))return;
                 String restored=T1LastRoute.restore(owner);
                 if(foreground)note(restored);
+                T1WazeWheelService.requestClusterReady(owner);
             },3000L);
         }
     }
