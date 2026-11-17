@@ -16,16 +16,24 @@ final class T1MasterTripHistory {
     static final class Entry {
         final String id;
         final long started,ended;
-        final double originalKm,km,evKm,iceKm,unknownKm,liters,electricityKwh;
+        final double originalKm,km,evKm,iceKm,unknownKm,liters,electricityKwh,recoveredKwh;
         final int samples,fuelEvents;
         final boolean corrected,verified;
         final String status;
         Entry(String id,long start,long end,double original,double shown,
               double ev,double ice,double unknown,double fuel,double kwh,
               int n,int events,boolean applied,boolean verified,String status){
+            this(id,start,end,original,shown,ev,ice,unknown,fuel,kwh,
+                Double.NaN,n,events,applied,verified,status);
+        }
+        Entry(String id,long start,long end,double original,double shown,
+              double ev,double ice,double unknown,double fuel,double kwh,
+              double chargeKwh,int n,int events,boolean applied,
+              boolean verified,String status){
             this.id=id;started=start;ended=end;originalKm=original;km=shown;
             evKm=ev;iceKm=ice;unknownKm=unknown;liters=fuel;
-            electricityKwh=kwh;samples=n;fuelEvents=events;
+            electricityKwh=kwh;recoveredKwh=chargeKwh;
+            samples=n;fuelEvents=events;
             corrected=applied;this.verified=verified;this.status=status;
         }
     }
@@ -81,7 +89,7 @@ final class T1MasterTripHistory {
         final String id=source.getName().substring(5,source.getName().length()-4);
         long start=0,end=0,previous=0;
         double original=Double.NaN,rebuilt=0,ev=0,ice=0,unknown=0,
-            kwh=Double.NaN;
+            kwh=Double.NaN,chargeKwh=Double.NaN;
         int n=0,valid=0,events=0;
         try(BufferedReader reader=new BufferedReader(new FileReader(source))){
             String header=reader.readLine();
@@ -93,7 +101,8 @@ final class T1MasterTripHistory {
                 ik=index(h,"distance_km_est"),
                 im=index(h,"motor_on_rpm_candidate"),
                 ie=index(h,"oem_500m_fuel_event_count"),
-                ikh=index(h,"hv_gross_discharge_kwh_est");
+                ikh=index(h,"hv_gross_discharge_kwh_est"),
+                ic=index(h,"hv_charge_kwh_est");
             if(it<0||iv<0||ik<0)throw new IOException("Faltan km o velocidad");
             String line;
             while((line=reader.readLine())!=null){
@@ -112,6 +121,9 @@ final class T1MasterTripHistory {
                 double electricity=number(row,ikh);
                 if(Double.isFinite(electricity)&&electricity>=0)
                     kwh=electricity;
+                double charged=number(row,ic);
+                if(Double.isFinite(charged)&&charged>=0)
+                    chargeKwh=charged;
                 long dt=ms-previous;
                 previous=ms;
                 double speed=number(row,iv);
@@ -151,7 +163,7 @@ final class T1MasterTripHistory {
             changed?ev:Double.NaN,
             changed?ice:Double.NaN,
             changed?unknown:Double.NaN,
-            experimentalLiters,kwh,n,events,changed,verified,status+
+            experimentalLiters,kwh,chargeKwh,n,events,changed,verified,status+
                 (Double.isFinite(experimentalLiters)?
                     " · combustible OEM experimental":" · litros sin confirmar"));
     }
