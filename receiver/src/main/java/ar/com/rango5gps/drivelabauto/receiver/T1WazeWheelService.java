@@ -81,6 +81,51 @@ public final class T1WazeWheelService extends AccessibilityService {
     private static volatile T1WazeWheelService connectedInstance;
     /** Real Android bind state, NOT the user's green preference toggle. */
     static boolean isServiceConnected(){return connectedInstance!=null;}
+    /** Which navigation app is actually exposed on the selected CLUSTER
+     * display right now? Read-only Android 11 accessibility inventory.
+     * A configured app or a previously used Waze is NOT proof of visibility.
+     * Never use windows from Display 0 (DriveLab voice UI).
+     */
+    static String visibleNavigationOnCluster(Context context){
+        T1WazeWheelService live=connectedInstance;
+        Display selected=T1ClusterWazeRouter.selected(context);
+        if(live==null||selected==null)return null;
+        try{
+            SparseArray<List<AccessibilityWindowInfo>> all=
+                live.getWindowsOnAllDisplays();
+            List<AccessibilityWindowInfo> windows=all==null?null:
+                all.get(selected.getDisplayId());
+            if(windows==null)return null;
+            boolean waze=false,maps=false;
+            String focused=null;
+            for(AccessibilityWindowInfo win:windows){
+                if(win==null||win.getDisplayId()!=selected.getDisplayId())
+                    continue;
+                AccessibilityNodeInfo root=win.getRoot();
+                if(root==null)continue;
+                boolean hasWaze=live.findMapNode(root,WAZE,0,new int[]{0})!=null;
+                boolean hasMaps=live.findMapNode(root,MAPS,0,new int[]{0})!=null;
+                waze|=hasWaze;
+                maps|=hasMaps;
+                if((win.isActive()||win.isFocused())&&(hasWaze!=hasMaps))
+                    focused=hasMaps?MAPS:WAZE;
+            }
+            // If only Google is showing, NEVER open Waze simply because
+            // Waze is configured as the default app for voice.
+            if(waze&&!maps)return WAZE;
+            if(maps&&!waze)return MAPS;
+            if(waze&&maps){
+                if(focused!=null)return focused;
+                // Both visible: honor the driver's actual selected panel.
+                String wheel=T1WheelTarget.packageName(context);
+                if(WAZE.equals(wheel)||MAPS.equals(wheel))return wheel;
+            }
+        }catch(Exception ex){
+            Log.w("DriveLabWheel","Read-only cluster window probe failed",ex);
+        }
+        return null; // no arbitrary Waze fallback when visibility is unknown
+    }
+
 
     static void releaseForSharedMicrophone(){
         T1WazeWheelService service=connectedInstance;
