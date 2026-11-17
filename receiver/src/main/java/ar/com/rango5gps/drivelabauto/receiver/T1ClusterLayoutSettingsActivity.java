@@ -23,7 +23,7 @@ import java.util.TreeMap;
 /** Window geometry and physically verified OEM mic button controls.
  * These controls run on the center UI; no overlay is drawn over OEM dials.
  */
-public final class T1ClusterLayoutSettingsActivity extends Activity {
+public final class T1ClusterLayoutSettingsActivity extends T1ImmersiveActivity {
     private LinearLayout column;
     private T1ClusterLayoutPreview preview;
     private TextView previewState;
@@ -171,6 +171,10 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
             column.addView(seek);
         }
         button("APLICAR",this::applyPanels);
+        String foreground=cfg().getString(
+            T1ClusterForegroundRecovery.RESULT,"");
+        if(!foreground.isEmpty())
+            text("ÚLTIMO TOMAR CONTROL · "+foreground,14);
         String result=T1ClusterAdbResize.result(this);
         text("Estado: "+(result.startsWith("VERIFICADO")?
             "Tamaños confirmados por ADB; comprobá el tablero":
