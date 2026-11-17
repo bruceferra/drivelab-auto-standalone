@@ -122,6 +122,11 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private TextView liveFuelNow,liveEcoNow,historyEcoStatus;
     private final java.util.Map<String,T1EcoTripReport.Result> ecoHistoryCache=
         new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.Map<String,T1TripEnergyAudit.Result> tripEnergyAudit=
+        new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.Set<String> tripEnergyPending=
+        java.util.Collections.newSetFromMap(
+            new java.util.concurrent.ConcurrentHashMap<String,Boolean>());
     private final java.util.Set<String> ecoHistoryPending=
         java.util.Collections.newSetFromMap(
             new java.util.concurrent.ConcurrentHashMap<String,Boolean>());
@@ -2037,9 +2042,14 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         double kwhPrice=tariffs.getFloat(T1TripRecorderService.KWH_PRICE,0f);
         // The total-day CSV stores gross HV-out and HV-in, but each client
         // 500m ledger already stores SIGNED NET energy. Never subtract twice.
+        T1TripEnergyAudit.Result audited=tripEnergyAudit.get(x.key());
+        boolean clientHv=x.slot!=0&&audited!=null&&audited.available();
         T1TripCostModel.Result econ=x.slot==0?
             T1TripCostModel.fromGross(x.km,x.liters,x.kwh,
                 x.chargedKwh,gasPrice,kwhPrice,kwhPriceKnown):
+            clientHv?T1TripCostModel.fromGross(x.km,x.liters,
+                audited.grossKwh,audited.chargedKwh,
+                gasPrice,kwhPrice,kwhPriceKnown):
             T1TripCostModel.fromNet(x.km,x.liters,x.kwh,
                 gasPrice,kwhPrice,kwhPriceKnown);
         boolean fuelOk=x.km>0&&Double.isFinite(x.liters)&&x.liters>0;
@@ -2061,14 +2071,16 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         if(historyEnergyCostStatus!=null)
             historyEnergyCostStatus.setText(
                 "BALANCE ENERGÉTICO DEL VIAJE · "+
-                (x.slot==0?
+                (x.slot==0||clientHv?
                     "HV DESCARGADOS "+(Double.isFinite(econ.grossKwh)?
                         f(econ.grossKwh,3)+" kWh":"SIN DATO")+
                     " · ENTRADA HV "+(Double.isFinite(econ.chargeKwh)?
                         f(econ.chargeKwh,3)+" kWh":"NO MEDIDA")+
                     " (regeneración y/o generador térmico)":
-                    "CLIENTE: kWh netos OEM 500 m; entrada HV "+
-                    "no separada por viaje")+
+                    "CLIENTE: "+(audited==null?
+                        "calculando entrada HV desde CSV…":
+                        "kWh netos OEM 500 m; entrada HV "+
+                        "no disponible en archivos históricos"))+
                 "\nELECTRICIDAD NETA "+(Double.isFinite(econ.netKwh)?
                     f(econ.netKwh,3)+" kWh":"SIN DATO")+
                 " · FACTURABLE ESTIMADA "+
@@ -2094,6 +2106,26 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         // Historical end-of-trip range was not persisted. Never substitute
         // the current vehicle's autonomy into a completed trip.
         compactMetric(historyDetailRow,"AUTONOMÍA TOTAL","NO GUARDADA");
+        // Read original journey CSVs OFF the UI thread and calculate
+        // discharge/charge specifically inside this client's time bounds.
+        // When older recordings lack the HV columns, preserve the OEM 500m
+        // net reading and explicitly mark the recovered amount as unknown.
+        if(x.slot!=0&&!tripEnergyAudit.containsKey(x.key())&&
+                tripEnergyPending.add(x.key())){
+            new Thread(()->{
+                T1TripEnergyAudit.Result audit=T1TripEnergyAudit.read(
+                    T1TripRecorderService.tripDir(getApplicationContext()),
+                    x.tripChain,x.started,x.ended);
+                tripEnergyAudit.put(x.key(),audit);
+                tripEnergyPending.remove(x.key());
+                ui.post(()->{
+                    if(visible&&x.key().equals(selectedHistoryKey)){
+                        renderedHistoryDetailSignature="";
+                        showHistoryDetails(x);
+                    }
+                });
+            },"T1-History-HV-Net-Audit").start();
+        }
         if(historyEcoStatus==null)return;
         final String key=x.key();
         T1EcoTripReport.Result cached=ecoHistoryCache.get(key);
