@@ -31,13 +31,15 @@ public final class T1WheelAdbFallbackSourceContractTest {
             "Must verify actual selected task, package, display and input focus");
         String resize=read("T1ClusterAdbResize.java");
         yes(backup.contains("mayFocusMap(input,id,pkg)")&&
-            backup.contains("parkedForWheel(app)")&&
+            !backup.contains("parkedForWheel")&&
+            !backup.contains("speedKmh()")&&
+            !backup.contains("gear()==1")&&
             backup.contains("focusCommand(map.id)")&&
             backup.contains("Thread.sleep(200L)")&&
             backup.contains("!T1WheelAdbFocusPolicy.focusedOn(input,id,pkg)")&&
             resize.contains("oem.gear()==1")&&
             resize.contains("oem.speedKmh()"),
-            "Focus may change only after OEM P/0, explicit physical wheel and verified target window");
+            "Wheel focus must work while driving; geometry P/0 remains guarded");
         yes(adb.contains("am task focus [1-9][0-9]{0,6}")&&
             !backup.contains("am stack remove ")&&
             !backup.contains("am task resize "),
