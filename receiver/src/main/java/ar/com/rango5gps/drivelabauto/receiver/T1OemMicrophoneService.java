@@ -55,6 +55,12 @@ public final class T1OemMicrophoneService extends Service {
             if(!started)return;
             prefs(T1OemMicrophoneService.this).edit()
                 .putLong(HEARTBEAT,System.currentTimeMillis()).apply();
+            // The physical 1010 microphone can stay alive after Android
+            // silently unbinds the wheel's AccessibilityService. Rebind only
+            // an ALREADY approved service, without affecting OEM listeners.
+            if(!T1WazeWheelService.isServiceConnected())
+                T1WheelAccessibilityRecovery.request(
+                    T1OemMicrophoneService.this);
             long now=SystemClock.elapsedRealtime();
             if(bridge!=null&&!bridge.registered()&&now-lastRebindAt>5500L){
                 lastRebindAt=now;
