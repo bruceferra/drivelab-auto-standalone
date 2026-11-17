@@ -169,9 +169,35 @@ public final class T1ClusterLayoutSettingsActivity extends T1ImmersiveActivity {
                 @Override public void onStopTrackingTouch(SeekBar bar){}
             });
             column.addView(seek);
+            // Optional decorative edge feathering, independent of real
+            // FREEFORM bounds and accessible controls.
+            final int savedFade=T1ClusterEdgeFade.width(this);
+            TextView fadeLabel=new TextView(this);
+            fadeLabel.setTextSize(16);
+            fadeLabel.setPadding(12,12,12,4);
+            fadeLabel.setText("DESVANECIDO LATERAL · "+savedFade+" / 120 px");
+            column.addView(fadeLabel);
+            SeekBar fadeSeek=new SeekBar(this);
+            fadeSeek.setMax(120);
+            fadeSeek.setProgress(savedFade);
+            fadeSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+                @Override public void onProgressChanged(SeekBar bar,int value,
+                    boolean fromUser){
+                    fadeLabel.setText("DESVANECIDO LATERAL · "+value+" / 120 px");
+                }
+                @Override public void onStartTrackingTouch(SeekBar bar){}
+                @Override public void onStopTrackingTouch(SeekBar bar){
+                    T1ClusterEdgeFade.setWidth(
+                        T1ClusterLayoutSettingsActivity.this,bar.getProgress());
+                }
+            });
+            column.addView(fadeSeek);
+            text("0 = sin efecto. Suaviza visualmente los bordes; "+
+                "no revela la capa OEM que está debajo de Waze/Maps.",12);
         }
         button("APLICAR",this::applyPanels);
         text("CIERRE LIMPIO MAPAS · "+T1ClusterFreshStart.last(this),14);
+        text("DEGRADADO · "+T1ClusterEdgeFade.last(this),12);
         String foreground=cfg().getString(
             T1ClusterForegroundRecovery.RESULT,"");
         if(!foreground.isEmpty())
