@@ -171,6 +171,7 @@ public final class T1ClusterLayoutSettingsActivity extends T1ImmersiveActivity {
             column.addView(seek);
         }
         button("APLICAR",this::applyPanels);
+        text("CIERRE LIMPIO MAPAS · "+T1ClusterFreshStart.last(this),14);
         String foreground=cfg().getString(
             T1ClusterForegroundRecovery.RESULT,"");
         if(!foreground.isEmpty())
