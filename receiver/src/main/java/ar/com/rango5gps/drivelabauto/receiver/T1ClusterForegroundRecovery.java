@@ -13,6 +13,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * The Jetour may keep an OEM overlay above normal Android applications.
  */
 final class T1ClusterForegroundRecovery {
+    static final String RESULT="cluster_foreground_recovery_result";
+    static final String RESULT_AT="cluster_foreground_recovery_at";
     private static final String WAZE="com.waze",MAPS="com.google.android.apps.maps";
     private static final Handler MAIN=new Handler(Looper.getMainLooper());
     private static final AtomicBoolean BUSY=new AtomicBoolean(false);
@@ -70,6 +72,11 @@ final class T1ClusterForegroundRecovery {
                     ". No se cerraron tareas del auto ni se cambiaron los paneles.";
             }finally{BUSY.set(false);}
             final String answer=message;
+            // Independent result survives subsequent cluster routing/status
+            // messages and remains visible under Clúster / Paneles A-B.
+            T1ClusterWazeRouter.prefs(app).edit()
+                .putString(RESULT,answer)
+                .putLong(RESULT_AT,System.currentTimeMillis()).commit();
             T1ClusterWazeRouter.status(app,answer);
             MAIN.post(()->{
                 if(answer.startsWith("TOMAR CONTROL SOLICITADO"))
