@@ -277,30 +277,6 @@ final class T1ClusterWazeRouter {
         status(c,result);
         return result.startsWith("Waze SOLICITADO");
     }
-    /** Called from the boot worker, never the main/UI thread.
-     * Read only OEM speed, and retry unknown readings during display startup. */
-    private static boolean stoppedForSavedSplit(Context c){
-        for(int attempt=0;attempt<3;attempt++){
-            MirrorAutomationOem oem=null;
-            try{
-                oem=new MirrorAutomationOem(c);
-                double speed=oem.speedKmh();
-                if(Double.isFinite(speed))return speed>=0&&speed<=0.5;
-            }catch(Exception ignored){
-                // Startup can expose Display 1 before the OEM speed signal.
-            }finally{
-                if(oem!=null)oem.close();
-            }
-            if(attempt<2){
-                try{Thread.sleep(700L);}
-                catch(InterruptedException e){
-                    Thread.currentThread().interrupt();
-                    return false;
-                }
-            }
-        }
-        return false;
-    }
     static String onReceiverBoot(Context c){
         if(!autoBoot(c))return "Arranque del clúster desactivado";
         if(selected(c)==null){
@@ -322,16 +298,11 @@ final class T1ClusterWazeRouter {
                 status(c,reason);
                 return reason;
             }
-            if(!stoppedForSavedSplit(c)){
-                String reason="Arranque FREEFORM pendiente: velocidad 0 km/h "+
-                    "no confirmada; paneles guardados sin cambios.";
-                status(c,reason);
-                return reason;
-            }
-            // Owner-verified physical fix: do not reuse stale Waze/Maps
-            // Android processes from the preceding ignition. This runs
-            // only at confirmed 0 km/h with the previously authorized local
-            // ADB bridge. No fallback launch if force-stop is not confirmed.
+            // The owner physically confirmed Android Settings force-stop
+            // of both apps restored the wheel. Try equivalent ADB only on
+            // genuine boot, without gear/speed checks. Never force-stop
+            // on an ordinary CLÚSTER ON tap or destination from Sender.
+            // If ADB fails, do not silently reuse the stale processes.
             T1ClusterFreshStart.Result clean=T1ClusterFreshStart.prepare(c);
             if(!clean.ready){
                 status(c,clean.message);
