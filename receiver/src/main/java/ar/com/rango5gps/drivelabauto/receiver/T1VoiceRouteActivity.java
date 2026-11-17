@@ -32,7 +32,7 @@ import java.util.ArrayList;
 import java.util.Locale;
 
 /**
- * Single-tap Jetour voice entry. Navigational requests -> Waze with confirmation.
+ * Single-tap Jetour voice entry. Destinations follow the visible cluster map.
  * Other speech -> the preferred installed AI app, using documented Android SEND
  * when supported. Experimental direct voice-app launch; neither vendor
  * publishes a guaranteed third-party Intent for Gemini Live / ChatGPT Voice.
@@ -424,8 +424,7 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
         String target=T1VoiceIntentPolicy.routeDestination(phrase);
         if(target!=null){
             status.setText("NAVEGACIÓN DETECTADA · "+target+
-                " · clúster: "+(T1NavigationTargets.dualMapPanelsConfigured(this)?
-                    "Waze + Google Maps":"Waze"));
+                " · se enviará al navegador visible en el clúster");
             if(fromVoice){
                 // The explicit "ir a"/"navegar a" utterance is itself
                 // authorization. Waze still resolves the actual location.
@@ -723,7 +722,7 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
     }
     private void confirmDestination(String place){
         new AlertDialog.Builder(this)
-            .setTitle("NAVEGAR EN WAZE")
+            .setTitle("NAVEGAR EN EL MAPA ABIERTO")
             .setMessage("Destino: "+place+
                 "\n\nConfirmá que sea el lugar correcto. " +
                 "Revisá el pin y la ruta en la pantalla Jetour.")
@@ -732,41 +731,52 @@ public final class T1VoiceRouteActivity extends T1ImmersiveActivity {
             .show();
     }
     private void navigate(String place){
-        Intent i=new Intent(Intent.ACTION_VIEW,
-            Uri.parse("waze://?q="+Uri.encode(place)+"&navigate=yes"))
-            .setPackage("com.waze");
         if(T1ClusterWazeRouter.enabled(this)){
-            // ADB close/resize may leave the APPROVAL flag pending even
-            // while both stored freeform panes are visibly open. Routing
-            // the microphone only to Waze in that case was a regression.
-            // Match the apps/panels, NOT the geometry approval flag.
-            boolean both=T1NavigationTargets.dualMapPanelsConfigured(this);
-            if(both){
-                // The same dual target dispatch already proven by Sender.
-                T1NavigationTargets.Result result=T1NavigationTargets.send(
-                    this,ar.com.rango5gps.drivelabauto.common.BridgeRouteTarget.BOTH,
+            // The OEM microphone follows the ACTUAL currently visible
+            // navigation window on Display 1, not a saved Waze preference.
+            // In a dual pane layout, only the active/selected visible
+            // navigator receives the destination: NEVER open both by default.
+            String pkg=T1WazeWheelService.visibleNavigationOnCluster(this);
+            if(pkg==null){
+                status.setText("No se pudo identificar el mapa abierto en "+
+                    "Display 1. No abrí Waze ni cambié de navegador.");
+                return;
+            }
+            if("com.google.android.apps.maps".equals(pkg)){
+                T1NavigationTargets.Result maps=T1NavigationTargets.send(
+                    this,ar.com.rango5gps.drivelabauto.common.BridgeRouteTarget.MAPS,
                     "search",place,true);
-                if(result.attempted)T1LastRoute.remember(this,
-                    ar.com.rango5gps.drivelabauto.common.BridgeRouteTarget.BOTH,
+                if(maps.attempted)T1LastRoute.remember(this,
+                    ar.com.rango5gps.drivelabauto.common.BridgeRouteTarget.MAPS,
                     "search",place);
-                status.setText(result.status);
-            }else{
-                if(T1ClusterWazeRouter.routeDestination(this,i))
+                status.setText(maps.status);
+                return;
+            }
+            if("com.waze".equals(pkg)){
+                Intent waze=new Intent(Intent.ACTION_VIEW,
+                    Uri.parse("waze://?q="+Uri.encode(place)+"&navigate=yes"))
+                    .setPackage("com.waze");
+                if(T1ClusterWazeRouter.routeDestination(this,waze))
                     T1LastRoute.remember(this,
                         ar.com.rango5gps.drivelabauto.common.BridgeRouteTarget.WAZE,
                         "search",place);
                 status.setText(T1ClusterWazeRouter.prefs(this).getString(
                     T1ClusterWazeRouter.STATUS,"Sin resultado de clúster"));
             }
-            return; // never open center Waze as a surprise fallback
+            return; // never open Waze on center display unexpectedly
         }
+        // Only outside the independent cluster, maintain old explicit
+        // Waze behavior for manual voice use.
+        Intent waze=new Intent(Intent.ACTION_VIEW,
+            Uri.parse("waze://?q="+Uri.encode(place)+"&navigate=yes"))
+            .setPackage("com.waze");
         try{
-            startActivity(i);
+            startActivity(waze);
             status.setText("Waze solicitado: "+place+
-                ". Verificá el destino en el clúster.");
+                ". Verificá el destino en la pantalla.");
         }catch(ActivityNotFoundException | SecurityException e){
-            status.setText("Waze no resolvió la navegación ("+
-                e.getClass().getSimpleName()+"). Sin ruta enviada.");
+            status.setText("No se abrió navegación ("+
+                e.getClass().getSimpleName()+").");
         }
     }
     /** This is the ONLY platform-supported system assistant probe here.
