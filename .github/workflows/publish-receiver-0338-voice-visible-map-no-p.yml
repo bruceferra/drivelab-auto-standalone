@@ -56,6 +56,21 @@ jobs:
             javac -encoding UTF-8 -d /tmp/t1-tests "receiver/tests/$test.java"
             java -cp /tmp/t1-tests "ar.com.rango5gps.drivelabauto.receiver.$test"
           done
+      - name: Verify inclusive and strict SOC rules and no threshold overlap
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-soc-ops
+          javac -encoding UTF-8 -d /tmp/t1-soc-ops \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModePolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedDualRulePolicy.java \
+            receiver/tests/T1OptimizedModePolicyTest.java \
+            receiver/tests/T1OptimizedDualRulePolicyTest.java
+          java -cp /tmp/t1-soc-ops ar.com.rango5gps.drivelabauto.receiver.T1OptimizedModePolicyTest
+          java -cp /tmp/t1-soc-ops ar.com.rango5gps.drivelabauto.receiver.T1OptimizedDualRulePolicyTest
+          grep -Fq 'q.minOperator=lowerOperatorSelector(existing.minComparison)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeActivity.java
+          grep -Fq 'q.maxOperator=upperOperatorSelector(existing.maxComparison)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeActivity.java
+          grep -Fq 'min_comparison_v3' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeStore.java
+          grep -Fq 'max_comparison_v3' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeStore.java
       - name: Assert minimal daily UI and all diagnostics still reachable
         run: |
           set -euo pipefail
@@ -122,8 +137,8 @@ jobs:
             output/DriveLab-Auto-Receiver-v0.3.38.apk \
             output/receiver.json output/sender.json output/receiver.sha256 \
             --target "$GITHUB_SHA" --latest \
-            --title 'DriveLab Auto Receiver 0.3.38 · micrófono al mapa visible, clúster sin P' \
-            --notes 'Receiver 0.3.38/code139: botón OEM micrófono envía ir a / navegar a exclusivamente al navegador visible en Display 1 según accesibilidad Android real. Maps visible: destino a Maps; Waze visible: destino a Waze; ambos visibles: ventana enfocada o panel elegido; sin ventana identificable: no abre Waze por defecto. Mantiene el doble envío explícito de Sender cuando se selecciona AMBOS, pero el micrófono ya no fuerza AMBOS. Se eliminó la exigencia de marcha P de pruebas de clúster, split nativo, geometría y recuperación al tocar CLÚSTER ON. Solo los cambios de geometría exigen 0 km/h confirmado; CLÚSTER OFF sigue recuperando OEM. Se conserva prueba experimental de split nativo del Receiver 0.3.37. Firmware aún necesita prueba física. Sin cambios en Sender 0.2.22, volante, HVAC ni espejos.'
+            --title 'DriveLab Auto Receiver 0.3.38 · operadores SOC, voz al mapa visible y clúster sin P' \
+            --notes 'Receiver 0.3.38/code139: botón OEM micrófono envía ir a / navegar a exclusivamente al navegador visible en Display 1 según accesibilidad Android real. Maps visible: destino a Maps; Waze visible: destino a Waze; ambos visibles: ventana enfocada o panel elegido; sin ventana identificable: no abre Waze por defecto. Mantiene el doble envío explícito de Sender cuando se selecciona AMBOS, pero el micrófono ya no fuerza AMBOS. Se eliminó la exigencia de marcha P de pruebas de clúster, split nativo, geometría y recuperación al tocar CLÚSTER ON. Solo los cambios de geometría exigen 0 km/h confirmado; CLÚSTER OFF sigue recuperando OEM. Se conserva prueba experimental de split nativo del Receiver 0.3.37. Firmware aún necesita prueba física. El optimizador admite mayor >, mayor o igual ≥, menor < y menor o igual ≤ en los extremos SOC de las reglas 1 y 2 de CIUDAD/CARRETERA/AUTOPISTA/DESCONOCIDO; respeta los extremos excluidos sin falsos solapamientos, conserva los ajustes previos y no cambia el motor OEM de validación y escritura. Sin cambios en Sender 0.2.22, volante, HVAC ni espejos.'
           mkdir -p verify
           gh release download v0.3.38 --pattern receiver.json --dir verify
           gh release download v0.3.38 --pattern sender.json --dir verify
