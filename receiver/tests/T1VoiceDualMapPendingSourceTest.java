@@ -3,61 +3,45 @@ package ar.com.rango5gps.drivelabauto.receiver;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-/** Voice destination should reach BOTH Waze and Google Maps in saved
- * split panes after CLÚSTER OFF/ON recovery, even if ADB did not verify
- * split geometry. Source contract; in-car Maps navigation still unverified.
- */
+/** The microphone targets the map actually visible on Display 1, not a
+ * saved dual-pane setting. Cannot assert physical visibility from CI. */
 public final class T1VoiceDualMapPendingSourceTest {
-    private static String src(String filename)throws Exception{
+    private static String src(String name)throws Exception{
         return Files.readString(Path.of(
             "receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver",
-            filename));
+            name));
     }
     private static void yes(boolean value,String message){
         if(!value)throw new AssertionError(message);
     }
     public static void main(String[] args)throws Exception{
         String voice=src("T1VoiceRouteActivity.java");
+        String wheel=src("T1WazeWheelService.java");
         String targets=src("T1NavigationTargets.java");
-        String layout=src("T1ClusterLayoutPolicy.java");
-        String router=src("T1ClusterWazeRouter.java");
         int start=voice.indexOf("private void navigate(String place){");
-        int end=voice.indexOf("private void ",start+16);
-        String navigate=voice.substring(start,end>start?end:voice.length());
-        yes(navigate.contains(
-                "boolean both=T1NavigationTargets.dualMapPanelsConfigured(this);")&&
-            navigate.contains("BridgeRouteTarget.BOTH")&&
-            navigate.contains("T1NavigationTargets.send(")&&
-            navigate.contains("T1LastRoute.remember(this,")&&
-            !navigate.contains("T1ClusterLayoutPolicy.active(this)"),
-            "OEM mic dual routing must not be gated on layout approval");
-        yes(voice.contains("T1NavigationTargets.dualMapPanelsConfigured(this)?")&&
-            voice.contains("Waze + Google Maps"),
-            "Voice announcement reflects actual configured dual routing");
-        int check=targets.indexOf("static boolean dualMapPanelsConfigured(Context c){");
-        int finish=targets.indexOf("private static Intent intent(",check);
-        yes(check>=0&&finish>check,"Dual map layout helper exists");
-        String body=targets.substring(check,finish);
-        yes(body.contains("T1ClusterWazeRouter.enabled(c)")&&
-            body.contains("T1ClusterWazeRouter.selected(c)")&&
-            body.contains("T1ClusterLayoutPolicy.MODE_SPLIT.equals(")&&
-            body.contains("T1ClusterLayoutPolicy.panelAOn(c)")&&
-            body.contains("T1ClusterLayoutPolicy.panelBOn(c)")&&
-            body.contains("com.waze")&&
-            body.contains("com.google.android.apps.maps")&&
-            !body.contains("T1ClusterLayoutPolicy.active(c)")&&
-            !body.contains("setMode")&&!body.contains("putBoolean("),
-            "Only the real two selected map panels qualify, without changing geometry");
-        yes(targets.contains("if(!dualMapPanelsConfigured(c))")&&
-            targets.contains("T1ClusterLayoutPolicy.routeWazeIfActive(c,")&&
+        int end=voice.indexOf("/** This is the ONLY",start);
+        yes(start>=0&&end>start,"Navigation dispatcher exists");
+        String navigation=voice.substring(start,end);
+        yes(navigation.contains("visibleNavigationOnCluster(this)")&&
+            navigation.contains("BridgeRouteTarget.MAPS")&&
+            navigation.contains("T1NavigationTargets.send(")&&
+            navigation.contains("routeDestination(this,waze)")&&
+            !navigation.contains("BridgeRouteTarget.BOTH")&&
+            navigation.contains("No se pudo identificar el mapa abierto")&&
+            navigation.contains("if(pkg==null)"),
+            "Microphone must choose actual visible navigator or abstain");
+        yes(wheel.contains("getWindowsOnAllDisplays()")&&
+            wheel.contains("all.get(selected.getDisplayId())")&&
+            wheel.contains("win.getDisplayId()!=selected.getDisplayId()")&&
+            wheel.contains("if(maps&&!waze)return MAPS;")&&
+            wheel.contains("if(waze&&!maps)return WAZE;")&&
+            wheel.contains("if(focused!=null)return focused;")&&
+            wheel.contains("T1WheelTarget.packageName(context)")&&
+            wheel.contains("return null; // no arbitrary Waze fallback"),
+            "Only visible windows of selected cluster drive voice map targeting");
+        yes(targets.contains("BridgeRouteTarget.MAPS.equals(target)")&&
             targets.contains("T1ClusterWazeRouter.routeGoogleMaps(c,")&&
-            targets.contains("T1GoogleMapsReplacement.arm(c)"),
-            "Both target sends one destination to each map in freeform cluster");
-        yes(layout.contains("static String reopenSavedPanelsStopped(Context c)")&&
-            layout.contains("static boolean pendingUnverified(Context c)"),
-            "Keep saved 60/40 recovery and separate verification state");
-        yes(router.contains("if(T1ClusterLayoutPolicy.pendingUnverified(c))"),
-            "Keep cold auto-boot safety guard");
-        System.out.println("PASS: OEM microphone dual Waze+Maps routing while layout pending; no geometry changes");
+            targets.contains("BridgeRouteTarget.BOTH.equals(target)"),
+            "Existing explicit Sender Maps/Both targets remain intact");
+        System.out.println("PASS microphone follows visible Waze/Maps on Display 1; no forced dual navigation");
     }
-}
