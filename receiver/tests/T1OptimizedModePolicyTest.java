@@ -10,6 +10,7 @@ public final class T1OptimizedModePolicyTest {
         unknownIsConfigurable();
         conditionalSoc();
         independentSocRange();
+        strictSocComparators();
         forcedAndRegeneration();
         System.out.println("OK: four-road optimized profiles are read-only");
     }
@@ -146,6 +147,77 @@ public final class T1OptimizedModePolicyTest {
         ok(!T1OptimizedModePolicy.evaluate(
             T1OptimizedModePolicy.Road.CITY,legacyMax,31)
             .conditionSatisfied,"legacy <= rejects above 30");
+    }
+    static void strictSocComparators(){
+        for(T1OptimizedModePolicy.Road road:
+                T1OptimizedModePolicy.Road.values()){
+            T1OptimizedModePolicy.Rule above20=
+                new T1OptimizedModePolicy.Rule(
+                    T1OptimizedModePolicy.Power.EV,
+                    T1OptimizedModePolicy.Strategy.SMART,50,
+                    true,20,T1OptimizedModePolicy.Comparison.GREATER,
+                    false,100,T1OptimizedModePolicy.Comparison.LESS_OR_EQUAL,
+                    T1OptimizedModePolicy.Regen.MEDIUM);
+            T1OptimizedModePolicy.Rule atOrAbove30=
+                new T1OptimizedModePolicy.Rule(
+                    T1OptimizedModePolicy.Power.HEV,
+                    T1OptimizedModePolicy.Strategy.SMART,50,
+                    true,30,T1OptimizedModePolicy.Comparison.GREATER_OR_EQUAL,
+                    false,100,T1OptimizedModePolicy.Comparison.LESS_OR_EQUAL,
+                    T1OptimizedModePolicy.Regen.LOW);
+            ok(!T1OptimizedModePolicy.evaluate(road,above20,20)
+                .conditionSatisfied,"strict >20 excludes 20 on "+road);
+            ok(T1OptimizedModePolicy.evaluate(road,above20,20.01)
+                .conditionSatisfied,"strict >20 includes 20.01 on "+road);
+            ok(T1OptimizedModePolicy.evaluate(road,atOrAbove30,30)
+                .conditionSatisfied,"inclusive >=30 includes 30 on "+road);
+            T1OptimizedModePolicy.Rule below30=
+                new T1OptimizedModePolicy.Rule(
+                    T1OptimizedModePolicy.Power.EV,
+                    T1OptimizedModePolicy.Strategy.SMART,50,
+                    false,5,T1OptimizedModePolicy.Comparison.GREATER_OR_EQUAL,
+                    true,30,T1OptimizedModePolicy.Comparison.LESS,
+                    T1OptimizedModePolicy.Regen.HIGH);
+            ok(T1OptimizedModePolicy.evaluate(road,below30,29.99)
+                .conditionSatisfied,"strict <30 includes 29.99 on "+road);
+            ok(!T1OptimizedModePolicy.evaluate(road,below30,30)
+                .conditionSatisfied,"strict <30 excludes 30 on "+road);
+            T1OptimizedModePolicy.Rule atOrBelow20=
+                new T1OptimizedModePolicy.Rule(
+                    T1OptimizedModePolicy.Power.EV,
+                    T1OptimizedModePolicy.Strategy.SMART,50,
+                    false,5,T1OptimizedModePolicy.Comparison.GREATER_OR_EQUAL,
+                    true,20,T1OptimizedModePolicy.Comparison.LESS_OR_EQUAL,
+                    T1OptimizedModePolicy.Regen.HIGH);
+            ok(T1OptimizedModePolicy.evaluate(road,atOrBelow20,20)
+                .conditionSatisfied,"inclusive <=20 includes 20 on "+road);
+            ok(!T1OptimizedDualRulePolicy.overlaps(
+                atOrBelow20,above20),
+                "A<=20 and B>20 must not conflict on "+road);
+            ok(!T1OptimizedDualRulePolicy.overlaps(
+                below30,atOrAbove30),
+                "A<30 and B>=30 must not conflict on "+road);
+            ok(T1OptimizedDualRulePolicy.overlaps(
+                atOrBelow20,new T1OptimizedModePolicy.Rule(
+                    T1OptimizedModePolicy.Power.HEV,
+                    T1OptimizedModePolicy.Strategy.SMART,50,
+                    true,20,T1OptimizedModePolicy.Comparison.GREATER_OR_EQUAL,
+                    false,100,T1OptimizedModePolicy.Comparison.LESS_OR_EQUAL,
+                    T1OptimizedModePolicy.Regen.MEDIUM)),
+                "A<=20 and B>=20 overlap exactly at 20 on "+road);
+            T1OptimizedModePolicy.Rule empty=
+                new T1OptimizedModePolicy.Rule(
+                    T1OptimizedModePolicy.Power.HEV,
+                    T1OptimizedModePolicy.Strategy.SMART,50,
+                    true,30,T1OptimizedModePolicy.Comparison.GREATER,
+                    true,30,T1OptimizedModePolicy.Comparison.LESS_OR_EQUAL,
+                    T1OptimizedModePolicy.Regen.MEDIUM);
+            ok(!empty.rangeValid(),
+                "A>30 and A<=30 must not be a selectable range on "+road);
+            ok(above20.rangeSummary().contains("> 20 %")&&
+                below30.rangeSummary().contains("< 30 %"),
+                "Strict comparator displayed in summary");
+        }
     }
     static void forcedAndRegeneration(){
         T1OptimizedModePolicy.Rule highway=
