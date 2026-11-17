@@ -258,6 +258,46 @@ final class T1ClusterLayoutPolicy {
         return left+"\nVentana solicitada, pendiente de "+
             "verificación de tamaño real por ADB.";
     }
+    /** Recover the owner's EXISTING split layout from the main CLÚSTER
+     * ON button when ADB closing/measurement is unavailable. This only
+     * relaunches Waze and Maps in their stored freeform bounds; it does
+     * NOT alter the confirmed-layout flag, remove tasks, change focus, or
+     * execute ADB. Caller must establish OEM P and 0 km/h, just as the
+     * user's explicit PROBAR DISEÑO action does.
+     */
+    static String reopenSavedPanelsStopped(Context c){
+        if(!MODE_SPLIT.equals(mode(c)))
+            return "Recuperación manual: diseño no es DIVIDIDO";
+        if(T1ClusterWazeRouter.selected(c)==null)
+            return "Recuperación manual: Display del clúster no disponible";
+        if(!panelAOn(c)||!panelBOn(c))
+            return "Recuperación manual: no hay dos paneles configurados";
+        String first=firstPackage(c),second=secondPackage(c);
+        if(first.equals(second)||
+           !T1ClusterWazeRouter.isSelectablePackage(c,first)||
+           !T1ClusterWazeRouter.isSelectablePackage(c,second))
+            return "Recuperación manual: apps de panel inválidas";
+        Display display=T1ClusterWazeRouter.selected(c);
+        Intent a=c.getPackageManager().getLaunchIntentForPackage(first);
+        Intent b=c.getPackageManager().getLaunchIntentForPackage(second);
+        if(a==null||b==null)return "Recuperación manual: app no disponible";
+        a.setPackage(first);
+        b.setPackage(second);
+        boolean inverted=inverted(c);
+        String left=start(c,display,a,geometry(c,display,inverted),
+            firstLabel(c));
+        if(!left.startsWith("APP SOLICITADA"))return left;
+        String right=start(c,display,b,geometry(c,display,!inverted),
+            secondLabel(c));
+        if(!right.startsWith("APP SOLICITADA"))
+            return left+"\\n"+right;
+        // Never mark layout ACTIVE without the normal verification; this
+        // is a recovery of requested windows, not a measurement result.
+        return left+"\\n"+right+
+            "\\nReapertura manual 60/40 guardada solicitada; "+
+            "sin cerrar tareas por ADB ni cambiar la aprobación del diseño.";
+    }
+
     /** A previously verified user-defined layout on next ignition. */
     static String boot(Context c){
         if(!active(c))return "Layout libre aún no confirmado";
