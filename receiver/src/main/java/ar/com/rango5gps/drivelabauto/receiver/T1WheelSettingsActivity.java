@@ -87,10 +87,7 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
             "\nÚLTIMA ACCIÓN: "+
             p.getString(T1WazeWheelService.LAST_STATUS,"ninguna")+
             "\nRECUPERACIÓN ACCESIBILIDAD: "+
-            T1WheelAccessibilityRecovery.describe(this)+
-            "\nRESPALDO ADB DISPLAY: "+
-            p.getString(T1WheelAdbFallback.STATUS,
-                "Sin intentos; se priorizan controles accesibles"));
+            T1WheelAccessibilityRecovery.describe(this));
     }
     private TextView text(LinearLayout col,String title,int size){
         TextView t=new TextView(this);
