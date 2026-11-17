@@ -559,9 +559,9 @@ final class T1GlobalToolbar {
                         // within the existing 60/40, not a fullscreen fallback.
                         main.postDelayed(()->{
                             if(!T1ClusterWazeRouter.enabled(owner)||
-                               !foreground)return;
+                               owner.isFinishing()||owner.isDestroyed())return;
                             String restored=T1LastRoute.restore(owner);
-                            note(restored);
+                            if(foreground)note(restored);
                         },3200L);
                     }
                 });
