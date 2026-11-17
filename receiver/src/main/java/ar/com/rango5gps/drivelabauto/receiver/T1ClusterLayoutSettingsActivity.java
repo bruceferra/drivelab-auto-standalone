@@ -147,7 +147,7 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
         preview=null;
         previewState=null;
         text("CLÚSTER · PANELES",22);
-        text("Elegí las apps y aplicá en P, detenido. "+
+        text("Elegí las apps y aplicá con el vehículo detenido. "+
             "Configurar no ejecuta cambios hasta tocar APLICAR.",14);
         panelRow(false);
         panelRow(true);
@@ -228,7 +228,7 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
         updatePreview();
         text("Herramientas técnicas: mediciones, conexión ADB "+
             "y diagnóstico. No hacen falta en cada uso.",13);
-        button("PROBAR GEOMETRÍA EN P Y 0 KM/H",this::testLayout);
+        button("PROBAR GEOMETRÍA A 0 KM/H",this::testLayout);
         button("PROBAR SPLIT NATIVO EN DISPLAY 1 · EXPERIMENTAL",
             this::tryNativeSplit);
         text("Prueba nativa: "+cfg().getString(
@@ -424,7 +424,7 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
             T1ClusterLayoutPolicy.mode(this)))return;
         T1ClusterLayoutPolicy.invertPanels(this);
         render();
-        // The button tests both REAL task bounds only when P/0 is verified.
+        // The button tests both REAL task bounds only when zero vehicle speed is verified.
         // A changed layout is not trusted for boot/route until confirmed.
         testLayout();
     }
@@ -437,25 +437,24 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
             T1ClusterLayoutPolicy.SPLIT_PERCENT,
             Math.max(30,Math.min(70,old+delta)),30,70);
         render();
-        // Exactly the same P/0 guard as PROBAR DISEÑO. No shell
+        // Exactly the same 0 km/h guard as PROBAR DISEÑO. No shell
         // commands or window repositioning while the car is moving.
         testLayout();
     }
     private void testLayout(){
         T1ClusterWazeRouter.status(this,
-            "Verificando P y 0 km/h del OEM (solo lectura)…");
+            "Verificando 0 km/h del OEM (solo lectura)…");
         new Thread(()->{
             MirrorAutomationOem oem=null;
             String failure=null;
             try{
                 oem=new MirrorAutomationOem(this);
-                int gear=oem.gear();
                 double speed=oem.speedKmh();
-                if(gear!=1||!Double.isFinite(speed)||
+                if(!Double.isFinite(speed)||
                    speed<0||speed>0.5)
-                    failure="BLOQUEADO: la T1 no confirmó P a 0 km/h.";
+                    failure="BLOQUEADO: la T1 no confirmó velocidad 0 km/h.";
             }catch(Exception ex){
-                failure="BLOQUEADO: sin lectura OEM de P/0.";
+                failure="BLOQUEADO: sin lectura OEM de velocidad.";
             }finally{
                 if(oem!=null)oem.close();
             }
@@ -518,7 +517,7 @@ public final class T1ClusterLayoutSettingsActivity extends Activity {
         if(nativeTrialRunning)return;
         nativeTrialRunning=true;
         T1ClusterWazeRouter.status(this,
-            "Probando compatibilidad de split nativo solo en P/0…");
+            "Probando compatibilidad del split nativo a 0 km/h…");
         T1ClusterNativeSplitTrial.run(this,message->{
             nativeTrialRunning=false;
             if(isFinishing()||isDestroyed())return;
