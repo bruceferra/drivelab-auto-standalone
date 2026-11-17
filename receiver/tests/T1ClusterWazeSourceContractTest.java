@@ -55,13 +55,12 @@ public final class T1ClusterWazeSourceContractTest {
             setup.contains("Pantallas secundarias públicas detectadas: "),
             "Display selector must show real list; Android AlertDialog setMessage hides setItems");
         ok(setup.contains("T1ClusterWazeRouter.choose(")&&
-            setup.contains("oem.gear()")&&
             setup.contains("oem.speedKmh()")&&
-            setup.contains("gear!=1")&&setup.contains("kmh>0.5")&&
+            setup.contains("kmh>0.5")&&
             setup.contains("setPositiveButton(\"ACTIVAR\"")&&
             setup.contains("putBoolean(T1ClusterWazeRouter.AUTO_BOOT,true)")&&
             setup.contains("putBoolean(\"auto_boot\",true)"),
-            "User chooses the display and permits boot; manual test verified P/0");
+            "User chooses the display and permits boot; manual test verified speed 0");
         ok(manifest.contains("com.google.android.apps.maps")&&
             manifest.contains("android.intent.category.LAUNCHER")&&
             !manifest.contains("android.permission.QUERY_ALL_PACKAGES"),
@@ -77,30 +76,30 @@ public final class T1ClusterWazeSourceContractTest {
             router.contains("openSelectedAppTest(Context c)"),
             "Only explicit user-selected public apps, with auto boot reset on change");
         ok(setup.contains("ELEGIR APLICACIÓN DEL CLÚSTER")&&
-            setup.contains("PROBAR APLICACIÓN ELEGIDA · EN P")&&
+            setup.contains("PROBAR APLICACIÓN ELEGIDA · DETENIDO")&&
             setup.contains("getLaunchIntentForPackage")==false&&
             setup.contains("pm.queryIntentActivities(launcher,0)")&&
             setup.contains("runParkedTest(boolean selectedApp)")&&
             setup.contains("openSelectedAppTest(this)")&&
             setup.contains("openManualTest(this)")&&
-            setup.contains("gear!=1")&&setup.contains("kmh>0.5"),
+            setup.contains("kmh>0.5"),
             "Manual app switch and Waze must both pass stopped-vehicle check");
         ok(router.contains("WAZE.equals(intent.getPackage())")&&
             router.contains("return launchOnDisplay(c,launch,manualTest,fromBoot,\"Waze\",true)")&&
             receiver.contains("routeDestination(this,launch)")&&
-            voice.contains("routeDestination(this,i)")&&
+            voice.contains("routeDestination(this,waze)")&&
             share.contains("routeDestination(this,navigation)"),
-            "Incoming destinations remain Waze regardless of selected boot app");
+            "Receiver and explicit shared routes retain their Waze destination contract");
         ok(receiver.contains("scheduleNativeClusterWaze()")&&
             receiver.contains("T1ClusterWazeRouter.onReceiverBoot(this)")&&
             receiver.contains("T1ClusterWazeRouter.routeDestination(this,launch)")&&
             receiver.contains("cluster?new Intent(this,ReceiverActivity.class):launch"),
             "Receiver boot and Xiaomi destinations keep cluster route");
-        ok(voice.contains("T1ClusterWazeRouter.routeDestination(this,i)")&&
+        ok(voice.contains("T1ClusterWazeRouter.routeDestination(this,waze)")&&
             share.contains("T1ClusterWazeRouter.routeDestination(this,navigation)")&&
             main.contains("T1ClusterWazeSettingsActivity.class")&&
             main.contains("T1ClusterWazeRouter.routeDestination(this,open)"),
-            "Voice, shared destinations and direct test follow same selected display");
+            "Voice uses visible map and shared destination routing uses selected display");
         System.out.println("PASS opt-in Waze public cluster without replacing T1Launcher");
     }
 }
