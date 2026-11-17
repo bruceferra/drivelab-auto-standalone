@@ -262,6 +262,18 @@ jobs:
           grep -Fq 'dashboardConsumption.stop();' "$cockpit"
           grep -Fq 'maintainFuelMonitor();' "$cockpit"
           grep -Fq 'new T1TripTelemetry(' "$cockpit"
+      - name: Costed trips with HV recovery and economic L/100 km (pure JVM)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-trip-cost
+          javac -encoding UTF-8 -d /tmp/t1-trip-cost \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripCostModel.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripEnergyAudit.java \
+            receiver/tests/T1TripCostModelTest.java \
+            receiver/tests/T1TripEnergyAuditTest.java
+          java -cp /tmp/t1-trip-cost ar.com.rango5gps.drivelabauto.receiver.T1TripCostModelTest
+          java -cp /tmp/t1-trip-cost ar.com.rango5gps.drivelabauto.receiver.T1TripEnergyAuditTest
       - name: OEM 500m paired fuel, energy and distance audit (pure JVM)
         shell: bash
         run: |
