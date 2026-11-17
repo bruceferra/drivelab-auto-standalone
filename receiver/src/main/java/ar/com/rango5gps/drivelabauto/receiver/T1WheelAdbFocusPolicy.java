@@ -46,6 +46,47 @@ final class T1WheelAdbFocusPolicy {
         return focused==1&&matched;
     }
 
+    /** A focused OEM instrument window after ignition is normal on this ROM.
+     * A user wheel turn may request map task focus ONLY while parked, with a
+     * unique, visible, key-capable map window on the chosen display and no
+     * third-party popup currently focused. The caller verifies the map task
+     * itself and must RECHECK actual focus after am task focus.
+     */
+    static boolean mayFocusMap(String dump,int display,String pkg){
+        if(!supported(display,pkg)||dump==null||dump.length()>96000)
+            return false;
+        boolean windows=false,foundMap=false,hasAllowedFocus=false;
+        int focusedCount=0;
+        for(String original:dump.split("\\r?\\n")){
+            String line=original.trim();
+            if(line.equals("Input Dispatcher State:"))windows=false;
+            if(line.equals("Windows:"))windows=true;
+            if(!windows||!line.contains("name=")||
+               !line.contains("displayId="+display+","))continue;
+            String normalized=line.replace("name='Window{","name=Window{");
+            boolean target=normalized.contains(" "+pkg+"/");
+            boolean isMap=normalized.contains(" "+WAZE+"/")||
+                normalized.contains(" "+MAPS+"/");
+            boolean instrument=normalized.contains(" com.autolink.instrument}");
+            if(target&&line.contains("visible=true")&&
+               line.contains("canReceiveKeys=true")&&
+               line.contains("paused=false"))
+                foundMap=true;
+            if(line.contains("hasFocus=true")){
+                focusedCount++;
+                if(instrument||isMap)hasAllowedFocus=true;
+                else return false;
+            }
+        }
+        return foundMap&&focusedCount==1&&hasAllowedFocus;
+    }
+
+    static String focusCommand(int taskId){
+        if(taskId<=0||taskId>9999999)
+            throw new IllegalArgumentException("Tarea ADB no autorizada");
+        return "am task focus "+taskId;
+    }
+
     static String command(int display,int keyCode){
         if(display<=0||display>=10||
            (keyCode!=21&&keyCode!=22&&keyCode!=23))
