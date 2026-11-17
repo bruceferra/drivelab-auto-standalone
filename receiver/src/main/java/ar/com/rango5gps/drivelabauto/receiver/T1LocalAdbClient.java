@@ -75,9 +75,11 @@ final class T1LocalAdbClient {
     static int connectedPort(){return lastLocalPort;}
     static String shell(Context context,String command)throws Exception{
         // STRICT command whitelist, no shell metacharacters or package names.
-        // Only harmless listing and bounded task geometry; never OEM data.
+        // Only listing, bounded geometry, and verified nonprimary-display DPAD.\n        // No global BACK, tap, display 0, arbitrary shell, or OEM writes.
         if(!command.equals("am stack list")&&
            !command.equals("dumpsys activity activities")&&
+           !command.equals("dumpsys input")&&
+           !command.matches("input dpad -d [1-9] keyevent (21|22|23)")&&
            !command.matches(
               "am task resize [1-9][0-9]{0,6}( [0-9]{1,5}){4}")&&
            !command.matches("am stack remove [1-9][0-9]{0,6}"))
