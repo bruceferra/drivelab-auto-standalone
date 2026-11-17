@@ -75,7 +75,7 @@ public final class T1ClusterWazeSettingsActivity extends Activity {
             "que pruebes Waze y vuelvas a activar el nuevo display.",13);
         button(body,"1 · DETECTAR / ELEGIR PANTALLA DEL CLÚSTER",
             this::chooseDisplay);
-        button(body,"2 · PROBAR WAZE EN EL DISPLAY ELEGIDO · EN P",
+        button(body,"2 · PROBAR WAZE EN EL DISPLAY ELEGIDO · DETENIDO",
             this::testWaze);
         label(body,"Podés elegir Waze, Google Maps u otra app instalada. "+
             "Los destinos recibidos desde Xiaomi o voz seguirán abriendo "+
@@ -84,7 +84,7 @@ public final class T1ClusterWazeSettingsActivity extends Activity {
             ()->startActivity(new Intent(this,
                 T1ClusterLayoutSettingsActivity.class)));
         button(body,"ELEGIR APLICACIÓN DEL CLÚSTER",this::chooseApp);
-        button(body,"PROBAR APLICACIÓN ELEGIDA · EN P",this::testSelectedApp);
+        button(body,"PROBAR APLICACIÓN ELEGIDA · DETENIDO",this::testSelectedApp);
         button(body,on?"3 · DESACTIVAR CLÚSTER DRIVELAB":
             "3 · ACTIVAR DESTINOS WAZE AL CLÚSTER",()->{
             if(on){
@@ -153,7 +153,7 @@ public final class T1ClusterWazeSettingsActivity extends Activity {
                     render();
                 }).show();
         });
-        label(body,"La prueba directa solo se permite en P y a 0 km/h "+
+        label(body,"La prueba directa solo se permite a 0 km/h "+
             "confirmados por las lecturas OEM. El display puede ser 2, 5 "+
             "u otro según el arranque de esta T1. No se elige por su número "+
             "de manera automática. Si Android lo rechaza, DriveLab NO abre "+
@@ -226,20 +226,19 @@ public final class T1ClusterWazeSettingsActivity extends Activity {
                 "Primero seleccioná un display secundario válido.");
             render();return;
         }
-        T1ClusterWazeRouter.status(this,"Comprobando P y 0 km/h sin mover vehículo…");
+        T1ClusterWazeRouter.status(this,"Comprobando 0 km/h sin mover vehículo…");
         render();
         new Thread(()->{
             MirrorAutomationOem oem=null;
             String error=null;
             try{
                 oem=new MirrorAutomationOem(this);
-                int gear=oem.gear();
                 double kmh=oem.speedKmh();
-                if(gear!=1||!Double.isFinite(kmh)||kmh<0||kmh>0.5)
-                    error="Prueba bloqueada. Se requiere P y velocidad "+
+                if(!Double.isFinite(kmh)||kmh<0||kmh>0.5)
+                    error="Prueba bloqueada. Se requiere velocidad "+
                         "0 km/h verificadas por OEM (1033 / 2148 / 1089).";
             }catch(Exception e){
-                error="No se puede confirmar P/0 con OEM: "+
+                error="No se puede confirmar velocidad con OEM: "+
                     e.getClass().getSimpleName();
             }finally{
                 if(oem!=null)oem.close();
@@ -256,6 +255,6 @@ public final class T1ClusterWazeSettingsActivity extends Activity {
                     T1ClusterWazeRouter.openManualTest(this);
                 render();
             });
-        },"DriveLab-Cluster-P0-Check").start();
+        },"DriveLab-Cluster-SpeedZero-Check").start();
     }
 }
