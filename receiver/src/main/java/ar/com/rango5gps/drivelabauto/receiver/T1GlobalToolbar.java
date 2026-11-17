@@ -543,7 +543,11 @@ final class T1GlobalToolbar {
                 }finally{
                     if(oem!=null)oem.close();
                 }
+                // Restart exactly the two saved navigation apps only
+                // after the car confirms 0 km/h. Never do ADB on the UI thread.
                 final boolean safe=stopped;
+                final T1ClusterFreshStart.Result fresh=safe?
+                    T1ClusterFreshStart.prepare(owner):null;
                 owner.runOnUiThread(()->{
                     if(owner.isFinishing()||owner.isDestroyed()||
                        !T1ClusterWazeRouter.enabled(owner))return;
@@ -553,6 +557,17 @@ final class T1GlobalToolbar {
                             .apply();
                         String blocked="CLÚSTER: no se confirmó 0 km/h; "+
                             "no se modificaron las ventanas";
+                        T1ClusterWazeRouter.status(owner,blocked);
+                        refreshCluster();note(blocked);
+                        return;
+                    }
+                    if(fresh==null||!fresh.ready){
+                        p.edit().putBoolean(T1ClusterWazeRouter.ENABLED,false)
+                            .putBoolean(T1ClusterWazeRouter.AUTO_BOOT,false)
+                            .apply();
+                        String blocked=fresh==null?
+                            "No se completó cierre limpio de mapas":
+                            fresh.message;
                         T1ClusterWazeRouter.status(owner,blocked);
                         refreshCluster();note(blocked);
                         return;
