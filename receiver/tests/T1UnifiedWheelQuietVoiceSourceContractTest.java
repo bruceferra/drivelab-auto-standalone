@@ -66,7 +66,8 @@ public final class T1UnifiedWheelQuietVoiceSourceContractTest {
             voice.contains("T1VoiceMath.calculate(phrase)")&&
             voice.contains("T1VoiceWeather.now(")&&
             voice.contains("T1VoiceNews.headlines(")&&
-            voice.contains("T1ClusterWazeRouter.routeDestination(this,i)")&&
+            voice.contains("visibleNavigationOnCluster(this)")&&
+            voice.contains("T1ClusterWazeRouter.routeDestination(this,waze)")&&
             voice.contains("requestPermissions(new String[]{Manifest.permission.RECORD_AUDIO}"),
             "Quiet speech still uses one existing dispatcher and requests audio permission");
         require(manifest.contains("android.speech.RecognitionService")&&
