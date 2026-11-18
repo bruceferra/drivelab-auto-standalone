@@ -1,4 +1,4 @@
-# Receiver 0.3.68: true cluster boot + visible map repair and usable SOC read-only A/B.
+# Receiver 0.3.68: auto-boot signal synced; visible one-tap map repair; actual SOC read-only A/B with updated test contract.
 name: Signed Receiver 0.3.68 - cluster boot and SOC OEM diagnostics
 on:
   push:
@@ -81,7 +81,7 @@ jobs:
           mkdir -p /tmp/t1-cluster-header
           javac -encoding UTF-8 -d /tmp/t1-cluster-header receiver/tests/T1ClusterFixedToolbarAndFocusResultContractTest.java
           java -cp /tmp/t1-cluster-header ar.com.rango5gps.drivelabauto.receiver.T1ClusterFixedToolbarAndFocusResultContractTest
-      - name: Verify TOMAR CONTROL retired and R requires confirmation
+      - name: Verify TOMAR CONTROL retired and one-tap REPARAR MAPAS exposed
         run: |
           set -euo pipefail
           mkdir -p /tmp/t1-focus
