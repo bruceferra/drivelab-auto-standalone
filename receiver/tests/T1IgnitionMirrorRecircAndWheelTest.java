@@ -22,7 +22,7 @@ public final class T1IgnitionMirrorRecircAndWheelTest{
         mic.contains("static void ensureRunning(Context c)"),
         "Recover unified steering wheel subscription from foreground");
     yes(toolbar.contains("MirrorManualTiltService.unverified(owner)")&&
-        toolbar.contains("boolean unknown=unresolved&&!healthy;"),
+        toolbar.contains("boolean unknown=(inFlight||(!manualSelected&&unresolved))&&!healthy;"),
         "Manual tilt icon reflects actual pending pulses and unverified physical pose");
     System.out.println("PASS ignition mirror/recirc/wheel recovery safeguards");
   }
