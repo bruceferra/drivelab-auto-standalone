@@ -34,12 +34,14 @@ public final class MirrorManualOnOffContractTest {
             manual.contains("MirrorAutomationService.PULSE_IN_FLIGHT,true)")&&
             manual.contains("putBoolean(MirrorAutomationService.PULSE_IN_FLIGHT,false)"),
             "Down counts only confirmed released pulses; next tap inverts exact counts");
-        yes(manual.contains("gear!=1||!Double.isFinite(speed)")&&
-            manual.contains("parked(oem); // NO P/R/D automatic transition logic")&&
+        yes(!manual.contains("parked(oem)")&&
+            !manual.contains("gear!=1||!Double.isFinite(speed)")&&
+            !manual.contains("oem.speedKmh()")&&
+            !manual.contains("oem.gear()")&&
             manual.contains("synchronized(MirrorAutomationService.OEM_MIRROR_MUTEX)")&&
             manual.contains("oem.write(id,down?2:1)")&&
             manual.contains("oem.write(id,0)"),
-            "P/zero guard each pulse, OEM mutex and neutral release required");
+            "Manual tilt free at any gear/speed, but mutex and neutral OEM release retained");
         yes(manual.contains("ACTION_REFERENCE=")&&
             manual.contains("if(reference)")&&
             manual.contains("YA ESTÁN NORMALES") == false&&
@@ -56,6 +58,6 @@ public final class MirrorManualOnOffContractTest {
         yes(manifest.contains("android:name=\".MirrorManualTiltService\"")&&
             manifest.contains("android:exported=\"false\""),
             "Manual actuator foreground service not exported");
-        System.out.println("PASS mirror manual button down/up, journal, P safety, owner override");
+        System.out.println("PASS mirror manual any-speed down/up, journal, neutral release, owner override");
     }
 }
