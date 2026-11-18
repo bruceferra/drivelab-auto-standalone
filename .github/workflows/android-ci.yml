@@ -274,6 +274,17 @@ jobs:
             receiver/tests/T1TripEnergyAuditTest.java
           java -cp /tmp/t1-trip-cost ar.com.rango5gps.drivelabauto.receiver.T1TripCostModelTest
           java -cp /tmp/t1-trip-cost ar.com.rango5gps.drivelabauto.receiver.T1TripEnergyAuditTest
+      - name: Own SQLite charge module and OEM cable detector contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-own-charges
+          javac -encoding UTF-8 -d /tmp/t1-own-charges \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ChargeMath.java \
+            receiver/tests/T1ChargeMathTest.java \
+            receiver/tests/T1ChargeAutoModuleSourceContractTest.java
+          java -cp /tmp/t1-own-charges ar.com.rango5gps.drivelabauto.receiver.T1ChargeMathTest
+          java -cp /tmp/t1-own-charges ar.com.rango5gps.drivelabauto.receiver.T1ChargeAutoModuleSourceContractTest
       - name: Grid-origin-only accounting and recorded plug charge ledger (pure JVM)
         shell: bash
         run: |
