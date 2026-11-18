@@ -1693,6 +1693,28 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             f(scoped.electricNetKwh,3)+" kWh":"ESPERANDO");
         costNow.setText(scoped.fuelKnown?
             "$ "+f(scoped.fuelCost,0):"SIN DATO");
+        // The selected TOTAL scope is the new physical CSV plus a read-only
+        // 18/11 carry. Client scope 1 and 2 remain INDEPENDENT.
+        if(selectedScope==0&&T1RebuiltMorning.isToday(this)){
+            double dayKm=T1RebuiltMorning.totalKm(this);
+            boolean hasNew=T1RebuiltMorning.attached(this);
+            boolean gotFuel=hasNew&&scoped.fuelKnown&&
+                Double.isFinite(scoped.fuelLiters)&&scoped.fuelLiters>=0;
+            double allLiters=T1RebuiltMorning.LITERS+
+                (gotFuel?scoped.fuelLiters:0d);
+            consumptionNow.setText(f(allLiters*100/dayKm,2)+
+                " L/100 · "+f(dayKm/allLiters,1)+" km/L "+
+                "(nafta; nuevo exp.)");
+            fuelNow.setText(f(allLiters,3)+" L"+
+                (gotFuel?" · nuevo OEM exp.":" · base T1Launcher"));
+            electricNow.setText("6,230 kWh T1Launcher"+
+                (hasNew&&scoped.electricKnown?
+                " + "+f(scoped.electricNetKwh,3)+
+                " kWh HV neto nuevo (distinta métrica)":"")+
+                " · regen base 1,590 kWh");
+            costNow.setText("$ "+f(allLiters*price,2)+
+                " nafta (sin electricidad de red)");
+        }
         if(!running){
             tripStatus.setText((dayPaused?"Ⅱ JORNADA PAUSADA · TRIP ":"○ JORNADA DETENIDA · último TRIP ")+
                 (m.getInt(T1TripRecorderService.SAMPLES,0)>0?
@@ -1845,6 +1867,9 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 " km en "+dayMasterCount+
                 " sesiones, distancias verificadas o identificadas "+
                 "como pendientes (sin sumar viajes individuales)";
+        if(T1RebuiltMorning.installed(this))
+            out.day+="\nPARCIAL CERRADO: T1Launcher 21,03 km. "+
+                "No sumar a VIAJE TOTAL.";
         out.month=month.trips+" viajes · "+f(month.km,1)+" km\n"+
             (month.fuelKnownTrips>0?"$ "+f(month.fuelCost,0)+" nafta exp.":
                 "Nafta: sin tramo OEM válido")+
