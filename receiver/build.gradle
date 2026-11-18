@@ -6,8 +6,8 @@ android {
     applicationId 'ar.com.rango5gps.drivelabauto.receiver'
     minSdk 30
     targetSdk 32
-    versionCode 154
-    versionName '0.3.53'
+    versionCode 155
+    versionName '0.3.54'
   }
   signingConfigs {
     release {
