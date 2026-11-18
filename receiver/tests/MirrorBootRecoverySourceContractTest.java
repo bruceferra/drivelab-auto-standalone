@@ -27,7 +27,7 @@ public final class MirrorBootRecoverySourceContractTest {
             svc.contains(".putBoolean(AUTO,true)")&&
             svc.contains("retorno al arrancar incompleto"),
             "Crash and uncertain cases keep warning; only complete restore rearms");
-        ok(toolbar.contains("boolean unknown=unresolved&&!healthy;")&&
+        ok(toolbar.contains("boolean unknown=(inFlight||(!manualSelected&&unresolved))&&!healthy;")&&
             toolbar.contains("ESPEJOS · RECUPERANDO EN P")&&
             toolbar.contains("ESPEJOS · REVISAR POSICIÓN")&&
             toolbar.contains("SUBIR ESPEJOS · MANUAL")&&
