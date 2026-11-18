@@ -26,6 +26,12 @@ final class T1ClusterTaskSnapshot {
             .format(new Date(when))+" · "+
             p.getString(RESULT,"Sin resultados");
     }
+    static String lastTime(Context c){
+        long when=T1ClusterWazeRouter.prefs(c).getLong(AT,0L);
+        return when<=0?"Aún no leído":
+            "Última lectura "+new SimpleDateFormat(
+                "dd/MM HH:mm:ss",Locale.ROOT).format(new Date(when));
+    }
     private static String shortValue(String value){
         if(value==null)return "(sin respuesta)";
         String trimmed=value.trim().replace('\n',' ');
