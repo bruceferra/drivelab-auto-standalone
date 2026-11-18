@@ -123,6 +123,8 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
         label(body,"FUNCIONES",17);
         button(body,"COCKPIT · VIAJES Y ENERGÍA",()->
             startActivity(new Intent(this,T1PremiumCockpitActivity.class)));
+        button(body,"MOSAICO · PANTALLA CENTRAL",()->
+            startActivity(new Intent(this,T1CenterMosaicActivity.class)));
         button(body,"CLÚSTER · PANELES A/B",()->
             startActivity(new Intent(this,T1ClusterLayoutSettingsActivity.class)));
         button(body,"VEHÍCULO · ESTADO Y AJUSTES",()->
