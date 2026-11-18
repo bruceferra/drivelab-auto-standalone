@@ -52,7 +52,9 @@ public final class T1AutoJourneySourceContractTest {
             screen.contains("EXPORTAR SESIONES")&&
             screen.contains("chargeDb.latest(")&&
             screen.contains("db.since(chargedAt)")&&
-            screen.contains("Math.min(")&&screen.contains("Math.max(0,since.net())"),
+            screen.contains("T1PlugEnergyLedger.estimate(")&&
+            screen.contains("assignedPlugKwh")&&
+            screen.contains("allocatedGridKwh"),
             "Charge-weighted nonphysical attribution, dated summaries and exports");
         yes(boot.contains("T1AutoJourneyService.startIfEnabled(context)")&&
             app.contains("T1AutoJourneyService.startIfEnabled(this)")&&
