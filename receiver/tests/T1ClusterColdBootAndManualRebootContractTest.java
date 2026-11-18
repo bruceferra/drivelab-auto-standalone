@@ -20,6 +20,7 @@ public final class T1ClusterColdBootAndManualRebootContractTest {
         String settings=read("T1ClusterWazeSettingsActivity.java");
         String reboot=read("T1ClusterManualReboot.java");
         String receiver=read("ReceiverService.java");
+        String boot=read("BootReceiver.java");
         yes(adb.contains("am force-stop com.waze")&&
             adb.contains("am force-stop com.google.android.apps.maps")&&
             adb.contains("pidof com.waze")&&
@@ -37,6 +38,12 @@ public final class T1ClusterColdBootAndManualRebootContractTest {
             !clean.contains("am stack remove")&&
             !clean.contains("am task resize"),
             "Navigation cleanup verifies process termination, no P/velocity gate");
+        yes(boot.contains("boolean clusterBoot=T1ClusterWazeRouter.autoBoot(context)")&&
+            boot.contains("if(receiverBoot||clusterBoot)")&&
+            boot.contains("BOOT_COMPLETED recibido")&&
+            toolbar.contains("REPARAR MAPAS")&&
+            toolbar.contains("this::confirmClusterReload"),
+            "Cluster auto-start must not depend on unrelated Receiver auto_boot, and repair is discoverable");
         yes(router.contains("T1ClusterFreshStart.prepare(c)")&&
             !router.contains("stoppedForSavedSplit(c)")&&
             receiver.contains("T1ClusterWazeRouter.onReceiverBoot(this)")&&
