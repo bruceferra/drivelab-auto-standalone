@@ -268,6 +268,7 @@ final class T1GlobalToolbar {
         int insert=firstIndex;
         for(Button b:ordered)row.addView(b,insert++);
         for(Button b:buttons){
+            b.setLongClickable(true); // OEM read-only chips remain non-clickable but draggable.
             b.setOnLongClickListener(v->{
                 ClipData clip=ClipData.newPlainText("drivelab-toolbar",key);
                 return v.startDragAndDrop(clip,new View.DragShadowBuilder(v),
