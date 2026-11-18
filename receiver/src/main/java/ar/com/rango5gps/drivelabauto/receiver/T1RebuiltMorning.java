@@ -305,6 +305,37 @@ final class T1RebuiltMorning {
             "independiente del origen de los electrones.");
         return out.toString();
     }
+    /** Owner's canonical EXTERNAL reference, shown also when older AUTO
+     * SQLite journeys were not cleared or the one-time import was not run.
+     * It never rewrites OEM readings or impersonates their source. */
+    static String reconciledReference(Context c){
+        return "RECONSTRUCCIÓN HISTÓRICA ÚNICA · 17/11 22:25 → "+
+            "18/11 09:12, más observación posterior"+
+            "\n18/11 07:43–08:05: 6,92 km · 1,36 kWh UTILIZADOS "+
+            "· 0,25 kWh REGENERADOS"+
+            "\n18/11 08:07–09:12: 14,11 km · 4,87 kWh UTILIZADOS "+
+            "· 1,34 kWh REGENERADOS"+
+            "\nTOTAL SIN DUPLICAR: "+fmt(KM,2)+" km "+
+            "("+fmt(EV_KM,2)+" EV + "+fmt(ICE_KM,2)+" nafta)"+
+            " · "+fmt(LITERS,3)+" L nafta"+
+            "\nBATERÍA UTILIZADA T1Launcher: "+
+            fmt(PACK_KWH,3)+" kWh · REGENERADA T1Launcher: "+
+            fmt(REGEN_KWH,3)+" kWh. La regeneración no "+
+            "se vuelve a descontar del consumo."+
+            "\nSOC al salir: 99,9 %; 09:12: 79,5 %; "+
+            "observación posterior: 73,2 % "+
+            "(diferencia 6,3 pp, sin kilómetros adicionales confirmados)."+
+            "\n"+chargeSummary(c)+
+            "\nORIGEN: historial-2026-11.csv T1Launcher y "+
+            "observación posterior. No incluir los 2,85 km del "+
+            "subviaje DriveLab: ya están dentro de los 21,03 km."+
+            (installed(c)?"\nIMPORTADO: sí, como parcial cerrado de Cockpit.":
+                "\nIMPORTADO EN COCKPIT: no confirmado; el registro "+
+                "de referencia es de solo lectura.")+
+            "\nLos valores RAW de la base AUTO OEM pertenecen a otra "+
+            "medición: NO son estos kWh y no se pueden renombrar "+
+            "regeneración sin verificar la dirección HV.";
+    }
     static String summary(Context c){
         if(!installed(c))return "RECONSTRUCCIÓN 18/11 AÚN NO IMPORTADA";
         double km=totalKm(c);
