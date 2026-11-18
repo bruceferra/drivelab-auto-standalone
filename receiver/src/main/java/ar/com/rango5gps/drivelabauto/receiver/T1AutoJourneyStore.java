@@ -216,6 +216,184 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
         }
         return out;
     }
+
+    /** A virtual journey generated from existing automatic raw samples.
+     * No rewriting source sessions; exact [from,to) user-local window, even
+     * when individual ignition sessions straddle its boundaries.
+     */
+    static final class Slice {
+        final String title;
+        final long from,until;
+        int sessions;
+        double km,gps,out,in;
+        long sampledMs;
+        private final java.util.HashSet<Long> ids=new java.util.HashSet<>();
+        Slice(String title,long from,long until){
+            this.title=title;this.from=from;this.until=until;
+        }
+        void add(long sessionId,T1AutoRangeMath.Delta delta){
+            if(delta.observedMs<=0)return;
+            ids.add(sessionId);sessions=ids.size();
+            km+=delta.distanceKm;gps+=delta.gpsKm;
+            out+=delta.hvOutKwh;in+=delta.hvInKwh;
+            sampledMs+=delta.observedMs;
+        }
+        double net(){return out-in;}
+        String describe(){
+            return title+" · "+sessions+" encendidos"+
+                "\\n"+fmt(km,2)+" km OEM · "+fmt(gps,2)+" km GPS"+
+                "\\nBatería: SALIDA "+fmt(out,3)+" kWh; ENTRADA "+
+                fmt(in,3)+" kWh; NETA "+fmt(net(),3)+" kWh"+
+                "\\nTiempo con telemetría: "+
+                fmt(sampledMs/60000.0,1)+" minutos"+
+                "\\nENTRADA = regeneración + generador térmico, "+
+                "no solo frenado. Nafta: SIN LITROS OEM VALIDADOS.";
+        }
+    }
+    static final class RangeReport {
+        final long from,until;
+        final Slice total;
+        final java.util.TreeMap<String,Slice> days=new java.util.TreeMap<>();
+        final java.util.LinkedHashMap<Long,Slice> byIgnition=
+            new java.util.LinkedHashMap<>();
+        RangeReport(long start,long end){
+            from=start;until=end;total=new Slice("TOTAL FILTRADO",start,end);
+        }
+        void add(long id,long sessionStart,T1AutoRangeMath.Cumulative previous,
+                 T1AutoRangeMath.Cumulative current){
+            long fromMs=Math.max(from,previous.at),toMs=Math.min(until,current.at);
+            if(toMs<=fromMs)return;
+            // Split a short observed segment at local midnights. Both
+            // total and day rows aggregate the SAME measured increments.
+            long part=fromMs;
+            while(part<toMs){
+                java.util.Calendar cal=java.util.Calendar.getInstance();
+                cal.setTimeInMillis(part);
+                java.text.SimpleDateFormat day=new java.text.SimpleDateFormat(
+                    "yyyy-MM-dd",Locale.getDefault());
+                String key=day.format(new Date(part));
+                cal.set(java.util.Calendar.HOUR_OF_DAY,0);
+                cal.set(java.util.Calendar.MINUTE,0);
+                cal.set(java.util.Calendar.SECOND,0);
+                cal.set(java.util.Calendar.MILLISECOND,0);
+                cal.add(java.util.Calendar.DAY_OF_MONTH,1);
+                long end=Math.min(toMs,cal.getTimeInMillis());
+                T1AutoRangeMath.Delta delta=T1AutoRangeMath.clip(
+                    previous,current,part,end);
+                total.add(id,delta);
+                days.computeIfAbsent(key,x->new Slice(x,from,until))
+                    .add(id,delta);
+                String label="ENCENDIDO #"+id+" · "+
+                    new java.text.SimpleDateFormat("dd/MM HH:mm",
+                        Locale.getDefault()).format(new Date(sessionStart));
+                byIgnition.computeIfAbsent(id,
+                    x->new Slice(label,from,until)).add(id,delta);
+                part=end;
+            }
+        }
+        String csv(){
+            StringBuilder s=new StringBuilder(
+                "nivel;nombre;desde_epoch_ms;hasta_epoch_ms;encendidos;"+
+                "km_oem;km_gps;hv_salida_kwh;hv_entrada_kwh;hv_neto_kwh;"+
+                "minutos_con_telemetria\\n");
+            csvRow(s,"TOTAL",total);
+            for(Slice slice:days.values())csvRow(s,"DIA",slice);
+            for(Slice slice:byIgnition.values())csvRow(s,"ENCENDIDO",slice);
+            return s.toString();
+        }
+        private void csvRow(StringBuilder out,String type,Slice row){
+            out.append(type).append(';')
+                .append(row.title.replace(';',',')).append(';')
+                .append(from).append(';').append(until).append(';')
+                .append(row.sessions).append(';')
+                .append(fmtCsv(row.km)).append(';')
+                .append(fmtCsv(row.gps)).append(';')
+                .append(fmtCsv(row.out)).append(';')
+                .append(fmtCsv(row.in)).append(';')
+                .append(fmtCsv(row.net())).append(';')
+                .append(fmtCsv(row.sampledMs/60000.0))
+                .append('\\n');
+        }
+    }
+    private static T1AutoRangeMath.Cumulative point(Cursor c){
+        return new T1AutoRangeMath.Cumulative(
+            c.getLong(0),c.getDouble(1),c.getDouble(2),
+            c.getDouble(3),c.getDouble(4));
+    }
+    /**
+     * Per-session cumulative baselines: fetch last sample at/before FROM,
+     * subsequent samples up to and INCLUDING the first after UNTIL.
+     * Fractional overlap avoids taking an entire ignition for a 19:00-23:50
+     * request. No gaps or fabricated earlier recordings.
+     */
+    synchronized RangeReport between(long from,long until){
+        if(from<=0||until<=from||until-from>370L*86400000L)
+            throw new IllegalArgumentException(
+                "Elegí un intervalo de hasta 370 días");
+        RangeReport result=new RangeReport(from,until);
+        SQLiteDatabase db=getReadableDatabase();
+        try(Cursor sessions=db.rawQuery(
+            "SELECT _id,start_ms FROM sessions WHERE start_ms<? "+
+            "AND last_ms>? ORDER BY start_ms",
+            new String[]{Long.toString(until),Long.toString(from)})){
+            while(sessions.moveToNext()){
+                long sessionId=sessions.getLong(0),started=sessions.getLong(1);
+                String id=Long.toString(sessionId);
+                T1AutoRangeMath.Cumulative previous=null;
+                try(Cursor base=db.rawQuery(
+                    "SELECT t_epoch_ms,km_oem_cum,km_gps_cum,"+
+                    "hv_out_cum,hv_in_cum FROM samples "+
+                    "WHERE session_id=? AND t_epoch_ms<=? "+
+                    "ORDER BY t_epoch_ms DESC LIMIT 1",
+                    new String[]{id,Long.toString(from)})){
+                    if(base.moveToFirst())previous=point(base);
+                }
+                long firstAfter=previous==null?from-1:previous.at;
+                try(Cursor rows=db.rawQuery(
+                    "SELECT t_epoch_ms,km_oem_cum,km_gps_cum,"+
+                    "hv_out_cum,hv_in_cum FROM samples "+
+                    "WHERE session_id=? AND t_epoch_ms>? "+
+                    "ORDER BY t_epoch_ms",
+                    new String[]{id,Long.toString(firstAfter)})){
+                    while(rows.moveToNext()){
+                        T1AutoRangeMath.Cumulative current=point(rows);
+                        if(previous!=null)
+                            result.add(sessionId,started,previous,current);
+                        previous=current;
+                        if(current.at>=until)break;
+                    }
+                }
+            }
+        }
+        return result;
+    }
+    synchronized void exportWindowPoints(OutputStream out,long from,long until)
+        throws IOException{
+        if(until<=from)throw new IllegalArgumentException("Intervalo");
+        writeLine(out,"sesion_id;fecha_epoch_ms;ready_1031;cable_1060;"+
+            "marcha_1033;velocidad_kmh;soc;volt;amps;rpm;gps_lat;gps_lon;"+
+            "precision_m;km_oem_acum;km_gps_acum;hv_salida_acum;"+
+            "hv_entrada_acum\\n");
+        try(Cursor c=getReadableDatabase().rawQuery(
+            "SELECT session_id,t_epoch_ms,raw_ready,raw_cable,raw_gear,"+
+                "speed_kmh,soc,volt,amps,rpm,gps_lat,gps_lon,"+
+                "gps_accuracy_m,km_oem_cum,km_gps_cum,hv_out_cum,hv_in_cum "+
+                "FROM samples WHERE t_epoch_ms>=? AND t_epoch_ms<? "+
+                "ORDER BY t_epoch_ms",
+            new String[]{Long.toString(from),Long.toString(until)})){
+            while(c.moveToNext()){
+                StringBuilder row=new StringBuilder();
+                for(int i=0;i<c.getColumnCount();i++){
+                    if(i>0)row.append(';');
+                    if(!c.isNull(i))row.append(i<=4?
+                        Long.toString(c.getLong(i)):fmtCsv(c.getDouble(i)));
+                }
+                writeLine(out,row.append('\\n').toString());
+            }
+        }
+        out.flush();
+    }
+
     private static String fmtCsv(double x){
         return Double.isFinite(x)?String.format(Locale.ROOT,"%.6f",x):"";
     }
