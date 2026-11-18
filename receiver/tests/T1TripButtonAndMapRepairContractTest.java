@@ -27,10 +27,11 @@ public final class T1TripButtonAndMapRepairContractTest {
             ui.contains("button.setAlpha(enabled?1f:0.42f)")&&
             ui.contains("enabled?color:MUTED"),
             "Gray buttons must be actually disabled");
-        check(ui.contains("tripAction(start,\"INICIAR\",TEAL,canStart&&!paused)")&&
+        check(ui.contains("T1TripActionPolicy.resolve(")&&
+            ui.contains("tripAction(start,\"INICIAR\",TEAL,state.start)")&&
             ui.contains("paused?\"REANUDAR\":\"PAUSAR\"")&&
             ui.contains("paused?TEAL:GOLD")&&
-            ui.contains("tripAction(end,\"TERMINAR\",RED,active||paused)"),
+            ui.contains("tripAction(end,\"TERMINAR\",RED,state.end)"),
             "Trip actions must have predictable green/yellow/red colors");
         check(ui.contains("if(T1JourneyStore.paused(this))askClient();else pauseClient()")&&
             ui.contains("if(T1JourneyStore2.paused(this))askSecond();else pauseSecond()"),
