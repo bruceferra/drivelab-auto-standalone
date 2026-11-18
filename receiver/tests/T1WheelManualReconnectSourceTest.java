@@ -44,8 +44,8 @@ public final class T1WheelManualReconnectSourceTest {
             "Wheel settings must offer explicit reconnect and Settings route");
         must(home.contains("RUEDITA · RECONECTAR ACCESIBILIDAD")&&
             home.contains("T1WheelAccessibilityRecovery.requestManual(this)")&&
-            home.contains("Settings.ACTION_ACCESSIBILITY_SETTINGS"),
-            "One-tap daily home recovery");
+            home.contains("T1WheelOwnerAdbDialog.show(this)"),
+            "One-tap daily home recovery with explicit ADB or Settings choice");
         must(adb.contains("private static final String LOOPBACK=\"127.0.0.1\"")&&
             adb.contains("settings put secure enabled_accessibility_services")&&
             !adb.contains("input keyevent 4")&&
