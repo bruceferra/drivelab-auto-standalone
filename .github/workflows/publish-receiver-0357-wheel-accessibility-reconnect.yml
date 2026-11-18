@@ -1,4 +1,4 @@
-# 2026-11-18: signed 0.3.57 one-tap accessibility reconnect after Android unbind.
+# 2026-11-18: signed 0.3.57 one-tap accessibility reconnect after Android unbind; Android Java compile and source regression fixes.
 name: Signed Receiver 0.3.57 - wheel Accessibility recovery one tap
 on:
   push:
