@@ -17,6 +17,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 final class T1WheelAccessibilityRecovery {
     static final String STATUS="accessibility_recovery_status";
+    static final String AUTO_BOOT_ADB="wheel_boot_adb_restore_approved";
+    static final String BOOT_STATUS="wheel_boot_check_status";
     private static final String PENDING="accessibility_restore_pending";
     private static final String EXPECTED="accessibility_restore_without";
     private static final AtomicBoolean RUNNING=new AtomicBoolean();
@@ -132,11 +134,11 @@ final class T1WheelAccessibilityRecovery {
             "no hace falta Termux ni internet.";
     }
 
-    /** EXPLICIT owner action (dialog confirmation required in UI).
-     * This is NOT called on startup, from the OEM wheel, or automatically.
-     * ADB shell has authority to change Settings.Secure only after the
-     * owner's prior local ADB authorization. Never claims it is a normal
-     * Android app permission. */
+    /** The UI calls this after an explicit owner confirmation. The boot
+     * supervisor may call it ONLY if the owner separately enabled and
+     * persistently authorized AUTO_BOOT_ADB on this exact installation.
+     * It is not a regular Android app permission; ADB must still be alive,
+     * authorized and checked against the live Android service list. */
     static String reauthorizeWithOwnerApproval(Context context){
         Context app=context.getApplicationContext();
         SharedPreferences prefs=app.getSharedPreferences(
@@ -207,6 +209,45 @@ final class T1WheelAccessibilityRecovery {
         },"T1-Owner-Explicit-Accessibility-ADB").start();
         return "Reautorización ADB local solicitada, verificando Android. "+
             "No se declara conectada hasta recibir el servicio.";
+    }
+
+    /** Start-of-ignition audit. Does not grant Android permissions unless
+     * there is a prior service connection AND an explicit, saved user choice.
+     * Never changes OEM/T1Launcher entries or sends wheel/steering commands.
+     */
+    static String checkAtBoot(Context context){
+        Context app=context.getApplicationContext();
+        SharedPreferences p=app.getSharedPreferences(
+            T1WazeWheelService.PREFS,Context.MODE_PRIVATE);
+        if(!p.getBoolean(T1WazeWheelService.ENABLED,false)||
+           !p.getBoolean(T1WazeWheelService.OEM_BINDER_ENABLED,false)){
+            return bootNote(p,"VOLANTE AUTO OFF: sin intervención");
+        }
+        if(T1WazeWheelService.isServiceConnected()){
+            T1WazeWheelService.requestClusterReady(app);
+            return bootNote(p,"VOLANTE OK: accesibilidad conectada; refrescando mapas");
+        }
+        String state=permissionState(app);
+        if(state.startsWith("HABILITADA PERO DESCONECTADA")){
+            request(app);
+            return bootNote(p,"VOLANTE: permiso activo; rebind ADB solicitado "+
+                "(solo si ADB local responde)");
+        }
+        if(!p.getBoolean(AUTO_BOOT_ADB,false))
+            return bootNote(p,"VOLANTE: "+state+
+                " · autoreparación ADB OFF; botón manual disponible");
+        if(p.getLong(T1WazeWheelService.SERVICE_AT,0L)<=0)
+            return bootNote(p,"VOLANTE: nunca autorizado previamente; "+
+                "reparación automática cancelada");
+        if(!state.startsWith("DESHABILITADA EN ANDROID"))
+            return bootNote(p,"VOLANTE: estado no verificable; "+
+                "no se cambiaron permisos");
+        String requested=reauthorizeWithOwnerApproval(app);
+        return bootNote(p,"VOLANTE AUTO ADB: "+requested);
+    }
+    private static String bootNote(SharedPreferences p,String value){
+        p.edit().putString(BOOT_STATUS,value).apply();
+        return value;
     }
 
     static String describe(Context c){
