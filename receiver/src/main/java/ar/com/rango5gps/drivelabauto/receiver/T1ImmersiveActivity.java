@@ -45,6 +45,7 @@ public abstract class T1ImmersiveActivity extends Activity {
             RecirculationGuardService.activateOnAppOpen(this);
             MirrorAutomationService.activateOnAppOpen(this);
             T1ChargeRecorderService.startIfEnabled(this);
+            T1AutoJourneyService.startIfEnabled(this);
         }
     }
     @Override protected void onResume(){

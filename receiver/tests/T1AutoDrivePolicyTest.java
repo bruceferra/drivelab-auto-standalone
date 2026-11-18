@@ -8,6 +8,8 @@ public final class T1AutoDrivePolicyTest {
         yes(T1AutoDrivePolicy.start(-1,0,4,32));
         yes(!T1AutoDrivePolicy.start(1,1,1,0));
         yes(!T1AutoDrivePolicy.start(-1,-1,1,0));
+        yes(!T1AutoDrivePolicy.start(1,-1,1,0));
+        yes(T1AutoDrivePolicy.start(-1,-1,4,18));
         yes(T1AutoDrivePolicy.stop(0,0,1,0));
         yes(T1AutoDrivePolicy.stop(1,1,1,0));
         yes(!T1AutoDrivePolicy.stop(-1,0,1,0));

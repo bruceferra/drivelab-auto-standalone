@@ -7,8 +7,11 @@ final class T1AutoDrivePolicy {
     static final long GAP_CLOSE_MS=90000L;
     private T1AutoDrivePolicy(){}
     static boolean start(int ready,int cable,int gear,double kmh){
-        return cable!=1 && (ready==1 ||
-            (gear!=1 && Double.isFinite(kmh) && kmh>1.5));
+        // An unknown cable state is NOT proof of unplugged. If OEM cable
+        // read fails, only verified physical motion may start a journey.
+        if(cable==1)return false;
+        boolean driving=gear!=1 && Double.isFinite(kmh)&&kmh>1.5;
+        return driving || (cable==0 && ready==1);
     }
     static boolean stop(int ready,int cable,int gear,double kmh){
         return cable==1 || (ready==0 && gear==1 &&

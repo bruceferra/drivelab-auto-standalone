@@ -71,6 +71,11 @@
             android:foregroundServiceType="location" />
         <service android:name=".T1TripRecorderService" android:exported="false"
             android:foregroundServiceType="location|dataSync" />
+        <!-- Own automatic ignition sessions, separate from manual TRIP 1/2 and
+             charge recorder; independent read-only OEM and GPS sampling. -->
+        <service android:name=".T1AutoJourneyService"
+            android:exported="false"
+            android:foregroundServiceType="location|dataSync" />
         <!-- Independent charge-only OEM 1060, low-frequency read-only service.
              Enabled by user from DriveLab CARGAS. No T1Launcher dependency. -->
         <service android:name=".T1ChargeRecorderService"
@@ -130,6 +135,8 @@
         <!-- Optional premium cockpit, never a default HOME nor OEM control surface. -->
         <activity android:name=".T1PremiumCockpitActivity" android:exported="false" />
         <activity android:name=".T1ChargeHistoryActivity"
+            android:exported="false" />
+        <activity android:name=".T1AutoJourneyActivity"
             android:exported="false" />
         <activity android:name=".T1OptimizedModeActivity" android:exported="false" />
         <activity android:name=".T1TripMapAnalysisActivity" android:exported="false" />

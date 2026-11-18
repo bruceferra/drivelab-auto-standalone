@@ -151,6 +151,14 @@ public final class T1AutoJourneyService extends Service {
                     if(oem==null)oem=new T1AutoDriveOem(this);
                     p=oem.read();
                     errors=0;
+                    if(session>0){
+                        T1AutoJourneyStore.Journey open=db.openJourney();
+                        if(open!=null&&p.wallMs-open.last>T1AutoJourneyStore.GAP_MS){
+                            db.end(session,"INTERVALO OEM SIN REGISTRO "+
+                                "· sesión anterior finalizada a última muestra");
+                            session=0;offStreak=0;
+                        }
+                    }
                     boolean start=T1AutoDrivePolicy.start(
                         p.ready,p.cable,p.gear,p.speed);
                     boolean ending=T1AutoDrivePolicy.stop(

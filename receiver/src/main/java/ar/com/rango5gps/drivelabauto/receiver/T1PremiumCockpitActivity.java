@@ -1252,6 +1252,9 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         compactButton(chargeActions,"CARGAS Y ECONOMÍA",BLUE,this::openChargeDialog);
         compactButton(chargeActions,"CARGAS AUTOMÁTICAS · HISTORIAL",BLUE,
             ()->startActivity(new Intent(this,T1ChargeHistoryActivity.class)));
+        LinearLayout autoTripsAction=row();secondary.addView(autoTripsAction);
+        compactButton(autoTripsAction,"VIAJES AUTO · ENCENDIDOS / ÚLTIMA CARGA",
+            BLUE,()->startActivity(new Intent(this,T1AutoJourneyActivity.class)));
 
         LinearLayout aggregate=row();secondary.addView(aggregate);
         dayNow=metric(tile(aggregate,CARD),"HOY · CLIENTES","—");
