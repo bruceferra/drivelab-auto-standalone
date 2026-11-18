@@ -125,6 +125,115 @@ final class T1RebuiltMorning {
     static String fmt(double n,int precision){
         return String.format(Locale.getDefault(),"%."+precision+"f",n);
     }
+    // Immutable source observation. This is NOT a live OEM value and must
+    // never be used to infer unrecorded mileage or charge consumption.
+    static final double LATER_SOC_REPORTED=73.2;
+    // Cache the latest *closed* charging event preceding the first drive.
+    // The Cockpit ticks on UI: SQLite is queried only in a worker thread.
+    private static volatile T1ChargeStore.Record matchedCharge;
+    private static volatile boolean chargeScanned=false;
+    private static volatile String chargeDiagnostic="sin lectura";
+    private static volatile long lastScanElapsed=-1L;
+    private static final java.util.concurrent.atomic.AtomicBoolean CHARGE_SCAN=
+        new java.util.concurrent.atomic.AtomicBoolean(false);
+    static void refreshCharge(Context c){
+        long elapsed=android.os.SystemClock.elapsedRealtime();
+        if(lastScanElapsed>=0 && elapsed>=lastScanElapsed &&
+           elapsed-lastScanElapsed<30000L)return;
+        if(!CHARGE_SCAN.compareAndSet(false,true))return;
+        Context context=c.getApplicationContext();
+        new Thread(()->{
+            try(T1ChargeStore db=new T1ChargeStore(context)){
+                T1ChargeStore.Record candidate=null;
+                for(T1ChargeStore.Record record:db.latest(500)){
+                    if(record.open!=0||record.end<=0)continue;
+                    long done=record.chargeEnded>0?
+                        record.chargeEnded:record.end;
+                    // The user provided approximately 22:25 on 17-Nov.
+                    // Exclude unrelated old charges and trips' later charges.
+                    if(done<1794960000000L||done>FROM)continue;
+                    if(record.kwh<=0||!Double.isFinite(record.kwh))
+                        continue;
+                    if(candidate==null ||
+                       done>(candidate.chargeEnded>0?
+                           candidate.chargeEnded:candidate.end))
+                        candidate=record;
+                }
+                matchedCharge=candidate;
+                chargeDiagnostic=candidate==null?
+                    "no se halló carga cerrada previa al viaje":
+                    "carga #"+candidate.id+" leída de SQLite";
+            }catch(Exception error){
+                chargeDiagnostic="error leyendo cargas: "+
+                    error.getClass().getSimpleName();
+            }finally{
+                chargeScanned=true;
+                lastScanElapsed=android.os.SystemClock.elapsedRealtime();
+                CHARGE_SCAN.set(false);
+            }
+        },"T1-18Nov-Read-Last-Charge").start();
+    }
+    static String chargeSummary(Context c){
+        refreshCharge(c);
+        T1ChargeStore.Record record=matchedCharge;
+        if(record==null)
+            return "CARGA 17/11 22:25: "+(chargeScanned?
+                chargeDiagnostic:"consultando historial local de cargas…")+
+                ". Inicio aproximado informado por propietario; "+
+                "salida 18/11 07:43 al 99,9 % confirmada por T1Launcher.";
+        java.text.SimpleDateFormat format=new java.text.SimpleDateFormat(
+            "dd/MM HH:mm",Locale.getDefault());
+        long done=record.chargeEnded>0?record.chargeEnded:record.end;
+        boolean meter=Double.isFinite(record.meterKwh)&&
+            record.meterKwh>0;
+        double acquired=meter?record.meterKwh:record.kwh;
+        boolean priced=Double.isFinite(record.price)&&record.price>=0;
+        return "CARGA DOCUMENTADA #"+record.id+
+            " · inicio "+format.format(new java.util.Date(record.start))+
+            " · fin "+format.format(new java.util.Date(done))+
+            " (hora "+(record.source.contains("IMPORTACIÓN MANUAL")?
+                "ingresada manualmente":"registrada por OEM")+")"+
+            "\nSOC "+fmt(record.socStart,1)+"→"+
+                fmt(record.socEnd,1)+" %"+
+            " · batería cargada "+fmt(record.kwh,3)+" kWh"+
+            " · red "+(meter?fmt(record.meterKwh,3)+" kWh MEDIDOS":
+                "SIN MEDIDOR (no sustituir por batería)")+
+            "\nCosto carga completa: "+(priced?
+                "$ "+fmt(acquired*record.price,2)+" "+
+                (meter?"con kWh medidos":"ESTIMADO sin pérdidas conocidas"):
+                "sin tarifa documentada")+
+            " · fuente "+record.source;
+    }
+    static String chargeTripAttribution(Context c,double batteryUseKwh){
+        refreshCharge(c);
+        T1ChargeStore.Record record=matchedCharge;
+        if(record==null)return "COSTO ELÉCTRICO DEL TRAMO: "+
+            (chargeScanned?"CARGA NO VINCULADA":"BUSCANDO CARGA…")+
+            " · no es 0 pesos.";
+        if(!(record.kwh>0)||!(batteryUseKwh>=0))
+            return "COSTO ELÉCTRICO: consumo o carga inválidos";
+        double fromPlug=Math.min(record.kwh,batteryUseKwh);
+        boolean meter=Double.isFinite(record.meterKwh)&&
+            record.meterKwh>0;
+        double equivalentGrid=meter?
+            fromPlug*record.meterKwh/record.kwh:Double.NaN;
+        boolean priced=Double.isFinite(record.price)&&record.price>=0;
+        double pricedKwh=meter?equivalentGrid:fromPlug;
+        double bill=priced?pricedKwh*record.price:Double.NaN;
+        return "IMPUTACIÓN ESTIMADA AL RECORRIDO: "+
+            fmt(fromPlug,3)+" kWh de batería"+
+            (meter?" ≈ "+fmt(equivalentGrid,3)+
+                " kWh red proporcionales":" · kWh de red sin medidor")+
+            (priced?" · $"+fmt(bill,2):
+                " · tarifa sin dato")+
+            "\n"+(meter?
+                "Costo proporcional estimado con medidor y carga registrada":
+                "Costo equivalente de batería; NO es costo medido de red")+
+            ". El campo T1Launcher kWh=6,23 se trata como uso reportado,"+
+            " no como regeneración. Su definición neta/bruta requiere "+
+            "validación: los 1,59 kWh regenerados NO se descuentan otra vez."+
+            " La batería puede incluir energía anterior o del térmico.";
+    }
     static String costs(Context c,double km,double liters,double packKwh){
         SharedPreferences rate=c.getSharedPreferences(
             T1TripRecorderService.PREFS,Context.MODE_PRIVATE);
@@ -164,10 +273,10 @@ final class T1RebuiltMorning {
             out.append("\nPONDERADO ECONÓMICO: SIN DATO HASTA "+
                 "CONFIGURAR $/kWh Y ATRIBUIR LA CARGA.");
         }
-        out.append("\nELECTRICIDAD PAGADA REAL: SIN DATO si no hay "+
-            "medición y atribución documentada de la carga del 17/11. "+
-            "El escenario NO es facturación. Regeneración se informa "+
-            "aparte y NO se descuenta dos veces de los 6,23 kWh.");
+        out.append("\n").append(chargeTripAttribution(c,packKwh))
+            .append("\nELECTRICIDAD PAGADA REAL: distinguir el costo total "+
+            "de la CARGA DOCUMENTADA del costo PROPORCIONAL ESTIMADO del "+
+            "recorrido; no asignar kWh de motor ni regeneración como red.");
         return out.toString();
     }
     static String summary(Context c){
@@ -175,11 +284,16 @@ final class T1RebuiltMorning {
         double km=totalKm(c);
         double fresh=km-KM;
         StringBuilder s=new StringBuilder();
-        s.append("PARCIAL CERRADO · 18/11 07:43–09:12 · T1Launcher")
+        s.append("JORNADA ENERGÉTICA DESDE CARGA 17/11 ~22:25"+
+            "\n").append(chargeSummary(c))
+            .append("\nPARCIAL CERRADO · 18/11 07:43–09:12 · T1Launcher")
             .append("\n21,03 km: EV 15,61 km + nafta 5,42 km")
             .append("\nNafta 0,240 L · batería reportada 6,230 kWh")
             .append(" · recuperados 1,590 kWh (informativo)")
-            .append("\nSOC 99,9 % → 79,5 % · máxima 129 km/h")
+            .append("\nSOC 99,9 % → 79,5 % (último viaje)"+
+                " · posterior declarado 73,2 % SIN recorrido añadido"+
+                " · diferencia 6,3 puntos aún no atribuida"+
+                " · máxima 129 km/h")
             .append("\nJORNADA 18/11: ").append(fmt(km,2))
             .append(" km = 21,03 km importados + ")
             .append(fmt(fresh,2)).append(" km nuevos OEM")
