@@ -19,7 +19,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * sensor is available, so 'up' never claims exact physical return.
  *
  * Actions are explicit foreground button requests ONLY; no boot or reverse.
- * Requires physically P and 0 km/h at start and before EVERY motor pulse.
+ * Explicit manual request in P/R/N/D, including at speed; the OEM actuator may still reject a write.
  * Uses the same OEM mirror mutex and ledger as legacy AUTO; no concurrency.
  */
 public final class MirrorManualTiltService extends Service {
@@ -95,7 +95,7 @@ public final class MirrorManualTiltService extends Service {
             .putBoolean(MirrorAutomationService.AUTO,false)
             .putBoolean(RUNNING,true)
             .putLong(RUNNING_AT,System.currentTimeMillis())
-            .putString(LAST_RESULT,"Solicitada lectura OEM P/0; sin pulsos aún")
+            .putString(LAST_RESULT,"Control manual solicitado; aguardando servicio OEM")
             .commit();
         try{
             startService(new Intent(this,MirrorAutomationService.class)
@@ -125,7 +125,7 @@ public final class MirrorManualTiltService extends Service {
         startForeground(CHANNEL_ID,new Notification.Builder(this,CHANNEL)
             .setSmallIcon(android.R.drawable.ic_menu_compass)
             .setContentTitle("DriveLab · movimiento manual de espejos")
-            .setContentText("P / 0 km/h; liberación después de cada pulso")
+            .setContentText("Control manual; liberación después de cada pulso")
             .setContentIntent(open).setOngoing(true).build());
     }
     private void result(String text){
@@ -143,19 +143,11 @@ public final class MirrorManualTiltService extends Service {
         throw new IllegalStateException(
             "REVERSA AUTO todavía activa: sin movimiento manual");
     }
-    private static void parked(MirrorAutomationOem oem)throws Exception{
-        int gear=oem.gear();
-        double speed=oem.speedKmh();
-        if(gear!=1||!Double.isFinite(speed)||speed<0||speed>0.5)
-            throw new IllegalStateException(
-                "P y 0 km/h requeridos: marcha="+gear+" velocidad="+speed);
-    }
     private void perform(boolean reference){
         try{
             waitForAutoStop();
             synchronized(MirrorAutomationService.OEM_MIRROR_MUTEX){
                 try(MirrorAutomationOem oem=new MirrorAutomationOem(this)){
-                    parked(oem);
                     if(reference){
                         // Only an explicit human confirmation after physical
                         // adjustment using original controls can clear old
@@ -173,7 +165,7 @@ public final class MirrorManualTiltService extends Service {
                                 "MANUAL · referencia visual ajustada por conductor")
                             .commit())
                             throw new IllegalStateException("Referencia no guardada");
-                        result("Referencia manual confirmada en P, sin mover "+
+                        result("Referencia manual confirmada, sin mover "+
                             "espejos. Próximo toque: BAJAR.");
                         return;
                     }
@@ -191,14 +183,14 @@ public final class MirrorManualTiltService extends Service {
                                  pendingRight>MirrorParkingPolicy.MAX_PULSES_PER_SIDE))
                         throw new IllegalStateException("Contador anterior inválido");
                     result((down?"BAJANDO":"SUBIENDO")+" manual · objetivo "+
-                        "IZQ "+l+" / DER "+r+" · P estacionado");
+                        "IZQ "+l+" / DER "+r+" · sin bloqueo P/R/D/velocidad");
                     for(int n=0;n<Math.max(l,r);n++){
                         for(int side=0;side<2;side++){
                             if(stopping)throw new IllegalStateException(
                                 "Movimiento interrumpido; registro conservado");
                             int limit=side==0?l:r;
                             if(n>=limit)continue;
-                            parked(oem); // NO P/R/D automatic transition logic
+                            // Driver-commanded movement is never gated by gear or speed.
                             int id=side==0?2068:2069;
                             int old=side==0?left(this):right(this);
                             if(!store().edit().putBoolean(
