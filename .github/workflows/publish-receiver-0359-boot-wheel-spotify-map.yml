@@ -1,0 +1,301 @@
+# 2026-11-18: signed 0.3.59 opt-in cold boot wheel health check and Spotify map foreground experiment.
+name: Signed Receiver 0.3.59 - boot wheel health and Spotify layer map focus
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-receiver-0359-boot-wheel-spotify-map.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: signed-drivelabauto-publication
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    env:
+      RECEIVER_STORE_PASSWORD: ${{ secrets.RECEIVER_STORE_PASSWORD }}
+      RECEIVER_KEY_ALIAS: ${{ secrets.RECEIVER_KEY_ALIAS }}
+      RECEIVER_KEY_PASSWORD: ${{ secrets.RECEIVER_KEY_PASSWORD }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Android SDK and existing signing identity
+        env:
+          RECEIVER_KEYSTORE_B64: ${{ secrets.RECEIVER_KEYSTORE_B64 }}
+        run: |
+          set -euo pipefail
+          tool=$(command -v sdkmanager || find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)
+          "$tool" 'platforms;android-35' 'build-tools;35.0.0'
+          test -n "$RECEIVER_KEYSTORE_B64" && test -n "$RECEIVER_STORE_PASSWORD"
+          test -n "$RECEIVER_KEY_ALIAS" && test -n "$RECEIVER_KEY_PASSWORD"
+          printf %s "$RECEIVER_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/receiver.p12"
+          chmod 600 "$RUNNER_TEMP/receiver.p12"
+          echo "RECEIVER_KEYSTORE=$RUNNER_TEMP/receiver.p12" >> "$GITHUB_ENV"
+      - name: Pure geometry and wheel behavior regression
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-tests
+          javac -encoding UTF-8 -d /tmp/t1-tests \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ClusterLayoutMath.java \
+            receiver/tests/T1ClusterLayoutMathTest.java \
+            receiver/tests/T1ClusterInvertedPanelsAndWheelSourceTest.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1WheelAccessListPolicy.java \
+            receiver/tests/T1WheelAccessListPolicyTest.java
+          java -cp /tmp/t1-tests ar.com.rango5gps.drivelabauto.receiver.T1ClusterLayoutMathTest
+          java -cp /tmp/t1-tests ar.com.rango5gps.drivelabauto.receiver.T1ClusterInvertedPanelsAndWheelSourceTest
+          java -cp /tmp/t1-tests ar.com.rango5gps.drivelabauto.receiver.T1WheelAccessListPolicyTest
+          for test in T1UpdaterFallbackSourceContractTest MirrorControlsVisibilitySourceContractTest T1GoogleMapsReplaceSourceContractTest T1AdbTaskResizeSourceContractTest T1WheelCalibrationSourceContractTest T1WheelOemBinderSourceContractTest T1WheelOemReconnectContractTest T1UnifiedWheelQuietVoiceSourceContractTest T1WheelPanelAndSpeedSourceTest T1WheelWazeFocusedBackTest T1WheelAutomaticBootResumeTest T1WheelBootDisplayInventoryTest T1ClusterRouteResumptionSourceTest T1WheelAccessibilityRecoverySourceTest T1ClusterPendingRecoverySourceTest T1WheelNov16RollbackSourceTest T1VoiceDualMapPendingSourceTest T1WheelNoAdbFallbackSourceTest; do
+            javac -encoding UTF-8 -d /tmp/t1-tests "receiver/tests/$test.java"
+            java -cp /tmp/t1-tests "ar.com.rango5gps.drivelabauto.receiver.$test"
+          done
+      - name: Verify cold boot now performs force-stop and real cluster OFF-ON
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-visible-boot
+          javac -encoding UTF-8 -d /tmp/t1-visible-boot receiver/tests/T1ClusterBootVisibleThenForceStopContractTest.java
+          java -cp /tmp/t1-visible-boot ar.com.rango5gps.drivelabauto.receiver.T1ClusterBootVisibleThenForceStopContractTest
+      - name: Verify cold boot and manual R OFF-ON sequence
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-clean-boot
+          javac -encoding UTF-8 -d /tmp/t1-clean-boot receiver/tests/T1ClusterColdBootAndManualRebootContractTest.java
+          java -cp /tmp/t1-clean-boot ar.com.rango5gps.drivelabauto.receiver.T1ClusterColdBootAndManualRebootContractTest
+      - name: Verify 0-120px touch-through cluster fade
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-fade
+          javac -encoding UTF-8 -d /tmp/t1-fade receiver/tests/T1ClusterEdgeFadeContractTest.java
+          java -cp /tmp/t1-fade ar.com.rango5gps.drivelabauto.receiver.T1ClusterEdgeFadeContractTest
+      - name: Verify fixed header R and persisted reload diagnostics
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-cluster-header
+          javac -encoding UTF-8 -d /tmp/t1-cluster-header receiver/tests/T1ClusterFixedToolbarAndFocusResultContractTest.java
+          java -cp /tmp/t1-cluster-header ar.com.rango5gps.drivelabauto.receiver.T1ClusterFixedToolbarAndFocusResultContractTest
+      - name: Verify TOMAR CONTROL retired and R requires confirmation
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-focus
+          javac -encoding UTF-8 -d /tmp/t1-focus receiver/tests/T1ClusterForegroundRecoveryContractTest.java
+          java -cp /tmp/t1-focus ar.com.rango5gps.drivelabauto.receiver.T1ClusterForegroundRecoveryContractTest
+      - name: Verify persistent FREEFORM 50/50 without ADB dependency
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-freeform-boot
+          javac -encoding UTF-8 -d /tmp/t1-freeform-boot receiver/tests/T1ClusterFreeformAutobootRegressionTest.java
+          java -cp /tmp/t1-freeform-boot ar.com.rango5gps.drivelabauto.receiver.T1ClusterFreeformAutobootRegressionTest
+      - name: Verify inclusive and strict SOC rules and no threshold overlap
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-soc-ops
+          javac -encoding UTF-8 -d /tmp/t1-soc-ops \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModePolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedDualRulePolicy.java \
+            receiver/tests/T1OptimizedModePolicyTest.java \
+            receiver/tests/T1OptimizedDualRulePolicyTest.java
+          java -cp /tmp/t1-soc-ops ar.com.rango5gps.drivelabauto.receiver.T1OptimizedModePolicyTest
+          java -cp /tmp/t1-soc-ops ar.com.rango5gps.drivelabauto.receiver.T1OptimizedDualRulePolicyTest
+          grep -Fq 'q.minOperator=lowerOperatorSelector(existing.minComparison)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeActivity.java
+          grep -Fq 'q.maxOperator=upperOperatorSelector(existing.maxComparison)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeActivity.java
+          grep -Fq 'min_comparison_v3' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeStore.java
+          grep -Fq 'max_comparison_v3' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1OptimizedModeStore.java
+      - name: Assert minimal daily UI and all diagnostics still reachable
+        run: |
+          set -euo pipefail
+          hub=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/ReceiverActivity.java
+          cluster=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ClusterWazeSettingsActivity.java
+          cockpit=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PremiumCockpitActivity.java
+          vehicle=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/ReceiverVehicleActivity.java
+          grep -q 'MENÚ TÉCNICO · PRUEBAS Y AJUSTES' "$hub"
+          grep -q 'quickControls.attach(oldControls)' "$hub"
+          grep -q 'CONFIGURAR PANELES A/B · APLICAR' "$cluster"
+          grep -q 'if(showTechnical)' "$cluster"
+          grep -q 'MENÚ TÉCNICO · PRUEBAS OEM' "$cockpit"
+          grep -q 'advanced.addView(extra)' "$cockpit"
+          grep -q 'renderWiperAndRadarDiagnostics(body)' "$vehicle"
+          grep -q 'renderMirrorTechnical(body)' "$vehicle"
+          grep -q 'showIndividualWindows' "$vehicle"
+      - name: Verify read-only OEM 2053 driving-mode button alongside EV MAX
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-driving-2053
+          javac -encoding UTF-8 -d /tmp/t1-driving-2053 \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1DrivingMode2053.java \
+            receiver/tests/T1DrivingMode2053Test.java
+          java -cp /tmp/t1-driving-2053 ar.com.rango5gps.drivelabauto.receiver.T1DrivingMode2053Test
+      - name: Verify microphone sends both Waze and Google Maps via Sender routing
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-voice-both
+          javac -encoding UTF-8 -d /tmp/t1-voice-both receiver/tests/T1VoiceDualMapPendingSourceTest.java
+          java -cp /tmp/t1-voice-both ar.com.rango5gps.drivelabauto.receiver.T1VoiceDualMapPendingSourceTest
+      - name: Verify historical HV energy and cost-weighted km/L calculations
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-trip-accounting
+          javac -encoding UTF-8 -d /tmp/t1-trip-accounting \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripCostModel.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripEnergyAudit.java \
+            receiver/tests/T1TripCostModelTest.java \
+            receiver/tests/T1TripEnergyAuditTest.java
+          java -cp /tmp/t1-trip-accounting ar.com.rango5gps.drivelabauto.receiver.T1TripCostModelTest
+          java -cp /tmp/t1-trip-accounting ar.com.rango5gps.drivelabauto.receiver.T1TripEnergyAuditTest
+      - name: Verify only logged plugged electricity enters trip costs
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-plug-grid
+          javac -encoding UTF-8 -d /tmp/t1-plug-grid \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripCostModel.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1PlugChargeLedger.java \
+            receiver/tests/T1TripCostModelTest.java \
+            receiver/tests/T1PlugChargeLedgerTest.java
+          java -cp /tmp/t1-plug-grid ar.com.rango5gps.drivelabauto.receiver.T1TripCostModelTest
+          java -cp /tmp/t1-plug-grid ar.com.rango5gps.drivelabauto.receiver.T1PlugChargeLedgerTest
+          ! grep -Fq 'evCost=hvOut*kwhPrice' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripRecorderService.java
+      - name: Verify ignition mirror recovery and orange warning
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/mirror-ignition-recovery
+          javac -encoding UTF-8 -d /tmp/mirror-ignition-recovery \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/MirrorParkingPolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/MirrorBootRecoveryPolicy.java \
+            receiver/tests/MirrorBootRecoveryPolicyTest.java \
+            receiver/tests/MirrorBootRecoverySourceContractTest.java \
+            receiver/tests/T1IgnitionMirrorRecircAndWheelTest.java \
+            receiver/tests/T1MirrorUncertainRecoverySourceContractTest.java \
+            receiver/tests/T1MirrorAcknowledgeClusterToggleSourceContractTest.java
+          java -cp /tmp/mirror-ignition-recovery ar.com.rango5gps.drivelabauto.receiver.MirrorBootRecoveryPolicyTest
+          java -cp /tmp/mirror-ignition-recovery ar.com.rango5gps.drivelabauto.receiver.MirrorBootRecoverySourceContractTest
+          java -cp /tmp/mirror-ignition-recovery ar.com.rango5gps.drivelabauto.receiver.T1IgnitionMirrorRecircAndWheelTest
+          java -cp /tmp/mirror-ignition-recovery ar.com.rango5gps.drivelabauto.receiver.T1MirrorUncertainRecoverySourceContractTest
+          java -cp /tmp/mirror-ignition-recovery ar.com.rango5gps.drivelabauto.receiver.T1MirrorAcknowledgeClusterToggleSourceContractTest
+      - name: Verify independent external charge recorder and first load import
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-charge
+          javac -encoding UTF-8 -d /tmp/t1-charge \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ChargeMath.java \
+            receiver/tests/T1ChargeMathTest.java \
+            receiver/tests/T1ChargeAutoModuleSourceContractTest.java
+          java -cp /tmp/t1-charge ar.com.rango5gps.drivelabauto.receiver.T1ChargeMathTest
+          java -cp /tmp/t1-charge ar.com.rango5gps.drivelabauto.receiver.T1ChargeAutoModuleSourceContractTest
+      - name: Verify automatic ignition journeys, HV and exportable GPS
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-autotrip
+          javac -encoding UTF-8 -d /tmp/t1-autotrip \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1AutoDrivePolicy.java \
+            receiver/tests/T1AutoDrivePolicyTest.java \
+            receiver/tests/T1AutoJourneySourceContractTest.java
+          java -cp /tmp/t1-autotrip ar.com.rango5gps.drivelabauto.receiver.T1AutoDrivePolicyTest
+          java -cp /tmp/t1-autotrip ar.com.rango5gps.drivelabauto.receiver.T1AutoJourneySourceContractTest
+      - name: Verify custom minute-precise journey time windows and CSV
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-auto-range
+          javac -encoding UTF-8 -d /tmp/t1-auto-range \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1AutoRangeMath.java \
+            receiver/tests/T1AutoRangeMathTest.java \
+            receiver/tests/T1AutoRangeWindowSourceContractTest.java
+          java -cp /tmp/t1-auto-range ar.com.rango5gps.drivelabauto.receiver.T1AutoRangeMathTest
+          java -cp /tmp/t1-auto-range ar.com.rango5gps.drivelabauto.receiver.T1AutoRangeWindowSourceContractTest
+      - name: Verify accessibility grant, wheel reconnect, ADB local consent
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/wheel-one-tap
+          javac -encoding UTF-8 -d /tmp/wheel-one-tap \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1WheelAccessListPolicy.java \
+            receiver/tests/T1WheelAccessListPolicyTest.java \
+            receiver/tests/T1WheelAccessibilityRecoverySourceTest.java \
+            receiver/tests/T1WheelManualReconnectSourceTest.java
+          java -cp /tmp/wheel-one-tap ar.com.rango5gps.drivelabauto.receiver.T1WheelAccessListPolicyTest
+          java -cp /tmp/wheel-one-tap ar.com.rango5gps.drivelabauto.receiver.T1WheelAccessibilityRecoverySourceTest
+          java -cp /tmp/wheel-one-tap ar.com.rango5gps.drivelabauto.receiver.T1WheelManualReconnectSourceTest
+      - name: Verify prior-approved accessibility restore by ADB without phone
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-adb-grant
+          javac -encoding UTF-8 -d /tmp/t1-adb-grant \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1WheelAccessListPolicy.java \
+            receiver/tests/T1WheelAccessListPolicyTest.java \
+            receiver/tests/T1WheelAccessibilityRecoverySourceTest.java \
+            receiver/tests/T1WheelManualReconnectSourceTest.java \
+            receiver/tests/T1WheelOwnerAdbRestoreSourceTest.java
+          java -cp /tmp/t1-adb-grant ar.com.rango5gps.drivelabauto.receiver.T1WheelAccessListPolicyTest
+          java -cp /tmp/t1-adb-grant ar.com.rango5gps.drivelabauto.receiver.T1WheelAccessibilityRecoverySourceTest
+          java -cp /tmp/t1-adb-grant ar.com.rango5gps.drivelabauto.receiver.T1WheelManualReconnectSourceTest
+          java -cp /tmp/t1-adb-grant ar.com.rango5gps.drivelabauto.receiver.T1WheelOwnerAdbRestoreSourceTest
+      - name: Verify boot wheel health and Spotify map foreground guarded recovery
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-boot-health
+          javac -encoding UTF-8 -d /tmp/t1-boot-health \
+            receiver/tests/T1BootHealthSpotifyOverlaySourceTest.java
+          java -cp /tmp/t1-boot-health ar.com.rango5gps.drivelabauto.receiver.T1BootHealthSpotifyOverlaySourceTest
+      - name: Build and verify signed Receiver 0.3.59
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'bruceferra/drivelab-auto-standalone'
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.58
+          ! gh release view v0.3.59 >/dev/null 2>&1
+          gradle --no-daemon :receiver:assembleRelease
+          apk=receiver/build/outputs/apk/release/receiver-release.apk
+          test -s "$apk"
+          sig="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          "$sig" verify --print-certs "$apk"
+          mkdir -p /tmp/old output
+          gh release download v0.3.58 --pattern 'DriveLab-Auto-Receiver-v0.3.58.apk' --dir /tmp/old
+          gh release download v0.3.58 --pattern 'sender.json' --dir output
+          "$sig" verify --print-certs /tmp/old/DriveLab-Auto-Receiver-v0.3.58.apk
+          before=$("$sig" verify --print-certs /tmp/old/DriveLab-Auto-Receiver-v0.3.58.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          after=$("$sig" verify --print-certs "$apk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          test -n "$before" && test "$before" = "$after"
+          badge=$("$aapt" dump badging "$apk" | head -1)
+          echo "$badge" | grep -F "package: name='ar.com.rango5gps.drivelabauto.receiver'"
+          echo "$badge" | grep -F "versionCode='160'"
+          echo "$badge" | grep -F "versionName='0.3.59'"
+          name=DriveLab-Auto-Receiver-v0.3.59.apk
+          cp "$apk" "output/$name"
+          export RECEIVER_SHA=$(sha256sum "output/$name" | awk '{print $1}')
+          python3 - <<'PY'
+          import os,json
+          manifest={
+            'packageName':'ar.com.rango5gps.drivelabauto.receiver',
+            'versionName':'0.3.59','versionCode':160,
+            'sha256':os.environ['RECEIVER_SHA'],
+            'apkUrl':'https://github.com/bruceferra/drivelab-auto-standalone/releases/download/v0.3.59/DriveLab-Auto-Receiver-v0.3.59.apk'}
+          assert len(manifest['sha256'])==64
+          with open('output/receiver.json','w') as f:
+            json.dump(manifest,f,indent=2)
+          with open('output/sender.json') as f:
+            sender=json.load(f)
+          assert sender['versionCode']==23 and sender['versionName']=='0.2.22'
+          PY
+          sha256sum "output/$name" > output/receiver.sha256
+      - name: Publish Receiver only and preserve Sender 0.2.22 OTA
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.58
+          ! gh release view v0.3.59 >/dev/null 2>&1
+          gh release create v0.3.59 \
+            output/DriveLab-Auto-Receiver-v0.3.59.apk \
+            output/receiver.json output/sender.json output/receiver.sha256 \
+            --target "$GITHUB_SHA" --latest \
+            --title 'DriveLab Auto Receiver 0.3.59 · Ruedita al arrancar y capa Spotify del mapa' \
+            --notes 'Receiver 0.3.59/code160: SALUD DE ARRANQUE. Después del BOOT real, DriverLab revisa el servicio Android de accesibilidad y refresca controles del volante/Waze/Maps. Si el permiso continúa aprobado pero el bind falló, usa la recuperación ADB local autorizada existente; si Android lo QUITÓ, una opción separada en VOLANTE permite AUTORIZAR UNA SOLA VEZ la reparación por ADB al encender, y se ejecuta únicamente con autorización previa confirmada de este servicio, bridge OEM ON y ADB 127.0.0.1:5556/5555 en funcionamiento. VOLANTE OFF revoca la opción persistente; sin permiso opt-in solo informa el diagnóstico. No altera otros servicios de accesibilidad. NUEVA OPCIÓN INDEPENDIENTE en CLÚSTER para la capa OEM Spotify: MAPAS DELANTE AL ENCENDER ON/OFF (por defecto OFF). Al terminar el arranque limpio con Waze+Google Maps Display 1, recupera el primer plano de las tareas existentes con ActivityManager.moveTaskToFront únicamente al confirmar 0 km/h, máximo dos intentos, sin tocar Spotify, audio Bluetooth/A2DP, pantallas OEM, tamaño, controles de conducción ni fuerza de detener apps. Es un ensayo: la capa OEM de Spotify podría ignorar el foco Android; el resultado y la limitación se muestran en Clúster. Se conservan Mirror v0.3.54, cargas v0.3.55 y viajes v0.3.56; Sender 0.2.22 intacto. Requiere prueba física estacionada.'
+          mkdir -p verify
+          gh release download v0.3.59 --pattern receiver.json --dir verify
+          gh release download v0.3.59 --pattern sender.json --dir verify
+          cmp output/receiver.json verify/receiver.json
+          cmp output/sender.json verify/sender.json
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.59
