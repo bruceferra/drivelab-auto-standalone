@@ -894,10 +894,10 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     }
     private void tripActions(Button start,Button pause,Button end,
                              boolean paused,boolean active,boolean live,
-                             boolean canStart){
+                             boolean canStart,boolean canResume){
         tripAction(start,"INICIAR",TEAL,canStart&&!paused);
         tripAction(pause,paused?"REANUDAR":"PAUSAR",
-            paused?TEAL:GOLD,paused||active&&live);
+            paused?TEAL:GOLD,paused?canResume:active&&live);
         tripAction(end,"TERMINAR",RED,active||paused);
     }
     private LinearLayout controlCard(LinearLayout parent,String title,int slot){
@@ -1635,13 +1635,13 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         // Gray controls are actually disabled, not merely recolored.
         tripActions(dayStartButton,dayPauseButton,dayEndButton,
             dayPaused,dayDesired||running,fresh||running,
-            !running&&!dayDesired);
+            !running&&!dayDesired,!running);
         tripActions(clientStartButton,clientPauseButton,clientEndButton,
             clientPaused,client||pending,clientLive,
-            !client&&!pending);
+            !client&&!pending,!dayPaused&&!running);
         tripActions(secondStartButton,secondPauseButton,secondEndButton,
             secondPaused,second||secondPending,secondLiveNow,
-            !second&&!secondPending);
+            !second&&!secondPending,!dayPaused&&!running);
         if(clientRecoverButton!=null)
             clientRecoverButton.setVisibility(
                 T1JourneyStore.stuck(this)?
