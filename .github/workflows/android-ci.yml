@@ -274,6 +274,17 @@ jobs:
             receiver/tests/T1TripEnergyAuditTest.java
           java -cp /tmp/t1-trip-cost ar.com.rango5gps.drivelabauto.receiver.T1TripCostModelTest
           java -cp /tmp/t1-trip-cost ar.com.rango5gps.drivelabauto.receiver.T1TripEnergyAuditTest
+      - name: Custom minute-precise journey intervals from raw GPS/OEM samples
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-auto-range
+          javac -encoding UTF-8 -d /tmp/t1-auto-range \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1AutoRangeMath.java \
+            receiver/tests/T1AutoRangeMathTest.java \
+            receiver/tests/T1AutoRangeWindowSourceContractTest.java
+          java -cp /tmp/t1-auto-range ar.com.rango5gps.drivelabauto.receiver.T1AutoRangeMathTest
+          java -cp /tmp/t1-auto-range ar.com.rango5gps.drivelabauto.receiver.T1AutoRangeWindowSourceContractTest
       - name: Ignition AUTO trips with GPS and last-plug accounting
         shell: bash
         run: |
