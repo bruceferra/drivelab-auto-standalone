@@ -1675,7 +1675,10 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             electricRoadKm=T1RebuiltMorning.totalEvKm(this);
         evKmNow.setText(f(electricRoadKm,2)+" km");
         if(reconstructedMorningStatus!=null)
-            reconstructedMorningStatus.setText(T1RebuiltMorning.summary(this));
+            reconstructedMorningStatus.setText(
+                T1RebuiltMorning.installed(this)?
+                    T1RebuiltMorning.summary(this):
+                    T1RebuiltMorning.reconciledReference(this));
         // L/100 km = liters * 100 / kilometers; km/L = km / liters.
         // Neither ratio is meaningful with no verified fuel events, zero
         // liters, zero distance or a stale client scope.
