@@ -448,7 +448,7 @@ public final class T1OptimizedAutoService extends Service {
         }
         // STOP BEFORE the propulsion-mode (1043) phase, too: the
         // previous implementation could switch 1043 to HEV and only
-        // discover that its requested forced target 70 had no known
+        // discover that its requested forced target had no known
         // 1041 readback when the auxiliary pilot ran afterwards.
         // Do not leave a partially applied road profile.
         T1SocRegenWritePolicy.Targets planned=
