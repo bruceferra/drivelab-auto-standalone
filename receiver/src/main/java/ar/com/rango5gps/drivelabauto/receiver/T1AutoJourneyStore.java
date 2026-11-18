@@ -241,12 +241,12 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
         double net(){return out-in;}
         String describe(){
             return title+" · "+sessions+" encendidos"+
-                "\\n"+fmt(km,2)+" km OEM · "+fmt(gps,2)+" km GPS"+
-                "\\nBatería: SALIDA "+fmt(out,3)+" kWh; ENTRADA "+
+                "\n"+fmt(km,2)+" km OEM · "+fmt(gps,2)+" km GPS"+
+                "\nBatería: SALIDA "+fmt(out,3)+" kWh; ENTRADA "+
                 fmt(in,3)+" kWh; NETA "+fmt(net(),3)+" kWh"+
-                "\\nTiempo con telemetría: "+
+                "\nTiempo con telemetría: "+
                 fmt(sampledMs/60000.0,1)+" minutos"+
-                "\\nENTRADA = regeneración + generador térmico, "+
+                "\nENTRADA = regeneración + generador térmico, "+
                 "no solo frenado. Nafta: SIN LITROS OEM VALIDADOS.";
         }
     }
@@ -295,7 +295,7 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
             StringBuilder s=new StringBuilder(
                 "nivel;nombre;desde_epoch_ms;hasta_epoch_ms;encendidos;"+
                 "km_oem;km_gps;hv_salida_kwh;hv_entrada_kwh;hv_neto_kwh;"+
-                "minutos_con_telemetria\\n");
+                "minutos_con_telemetria\n");
             csvRow(s,"TOTAL",total);
             for(Slice slice:days.values())csvRow(s,"DIA",slice);
             for(Slice slice:byIgnition.values())csvRow(s,"ENCENDIDO",slice);
@@ -312,7 +312,7 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
                 .append(fmtCsv(row.in)).append(';')
                 .append(fmtCsv(row.net())).append(';')
                 .append(fmtCsv(row.sampledMs/60000.0))
-                .append('\\n');
+                .append('\n');
         }
     }
     private static T1AutoRangeMath.Cumulative point(Cursor c){
@@ -373,7 +373,7 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
         writeLine(out,"sesion_id;fecha_epoch_ms;ready_1031;cable_1060;"+
             "marcha_1033;velocidad_kmh;soc;volt;amps;rpm;gps_lat;gps_lon;"+
             "precision_m;km_oem_acum;km_gps_acum;hv_salida_acum;"+
-            "hv_entrada_acum\\n");
+            "hv_entrada_acum\n");
         try(Cursor c=getReadableDatabase().rawQuery(
             "SELECT session_id,t_epoch_ms,raw_ready,raw_cable,raw_gear,"+
                 "speed_kmh,soc,volt,amps,rpm,gps_lat,gps_lon,"+
@@ -388,7 +388,7 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
                     if(!c.isNull(i))row.append(i<=4?
                         Long.toString(c.getLong(i)):fmtCsv(c.getDouble(i)));
                 }
-                writeLine(out,row.append('\\n').toString());
+                writeLine(out,row.append('\n').toString());
             }
         }
         out.flush();
