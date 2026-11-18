@@ -40,6 +40,16 @@ public final class T1RebuiltMorningSourceContractTest {
             morning.contains("NO se descuentan otra vez")&&
             morning.contains("LATER_SOC_REPORTED=73.2"),
             "Documented charge source, proportional cost, regen separation and later SOC");
+        String auto=src("T1AutoJourneyActivity.java");
+        yes(morning.contains("RECONSTRUCCIÓN HISTÓRICA ÚNICA")&&
+            morning.contains("fmt(PACK_KWH,3)") &&
+            auto.contains("T1RebuiltMorning.reconciledReference(this)")&&
+            auto.contains("REGENERADOS")&&
+            auto.contains("DATOS HV RAW NO RECONCILIADOS")&&
+            auto.contains("overlapsHistorical")&&
+            auto.contains("No sumar esta sesión al parcial T1Launcher"),
+            "AUTO screen must show external reconstructed 6.23 USED and "+
+            "1.59 regenerated, not reuse old overlapping HV RAW label");
         yes(!morning.contains("drop table")&&
             !morning.contains("getExternalStorageDirectory")&&
             !morning.contains("com.t1launcher."),
