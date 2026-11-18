@@ -110,7 +110,7 @@ public final class T1ClusterWazeSettingsActivity extends T1ImmersiveActivity {
             T1ClusterWazeRouter.BOOT_RELOAD_RESULT,
             "Aún no probado tras reiniciar la camioneta"),14);
         label(body,"TAREAS WAZE / MAPS · "+
-            T1ClusterTaskSnapshot.last(this),12);
+            T1ClusterTaskSnapshot.lastTime(this),12);
         button(body,"DIAGNÓSTICO DISPLAY 1 / MAPAS · SOLO LEER",
             this::showClusterTaskSnapshot);
         boolean focusAuto=p.getBoolean(T1ClusterBootFocus.ENABLED,false);
