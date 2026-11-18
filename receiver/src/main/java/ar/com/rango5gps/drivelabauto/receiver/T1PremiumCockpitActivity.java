@@ -44,7 +44,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private final AtomicBoolean continuityBusy=new AtomicBoolean(false);
     private ScrollView cockpitScroll;
     private LinearLayout cockpitNavRow,cockpitModeRow;
-    private TextView systemMonitorLine;
+    private TextView systemMonitorLine,reconstructedMorningStatus;
     private T1SystemLoadMonitor loadMonitor;
     private final AtomicBoolean loadReading=new AtomicBoolean(false);
     private T1SystemLoadMonitor.Result lastSystemLoad;
@@ -1095,6 +1095,18 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         secondPauseButton=compactButton(secondActions,"PAUSAR",GOLD,this::pauseSecond);
         secondEndButton=compactButton(secondActions,"TERMINAR",RED,this::finishSecond);
 
+        // Owner-authorized one-time import: old LOCAL journeys are deleted
+        // on device only after this explicit tap; app install alone is safe.
+        LinearLayout rebuiltAction=row();root.addView(rebuiltAction);
+        compactButton(rebuiltAction,
+            "18/11 · BORRAR VIEJOS / IMPORTAR PARCIAL / SEGUIR JORNADA",
+            TEAL,this::confirmReconstructedMorning);
+        reconstructedMorningStatus=text(
+            "18/11 · reconstrucción pendiente de aplicar",
+            13,WHITE,true);
+        reconstructedMorningStatus.setBackground(bg(CARD,12));
+        reconstructedMorningStatus.setPadding(12,10,12,10);
+        root.addView(reconstructedMorningStatus);
         // Unique navigation row: no duplicate rescue controls.
         // RAM/CPU access is preserved as a primary button.
 
@@ -1637,7 +1649,9 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             false,second,secondPending,secondLive,0,0,0,0,0,price);
         totalScopeTitle.setText(dayPaused?"Ⅱ VIAJE TOTAL PAUSADO":
             dayDesired?"● VIAJE TOTAL · JORNADA":"○ VIAJE TOTAL · SIN GRABAR");
-        totalScopeKm.setText(f(total.km,2)+" km");
+        totalScopeKm.setText(f(
+            T1RebuiltMorning.isToday(this)?T1RebuiltMorning.totalKm(this):
+                total.km,2)+" km");
         scopeTitle.setText(clientPaused?"Ⅱ VIAJE 1 PAUSADO":
             client?"● VIAJE 1 · ACTIVO":
             pending?"◉ VIAJE 1 · PREPARANDO":"○ VIAJE 1 · SIN GRABAR");
@@ -1657,7 +1671,11 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 m.getFloat(T1TripRecorderService.EV_DISTANCE,0f):0):
             selectedScope==2?(second?T1JourneyStore2.electricKm(this):0):
             client?T1JourneyStore.electricKm(this):0;
+        if(selectedScope==0&&T1RebuiltMorning.isToday(this))
+            electricRoadKm=T1RebuiltMorning.totalEvKm(this);
         evKmNow.setText(f(electricRoadKm,2)+" km");
+        if(reconstructedMorningStatus!=null)
+            reconstructedMorningStatus.setText(T1RebuiltMorning.summary(this));
         // L/100 km = liters * 100 / kilometers; km/L = km / liters.
         // Neither ratio is meaningful with no verified fuel events, zero
         // liters, zero distance or a stale client scope.
@@ -1835,6 +1853,26 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             "no sumar dos veces compras y consumo";
 
         ArrayList<HistoryRecord> all=new ArrayList<>();
+        if(T1RebuiltMorning.installed(this)){
+            // Real prior files were cleared at import, but this explicit
+            // sidecar checkpoint remains visible as a CLOSED client trip.
+            // Its 6.23 kWh are T1Launcher pack usage, NOT an OEM HV-out CSV.
+            all.add(new HistoryRecord(1,T1RebuiltMorning.ID,
+                "18/11 RECONSTRUIDO · 07:43–09:12 · T1Launcher",
+                T1RebuiltMorning.FROM,T1RebuiltMorning.UNTIL,
+                T1RebuiltMorning.KM,T1RebuiltMorning.KM,
+                T1RebuiltMorning.EV_KM,T1RebuiltMorning.LITERS,
+                T1RebuiltMorning.PACK_KWH,Double.NaN,Double.NaN,
+                false,false,0,""));
+            if(T1RebuiltMorning.isToday(this)){
+                out.day="JORNADA 18/11 · "+T1RebuiltMorning.fmt(
+                    T1RebuiltMorning.totalKm(this),2)+
+                    " km (21,03 km históricos + nuevos OEM reales)"+
+                    "\nParcial cerrado 07:43–09:12 · nafta 0,240 L "+
+                    "· 6,230 kWh batería T1Launcher · "+
+                    "regenerados 1,590 kWh (aparte)";
+            }
+        }
         // Viaje Total and two independent client slots retain their original
         // sources; never sum their overlapping distances in this snapshot.
         SharedPreferences recorder=getSharedPreferences(
@@ -2078,6 +2116,37 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     }
     private void showHistoryDetails(HistoryRecord x){
         if(historyDetailTitle==null||historyDetailRow==null)return;
+        if(T1RebuiltMorning.isReconstructed(x.key())){
+            historyDetailTitle.setText(
+                "VIAJE PARCIAL CERRADO · 18/11/2026 07:43–09:12 "+
+                "· T1Launcher (21,03 km)");
+            historyDetailRow.removeAllViews();
+            compactMetric(historyDetailRow,"CONSUMO NAFTA",
+                "1,14 L/100 · 87,63 km/L (solo combustible)");
+            compactMetric(historyDetailRow,"KM ELÉCTRICOS PUROS",
+                "15,61 km");
+            compactMetric(historyDetailRow,"COMBUSTIBLE",
+                "0,240 L (T1Launcher)");
+            compactMetric(historyDetailRow,"BATERÍA REPORTADA",
+                "6,230 kWh; regen 1,590 kWh APARTE");
+            SharedPreferences price=getSharedPreferences(
+                T1TripRecorderService.PREFS,MODE_PRIVATE);
+            compactMetric(historyDetailRow,"COSTO NAFTA",
+                "$ "+f(.24*price.getFloat(
+                    T1TripRecorderService.FUEL_PRICE,2129f),2));
+            compactMetric(historyDetailRow,"AUTONOMÍA TOTAL",
+                "NO GUARDADA · odómetro SIN DATO");
+            historyEnergyCostStatus.setText(
+                "RECONSTRUCCIÓN T1LAUNCHER · PARCIAL CERRADO"+
+                "\n"+T1RebuiltMorning.costs(this,21.03,.24,6.23)+
+                "\nDistancia 21,03 km = 15,61 EV + 5,42 nafta. "+
+                "SOC 99,9→79,5 %. Máx. 129 km/h. "+
+                "No sumar el viaje DriveLab 2,85 km superpuesto.");
+            if(historyEcoStatus!=null)
+                historyEcoStatus.setText("ECO DEL VIAJE · "+
+                    "sin puntos GPS/OEM importados; no se inventan curvas.");
+            return;
+        }
         historyDetailTitle.setText(x.displayName()+" · "+
             new SimpleDateFormat("dd/MM/yyyy HH:mm",Locale.getDefault())
                 .format(new Date(x.started))+
@@ -2379,6 +2448,73 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 historyDeleteResult(done,msg);
             });
         },"T1-History-Delete-User-Confirmed").start();
+    }
+    private void confirmReconstructedMorning(){
+        if(T1RebuiltMorning.installed(this)){
+            new AlertDialog.Builder(this).setTitle("18/11 ya importado")
+                .setMessage("El viaje cerrado de 21,03 km y el saldo inicial "+
+                    "de la jornada ya están guardados. No se borrará nada "+
+                    "otra vez; se conserva el vínculo al TRIP nuevo.")
+                .setPositiveButton("ENTENDIDO",null).show();
+            return;
+        }
+        String blocked=T1TripDeletion.blockReason(this);
+        if(blocked!=null){
+            historyDeleteResult(false,blocked);return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("18/11 · limpieza e importación única")
+            .setMessage("Eliminar los viajes y jornadas LOCALES antiguos, "+
+                "incluida la base AUTO por encendido, e importar el parcial "+
+                "cerrado 07:43–09:12 (21,03 km). Luego iniciar un TRIP "+
+                "NUEVO y mostrar la jornada 18/11 con esos 21,03 km "+
+                "como saldo inicial, sin inventar muestras OEM/GPS. "+
+                "Se conservan cargas, precios, mapas, ADB, volante "+
+                "y configuraciones. La NUBE NO se borra. "+
+                "Esta operación no se repite tras reiniciar.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("BORRAR E IMPORTAR",(d,w)->{
+                if(reconstructedMorningStatus!=null)
+                    reconstructedMorningStatus.setText(
+                        "Importando en segundo plano, sin tocar mapas…");
+                new Thread(()->{
+                    String result;boolean ok;
+                    try{
+                        result=T1RebuiltMorning.install(
+                            getApplicationContext());
+                        ok=true;
+                    }catch(Exception ex){
+                        result="IMPORTACIÓN INCOMPLETA: "+
+                            String.valueOf(ex.getMessage())+
+                            ". No se afirma éxito; revisar estado local.";
+                        ok=false;
+                    }
+                    final String message=result;
+                    final boolean installed=ok;
+                    ui.post(()->{
+                        if(isFinishing()||isDestroyed())return;
+                        if(installed){
+                            selectedScope=0;
+                            historyDeleteRevision++;
+                            selectedHistoryKey="1:"+T1RebuiltMorning.ID;
+                            renderedHistorySignature="";
+                            renderedHistoryDetailSignature="";
+                            cachedMasterHistory=new ArrayList<>();
+                            updateHistory();
+                            updateStats();
+                        }
+                        if(reconstructedMorningStatus!=null)
+                            reconstructedMorningStatus.setText(
+                                installed?T1RebuiltMorning.summary(this):
+                                    message);
+                        new AlertDialog.Builder(this)
+                            .setTitle(installed?"18/11 · IMPORTADO":
+                                "IMPORTACIÓN SIN CONFIRMAR")
+                            .setMessage(message)
+                            .setPositiveButton("ENTENDIDO",null).show();
+                    });
+                },"T1-Reconstructed-Morning-Owner-Import").start();
+            }).show();
     }
     private void runHistoryRepair(){runHistoryRepair(true);}
     private void runHistoryRepair(boolean manual){
