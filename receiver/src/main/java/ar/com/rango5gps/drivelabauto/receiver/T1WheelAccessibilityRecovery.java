@@ -157,6 +157,14 @@ final class T1WheelAccessibilityRecovery {
         new Thread(()->{
             try{
                 String old=current(app);
+                // Prove DriveLab's ADB session is really authorized on THIS
+                // headunit before changing any secure user setting.
+                String adbCurrent=T1LocalAdbClient.shell(app,
+                    "settings get secure enabled_accessibility_services").trim();
+                String normalized=old==null?"null":old;
+                if(!normalized.equals(adbCurrent))
+                    throw new IllegalStateException(
+                        "Lecturas ADB/Android difieren; sin modificar permisos");
                 String updated=T1WheelAccessListPolicy.withOurService(old);
                 if(updated==null)
                     throw new IllegalStateException(
