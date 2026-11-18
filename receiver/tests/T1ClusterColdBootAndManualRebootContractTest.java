@@ -44,12 +44,16 @@ public final class T1ClusterColdBootAndManualRebootContractTest {
             toolbar.contains("REPARAR MAPAS")&&
             toolbar.contains("this::confirmClusterReload"),
             "Cluster auto-start must not depend on unrelated Receiver auto_boot, and repair is discoverable");
-        yes(router.contains("T1ClusterFreshStart.prepare(c)")&&
-            !router.contains("stoppedForSavedSplit(c)")&&
+        int bootMethod=router.indexOf("static String onReceiverBoot(Context c)");
+        int dual=router.indexOf("if(T1ClusterLayoutPolicy.savedDualSplit(c))",bootMethod);
+        int fallback=router.indexOf("if(T1ClusterLayoutPolicy.pendingUnverified(c))",dual);
+        String bootPart=router.substring(dual,fallback);
+        yes(!bootPart.contains("T1ClusterFreshStart.prepare(c)")&&
+            !bootPart.contains("T1ClusterAdbResize.closeClusterApps(c,")&&
+            bootPart.contains("reopenSavedPanelsStopped(c)")&&
             receiver.contains("T1ClusterWazeRouter.onReceiverBoot(this)")&&
-            receiver.contains("if(intent!=null&&intent.getBooleanExtra(FROM_BOOT,false))")&&
-            receiver.contains("Navegación delegada al arranque limpio del clúster"),
-            "Only true boot may clean before auto-opening map panes");
+            receiver.contains("if(intent!=null&&intent.getBooleanExtra(FROM_BOOT,false))"),
+            "Cold boot must NOT repeatedly close Waze/Maps after physical 0.3.68 regression");
         int manual=toolbar.indexOf("private void toggleCluster()");
         int next=toolbar.indexOf("private void refreshMirrorAuto()",manual);
         yes(manual>0&&next>manual&&
@@ -68,7 +72,7 @@ public final class T1ClusterColdBootAndManualRebootContractTest {
             reboot.contains("MAIN.postDelayed(()->performOn(owner,update,false),")&&
             reboot.contains("putBoolean(T1ClusterWazeRouter.RELOAD_HOLD,true)")&&
             reboot.contains("putBoolean(T1ClusterWazeRouter.RELOAD_HOLD,false)")&&
-            router.contains("android.os.SystemClock.sleep(T1ClusterManualReboot.OFF_VISIBLE_MS)")&&
+            reboot.contains("OFF_VISIBLE_MS=10000L")&&
             reboot.contains("T1ClusterFreshStart.prepare(owner)")&&
             reboot.contains("reopenSavedPanelsStopped(owner)")&&
             reboot.contains("T1ClusterAdbResize.closeClusterApps(owner,")&&
@@ -77,9 +81,9 @@ public final class T1ClusterColdBootAndManualRebootContractTest {
             reboot.contains("T1LastRoute.restore(owner)")&&
             !reboot.contains("new Intent(owner,ReceiverActivity.class)")&&
             !reboot.contains("Intent.FLAG_ACTIVITY_CLEAR_TASK")&&
-            router.contains("T1ClusterAdbResize.closeClusterApps(c,")&&
-            router.contains("putBoolean(ENABLED,false)")&&
-            router.contains("putBoolean(ENABLED,true)")&&
+            reboot.contains("T1ClusterAdbResize.closeClusterApps(owner,")&&
+            reboot.contains("putBoolean(T1ClusterWazeRouter.ENABLED,false)")&&
+            reboot.contains("putBoolean(T1ClusterWazeRouter.ENABLED,true)")&&
             reboot.contains("ReceiverService.ACTION_START")&&
             reboot.contains("speedKmh()")&&
             reboot.contains("gear!=1||!Double.isFinite(speed)")&&
