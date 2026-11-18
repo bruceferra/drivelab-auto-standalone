@@ -11,7 +11,7 @@ final class T1SocModePolicy {
     }
     static double socTarget(int rawInt,double rawFloat){
         // T1Launcher observations: raw 56 means selected FORZADO 50%.
-        // Unknown raw encodings (60/70% not photographed) stay unknown.
+        // Owner-confirmed OEM pairings include 60%=raw64, 70%=raw72.
         // rawFloat=1 is not a valid percentage for this getter.
         int selected=T1SocTargetCodec.observedPercentForRaw(rawInt);
         return selected<0?Double.NaN:selected;
