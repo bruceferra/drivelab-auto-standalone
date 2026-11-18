@@ -57,10 +57,16 @@ final class T1OemHardKeyBridge {
                 // T1Launcher-T1N134.apk DEX: VozVolante$callback$1
                 // explicitly matches physical microphone key=1010,
                 // action=100. 1000..1003 are wheel/OK/BACK.
-                if((key>=1000&&key<=1003)||key==1010)
+                boolean known=(key>=1000&&key<=1003)||key==1010;
+                boolean capture=T1ModeKeyProbe.armed(app);
+                if(known||capture)
                     main.post(()->{
-                        if(requested&&registered)
-                            receiver.onHardKey(key,action,extra);
+                        if(!requested||!registered)return;
+                        if(T1ModeKeyProbe.armed(app))
+                            T1ModeKeyProbe.observe(app,key,action,extra);
+                        // Unknown MODE candidate is logged ONLY.
+                        // Never forward it as a wheel/voice command.
+                        if(known)receiver.onHardKey(key,action,extra);
                     });
                 return true;
             }

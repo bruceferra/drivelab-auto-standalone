@@ -229,7 +229,55 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
                     recreate();
                 }).show();
         });
-        modeState=text(body,"MODO RUEDITA ACTUAL: SELECCIÓN DE BOTONES",20);
+        text(body,"BOTÓN FÍSICO MODE · INVESTIGACIÓN OEM",17);
+        text(body,"T1 Launcher registra teclas Android, pero en su APK "+
+            "no encontramos todavía un código fiable para MODE. "+
+            "Esta captura sólo registra eventos del Binder OEM ya "+
+            "conectado. Nunca envía pulsaciones ni cambia fuentes de "+
+            "audio. Probá únicamente en P, detenido.",13);
+        button(body,"CAPTURAR BOTÓN MODE · 30 S (SOLO LECTURA)",()->{
+            report.setText("Comprobando marcha P y velocidad cero antes "+
+                "de activar la captura de botón MODE…");
+            new Thread(()->{
+                boolean safe=false;
+                String error="No se confirmó P / 0 km/h";
+                MirrorAutomationOem oem=null;
+                try{
+                    oem=new MirrorAutomationOem(this);
+                    int gear=oem.gear();
+                    double speed=oem.speedKmh();
+                    safe=gear==1&&Double.isFinite(speed)&&
+                        speed>=0&&speed<=0.5;
+                    if(!safe)error="Lectura OEM marcha="+gear+
+                        " velocidad="+speed+" km/h · solo en P";
+                }catch(Exception ex){
+                    error="OEM no disponible: "+ex.getClass().getSimpleName();
+                }finally{
+                    if(oem!=null)oem.close();
+                }
+                final boolean permitted=safe;
+                final String detail=error;
+                runOnUiThread(()->{
+                    if(!permitted){
+                        report.setText("CAPTURA MODE BLOQUEADA: "+detail);return;
+                    }
+                    T1OemMicrophoneService.ensureRunning(this);
+                    T1ModeKeyProbe.arm(this);
+                    report.setText("Captura MODE iniciada por 30 s. Pulsá "+
+                        "el botón físico MODE una o dos veces. "+
+                        "Después tocá VER RESULTADO MODE. "+
+                        "No se envían comandos al auto.");
+                });
+            },"T1-Mode-ReadOnly-Park-Check").start();
+        });
+        button(body,"VER RESULTADO MODE / COMPARTIR CÓDIGOS",()->{
+            report.setText(T1ModeKeyProbe.status(this)+
+                "\\nSi no llega código OEM, tocá la prueba Android "+
+                "KEYEVENT de abajo.");
+        });
+        button(body,"CAPTURAR MODE COMO TECLA ANDROID (90 S)",()->
+            startActivity(new Intent(this,T1SteeringKeysActivity.class)));
+                modeState=text(body,"MODO RUEDITA ACTUAL: SELECCIÓN DE BOTONES",20);
         panelA=button(body,"CONTROLAR PANEL A",()->{
             T1WheelTarget.select(this,false);refreshModes();
         });
