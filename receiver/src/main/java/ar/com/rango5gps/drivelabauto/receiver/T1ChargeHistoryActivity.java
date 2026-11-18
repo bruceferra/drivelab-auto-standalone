@@ -133,7 +133,8 @@ public final class T1ChargeHistoryActivity extends T1ImmersiveActivity {
     }
     private EditText number(LinearLayout parent,String name,String sample){
         EditText e=new EditText(this);e.setSingleLine(true);
-        e.setTextColor(FG);e.setHintTextColor(MUTED);
+        // Android AlertDialog uses LIGHT theme, unlike this dark activity.
+        e.setTextColor(Color.BLACK);e.setHintTextColor(Color.GRAY);
         e.setHint(name+" (ejemplo "+sample+")");
         e.setInputType(InputType.TYPE_CLASS_NUMBER|
             InputType.TYPE_NUMBER_FLAG_DECIMAL);

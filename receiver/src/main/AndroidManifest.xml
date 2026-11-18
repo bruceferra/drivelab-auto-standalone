@@ -71,6 +71,10 @@
             android:foregroundServiceType="location" />
         <service android:name=".T1TripRecorderService" android:exported="false"
             android:foregroundServiceType="location|dataSync" />
+        <!-- Independent charge-only OEM 1060, low-frequency read-only service.
+             Enabled by user from DriveLab CARGAS. No T1Launcher dependency. -->
+        <service android:name=".T1ChargeRecorderService"
+            android:exported="false" android:foregroundServiceType="dataSync" />
         <!-- Historical three-map GPS replay: user-triggered FGS survives tab switches.
              No boot restart and no vehicle OEM writes. -->
         <service android:name=".T1TripMapReplayService"
@@ -125,6 +129,8 @@
         <activity android:name=".T1ValidationWizardActivity" android:exported="false" />
         <!-- Optional premium cockpit, never a default HOME nor OEM control surface. -->
         <activity android:name=".T1PremiumCockpitActivity" android:exported="false" />
+        <activity android:name=".T1ChargeHistoryActivity"
+            android:exported="false" />
         <activity android:name=".T1OptimizedModeActivity" android:exported="false" />
         <activity android:name=".T1TripMapAnalysisActivity" android:exported="false" />
         <activity android:name=".T1VoiceRouteActivity" android:exported="false" />

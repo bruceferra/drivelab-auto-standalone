@@ -590,19 +590,23 @@ final class T1JourneyStore {
         for(Entry e:history(c)){
             if(fmt.format(new Date(e.started)).startsWith(datePrefix))t.add(e);
         }
-        File file=new File(T1TripRecorderService.tripDir(c),"grid_charges.csv");
-        if(file.isFile())try(BufferedReader reader=new BufferedReader(new FileReader(file))){
-            reader.readLine();String line;
-            while((line=reader.readLine())!=null){
-                String[] f=line.split(";",-1);
-                if(f.length<4)continue;
-                if(!fmt.format(new Date(time(f[0]))).startsWith(datePrefix))continue;
-                double k=number(f[1]),cost=number(f[3]);
-                if(Double.isFinite(k)&&Double.isFinite(cost)){
-                    t.charges++;t.gridKwh+=k;t.gridCost+=cost;
+        for(String source:new String[]{"grid_charges.csv",T1ChargeStore.CSV}){
+            File file=new File(T1TripRecorderService.tripDir(c),source);
+            if(file.isFile())try(BufferedReader reader=new BufferedReader(
+                    new FileReader(file))){
+                reader.readLine();String line;
+                while((line=reader.readLine())!=null){
+                    String[] f=line.split(";",-1);
+                    if(f.length<4)continue;
+                    if(!fmt.format(new Date(time(f[0])))
+                            .startsWith(datePrefix))continue;
+                    double k=number(f[1]),cost=number(f[3]);
+                    if(Double.isFinite(k)&&Double.isFinite(cost)){
+                        t.charges++;t.gridKwh+=k;t.gridCost+=cost;
+                    }
                 }
-            }
-        }catch(IOException ignored){}
+            }catch(IOException ignored){}
+        }
         return t;
     }
     static String today(){return new SimpleDateFormat("yyyy-MM-dd",Locale.ROOT)

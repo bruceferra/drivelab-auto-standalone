@@ -1250,6 +1250,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         clientRecoverButton.setVisibility(android.view.View.GONE);
         LinearLayout chargeActions=row();secondary.addView(chargeActions);
         compactButton(chargeActions,"CARGAS Y ECONOMÍA",BLUE,this::openChargeDialog);
+        compactButton(chargeActions,"CARGAS AUTOMÁTICAS · HISTORIAL",BLUE,
+            ()->startActivity(new Intent(this,T1ChargeHistoryActivity.class)));
 
         LinearLayout aggregate=row();secondary.addView(aggregate);
         dayNow=metric(tile(aggregate,CARD),"HOY · CLIENTES","—");
@@ -1913,6 +1915,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             T1TripRecorderService.tripDir(this),"grid_charges.csv");
         java.util.List<T1PlugChargeLedger.Charge> charges=
             T1PlugChargeLedger.read(purchases);
+        charges.addAll(T1PlugChargeLedger.read(new java.io.File(
+            T1TripRecorderService.tripDir(this),T1ChargeStore.CSV)));
         if(charges.isEmpty())return;
         for(int scope=0;scope<2;scope++){
             java.util.List<T1PlugChargeLedger.Trip> trips=

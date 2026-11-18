@@ -68,6 +68,9 @@ public final class BootReceiver extends BroadcastReceiver {
                     .apply();
             }
         }
+        // Charge monitor is INDEPENDENT of any manually started GPS trip.
+        // Only restart if enabled from its own page. No camera, network or OEM writes.
+        T1ChargeRecorderService.startIfEnabled(context);
         if(Intent.ACTION_BOOT_COMPLETED.equals(action))
             RecirculationGuardService.newIgnition(context);
         // Recirculation has independent opt-in and a dedicated foreground
