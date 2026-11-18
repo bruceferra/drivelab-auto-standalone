@@ -45,6 +45,8 @@ public final class MirrorAutomationService extends Service {
     /** Explicit driver confirmation AFTER physically resetting mirrors with OEM switch.
      * Never an angle sensor; is a visual acknowledgement and never actuates the mirrors. */
     public static final String ACTION_CONFIRM_NORMAL="t1.mirror.CONFIRM_NORMAL";
+    static final String ACTION_BOOT_RECOVER="t1.mirror.BOOT_RECOVER_LOGGED";
+    static final String BOOT_RECOVERY="boot_recovery_in_progress";
     private static final String CHANNEL="t1_mirror_parking";
     private static final int NOTIF_ID=7526;
     // One quick wheel-notch-like OEM press per step; ALWAYS release 2068/2069
@@ -72,18 +74,46 @@ public final class MirrorAutomationService extends Service {
     static void activateOnAppOpen(Context context){
         SharedPreferences p=context.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
         long age=System.currentTimeMillis()-p.getLong(LAST_POLL,0L);
-        if(p.getBoolean(AUTO,false)&&
-           p.getBoolean(SERVICE_ACTIVE,false)&&age>=0&&age<3000L)
-            return; // keep a healthy live return counter intact
+        if(p.getBoolean(SERVICE_ACTIVE,false)&&age>=0&&age<8000L)
+            return; // live motion must not be interrupted by another activity
         if(unresolved(p)){
+            int left=p.getInt(PENDING_LEFT,0),right=p.getInt(PENDING_RIGHT,0);
+            if(MirrorBootRecoveryPolicy.recoverable(left,right,
+                    p.getBoolean(PULSE_IN_FLIGHT,false))){
+                boolean saved=p.edit().putBoolean(AUTO,false)
+                    .putBoolean(SAFETY_HOLD,true).putBoolean(BOOT_RECOVERY,true)
+                    .putString(POSITION,"INCIERTA · recuperando pulsos al arrancar")
+                    .putString(STATUS,"ESPEJOS NARANJA · retorno en P pendiente "+
+                        "IZQ "+left+" DER "+right+" · esperando P estable")
+                    .commit();
+                if(saved)try{
+                    context.startForegroundService(new Intent(context,
+                        MirrorAutomationService.class)
+                        .setAction(ACTION_BOOT_RECOVER));
+                }catch(RuntimeException ex){
+                    p.edit().putBoolean(BOOT_RECOVERY,false)
+                        .putString(STATUS,
+                            "Retorno al arrancar NO disponible · "+
+                            ex.getClass().getSimpleName()+
+                            "; usar RECUPERAR ESPEJOS").commit();
+                }
+                return;
+            }
             p.edit().putBoolean(AUTO,false).putBoolean(SAFETY_HOLD,true)
-                .putString(STATUS,"ESPEJOS: movimiento incompleto registrado; "+
-                    "el usuario puede corregir físicamente la posición")
-                .apply();
+                .putBoolean(BOOT_RECOVERY,false)
+                .putString(STATUS,"ESPEJOS NARANJA · pulso incierto o "+
+                    "registro inválido; revisar espejos con mandos originales")
+                .commit();
             return;
         }
-        // A stale orange warning with ZERO issued pulses must not disable
-        // the owner-preferred AUTO at every ignition.
+        if(p.getBoolean(SAFETY_HOLD,false)&&
+            p.getString(POSITION,"").startsWith("INCIERTA")){
+            p.edit().putBoolean(AUTO,false)
+                .putString(STATUS,"ESPEJOS NARANJA · contador perdido, "+
+                    "revisión visual obligatoria").commit();
+            return;
+        }
+        // Only a truly clear, safe ledger can re-arm the next R.
         p.edit().putBoolean(SAFETY_HOLD,false)
             .putBoolean(AUTO,true)
             .putBoolean(SERVICE_ACTIVE,false)
@@ -212,7 +242,26 @@ public final class MirrorAutomationService extends Service {
             if(!running){stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();}
             return START_NOT_STICKY;
         }
-        if(ACTION_AUTO.equals(action)){
+        if(ACTION_BOOT_RECOVER.equals(action)){
+            if(running)return START_STICKY;
+            int l=prefs().getInt(PENDING_LEFT,0);
+            int r=prefs().getInt(PENDING_RIGHT,0);
+            if(!MirrorBootRecoveryPolicy.recoverable(l,r,
+                    prefs().getBoolean(PULSE_IN_FLIGHT,false))){
+                prefs().edit().putBoolean(AUTO,false)
+                    .putBoolean(SAFETY_HOLD,true)
+                    .putBoolean(BOOT_RECOVERY,false)
+                    .putString(STATUS,"ESPEJOS NARANJA · recuperación "+
+                        "al arrancar bloqueada, contador incierto").commit();
+                stopSelf();return START_NOT_STICKY;
+            }
+            pendingManual=4; // strictly P, zero speed, original logged pulses
+            prefs().edit().putBoolean(AUTO,false)
+                .putBoolean(SAFETY_HOLD,true)
+                .putBoolean(BOOT_RECOVERY,true)
+                .putString(STATUS,"ESPEJOS NARANJA · esperando P estable "+
+                    "para subir "+l+" IZQ / "+r+" DER").commit();
+        }else if(ACTION_AUTO.equals(action)){
             // Some Activity/watchdog paths resend ACTION_AUTO while a 20-pulse
             // tilt or its P+30s return is ALREADY RUNNING. Do NOT mistake the
             // correctly outstanding pulse ledger for an unsafe re-arm and
@@ -322,26 +371,56 @@ public final class MirrorAutomationService extends Service {
                         pendingManual=0;
                         // Relative ANGLE adjustment in D is manually requested
                         // by the driver; folding has its own <=5 km/h guard.
-                        if(rawGear!=1&&rawGear!=4)
+                        if(manual==4){
+                            // After restart: require 2.5 s of real OEM P/0.
+                            // A parked, stable boot must be verified anew;
+                            // no motor command in R or D during startup.
+                            for(int stable=0;stable<10&&!stop;stable++){
+                                if(!MirrorBootRecoveryPolicy.parkedForRestore(
+                                        oem.gear(),oem.speedKmh()))
+                                    throw new IllegalStateException(
+                                        "P estable no confirmado al encender");
+                                SystemClock.sleep(250L);
+                            }
+                            if(stop)throw new IllegalStateException(
+                                "Recuperación de arranque interrumpida");
+                        }else if(rawGear!=1&&rawGear!=4)
                             throw new IllegalStateException(
                                 "Ajuste manual de orientación: solo P o D");
-                        int l=manual==3?prefs().getInt(PENDING_LEFT,0):steps(LEFT);
-                        int r=manual==3?prefs().getInt(PENDING_RIGHT,0):steps(RIGHT);
-                        if(manual==3 && (l+r==0)){
+                        int l=(manual==3||manual==4)?
+                            prefs().getInt(PENDING_LEFT,0):steps(LEFT);
+                        int r=(manual==3||manual==4)?
+                            prefs().getInt(PENDING_RIGHT,0):steps(RIGHT);
+                        if((manual==3||manual==4) && (l+r==0)){
                             prefs().edit().putString(STATUS,
                                 "SIN PULSOS REGISTRADOS: versión anterior perdió "+
                                 "la cuenta. Ajustá con mandos originales en P.")
                                 .putBoolean(SAFETY_HOLD,true).apply();
                             break;
                         }
-                        if(manual==3 && prefs().getBoolean(PULSE_IN_FLIGHT,false))
+                        if((manual==3||manual==4) &&
+                           prefs().getBoolean(PULSE_IN_FLIGHT,false))
                             throw new IllegalStateException(
                                 "Pulso previo incierto; usar mando original");
                         movementStarted=true;
-                        int[] counts=runPulses(oem,manual==1,l,r,false,manual==3);
+                        int[] counts=runPulses(oem,manual==1,l,r,
+                            manual==4,manual==3||manual==4,manual==4);
                         if(counts[0]!=l||counts[1]!=r)
                             throw new IllegalStateException("Movimiento manual incompleto");
-                        if(manual==3){
+                        if(manual==4){
+                            if(!prefs().edit().putBoolean(BOOT_RECOVERY,false)
+                                .putBoolean(SAFETY_HOLD,false)
+                                .putBoolean(AUTO,true)
+                                .putString(POSITION,
+                                    "P · pulsos guardados compensados; "+
+                                    "ángulo físico sin sensor")
+                                .putString(STATUS,"ESPEJOS · recuperados "+
+                                    counts[0]+" IZQ / "+counts[1]+" DER. "+
+                                    "AUTO listo para próxima R; revisar "+
+                                    "posición visual antes de circular")
+                                .commit())throw new IllegalStateException(
+                                    "No se guardó retorno al encender");
+                        }else if(manual==3){
                             prefs().edit().putString(POSITION,
                                     "P · retorno manual de pulsos registrado")
                                 .putString(STATUS,"RECUPERADOS izq="+counts[0]+
@@ -392,7 +471,7 @@ public final class MirrorAutomationService extends Service {
                                 throw new IllegalStateException("No se pudo iniciar contador");
                             movementStarted=true;
                             int[] n=runPulses(oem,true,policy.requestedLeft(),
-                                policy.requestedRight(),true,true);
+                                policy.requestedRight(),true,true,false);
                             policy.completeTilt(n[0],n[1]);
                             prefs().edit().putString(POSITION,
                                 policy.phase()==MirrorParkingPolicy.Phase.TILTED?
@@ -415,7 +494,7 @@ public final class MirrorAutomationService extends Service {
                                     System.currentTimeMillis()).apply();
                             movementStarted=true;
                             int[] n=runPulses(oem,false,policy.leftIssued(),
-                                policy.rightIssued(),true,true);
+                                policy.rightIssued(),true,true,false);
                             policy.completeRestore(n[0],n[1]);
                             prefs().edit().putString(POSITION,
                                 policy.phase()==MirrorParkingPolicy.Phase.NORMAL?
@@ -454,6 +533,18 @@ public final class MirrorAutomationService extends Service {
                     }
                     movementStarted=false;
                     if(pendingManual!=0)pendingManual=0;
+                    if(manual==4){
+                        prefs().edit().putBoolean(AUTO,false)
+                            .putBoolean(BOOT_RECOVERY,false)
+                            .putBoolean(SAFETY_HOLD,true)
+                            .putString(POSITION,"INCIERTA · retorno al arrancar "+
+                                "pendiente de inspección")
+                            .putString(STATUS,"ESPEJOS NARANJA · "+
+                                "retorno al arrancar incompleto: "+reason+
+                                " · corregir en P antes de circular")
+                            .commit();
+                        break; // never retry an interrupted OEM movement
+                    }
                     if(prefs().getBoolean(AUTO,false)){
                         // Never automatically retry a possibly partial movement.
                         prefs().edit().putBoolean(AUTO,false)
@@ -494,7 +585,7 @@ public final class MirrorAutomationService extends Service {
      */
     private int[] runPulses(MirrorAutomationOem oem,boolean down,
                     int left,int right,boolean automatic,
-                    boolean trackLedger)throws Exception{
+                    boolean trackLedger,boolean bootParkedOnly)throws Exception{
         synchronized(OEM_MIRROR_MUTEX){
             int[] counts={0,0};
             int max=Math.max(left,right);
@@ -508,6 +599,9 @@ public final class MirrorAutomationService extends Service {
                     if(mapGear(gear)==MirrorParkingPolicy.Gear.UNKNOWN||
                        !Double.isFinite(speed)||speed<0||speed>200)
                         throw new IllegalStateException("Marcha o velocidad OEM inválida");
+                    if(bootParkedOnly &&
+                        !MirrorBootRecoveryPolicy.parkedForRestore(gear,speed))
+                        return counts; // leave remaining pulses journaled
                     if(automatic){
                         // Controlled gear change is not a failed OEM movement.
                         if(down && (gear!=2||speed>8))return counts;
