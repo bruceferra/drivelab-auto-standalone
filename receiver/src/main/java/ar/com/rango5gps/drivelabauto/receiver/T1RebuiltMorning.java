@@ -273,10 +273,36 @@ final class T1RebuiltMorning {
             out.append("\nPONDERADO ECONÓMICO: SIN DATO HASTA "+
                 "CONFIGURAR $/kWh Y ATRIBUIR LA CARGA.");
         }
-        out.append("\n").append(chargeTripAttribution(c,packKwh))
-            .append("\nELECTRICIDAD PAGADA REAL: distinguir el costo total "+
-            "de la CARGA DOCUMENTADA del costo PROPORCIONAL ESTIMADO del "+
-            "recorrido; no asignar kWh de motor ni regeneración como red.");
+        out.append("\n").append(chargeTripAttribution(c,packKwh));
+        T1ChargeStore.Record charge=matchedCharge;
+        if(charge!=null && charge.kwh>0 &&
+           Double.isFinite(charge.price) && charge.price>=0 &&
+           Double.isFinite(fuelPrice) && fuelPrice>0 && km>0){
+            double assigned=Math.min(packKwh,charge.kwh);
+            boolean metered=Double.isFinite(charge.meterKwh)&&
+                charge.meterKwh>0;
+            double equivalentGrid=metered?
+                assigned*charge.meterKwh/charge.kwh:assigned;
+            double estimatedCash=gasolineCost+
+                equivalentGrid*charge.price;
+            double weightedLiters=estimatedCash/fuelPrice;
+            out.append("\nPONDERADO ECONÓMICO IMPUTADO DESDE "+
+                "CARGA DOCUMENTADA #").append(charge.id)
+                .append(": $").append(fmt(estimatedCash,2))
+                .append(" = ").append(fmt(weightedLiters,3))
+                .append(" L equivalentes; ")
+                .append(fmt(weightedLiters*100/km,2))
+                .append(" L/100; ")
+                .append(fmt(km/weightedLiters,2))
+                .append(" km/L; ahorro estimado $")
+                .append(fmt(gasOnlyCost-estimatedCash,2))
+                .append(metered?" (red medida, asignación estimada)":
+                    " (batería estimada, red sin medidor)");
+        }
+        out.append("\nELECTRICIDAD PAGADA REAL: el COSTO DE LA CARGA "+
+            "COMPLETA se calcula con su historial; el costo del "+
+            "RECORRIDO es una imputación ESTIMADA, no una medición "+
+            "independiente del origen de los electrones.");
         return out.toString();
     }
     static String summary(Context c){
