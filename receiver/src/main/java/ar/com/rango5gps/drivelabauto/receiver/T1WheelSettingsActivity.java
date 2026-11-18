@@ -64,6 +64,7 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
         bridgeState.setText("CONTROL "+T1WheelTarget.name(this)+" "+(on?"CONFIGURADO":"APAGADO")+
             " · PUENTE OEM "+(link?"HABILITADO":"APAGADO")+
             "\nACCESIBILIDAD: "+(connected?"CONECTADA":"SIN CONEXIÓN")+
+            "\n"+T1WheelAccessibilityRecovery.permissionState(this)+
             "\n"+p.getString(T1WazeWheelService.OEM_BINDER_STATUS,
                 "Sin conexión"));
         // A preference alone never paints a connected/working bridge green.
@@ -103,6 +104,22 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
         b.setOnClickListener(v->action.run());
         col.addView(b,new LinearLayout.LayoutParams(-1,57));
         return b;
+    }
+    private void openAccessibilitySettings(){
+        Intent intent=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
+        if(intent.resolveActivity(getPackageManager())==null){
+            report.setText("La T1 no expone Ajustes de accesibilidad. "+
+                "Si Android quitó el permiso, un botón de DriveLab NO "+
+                "puede concedérselo sin intervención del propietario. "+
+                "Usá el ADB local autorizado o WebADB conectado por USB.");
+            return;
+        }
+        try{startActivity(intent);}
+        catch(Exception ex){
+            report.setText("Ajustes no disponibles: "+
+                ex.getClass().getSimpleName()+
+                ". El servicio requiere autorización Android.");
+        }
     }
     private void learning(LinearLayout col,String label,String action){
         button(col,"APRENDER TECLA · "+label,()->{
@@ -150,16 +167,17 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
                 "y las ventanas Waze/Maps que realmente expone Android. "+
                 "No toca botones ni modifica rutas.");
         });
+        button(body,"RECONECTAR ACCESIBILIDAD · RUEDITA",()->{
+            String state=T1WheelAccessibilityRecovery.requestManual(this);
+            report.setText("RECONECTAR · "+state+
+                "\n"+T1WheelAccessibilityRecovery.describe(this)+
+                "\nEl estado se actualiza automáticamente abajo. "+
+                "Si Android desactivó el permiso, tocá ABRIR AJUSTES.");
+            // Do not claim success until Android invokes onServiceConnected.
+            refreshModes();
+        });
         button(body,"ABRIR AJUSTES DE ACCESIBILIDAD (SI EXISTEN)",()->{
-            Intent intent=new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS);
-            if(intent.resolveActivity(getPackageManager())==null){
-                report.setText("La T1 no tiene pantalla de ajustes "+
-                    "Accesibilidad disponible. Usá WebADB como ya hicimos.");
-                return;
-            }
-            try{startActivity(intent);}
-            catch(Exception ex){report.setText("Ajustes no disponibles: "+
-                ex.getClass().getSimpleName()+". Usá WebADB.");}
+            openAccessibilitySettings();
         });
         modeState=text(body,"MODO RUEDITA ACTUAL: SELECCIÓN DE BOTONES",20);
         panelA=button(body,"CONTROLAR PANEL A",()->{
