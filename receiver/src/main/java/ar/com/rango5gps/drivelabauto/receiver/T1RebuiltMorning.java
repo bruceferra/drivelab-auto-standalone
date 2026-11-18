@@ -100,6 +100,11 @@ final class T1RebuiltMorning {
         if(id==null||!id.matches("[0-9]{8}_[0-9]{6}"))return;
         prefs.edit().putString(TRIP_ID,id).putBoolean(PENDING,false).commit();
     }
+    static boolean isToday(Context c){
+        return installed(c)&&"2026-11-18".equals(
+            new java.text.SimpleDateFormat("yyyy-MM-dd",Locale.ROOT)
+                .format(new java.util.Date()));
+    }
     static boolean attached(Context c){
         if(!installed(c))return false;
         String bound=p(c).getString(TRIP_ID,"");
