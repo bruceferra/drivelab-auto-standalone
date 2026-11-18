@@ -2,12 +2,18 @@ package ar.com.rango5gps.drivelabauto.receiver;
 
 import android.app.Activity;
 import android.app.AlertDialog;
+import android.app.DatePickerDialog;
+import android.app.TimePickerDialog;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
+import android.text.InputType;
+import android.widget.EditText;
+import java.util.Calendar;
+import java.util.concurrent.atomic.AtomicBoolean;
 import android.view.Gravity;
 import android.view.ViewGroup;
 import android.widget.Button;
@@ -27,10 +33,15 @@ import java.util.Locale;
  */
 public final class T1AutoJourneyActivity extends T1ImmersiveActivity {
     private static final int SAVE_SESSIONS=4451,SAVE_POINTS=4452,
+        SAVE_RANGE=4453,SAVE_RANGE_POINTS=4454,
         BG=0xFF101820,CARD=0xFF1F2F3A,WHITE=Color.WHITE,
         MUTED=0xFFBECDD6,BLUE=0xFF285A6B;
-    private TextView overview;
-    private LinearLayout entries;
+    private TextView overview,rangeStatus;
+    private LinearLayout entries,rangeDays,rangeIgnitions;
+    private EditText dateFrom,dateUntil;
+    private final AtomicBoolean computingRange=new AtomicBoolean(false);
+    private volatile long selectedFrom=0,selectedUntil=0;
+    private String rangeCsv="";
     private int pendingExport=0;
     private TextView label(String text,int size,int fg){
         TextView t=new TextView(this);
@@ -71,6 +82,38 @@ public final class T1AutoJourneyActivity extends T1ImmersiveActivity {
         LinearLayout csv=row(root);
         action(csv,"EXPORTAR SESIONES",()->save(false));
         action(csv,"EXPORTAR PUNTOS GPS",()->save(true));
+        root.addView(label("GENERADOR DE VIAJES · FECHA Y HORA EXACTAS",
+            17,WHITE));
+        root.addView(label("Elegí DESDE y HASTA con fecha y hora, al minuto. "+
+            "Ejemplo: sábado 19:00 a sábado 23:50. "+
+            "También permite períodos de varios días desde las 00:00. "+
+            "Un encendido que comenzó antes se recorta al horario elegido.",
+            13,MUTED));
+        LinearLayout dates=row(root);
+        dateFrom=dateInput(dates,"DESDE · aaaa-MM-dd HH:mm");
+        dateUntil=dateInput(dates,"HASTA · aaaa-MM-dd HH:mm");
+        String key="t1_auto_range_filter";
+        SharedPreferences saved=getSharedPreferences(key,MODE_PRIVATE);
+        Calendar local=Calendar.getInstance();
+        String until=new SimpleDateFormat("yyyy-MM-dd HH:mm",
+            Locale.getDefault()).format(local.getTime());
+        local.set(Calendar.HOUR_OF_DAY,0);
+        local.set(Calendar.MINUTE,0);
+        local.set(Calendar.SECOND,0);
+        dateFrom.setText(saved.getString("start",new SimpleDateFormat(
+            "yyyy-MM-dd HH:mm",Locale.getDefault()).format(local.getTime())));
+        dateUntil.setText(saved.getString("until",until));
+        LinearLayout pickers=row(root);
+        action(pickers,"ELEGIR DESDE",()->pickDateTime(dateFrom));
+        action(pickers,"ELEGIR HASTA",()->pickDateTime(dateUntil));
+        LinearLayout process=row(root);
+        action(process,"GENERAR DETALLE",this::generateRange);
+        action(process,"EXPORTAR RESUMEN",()->exportRange(false));
+        action(process,"EXPORTAR GPS FILTRADO",()->exportRange(true));
+        rangeStatus=label("Definí un intervalo y tocá GENERAR DETALLE.",14,WHITE);
+        rangeStatus.setBackgroundColor(CARD);root.addView(rangeStatus);
+        rangeDays=rowList(root,"ESTADÍSTICAS POR DÍA");
+        rangeIgnitions=rowList(root,"DESGLOSE POR CADA ENCENDIDO");
         overview=label("Leyendo base…",14,WHITE);
         overview.setBackgroundColor(CARD);root.addView(overview);
         root.addView(label("HISTORIAL POR ENCENDIDO",17,WHITE));
@@ -85,6 +128,150 @@ public final class T1AutoJourneyActivity extends T1ImmersiveActivity {
             13,MUTED));
         setContentView(sc);
         refresh();
+    }
+    private EditText dateInput(LinearLayout row,String hint){
+        EditText e=new EditText(this);
+        e.setSingleLine(true);
+        e.setHint(hint);
+        e.setHintTextColor(MUTED);
+        e.setTextColor(WHITE);
+        e.setTextSize(13);
+        e.setInputType(InputType.TYPE_CLASS_DATETIME|
+            InputType.TYPE_DATETIME_VARIATION_NORMAL);
+        row.addView(e,new LinearLayout.LayoutParams(0,
+            ViewGroup.LayoutParams.WRAP_CONTENT,1));
+        return e;
+    }
+    private LinearLayout rowList(LinearLayout root,String name){
+        root.addView(label(name,16,WHITE));
+        LinearLayout list=new LinearLayout(this);
+        list.setOrientation(LinearLayout.VERTICAL);
+        root.addView(list);
+        return list;
+    }
+    private void pickDateTime(EditText destination){
+        Calendar now=Calendar.getInstance();
+        try{
+            java.text.SimpleDateFormat fmt=new java.text.SimpleDateFormat(
+                "yyyy-MM-dd HH:mm",Locale.getDefault());
+            fmt.setLenient(false);
+            Date selected=fmt.parse(destination.getText().toString().trim());
+            if(selected!=null)now.setTime(selected);
+        }catch(Exception ignored){}
+        new DatePickerDialog(this,(view,year,month,day)->{
+            Calendar date=Calendar.getInstance();
+            date.set(year,month,day,
+                now.get(Calendar.HOUR_OF_DAY),now.get(Calendar.MINUTE));
+            new TimePickerDialog(this,(time,hour,min)->{
+                date.set(Calendar.HOUR_OF_DAY,hour);
+                date.set(Calendar.MINUTE,min);
+                date.set(Calendar.SECOND,0);
+                date.set(Calendar.MILLISECOND,0);
+                destination.setText(new java.text.SimpleDateFormat(
+                    "yyyy-MM-dd HH:mm",Locale.getDefault()).format(
+                        date.getTime()));
+            },now.get(Calendar.HOUR_OF_DAY),
+              now.get(Calendar.MINUTE),true).show();
+        },now.get(Calendar.YEAR),now.get(Calendar.MONTH),
+          now.get(Calendar.DAY_OF_MONTH)).show();
+    }
+    private void generateRange(){
+        if(!computingRange.compareAndSet(false,true)){
+            note("Ya se está calculando un intervalo");return;
+        }
+        final long from,until;
+        try{
+            from=parseDateTime(dateFrom.getText().toString().trim());
+            until=parseDateTime(dateUntil.getText().toString().trim());
+            if(from<=0||until<=from||until-from>370L*86400000L)
+                throw new IllegalArgumentException(
+                    "HASTA debe ser posterior a DESDE (máximo 370 días)");
+            getSharedPreferences("t1_auto_range_filter",MODE_PRIVATE).edit()
+                .putString("start",dateFrom.getText().toString().trim())
+                .putString("until",dateUntil.getText().toString().trim())
+                .apply();
+        }catch(Exception ex){
+            computingRange.set(false);
+            note("Rango inválido: "+ex.getMessage());
+            return;
+        }
+        rangeStatus.setText("Calculando desde "+
+            dateFrom.getText()+" hasta "+dateUntil.getText()+
+            " con puntos OEM/GPS, sin modificar sesiones…");
+        new Thread(()->{
+            T1AutoJourneyStore.RangeReport result=null;
+            String error="";
+            try(T1AutoJourneyStore db=new T1AutoJourneyStore(this)){
+                result=db.between(from,until);
+            }catch(Exception ex){
+                error=ex.getClass().getSimpleName()+": "+
+                    String.valueOf(ex.getMessage());
+            }
+            final T1AutoJourneyStore.RangeReport report=result;
+            final String failure=error;
+            runOnUiThread(()->{
+                computingRange.set(false);
+                if(isFinishing()||isDestroyed())return;
+                if(report==null){
+                    rangeStatus.setText("No se pudo generar: "+failure);
+                    return;
+                }
+                selectedFrom=from;selectedUntil=until;
+                rangeCsv=report.csv();
+                rangeStatus.setText(
+                    "VIAJE ESTADÍSTICO VIRTUAL"+
+                    "\n"+dateFrom.getText()+" → "+dateUntil.getText()+
+                    "\n"+report.total.describe()+
+                    "\nLos km y kWh corresponden SOLO a puntos observados "+
+                    "en el intervalo. No incluyen viajes no grabados. "+
+                    "Los litros de nafta no están validados por sesión.");
+                renderSlices(rangeDays,report.days.values());
+                renderSlices(rangeIgnitions,report.byIgnition.values());
+            });
+        },"T1-Auto-Range-Background").start();
+    }
+    private long parseDateTime(String raw)throws Exception{
+        java.text.SimpleDateFormat f=new java.text.SimpleDateFormat(
+            "yyyy-MM-dd HH:mm",Locale.getDefault());
+        f.setLenient(false);
+        java.text.ParsePosition pos=new java.text.ParsePosition(0);
+        Date d=f.parse(raw,pos);
+        if(d==null||pos.getIndex()!=raw.length())
+            throw new IllegalArgumentException(
+                "Usá aaaa-MM-dd HH:mm, por ejemplo 2026-11-18 19:00");
+        return d.getTime();
+    }
+    private void renderSlices(LinearLayout parent,
+        java.util.Collection<T1AutoJourneyStore.Slice> slices){
+        parent.removeAllViews();
+        if(slices.isEmpty()){
+            parent.addView(label("Sin muestras en el horario elegido.",
+                13,MUTED));return;
+        }
+        for(T1AutoJourneyStore.Slice slice:slices){
+            TextView tile=label(slice.describe(),13,WHITE);
+            tile.setBackgroundColor(CARD);
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT);
+            lp.topMargin=7;parent.addView(tile,lp);
+        }
+    }
+    private void exportRange(boolean points){
+        if(selectedUntil<=selectedFrom||rangeCsv.isEmpty()){
+            note("Primero generá un detalle por fecha y hora.");return;
+        }
+        int id=points?SAVE_RANGE_POINTS:SAVE_RANGE;
+        Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT)
+            .addCategory(Intent.CATEGORY_OPENABLE)
+            .setType("text/csv");
+        intent.putExtra(Intent.EXTRA_TITLE,
+            "DriveLab_Viaje_Estadistico_"+
+            new SimpleDateFormat("yyyyMMdd_HHmm",Locale.ROOT)
+                .format(new Date(selectedFrom))+
+            (points?"_GPS.csv":".csv"));
+        try{startActivityForResult(intent,id);}
+        catch(Exception ex){note("No se pudo abrir el guardado CSV");}
     }
     private void setAuto(boolean enabled){
         SharedPreferences p=T1AutoJourneyService.prefs(this);
@@ -208,16 +395,33 @@ public final class T1AutoJourneyActivity extends T1ImmersiveActivity {
     @Override protected void onActivityResult(int req,int result,Intent data){
         super.onActivityResult(req,result,data);
         if(result!=Activity.RESULT_OK||data==null||data.getData()==null||
-            (req!=SAVE_SESSIONS&&req!=SAVE_POINTS))return;
+            (req!=SAVE_SESSIONS&&req!=SAVE_POINTS&&
+             req!=SAVE_RANGE&&req!=SAVE_RANGE_POINTS))return;
         Uri dest=data.getData();
         boolean samples=req==SAVE_POINTS;
+        boolean intervalPoints=req==SAVE_RANGE_POINTS;
+        boolean intervalSummary=req==SAVE_RANGE;
+        final long from=selectedFrom,until=selectedUntil;
+        final String cached=rangeCsv;
         new Thread(()->{
             String message;
             try(T1AutoJourneyStore db=new T1AutoJourneyStore(this);
                 OutputStream out=getContentResolver().openOutputStream(dest,"wt")){
                 if(out==null)throw new IllegalStateException("Sin archivo");
-                db.export(out,samples);
-                message=(samples?"Puntos GPS":"Sesiones")+" exportados en CSV";
+                if(intervalSummary){
+                    if(from<=0||until<=from||cached.isEmpty())
+                        throw new IllegalArgumentException("Sin intervalo");
+                    out.write(cached.getBytes(
+                        java.nio.charset.StandardCharsets.UTF_8));
+                    out.flush();
+                }else if(intervalPoints){
+                    if(from<=0||until<=from)
+                        throw new IllegalArgumentException("Sin intervalo");
+                    db.exportWindowPoints(out,from,until);
+                }else db.export(out,samples);
+                message=(intervalSummary?"Viaje estadístico":
+                    intervalPoints?"GPS del intervalo":
+                    samples?"Puntos GPS":"Sesiones")+" exportados en CSV";
             }catch(Exception ex){
                 message="Error CSV: "+ex.getClass().getSimpleName();
             }
