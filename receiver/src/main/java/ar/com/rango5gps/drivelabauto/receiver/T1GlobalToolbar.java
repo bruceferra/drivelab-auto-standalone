@@ -8,6 +8,7 @@ import android.view.ViewGroup;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.IdentityHashMap;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Typeface;
@@ -49,7 +50,6 @@ final class T1GlobalToolbar {
         }
     };
     private boolean foreground;
-    private static final int DRAG_TAG_ID=0x7f0f0f01;
     private static final String ORDER_PREFS="drivelab_toolbar_order_v1";
     private LinearLayout firstButtons,secondButtons;
     private long lastPoll=0, lastDevicesPoll=0;
@@ -253,6 +253,9 @@ final class T1GlobalToolbar {
                 buttons.add((Button)row.getChildAt(i));
         if(buttons.size()<2)return;
         final String prefix="row_"+key+"_";
+        final IdentityHashMap<Button,Integer> ids=new IdentityHashMap<>();
+        for(int i=0;i<buttons.size();i++)ids.put(buttons.get(i),i);
+        int firstIndex=row.indexOfChild(buttons.get(0));
         SharedPreferences prefs=owner.getSharedPreferences(ORDER_PREFS,Context.MODE_PRIVATE);
         ArrayList<Button> ordered=new ArrayList<>(buttons);
         Collections.sort(ordered,(a,b)->{
@@ -262,11 +265,9 @@ final class T1GlobalToolbar {
         });
         // Move only buttons; fixed labels/status/clock remain in their slots.
         for(Button b:ordered)row.removeView(b);
-        int insert=0;
+        int insert=firstIndex;
         for(Button b:ordered)row.addView(b,insert++);
         for(Button b:buttons){
-            b.setTag(DRAG_TAG_ID,
-                Integer.valueOf(buttons.indexOf(b)));
             b.setOnLongClickListener(v->{
                 ClipData clip=ClipData.newPlainText("drivelab-toolbar",key);
                 return v.startDragAndDrop(clip,new View.DragShadowBuilder(v),
@@ -289,10 +290,8 @@ final class T1GlobalToolbar {
                         for(int i=0;i<row.getChildCount();i++){
                             View item=row.getChildAt(i);
                             if(item instanceof Button){
-                                Object id=item.getTag(
-                                    DRAG_TAG_ID);
-                                if(id instanceof Integer)
-                                    editor.putInt(prefix+id,order++);
+                                Integer id=ids.get(item);
+                                if(id!=null)editor.putInt(prefix+id,order++);
                             }
                         }
                         editor.apply();
