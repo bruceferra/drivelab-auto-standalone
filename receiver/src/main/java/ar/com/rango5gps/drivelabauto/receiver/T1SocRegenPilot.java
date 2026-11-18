@@ -208,9 +208,11 @@ final class T1SocRegenPilot {
                     gotInt?lastInt:Integer.MIN_VALUE,
                     gotFloat?lastFloat:Double.NaN):""));
             // 1041 has an ECU/launcher display encoding: raw 56=50%,
-            // raw 48=40%, raw 40=30%, raw 30=20%. Comparing raw==target
-            // would falsely accept 40 while the original UI shows 30%.
-            // floatRaw=1 is not an SOC percentage. No guesses for 60/70.
+            // raw 48=40%, raw 40=30%, raw 30=20%, raw72=70%
+            // from the owner's ORIGINAL Jetour 18-Nov A/B calibration.
+            // Comparing raw==target would falsely accept 40 while the
+            // original UI shows 30%. floatRaw=1 is not an SOC percentage.
+            // 60% remains unverified.
             boolean matches=id==1041?
                 (gotInt&&T1SocTargetCodec.confirmsRequested(
                     target,lastInt,gotFloat?lastFloat:Double.NaN)):
@@ -244,7 +246,7 @@ final class T1SocRegenPilot {
         if(!active.getAsBoolean())
             throw new IllegalStateException("AUTO ya está apagado");
         // Do not even START an unknown SOC target command. Until the
-        // owner physically verifies 60/70 in Jetour's original menu,
+        // owner physically verifies a target in Jetour's original menu,
         // readInt 1041 cannot confirm it and a write would strand the
         // ECU at an unknown target (the previous 70 trial read RAW 72).
         if(targets.needsTarget()&&
