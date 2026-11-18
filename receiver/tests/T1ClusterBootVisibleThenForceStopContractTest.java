@@ -1,70 +1,46 @@
 package ar.com.rango5gps.drivelabauto.receiver;
-
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-/** Owner-established order: force-stop from T1Launcher Settings cleared OEM
- * Spotify overlay ONLY when Waze and Maps were still displayed on an ON
- * cluster. This contract verifies code order; it cannot verify Jetour ROM.
+/** Regression after physical 0.3.68 failure: automatic boot MUST NOT
+ * force-stop maps or cycle DriveLab OFF/ON. The optional explicit manual
+ * repair remains separate; neither touches the disabled T1Launcher.
  */
 public final class T1ClusterBootVisibleThenForceStopContractTest {
-    private static String source(String n)throws Exception{
+    private static String src(String n)throws Exception{
         return Files.readString(Path.of(
             "receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver",n));
     }
-    private static void check(boolean ok,String message){
-        if(!ok)throw new AssertionError(message);
+    private static void check(boolean yes,String msg){
+        if(!yes)throw new AssertionError(msg);
     }
     public static void main(String[] args)throws Exception{
-        String router=source("T1ClusterWazeRouter.java");
-        String fresh=source("T1ClusterFreshStart.java");
-        String bar=source("T1GlobalToolbar.java");
-        String reboot=source("T1ClusterManualReboot.java");
-        String service=source("ReceiverService.java");
+        String router=src("T1ClusterWazeRouter.java");
+        String service=src("ReceiverService.java");
+        String toolbar=src("T1GlobalToolbar.java");
+        String manual=src("T1ClusterManualReboot.java");
         int boot=router.indexOf("static String onReceiverBoot(Context c)");
         int saved=router.indexOf("if(T1ClusterLayoutPolicy.savedDualSplit(c))",boot);
         int end=router.indexOf("if(T1ClusterLayoutPolicy.pendingUnverified(c))",saved);
-        check(boot>=0&&saved>boot&&end>saved,"Boot split branch available");
-        String part=router.substring(saved,end);
-        int initial=part.indexOf("String initial=T1ClusterLayoutPolicy.reopenSavedPanelsStopped(c)");
-        int stop=part.indexOf("T1ClusterFreshStart.prepare(c)");
-        int second=part.indexOf("String opened=T1ClusterLayoutPolicy.reopenSavedPanelsStopped(c)");
-        check(initial>=0&&stop>initial&&second>stop,
-            "Cold boot MUST first open both apps, then force-stop with cluster ON, then reopen");
-        int off=part.indexOf("putBoolean(ENABLED,false)");
-        int taskClose=part.indexOf("T1ClusterAdbResize.closeClusterApps(c,");
-        int on=part.indexOf("putBoolean(ENABLED,true)");
-        check(part.contains("Thread.sleep(1600L)")&&
-            part.contains("if(!autoBoot(c))")&&
-            part.contains("if(!clean.changed)")&&
-            part.contains("return initial;")&&
-            off>stop&&taskClose>off&&on>taskClose&&second>on&&
-            part.contains("android.os.SystemClock.sleep(T1ClusterManualReboot.OFF_VISIBLE_MS)")&&
-            part.indexOf("closed.await(16L,")<
-                part.indexOf("android.os.SystemClock.sleep(T1ClusterManualReboot.OFF_VISIBLE_MS)")&&
-            part.contains(".putBoolean(RELOAD_HOLD,true)")&&
-            part.contains(".putBoolean(RELOAD_HOLD,false)")&&
-            reboot.contains("static final long OFF_VISIBLE_MS=10000L")&&
-            part.contains("closed.await(16L,java.util.concurrent.TimeUnit.SECONDS)")&&
-            part.contains("BOOT_RELOAD_RESULT")&&
-            !part.contains("speedKmh()")&&
-            !part.contains("gear()"),
-            "Boot must reproduce R force-stop, real OFF task close, pause, ON and saved split");
-        check(fresh.contains("T1LocalAdbClient.shell(c,\"am force-stop \"+pkg)")&&
-            fresh.contains("T1LocalAdbClient.shell(c,\"pidof \"+pkg)")&&
-            reboot.contains("T1ClusterFreshStart.prepare(owner)")&&
-            reboot.contains("reopenSavedPanelsStopped(owner)")&&
-            reboot.contains("T1ClusterAdbResize.closeClusterApps(owner,")&&
-            reboot.contains("performOn(owner,update,confirmed)"),
-            "Scoped ADB stop and REBOOT still follow active-cluster method");
-        int manualStart=bar.indexOf("private void toggleCluster()");
-        int manualEnd=bar.indexOf("private void refreshMirrorAuto()",manualStart);
-        check(manualStart>=0&&manualEnd>manualStart&&
-            !bar.substring(manualStart,manualEnd).contains("T1ClusterFreshStart.prepare("),
-            "CLUSTER ON normal never kills active navigation");
-        check(service.contains("T1ClusterWazeRouter.onReceiverBoot(this)")&&
-            service.contains("T1LastRoute.restore(this)"),
-            "Boot restores last route only after cluster sequence");
-        System.out.println("PASS cold boot: maps visible -> force-stop -> OFF close -> wait -> ON -> restore");
+        check(boot>=0&&saved>boot&&end>saved,"Saved dual-pane boot available");
+        String branch=router.substring(saved,end);
+        check(branch.contains("T1ClusterLayoutPolicy.reopenSavedPanelsStopped(c)")&&
+              branch.contains("ARRANQUE SIMPLE 0.3.69")&&
+              branch.contains("BOOT_RELOAD_RESULT")&&
+              !branch.contains("T1ClusterFreshStart.prepare(c)")&&
+              !branch.contains("T1ClusterAdbResize.closeClusterApps(c,")&&
+              !branch.contains("putBoolean(ENABLED,false)")&&
+              !branch.contains("Thread.sleep(1600L)")&&
+              !branch.contains("T1ClusterManualReboot.OFF_VISIBLE_MS"),
+              "Cold boot must open maps ONCE without force-stop, stack close or OFF/ON");
+        check(!service.contains("T1ClusterBootFocus.afterClusterBoot(")&&
+              service.contains("T1WazeWheelService.requestClusterReady(this)")&&
+              service.contains("T1LastRoute.restore(this)"),
+              "Keep wheel and route, do not reorder boot tasks above Spotify");
+        check(toolbar.contains("REPARAR MAPAS")&&
+              manual.contains("T1ClusterFreshStart.prepare(owner)")&&
+              manual.contains("T1ClusterAdbResize.closeClusterApps(owner,"),
+              "Explicit manual repair remains, but never invoked automatically");
+        System.out.println("PASS no automatic destructive map restart or task focus");
     }
 }
