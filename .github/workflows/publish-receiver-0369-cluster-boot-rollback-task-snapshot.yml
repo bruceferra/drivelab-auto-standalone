@@ -1,4 +1,4 @@
-# Receiver 0.3.69: non-destructive DriveLab-only cluster boot rollback, fade restored on UI, and read-only task evidence.
+# Receiver 0.3.69: DriveLab-only no-force-stop boot, preserved wheel, UI fade and task/display diagnostics validated.
 name: Signed Receiver 0.3.69 - cluster gentle boot and diagnostic snapshot
 on:
   push:
