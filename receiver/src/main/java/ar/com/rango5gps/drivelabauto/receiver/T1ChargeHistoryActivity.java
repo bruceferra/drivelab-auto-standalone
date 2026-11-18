@@ -54,6 +54,9 @@ public final class T1ChargeHistoryActivity extends T1ImmersiveActivity {
         LinearLayout actions=row();content.addView(actions);
         button(actions,"IMPORTAR 1.ª CARGA",this::importFirstCharge);
         button(actions,"EXPORTAR CSV",this::exportCsv);
+        LinearLayout fix=row();content.addView(fix);
+        button(fix,"CORREGIR HORAS DE CARGA IMPORTADA",
+            this::correctImportedHours);
         content.addView(text("kWh de batería = energía recibida estimada. "+
             "Los kWh de red medidos incluyen pérdidas y pueden ser mayores. "+
             "Cuando no hay medidor, el costo mostrado es una ESTIMACIÓN. "+
@@ -204,6 +207,81 @@ public final class T1ChargeHistoryActivity extends T1ImmersiveActivity {
                 }
             }).show();
     }
+    private static String stamp(long at){
+        return new SimpleDateFormat("yyyy-MM-dd HH:mm",
+            Locale.getDefault()).format(new Date(at));
+    }
+    private static long parseStamp(String input)throws Exception{
+        SimpleDateFormat format=new SimpleDateFormat("yyyy-MM-dd HH:mm",
+            Locale.getDefault());
+        format.setLenient(false);
+        java.text.ParsePosition position=new java.text.ParsePosition(0);
+        Date d=format.parse(input.trim(),position);
+        if(d==null||position.getIndex()!=input.trim().length())
+            throw new IllegalArgumentException(
+                "Formato: aaaa-MM-dd HH:mm");
+        return d.getTime();
+    }
+    private void correctImportedHours(){
+        T1ChargeStore.Record selected=null;
+        try(T1ChargeStore db=new T1ChargeStore(this)){
+            for(T1ChargeStore.Record row:db.latest(500)){
+                if(row.source.contains("IMPORTACIÓN MANUAL")){
+                    selected=row;break;
+                }
+            }
+        }catch(Exception ex){
+            msg("No pude leer el historial: "+
+                ex.getClass().getSimpleName());return;
+        }
+        if(selected==null){
+            msg("No encontré cargas importadas manualmente");return;
+        }
+        final T1ChargeStore.Record target=selected;
+        LinearLayout fields=new LinearLayout(this);
+        fields.setOrientation(LinearLayout.VERTICAL);
+        fields.setPadding(18,10,18,10);
+        TextView expl=text("Sesión #"+target.id+
+            ". El horario de 22:25 que recordás es el INICIO de enchufe; "+
+            "el FIN debe ser el real de T1 Launcher o tu observación. "+
+            "Si no sabés cuándo terminó, CANCELÁ: DriveLab no debe "+
+            "inventar la hora de corte.",14,Color.DKGRAY);
+        fields.addView(expl);
+        EditText startField=new EditText(this);
+        startField.setSingleLine(true);
+        startField.setInputType(InputType.TYPE_CLASS_DATETIME|
+            InputType.TYPE_DATETIME_VARIATION_NORMAL);
+        startField.setHint("INICIO aaaa-MM-dd HH:mm");
+        startField.setText(stamp(target.start));
+        fields.addView(startField);
+        EditText endField=new EditText(this);
+        endField.setSingleLine(true);
+        endField.setInputType(InputType.TYPE_CLASS_DATETIME|
+            InputType.TYPE_DATETIME_VARIATION_NORMAL);
+        endField.setHint("FIN REAL / INFORMADO aaaa-MM-dd HH:mm");
+        endField.setText(stamp(target.end));
+        fields.addView(endField);
+        ScrollView scroll=new ScrollView(this);
+        scroll.addView(fields);
+        new AlertDialog.Builder(this)
+            .setTitle("CORREGIR INICIO Y FIN · CARGA #"+target.id)
+            .setView(scroll)
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("GUARDAR HORAS",(dialog,which)->{
+                try(T1ChargeStore db=new T1ChargeStore(this)){
+                    long from=parseStamp(startField.getText().toString());
+                    long until=parseStamp(endField.getText().toString());
+                    db.correctManualHours(target.id,from,until);
+                    db.exportForCosts(this);
+                    msg("Horarios manuales guardados en la misma "+
+                        "sesión; kWh, Ah y tarifa conservados");
+                    refresh();
+                }catch(Exception ex){
+                    msg("No se corrigió: "+ex.getMessage());
+                }
+            }).show();
+    }
+
     private void exportCsv(){
         Intent intent=new Intent(Intent.ACTION_CREATE_DOCUMENT);
         intent.addCategory(Intent.CATEGORY_OPENABLE);

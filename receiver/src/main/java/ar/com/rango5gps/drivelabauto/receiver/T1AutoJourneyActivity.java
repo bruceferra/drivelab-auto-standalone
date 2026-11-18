@@ -321,10 +321,12 @@ public final class T1AutoJourneyActivity extends T1ImmersiveActivity {
             long chargedAt=0;
             T1ChargeStore.Record lastCharge=null;
             for(T1ChargeStore.Record record:chargeDb.latest(300)){
-                if(record.open!=0||record.end<=0||
-                   record.end>System.currentTimeMillis())continue;
-                if(record.end>chargedAt){
-                    chargedAt=record.end;lastCharge=record;
+                if(record.open!=0||record.end<=0)continue;
+                long finished=record.chargeEnded>0?
+                    record.chargeEnded:record.end;
+                if(finished>System.currentTimeMillis())continue;
+                if(finished>chargedAt){
+                    chargedAt=finished;lastCharge=record;
                 }
             }
             if(lastCharge!=null){
@@ -339,7 +341,8 @@ public final class T1AutoJourneyActivity extends T1ImmersiveActivity {
                     .append(new SimpleDateFormat("dd/MM HH:mm",
                         Locale.getDefault()).format(new Date(chargedAt)))
                     .append(lastCharge.source.contains("IMPORTACIÓN MANUAL")?
-                        " · informada manualmente":" · cable desconectado");
+                        " · informada manualmente":
+                        " · última corriente HV, corte estimado");
                 if(allocation!=null){
                     text.append("\nELECTRICIDAD DEL ENCHUFE · ESTIMACIÓN CONTABLE")
                         .append("\nCargados a batería: ")
