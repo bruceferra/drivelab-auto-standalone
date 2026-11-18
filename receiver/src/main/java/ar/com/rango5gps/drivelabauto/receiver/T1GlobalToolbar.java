@@ -661,10 +661,15 @@ final class T1GlobalToolbar {
         // matters when the service is gone and physical return was not seen.
         boolean unresolved=inFlight||pendingLeft>0||pendingRight>0;
         boolean unknown=unresolved&&!healthy;
-        mirrorAutoButton.setText(unknown?"ESPEJOS · REVISAR POSICIÓN":
+        boolean bootRecovery=p.getBoolean(MirrorAutomationService.BOOT_RECOVERY,false);
+        // An interrupted write or a previous uncatalogued tilt must never
+        // render a neutral gray button just because pending counts are zero.
+        if(!healthy&&safetyHold&&pose.startsWith("INCIERTA"))unknown=true;
+        mirrorAutoButton.setText(bootRecovery?"ESPEJOS · RECUPERANDO EN P":
+            unknown?"ESPEJOS · REVISAR POSICIÓN":
             healthy?"REVERSA AUTO ✓":
             auto?"REVERSA AUTO · REVISAR":"REVERSA MANUAL");
-        T1JetourTheme.button(mirrorAutoButton,unknown?
+        T1JetourTheme.button(mirrorAutoButton,(unknown||bootRecovery)?
             T1JetourTheme.AMBER_BUTTON:healthy?
             T1JetourTheme.GREEN_BUTTON:auto?
             T1JetourTheme.AMBER_BUTTON:T1JetourTheme.PANEL_HI);
@@ -674,17 +679,24 @@ final class T1GlobalToolbar {
         // accessible in neutral gray for future manual recovery.
         if(mirrorRecoverButton!=null){
             boolean needsRecovery=unresolved;
+            if(!healthy&&safetyHold&&pose.startsWith("INCIERTA"))
+                needsRecovery=true;
             T1JetourTheme.button(mirrorRecoverButton,needsRecovery?
                 T1JetourTheme.AMBER_BUTTON:T1JetourTheme.PANEL_HI);
-            mirrorRecoverButton.setText(needsRecovery?
-                "RECUPERAR ESPEJOS":"ESPEJOS · SIN PENDIENTES");
+            mirrorRecoverButton.setText(bootRecovery?
+                "ESPEJOS · VOLVIENDO":
+                needsRecovery?(unresolved?
+                    "RECUPERAR ESPEJOS":"ESPEJOS · REVISAR MANUAL"):
+                "ESPEJOS · SIN PENDIENTES");
             mirrorRecoverButton.setContentDescription(needsRecovery?
                 "Recuperación de espejos disponible. Pendientes izquierda "+
                     pendingLeft+", derecha "+pendingRight:
                 "Espejos sin pulsos pendientes. Posición "+
                     "normal confirmada o sin recuperación requerida.");
         }
-        mirrorAutoButton.setContentDescription(unknown?
+        mirrorAutoButton.setContentDescription(bootRecovery?
+            "Retorno de pulsos durables al encender, solo en P y parado":
+            unknown?
             "Posición física no comprobada; tocar para ver recuperación segura":
             auto?(healthy?"Espejos reversa AUTO activo. Tocar para desactivar":
                 "Espejos reversa AUTO solicitado, servicio sin confirmar. Tocar para desactivar"):
