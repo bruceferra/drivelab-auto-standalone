@@ -14,6 +14,7 @@ public final class T1SocOemReadOnlyCalibrationContractTest {
     }
     public static void main(String[] args)throws Exception{
         String pilot=src("T1SocRegenPilot.java");
+        String reader=src("MirrorAutomationOem.java");
         String automatic=src("T1OptimizedAutoService.java");
         String screen=src("T1OptimizedModeActivity.java");
         String map=src("T1SocTargetCodec.java");
@@ -37,13 +38,14 @@ public final class T1SocOemReadOnlyCalibrationContractTest {
             screen.contains("LEER B · DESPUÉS")&&
             screen.contains("captureSocOem(boolean after)")&&
             screen.contains("T1OptimizedAutoService.enabled(this)")&&
-            screen.contains("gear!=1||!Double.isFinite(speed)")&&
+            !screen.contains("gear!=1||!Double.isFinite(speed)")&&
+            reader.contains("id!=1040 && id!=1041 && id!=1046")&&
             screen.contains("oem.readInt(1040)")&&
             screen.contains("oem.readInt(1041)")&&
             screen.contains("oem.readInt(1046)")&&
             screen.contains("SOC_OEM_CALIBRACION_B")&&
             !screen.contains("oem.write("),
-            "Calibration must read 1040/1041/1046 in P/0, AUTO OFF, with persistent A/B and no writes");
+            "Calibration must read allowlisted 1040/1041/1046 in any gear, AUTO OFF, persist A/B, no writes");
         System.out.println("PASS OEM forced SOC A/B read-only calibration and unmapped-target fail-closed");
     }
 }
