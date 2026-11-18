@@ -392,8 +392,44 @@ public final class T1AutoJourneyActivity extends T1ImmersiveActivity {
                     "carga cerrada; importala en CARGAS AUTOMÁTICAS.");
             }
             ArrayList<T1AutoJourneyStore.Journey> journeys=db.latest(100);
+            // Impair only the electricity previously bought on the last
+            // recorded plug charge, never incoming motor/brake HV energy.
+            // This is a chronological ACCOUNTING estimate, not a claim
+            // that we can identify the physical origin of the electrons.
+            java.util.HashMap<Long,String> allocations=new java.util.HashMap<>();
+            if(lastCharge!=null && lastCharge.kwh>0){
+                ArrayList<T1AutoJourneyStore.Journey> chronological=db.latest(500);
+                java.util.Collections.reverse(chronological);
+                double cumulativeOut=0,cumulativeIn=0;
+                double previousPlug=0,previousGrid=0;
+                for(T1AutoJourneyStore.Journey j:chronological){
+                    if(j.start<chargedAt)continue;
+                    cumulativeOut+=j.hvOut;
+                    cumulativeIn+=j.hvIn;
+                    T1PlugEnergyLedger.Result account=
+                        T1PlugEnergyLedger.estimate(lastCharge.kwh,
+                            lastCharge.meterKwh,cumulativeOut,cumulativeIn,
+                            lastCharge.price);
+                    if(account==null)continue;
+                    double delta=account.assignedPlugKwh-previousPlug;
+                    double deltaGrid=account.allocatedGridKwh-previousGrid;
+                    String detail="ENCHUFE IMPUTADO AL VIAJE: "+
+                        T1AutoJourneyStore.fmt(delta,3)+" kWh batería";
+                    if(delta<0)detail+=" · ajuste por energía interna";
+                    if(account.priceKnown)
+                        detail+=" · costo atribuido $"+
+                            T1AutoJourneyStore.fmt(
+                                deltaGrid*lastCharge.price,2);
+                    detail+=" (estimación, no medición de origen)";
+                    allocations.put(j.id,detail);
+                    previousPlug=account.assignedPlugKwh;
+                    previousGrid=account.allocatedGridKwh;
+                }
+            }
             for(T1AutoJourneyStore.Journey j:journeys){
-                TextView e=label("SESIÓN #"+j.id+"\n"+j.describe(),14,WHITE);
+                String estimate=allocations.get(j.id);
+                TextView e=label("SESIÓN #"+j.id+"\n"+j.describe()+
+                    (estimate==null?"":"\n"+estimate),14,WHITE);
                 e.setBackgroundColor(CARD);
                 LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,-2);
