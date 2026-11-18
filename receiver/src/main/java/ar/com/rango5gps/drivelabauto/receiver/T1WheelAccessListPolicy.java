@@ -34,6 +34,28 @@ final class T1WheelAccessListPolicy {
         if(own!=1||remaining.isEmpty())return null;
         return String.join(":",remaining);
     }
+    /** Explicit owner-confirmed ADB restoration ONLY. Preserve the exact
+     * other-user/accessibility entries and their order; never clear them.
+     * The caller independently checks a durable previous service connection,
+     * local ADB authorization, and the user's fresh confirmation. */
+    static String withOurService(String existing){
+        if(existing==null||existing.isEmpty()||"null".equals(existing))
+            return TARGET;
+        if(existing.length()>1024||
+           !existing.matches("[A-Za-z0-9_.$/:]+"))return null;
+        String[] entries=existing.split(":",-1);
+        int own=0;
+        for(String entry:entries){
+            if(entry.isEmpty()||!entry.contains("/")||
+               entry.indexOf('/')!=entry.lastIndexOf('/'))
+                return null;
+            if(target(entry))own++;
+        }
+        if(own>1)return null;
+        if(own==1)return existing;
+        String updated=existing+":"+TARGET;
+        return updated.length()>1024?null:updated;
+    }
     static String command(String listing){
         if(listing==null||listing.isEmpty()||listing.length()>1024||
            !listing.matches("[A-Za-z0-9_.$/:]+"))
