@@ -61,6 +61,9 @@
             android:foregroundServiceType="dataSync" />
         <service android:name=".MirrorAutomationService" android:exported="false"
             android:foregroundServiceType="dataSync" />
+        <!-- User-tapped up/down only; never scheduled by ignition or reverse. -->
+        <service android:name=".MirrorManualTiltService" android:exported="false"
+            android:foregroundServiceType="dataSync" />
         <service android:name=".RecirculationGuardService" android:exported="false"
             android:foregroundServiceType="dataSync" />
         <!-- Only after user explicitly selects MODO OPTIMIZADO ON.
