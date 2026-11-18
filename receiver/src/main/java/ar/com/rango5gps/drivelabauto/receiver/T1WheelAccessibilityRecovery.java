@@ -67,9 +67,12 @@ final class T1WheelAccessibilityRecovery {
                     }
                 }
             }
-            if(!approved||enabled!=1)
-                return "DESHABILITADA EN ANDROID · requiere autorización "+
-                    "manual en Ajustes de accesibilidad";
+            if(enabled!=1)
+                return "DESHABILITADA EN ANDROID · accesibilidad general "+
+                    "apagada (ANDROID="+enabled+")";
+            if(!approved)
+                return "DESHABILITADA EN ANDROID · DriveLab no figura "+
+                    "en servicios autorizados";
             return "HABILITADA PERO DESCONECTADA · "+
                 "Android no entregó el servicio a DriveLab";
         }catch(Exception error){
@@ -127,6 +130,75 @@ final class T1WheelAccessibilityRecovery {
         },"T1-Wheel-Manual-Authorized-Rebind").start();
         return "Reconexión solicitada: sólo el enlace previamente autorizado; "+
             "no hace falta Termux ni internet.";
+    }
+
+    /** EXPLICIT owner action (dialog confirmation required in UI).
+     * This is NOT called on startup, from the OEM wheel, or automatically.
+     * ADB shell has authority to change Settings.Secure only after the
+     * owner's prior local ADB authorization. Never claims it is a normal
+     * Android app permission. */
+    static String reauthorizeWithOwnerApproval(Context context){
+        Context app=context.getApplicationContext();
+        SharedPreferences prefs=app.getSharedPreferences(
+            T1WazeWheelService.PREFS,Context.MODE_PRIVATE);
+        if(T1WazeWheelService.isServiceConnected())
+            return "Ya está conectado. No se cambió accesibilidad.";
+        if(prefs.getLong(T1WazeWheelService.SERVICE_AT,0L)<=0)
+            return "No hay prueba de autorización anterior de DriveLab "+
+                "en esta instalación: habilitalo desde Ajustes Android.";
+        if(!prefs.getString(PENDING,"").isEmpty())
+            return "Hay una restauración anterior interrumpida. "+
+                "Primero usá RECONECTAR para reparar esa lista.";
+        if(!RUNNING.compareAndSet(false,true))
+            return "Ya hay una recuperación en curso; no se superponen.";
+        lastAttempt=SystemClock.elapsedRealtime();
+        note(prefs,"ADB LOCAL · reautorización confirmada por propietario; "+
+            "verificando listado real Android…");
+        new Thread(()->{
+            try{
+                String old=current(app);
+                String updated=T1WheelAccessListPolicy.withOurService(old);
+                if(updated==null)
+                    throw new IllegalStateException(
+                        "Listado Android ambiguo o demasiado largo; "+
+                        "no se cambiaron servicios");
+                int flag=Settings.Secure.getInt(app.getContentResolver(),
+                    Settings.Secure.ACCESSIBILITY_ENABLED,0);
+                // Refuse racing Android changes: the list must still have
+                // exactly the snapshot that the owner confirmed.
+                if(!java.util.Objects.equals(old,current(app)))
+                    throw new IllegalStateException(
+                        "La lista cambió en Android, sin modificarla");
+                if(!updated.equals(old)){
+                    T1LocalAdbClient.shell(app,
+                        T1WheelAccessListPolicy.command(updated));
+                    if(!updated.equals(current(app)))
+                        throw new IllegalStateException(
+                            "Android no confirmó la nueva lista");
+                }
+                // This second setting is required if Jetour has disabled
+                // ALL accessibility globally. Do not toggle it on boot.
+                if(flag!=1){
+                    T1LocalAdbClient.shell(app,
+                        "settings put secure accessibility_enabled 1");
+                    if(Settings.Secure.getInt(app.getContentResolver(),
+                        Settings.Secure.ACCESSIBILITY_ENABLED,0)!=1)
+                        throw new IllegalStateException(
+                            "Android rechazó activar accesibilidad general");
+                }
+                note(prefs,"ADB LOCAL · configuración Android restaurada "+
+                    "bajo confirmación. Esperando onServiceConnected; "+
+                    "si no se enlaza, revisar Ajustes.");
+            }catch(Exception error){
+                note(prefs,"ADB LOCAL · autorización NO confirmada: "+
+                    T1LocalAdbClient.connectivityHint(error)+
+                    ". Ajustes/WebADB permanecen disponibles.");
+            }finally{
+                RUNNING.set(false);
+            }
+        },"T1-Owner-Explicit-Accessibility-ADB").start();
+        return "Reautorización ADB local solicitada, verificando Android. "+
+            "No se declara conectada hasta recibir el servicio.";
     }
 
     static String describe(Context c){
