@@ -700,6 +700,19 @@ jobs:
           javac -encoding UTF-8 -d /tmp/t1-trip-delete-0279 \
             receiver/tests/T1HistoryDeletionSourceContractTest.java
           java -cp /tmp/t1-trip-delete-0279 ar.com.rango5gps.drivelabauto.receiver.T1HistoryDeletionSourceContractTest
+      - name: Manual wheel Accessibility reconnect with Android grant and local ADB
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-wheel-reconnect
+          javac -encoding UTF-8 -d /tmp/t1-wheel-reconnect \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1WheelAccessListPolicy.java \
+            receiver/tests/T1WheelAccessListPolicyTest.java \
+            receiver/tests/T1WheelAccessibilityRecoverySourceTest.java \
+            receiver/tests/T1WheelManualReconnectSourceTest.java
+          java -cp /tmp/t1-wheel-reconnect ar.com.rango5gps.drivelabauto.receiver.T1WheelAccessListPolicyTest
+          java -cp /tmp/t1-wheel-reconnect ar.com.rango5gps.drivelabauto.receiver.T1WheelAccessibilityRecoverySourceTest
+          java -cp /tmp/t1-wheel-reconnect ar.com.rango5gps.drivelabauto.receiver.T1WheelManualReconnectSourceTest
       - name: Jetour T1 wheel/Zoom diagnosis inside DriveLab, no Waze switching
         shell: bash
         run: |
