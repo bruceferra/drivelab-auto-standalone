@@ -1,4 +1,4 @@
-# 2026-11-18: signed 0.3.54 guarded mirror restore from durable per-side pulse ledger.
+# 2026-11-18: signed 0.3.54 guarded mirror restore from durable per-side pulse ledger; legacy no-blind-up source contract updated and AUTO uncertain rearm blocked.
 name: Signed Receiver 0.3.54 - auto restore logged mirrors in P
 on:
   push:
