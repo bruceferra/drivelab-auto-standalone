@@ -92,6 +92,7 @@ final class T1LocalAdbClient {
            !command.matches(
                "settings put secure enabled_accessibility_services "+
                "[A-Za-z0-9_.$/:]{1,1024}")&&
+           !command.equals("settings put secure accessibility_enabled 1")&&
            !command.matches(
               "am task resize [1-9][0-9]{0,6}( [0-9]{1,5}){4}")&&
            !command.matches("am stack remove [1-9][0-9]{0,6}"))
