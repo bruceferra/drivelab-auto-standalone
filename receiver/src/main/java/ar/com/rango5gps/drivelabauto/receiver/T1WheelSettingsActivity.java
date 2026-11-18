@@ -111,7 +111,7 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
             report.setText("La T1 no expone Ajustes de accesibilidad. "+
                 "Si Android quitó el permiso, un botón de DriveLab NO "+
                 "puede concedérselo sin intervención del propietario. "+
-                "Usá el ADB local autorizado o WebADB conectado por USB.");
+                "Usá WebADB. También sirve el ADB local ya autorizado.");
             return;
         }
         try{startActivity(intent);}
@@ -168,8 +168,8 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
                 "No toca botones ni modifica rutas.");
         });
         button(body,"RECONECTAR ACCESIBILIDAD · RUEDITA",()->{
-            String state=T1WheelAccessibilityRecovery.requestManual(this);
-            report.setText("RECONECTAR · "+state+
+            String reconnectMessage=T1WheelAccessibilityRecovery.requestManual(this);
+            report.setText("RECONECTAR · "+reconnectMessage+
                 "\n"+T1WheelAccessibilityRecovery.describe(this)+
                 "\nEl estado se actualiza automáticamente abajo. "+
                 "Si Android desactivó el permiso, tocá ABRIR AJUSTES.");
