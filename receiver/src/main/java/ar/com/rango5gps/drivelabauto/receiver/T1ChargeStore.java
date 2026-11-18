@@ -23,7 +23,7 @@ final class T1ChargeStore extends SQLiteOpenHelper {
         CURRENT_SESSION="current_session_id";
     static final String DB="t1_charge_sessions.db",CSV="grid_charges_auto.csv";
     static final class Record {
-        long id,start,end,last;
+        long id,start,end,last,lastActive,chargeEnded;
         double socStart,socEnd,ah,kwh,meterKwh,price;
         int samples,cable,open;
         String source,note;
@@ -39,6 +39,14 @@ final class T1ChargeStore extends SQLiteOpenHelper {
                 fmt(ah,1)+" Ah · "+samples+" muestras"+
                 "\n"+fmt(external,2)+" kWh "+basis+" · $ "+
                 fmt(external*price,0)+" (tarifa $ "+fmt(price,2)+"/kWh)"+
+                "\nInicio: "+fmt.format(new Date(start))+
+                "\n"+(chargeEnded>0?
+                    "Última corriente de carga observada: "+
+                    fmt.format(new Date(chargeEnded))+
+                    " (estimación, no confirmación del cargador)":
+                    "Sin hora de corte de corriente confirmada")+
+                (end>0?"\nFin de sesión / cable: "+
+                    fmt.format(new Date(end)):"")+
                 "\n"+source+" · "+(note==null?"":note);
         }
     }
@@ -46,7 +54,7 @@ final class T1ChargeStore extends SQLiteOpenHelper {
         return Double.isFinite(n)?
             String.format(Locale.getDefault(),"%."+precision+"f",n):"—";
     }
-    T1ChargeStore(Context ctx){super(ctx,DB,null,1);}
+    T1ChargeStore(Context ctx){super(ctx,DB,null,2);}
     @Override public void onCreate(SQLiteDatabase db){
         db.execSQL("CREATE TABLE sessions("+
             "_id INTEGER PRIMARY KEY AUTOINCREMENT,"+
@@ -58,10 +66,19 @@ final class T1ChargeStore extends SQLiteOpenHelper {
             "samples INTEGER NOT NULL DEFAULT 0,"+
             "cable_raw INTEGER NOT NULL DEFAULT -1,"+
             "is_open INTEGER NOT NULL DEFAULT 1,"+
-            "source TEXT NOT NULL,note TEXT DEFAULT '')");
+            "source TEXT NOT NULL,note TEXT DEFAULT '',"+
+            "last_active_ms INTEGER NOT NULL DEFAULT 0,"+
+            "charge_done_ms INTEGER NOT NULL DEFAULT 0)");
         db.execSQL("CREATE INDEX ix_charge_end ON sessions(end_ms)");
     }
-    @Override public void onUpgrade(SQLiteDatabase db,int from,int to){}
+    @Override public void onUpgrade(SQLiteDatabase db,int from,int to){
+        if(from<2){
+            db.execSQL("ALTER TABLE sessions ADD COLUMN "+
+                "last_active_ms INTEGER NOT NULL DEFAULT 0");
+            db.execSQL("ALTER TABLE sessions ADD COLUMN "+
+                "charge_done_ms INTEGER NOT NULL DEFAULT 0");
+        }
+    }
     private static double val(Cursor c,int col){
         return c.isNull(col)?Double.NaN:c.getDouble(col);
     }
@@ -72,11 +89,12 @@ final class T1ChargeStore extends SQLiteOpenHelper {
         r.ah=c.getDouble(6);r.kwh=c.getDouble(7);r.meterKwh=val(c,8);
         r.price=c.getDouble(9);r.samples=c.getInt(10);r.cable=c.getInt(11);
         r.open=c.getInt(12);r.source=c.getString(13);r.note=c.getString(14);
+        r.lastActive=c.getLong(15);r.chargeEnded=c.getLong(16);
         return r;
     }
     private static final String COLS="_id,start_ms,end_ms,last_ms,soc_start,"+
         "soc_end,ah,battery_kwh,meter_kwh,price_kwh,samples,cable_raw,"+
-        "is_open,source,note";
+        "is_open,source,note,last_active_ms,charge_done_ms";
     synchronized Record openSession(){
         try(Cursor c=getReadableDatabase().rawQuery(
                 "SELECT "+COLS+" FROM sessions WHERE is_open=1 "+
@@ -89,6 +107,7 @@ final class T1ChargeStore extends SQLiteOpenHelper {
         if(old!=null)return old.id;
         ContentValues v=new ContentValues();
         v.put("start_ms",at);v.put("last_ms",at);
+        v.put("last_active_ms",at);
         if(T1ChargeMath.validSoc(soc))v.put("soc_start",soc);
         v.put("price_kwh",price);v.put("cable_raw",cable);
         v.put("source","OEM CABLE 1060");
@@ -109,6 +128,20 @@ final class T1ChargeStore extends SQLiteOpenHelper {
         if(extra[0]>0){
             v.put("ah",r.ah+extra[0]);
             v.put("battery_kwh",r.kwh+extra[1]);
+            v.put("last_active_ms",reading.timeMs);
+            // Charging resumed after a quiet period. Only trust the next
+            // stable full SOC window, never freeze an unfinished session.
+            v.put("charge_done_ms",0);
+        }else if(r.chargeEnded<=0 && r.lastActive>0 &&
+                 T1ChargeMath.plugged(reading.cable)&&
+                 T1ChargeMath.validSoc(reading.soc)&&
+                 reading.soc>=99.0 &&
+                 reading.timeMs-r.lastActive>=300000L){
+            // Vehicle stays plugged after reaching 100%. End of ENERGY
+            // FLOW is an estimate: last valid sample, NOT unplug time.
+            v.put("charge_done_ms",r.lastActive);
+            v.put("note","Fin de flujo HV estimado tras 5 min "+
+                "sin corriente a SOC>=99%, cable aún conectado");
         }
         v.put("samples",r.samples+1);
         getWritableDatabase().update("sessions",v,"_id=?",
@@ -120,6 +153,9 @@ final class T1ChargeStore extends SQLiteOpenHelper {
         ContentValues v=new ContentValues();
         v.put("is_open",0);
         v.put("end_ms",Math.max(at,old.last));
+        if(old.chargeEnded==0)
+            v.put("charge_done_ms",old.lastActive>0?
+                old.lastActive:Math.max(at,old.last));
         int n=getWritableDatabase().update("sessions",v,"_id=?",
             new String[]{Long.toString(id)});
         return n==1;
@@ -146,16 +182,44 @@ final class T1ChargeStore extends SQLiteOpenHelper {
         }
         ContentValues v=new ContentValues();
         v.put("start_ms",finished);v.put("end_ms",finished);
-        v.put("last_ms",finished);v.put("soc_start",soc0);
+        v.put("last_ms",finished);v.put("charge_done_ms",finished);
+        v.put("soc_start",soc0);
         v.put("soc_end",soc1);v.put("ah",ah);
         v.put("battery_kwh",batteryKwh);
         if(Double.isFinite(meterKwh))v.put("meter_kwh",meterKwh);
         v.put("price_kwh",price);v.put("samples",0);
         v.put("cable_raw",1);v.put("is_open",0);
         v.put("source","T1LAUNCHER · IMPORTACIÓN MANUAL");
-        v.put("note","Fecha final informada; no se importó SQLite original");
+        v.put("note","Fecha final informada por usuario; "+
+            "hora de corte NO verificada con vehículo");
         return getWritableDatabase().insertOrThrow("sessions",null,v);
     }
+    /** Fix the already imported first charge without losing kWh/price/ID.
+     * The manually supplied final timestamp remains owner-provided rather
+     * than asserted as observed by Android or the OEM charging controller. */
+    synchronized void correctManualHours(long id,long start,long end){
+        if(start<=0||end<start||end>System.currentTimeMillis()+300000L ||
+           end-start>172800000L)
+            throw new IllegalArgumentException("Horas de carga inválidas");
+        Record target=null;
+        for(Record r:latest(500))
+            if(r.id==id){target=r;break;}
+        if(target==null||target.open!=0||
+           !target.source.contains("IMPORTACIÓN MANUAL"))
+            throw new IllegalArgumentException(
+                "Sólo se corrigen cargas importadas manualmente");
+        ContentValues update=new ContentValues();
+        update.put("start_ms",start);
+        update.put("end_ms",end);
+        update.put("last_ms",end);
+        update.put("charge_done_ms",end);
+        update.put("note","Inicio y fin informados MANUALMENTE; "+
+            "no corroborados por OEM");
+        if(getWritableDatabase().update("sessions",update,"_id=?",
+            new String[]{Long.toString(id)})!=1)
+            throw new IllegalStateException("No se actualizó la sesión");
+    }
+
     synchronized ArrayList<Record> latest(int max){
         ArrayList<Record> out=new ArrayList<>();
         try(Cursor c=getReadableDatabase().rawQuery(
@@ -170,7 +234,7 @@ final class T1ChargeStore extends SQLiteOpenHelper {
         StringBuilder b=new StringBuilder();
         b.append("id;inicio_epoch_ms;fin_epoch_ms;soc_inicial;soc_final;"+
             "ah_bateria;kwh_bateria_est;kwh_medidor_red;precio_kwh;"+
-            "estado;origen;nota\n");
+            "estado;origen;nota;ultima_corriente_ms;fin_flujo_estimado_ms\n");
         for(Record r:latest(500)){
             b.append(r.id).append(';').append(r.start).append(';')
                 .append(r.end).append(';').append(fmtCsv(r.socStart)).append(';')
@@ -180,7 +244,9 @@ final class T1ChargeStore extends SQLiteOpenHelper {
                 .append(fmtCsv(r.price)).append(';')
                 .append(r.open==1?"ABIERTA":"CERRADA").append(';')
                 .append(clean(r.source)).append(';')
-                .append(clean(r.note)).append('\n');
+                .append(clean(r.note)).append(';')
+                .append(r.lastActive).append(';')
+                .append(r.chargeEnded).append('\n');
         }
         return b.toString();
     }
@@ -206,7 +272,8 @@ final class T1ChargeStore extends SQLiteOpenHelper {
             boolean metered=Double.isFinite(r.meterKwh)&&r.meterKwh>0;
             double purchased=metered?r.meterKwh:r.kwh;
             if(!Double.isFinite(purchased)||purchased<=0)continue;
-            body.append(r.end).append(';').append(fmtCsv(purchased))
+            body.append(r.chargeEnded>0?r.chargeEnded:r.end)
+                .append(';').append(fmtCsv(purchased))
                 .append(';').append(fmtCsv(r.price)).append(';')
                 .append(fmtCsv(purchased*r.price)).append(';')
                 .append("DRIVELAB_AUTO_ID=").append(r.id).append(' ')
