@@ -243,6 +243,22 @@ final class T1SocRegenPilot {
                             BooleanSupplier active)throws Exception{
         if(!active.getAsBoolean())
             throw new IllegalStateException("AUTO ya está apagado");
+        // Do not even START an unknown SOC target command. Until the
+        // owner physically verifies 60/70 in Jetour's original menu,
+        // readInt 1041 cannot confirm it and a write would strand the
+        // ECU at an unknown target (the previous 70 trial read RAW 72).
+        if(targets.needsTarget()&&
+            T1SocTargetCodec.observedRawForPercent(targets.forcedSoc)<0){
+            String diagnostic="SOC FORZADO "+targets.forcedSoc+
+                " % SIN MAPEO OEM VALIDADO: NO se envió 1041/1040/1046. "+
+                "Usá CALIBRAR FORZADO OEM (A/B, solo lectura) y "+
+                "confirmá el porcentaje en la pantalla original Jetour. "+
+                "El optimizador se detiene para no cambiar un objetivo "+
+                "de batería imposible de verificar.";
+            T1OemDiagnosticLog.add(app,
+                "SOC_FORZADO_NO_AUTORIZADO_SIN_MAPEO",diagnostic);
+            return diagnostic;
+        }
         T1OemDiagnosticLog.add(app,"SOC_REGEN_PERFIL",
             "SOLICITADO "+targets.summary()+"; comprobando OEM");
         return withBinder(b->{
