@@ -47,13 +47,93 @@ final class T1WheelAccessibilityRecovery {
         },"T1-Accessibility-Authorized-Rebind").start();
     }
 
-    static String describe(Context c){
+    /** Android is the authority: a green DriveLab preference is not a
+     * running AccessibilityService and must not be presented as connected.
+     * The OS accessibility list is READ ONLY here, not guessed or altered. */
+    static String permissionState(Context context){
         if(T1WazeWheelService.isServiceConnected())
-            return "ACCESIBILIDAD: SERVICIO CONECTADO";
+            return "CONECTADA · Android entregó el servicio";
+        try{
+            int enabled=Settings.Secure.getInt(context.getContentResolver(),
+                Settings.Secure.ACCESSIBILITY_ENABLED,0);
+            String current=current(context);
+            boolean approved=false;
+            if(current!=null){
+                for(String component:current.split(":")){
+                    if(T1WheelAccessListPolicy.target(component)){
+                        approved=true;break;
+                    }
+                }
+            }
+            if(!approved||enabled!=1)
+                return "DESHABILITADA EN ANDROID · requiere autorización "+
+                    "manual en Ajustes de accesibilidad";
+            return "HABILITADA PERO DESCONECTADA · "+
+                "Android no entregó el servicio a DriveLab";
+        }catch(Exception error){
+            return "ESTADO ANDROID NO VERIFICABLE · "+
+                error.getClass().getSimpleName();
+        }
+    }
+
+    /** One-tap manual action. Never grants Accessibility. When the owner
+     * already enabled this exact service AND ADB was authorized, a safe
+     * journalled rebind can be attempted without Termux, using loopback only.
+     * Manual requests bypass the 90s automatic backoff, not the safety gates. */
+    static String requestManual(Context context){
+        Context app=context.getApplicationContext();
+        SharedPreferences p=app.getSharedPreferences(
+            T1WazeWheelService.PREFS,Context.MODE_PRIVATE);
+        if(T1WazeWheelService.isServiceConnected()){
+            T1WazeWheelService.requestScan(app);
+            return "Accesibilidad ya conectada. Actualizando controles Waze/Maps.";
+        }
+        String pending=p.getString(PENDING,"");
+        String state=permissionState(app);
+        if(pending.isEmpty()&&
+            !state.startsWith("HABILITADA PERO DESCONECTADA")){
+            note(p,state);
+            return state;
+        }
+        if(!pending.isEmpty()){
+            // Repair the exact prior ADB snapshot even if the temporary
+            // removal left our component absent from Android's list.
+            if(!RUNNING.compareAndSet(false,true))
+                return "Recuperación de accesibilidad en curso";
+            lastAttempt=SystemClock.elapsedRealtime();
+            note(p,"RECONECTAR · restaurando lista anterior de Android…");
+            new Thread(()->{
+                try{attempt(app,p);}
+                finally{RUNNING.set(false);}
+            },"T1-Wheel-Repair-Pending-Manual").start();
+            return "Reparando un reinicio interrumpido; mirá el estado abajo.";
+        }
+        if(T1WheelAccessListPolicy.withoutOurService(current(app))==null){
+            note(p,"El servicio está habilitado, pero Android no permite "+
+                "un rebind seguro con la lista actual. Usá Ajustes.");
+            return "Servicio habilitado; la lista de accesibilidad no "+
+                "permite reengancharlo automáticamente. Abrí Ajustes.";
+        }
+        if(!RUNNING.compareAndSet(false,true))
+            return "Recuperación de accesibilidad ya en curso";
+        lastAttempt=SystemClock.elapsedRealtime();
+        note(p,"RECONECTAR · intentando ADB local autorizado "+
+            "sin modificar otros servicios…");
+        new Thread(()->{
+            try{attempt(app,p);}
+            finally{RUNNING.set(false);}
+        },"T1-Wheel-Manual-Authorized-Rebind").start();
+        return "Reconexión solicitada: sólo el enlace previamente autorizado; "+
+            "no hace falta Termux ni internet.";
+    }
+
+    static String describe(Context c){
+        String status=permissionState(c);
+        if(T1WazeWheelService.isServiceConnected())return status;
         SharedPreferences p=c.getSharedPreferences(
             T1WazeWheelService.PREFS,Context.MODE_PRIVATE);
-        return p.getString(STATUS,
-            "ACCESIBILIDAD: configurada, sin instancia conectada");
+        return status+"\\n"+p.getString(STATUS,
+            "Recuperación no intentada");
     }
 
     private static String current(Context app){
