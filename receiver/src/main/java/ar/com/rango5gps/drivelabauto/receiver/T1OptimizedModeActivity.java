@@ -29,7 +29,8 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         MUTED=T1JetourTheme.MUTED, AQUA=T1JetourTheme.CYAN;
     private final EnumMap<T1OptimizedModePolicy.Road,Profile> profiles=
         new EnumMap<>(T1OptimizedModePolicy.Road.class);
-    private TextView preview,automaticState,shadowStats;
+    private TextView preview,automaticState,shadowStats,socCalibrationStatus;
+    private static final String SOC_CALIBRATION_PREFS="t1_soc_oem_calibration_readonly_v1";
     private volatile boolean shadowDownloadBusy;
     private Button automaticButton;
     private T1OptimizedModePolicy.Road road=T1OptimizedModePolicy.Road.UNKNOWN;
@@ -448,6 +449,29 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         T1JetourTheme.button(socDiag,T1JetourTheme.PANEL_HI);
         socDiag.setOnClickListener(v->showSocDiagnostic());
         root.addView(socDiag);
+        root.addView(text("CALIBRAR FORZADO OEM · SOLO LECTURA"+
+            "\nCon AUTO OFF, en P: capturá A en SMART, "+
+            "cambiá a FORZADO 70 desde el menú ORIGINAL Jetour y "+
+            "capturá B. NO envía ningún comando al auto. "+
+            "1040=4 demuestra estrategia FORZADO; "+
+            "1041 debe compararse con el porcentaje visible "+
+            "en la pantalla OEM. Sacá una foto del 70 %.",13,MUTED,false));
+        LinearLayout socCaptureActions=horizontal();
+        root.addView(socCaptureActions);
+        Button beforeSoc=new Button(this);
+        beforeSoc.setAllCaps(false);
+        beforeSoc.setText("LEER A · ANTES");
+        T1JetourTheme.button(beforeSoc,T1JetourTheme.PANEL_HI);
+        beforeSoc.setOnClickListener(v->captureSocOem(false));
+        column(socCaptureActions,beforeSoc,1);
+        Button afterSoc=new Button(this);
+        afterSoc.setAllCaps(false);
+        afterSoc.setText("LEER B · DESPUÉS");
+        T1JetourTheme.button(afterSoc,T1JetourTheme.PANEL_HI);
+        afterSoc.setOnClickListener(v->captureSocOem(true));
+        column(socCaptureActions,afterSoc,1);
+        socCalibrationStatus=text(socCalibrationReport(),13,Color.WHITE,false);
+        root.addView(socCalibrationStatus);
         root.addView(text("Paso 1: seguridad OEM. Paso 2: envío del "+
             "nuevo SOC. Paso 3: confirmación por getters 1041. "+
             "SUBIR envía directamente al servidor privado ya vinculado "+
@@ -638,6 +662,89 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         }
         if(automaticState!=null)
             automaticState.setText(T1OptimizedAutoService.status(this));
+    }
+    /** Two real OEM observations; the app never changes 1040/1041/1046. */
+    private String socCalibrationReport(){
+        android.content.SharedPreferences p=getSharedPreferences(
+            SOC_CALIBRATION_PREFS,MODE_PRIVATE);
+        String a=p.getString("before","A (SMART): aún sin captura");
+        String b=p.getString("after","B (FORZADO): aún sin captura");
+        return "LECTURAS GUARDADAS · 1040=2 SMART / 4 FORZADO"+
+            "\n"+a+"\n"+b+
+            "\nLos valores RAW 1041=64/72 todavía no se pueden "+
+            "interpretar como 60/70 % sin confirmar menú OEM.";
+    }
+    private void captureSocOem(boolean after){
+        if(T1OptimizedAutoService.enabled(this)){
+            new android.app.AlertDialog.Builder(this)
+                .setTitle("CALIBRACIÓN BLOQUEADA")
+                .setMessage("Primero apagá MODO OPTIMIZADO. "+
+                    "Esta prueba no puede competir con cambios OEM automáticos.")
+                .setPositiveButton("ENTENDIDO",null).show();
+            return;
+        }
+        if(socCalibrationStatus!=null)
+            socCalibrationStatus.setText("Leyendo OEM 1033 / velocidad "+
+                "/ 1040 / 1041 / 1046… sin escritura");
+        new Thread(()->{
+            MirrorAutomationOem oem=null;
+            String observation=null;
+            String failure=null;
+            try{
+                oem=new MirrorAutomationOem(this);
+                int gear=oem.gear();
+                double speed=oem.speedKmh();
+                if(gear!=1||!Double.isFinite(speed)||speed<0||
+                    speed>0.5){
+                    failure="Requiere P y 0 km/h confirmados: "+
+                        "1033="+gear+" / velocidad="+speed;
+                }else{
+                    int strategy=oem.readInt(1040);
+                    int targetRaw=oem.readInt(1041);
+                    int regen=oem.readInt(1046);
+                    observation=(after?"B DESPUÉS":"A ANTES")+
+                        " · "+new java.text.SimpleDateFormat(
+                            "dd/MM HH:mm:ss",Locale.ROOT)
+                            .format(new java.util.Date())+
+                        " · 1040="+strategy+
+                        (strategy==4?" (FORZADO)":
+                            strategy==2?" (SMART)":" (SIN MAPEO)")+
+                        " · "+T1SocTargetCodec.explain(
+                            targetRaw,Double.NaN)+
+                        " · 1046="+regen;
+                }
+            }catch(Exception ex){
+                failure=ex.getClass().getSimpleName()+
+                    (ex.getMessage()==null?"":" · "+ex.getMessage());
+            }finally{
+                if(oem!=null)oem.close();
+            }
+            final String record=observation,problem=failure;
+            runOnUiThread(()->{
+                if(isFinishing()||isDestroyed())return;
+                if(problem!=null){
+                    if(socCalibrationStatus!=null)
+                        socCalibrationStatus.setText("LECTURA BLOQUEADA: "+problem);
+                    new android.app.AlertDialog.Builder(this)
+                        .setTitle("LECTURA OEM NO CONFIRMADA")
+                        .setMessage(problem)
+                        .setPositiveButton("CERRAR",null).show();
+                    return;
+                }
+                getSharedPreferences(SOC_CALIBRATION_PREFS,MODE_PRIVATE)
+                    .edit().putString(after?"after":"before",record).commit();
+                T1OemDiagnosticLog.add(this,after?
+                    "SOC_OEM_CALIBRACION_B":"SOC_OEM_CALIBRACION_A",record);
+                String report=socCalibrationReport();
+                if(socCalibrationStatus!=null)
+                    socCalibrationStatus.setText(report);
+                new android.app.AlertDialog.Builder(this)
+                    .setTitle(after?"LECTURA B GUARDADA":"LECTURA A GUARDADA")
+                    .setMessage(report+"\nAnotá qué porcentaje muestra "+
+                        "la pantalla original Jetour.")
+                    .setPositiveButton("CERRAR",null).show();
+            });
+        },"T1-SOC-Calibracion-ReadOnly").start();
     }
     private void showSocDiagnostic(){
         String report=T1OemDiagnosticLog.report(this);
