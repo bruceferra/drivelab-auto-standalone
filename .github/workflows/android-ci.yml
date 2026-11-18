@@ -84,6 +84,13 @@ jobs:
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1DrivingMode2053.java \
             receiver/tests/T1DrivingMode2053Test.java
           java -cp /tmp/t1-driving-mode ar.com.rango5gps.drivelabauto.receiver.T1DrivingMode2053Test
+      - name: Persistent same-row drag-and-drop toolbar regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-toolbar-dnd
+          javac -encoding UTF-8 -d /tmp/t1-toolbar-dnd receiver/tests/T1ToolbarDragDropContractTest.java
+          java -cp /tmp/t1-toolbar-dnd ar.com.rango5gps.drivelabauto.receiver.T1ToolbarDragDropContractTest
       - name: Trip buttons and parked manual map repair regression
         shell: bash
         run: |
