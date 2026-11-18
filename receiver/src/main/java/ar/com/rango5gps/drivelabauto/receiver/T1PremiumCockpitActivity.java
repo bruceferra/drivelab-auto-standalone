@@ -902,6 +902,53 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             paused?TEAL:GOLD,paused?state.resume:state.pause);
         tripAction(end,"TERMINAR",RED,state.end);
     }
+    /** Long-press to reorder cards inside their own horizontal cockpit row.
+     * Never swaps across rows, and persists after reopening the cockpit.
+     */
+    private void reorderCockpitRow(LinearLayout row,String rowKey){
+        final java.util.ArrayList<android.view.View> original=new java.util.ArrayList<>();
+        for(int i=0;i<row.getChildCount();i++)original.add(row.getChildAt(i));
+        if(original.size()<2)return;
+        final java.util.IdentityHashMap<android.view.View,Integer> ids=
+            new java.util.IdentityHashMap<>();
+        for(int i=0;i<original.size();i++)ids.put(original.get(i),i);
+        final String prefix="cockpit_row_"+rowKey+"_";
+        android.content.SharedPreferences prefs=getSharedPreferences(
+            "drivelab_cockpit_blocks_order_v1",MODE_PRIVATE);
+        java.util.ArrayList<android.view.View> sorted=
+            new java.util.ArrayList<>(original);
+        java.util.Collections.sort(sorted,(a,b)->Integer.compare(
+            prefs.getInt(prefix+ids.get(a),ids.get(a)),
+            prefs.getInt(prefix+ids.get(b),ids.get(b))));
+        for(android.view.View card:sorted)row.removeView(card);
+        for(android.view.View card:sorted)row.addView(card);
+        for(android.view.View card:original){
+            card.setOnLongClickListener(v->v.startDragAndDrop(
+                android.content.ClipData.newPlainText("drivelab-block",rowKey),
+                new android.view.View.DragShadowBuilder(v),v,0));
+            card.setOnDragListener((target,event)->{
+                switch(event.getAction()){
+                    case android.view.DragEvent.ACTION_DRAG_STARTED:
+                        return event.getLocalState() instanceof android.view.View&&
+                            ((android.view.View)event.getLocalState()).getParent()==row;
+                    case android.view.DragEvent.ACTION_DROP:
+                        android.view.View source=(android.view.View)event.getLocalState();
+                        if(source==target||source.getParent()!=row)return true;
+                        int destination=row.indexOfChild(target);
+                        row.removeView(source);
+                        row.addView(source,Math.min(destination,row.getChildCount()));
+                        android.content.SharedPreferences.Editor edit=
+                            getSharedPreferences("drivelab_cockpit_blocks_order_v1",
+                                MODE_PRIVATE).edit();
+                        for(int i=0;i<row.getChildCount();i++)
+                            edit.putInt(prefix+ids.get(row.getChildAt(i)),i);
+                        edit.apply();
+                        return true;
+                    default:return true;
+                }
+            });
+        }
+    }
     private LinearLayout controlCard(LinearLayout parent,String title,int slot){
         LinearLayout card=col();
         card.setPadding(5,3,5,3);
@@ -1113,6 +1160,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         secondPauseButton=compactButton(secondActions,"PAUSAR",GOLD,()->{if(T1JourneyStore2.paused(this))askSecond();else pauseSecond();});
         secondEndButton=compactButton(secondActions,"TERMINAR",RED,this::finishSecond);
 
+        reorderCockpitRow(controls,"trip_controls");
+
         // No import banners or long historical text before the gauges:
         // this cockpit top area is for the instrument panel, not logs.
         // Owner-confirmed history is available under DETALLES / HISTORIAL.
@@ -1130,6 +1179,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         LinearLayout powertrain=row();root.addView(powertrain);
         tempEngine=compactMetric(powertrain,"TEMP. MOTOR · RAW EXP.","SIN LECTURA");
         tempBattery=compactMetric(powertrain,"TEMP. BATERÍA HV · OEM","SIN LECTURA");
+        reorderCockpitRow(powertrain,"temperatures");
         socStrategy=text("SOC · ESPERANDO OEM",12,WHITE,true);
         commentaryLeft.addView(socStrategy);
 
@@ -1157,6 +1207,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         secondScopeKm=text("0,00 km",27,0xFF5BE2D0,true);
         client2ScopeCard.addView(secondScopeKm);
 
+        reorderCockpitRow(overview,"trip_overview");
         LinearLayout metrics=row();root.addView(metrics);
         consumptionNow=compactMetric(metrics,"CONSUMO · EXP.","SIN DATOS");
         evKmNow=compactMetric(metrics,"KM ELÉCTRICOS PUROS","0,00 km");
@@ -1164,6 +1215,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         electricNow=compactMetric(metrics,"ELECTRICIDAD CONSUMIDA · EXP.","—");
         costNow=compactMetric(metrics,"COSTO COMBUSTIBLE · EXP.","—");
         autonomyNow=compactMetric(metrics,"AUTONOMÍA TOTAL · EXP.","SIN DATOS");
+        reorderCockpitRow(metrics,"energy_metrics");
         LinearLayout commentaryColumns=row();
         root.addView(commentaryColumns);
         commentaryColumns.addView(commentaryLeft,
