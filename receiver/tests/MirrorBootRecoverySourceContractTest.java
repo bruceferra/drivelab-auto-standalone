@@ -29,7 +29,8 @@ public final class MirrorBootRecoverySourceContractTest {
             "Crash and uncertain cases keep warning; only complete restore rearms");
         ok(toolbar.contains("boolean unknown=unresolved&&!healthy;")&&
             toolbar.contains("ESPEJOS · RECUPERANDO EN P")&&
-            toolbar.contains("ESPEJOS · REVISAR MANUAL")&&
+            toolbar.contains("ESPEJOS · REVISAR POSICIÓN")&&
+            toolbar.contains("SUBIR ESPEJOS · MANUAL")&&
             toolbar.contains("T1JetourTheme.AMBER_BUTTON"),
             "No lost-orange state on reboot");
         System.out.println("PASS mirror ignition recovery source and orange status");
