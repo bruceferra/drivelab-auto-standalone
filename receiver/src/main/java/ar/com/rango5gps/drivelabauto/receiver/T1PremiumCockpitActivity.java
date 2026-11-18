@@ -884,6 +884,22 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         lp.setMargins(2,1,2,1);parent.addView(b,lp);
         return b;
     }
+    private void tripAction(Button button,String title,int color,boolean enabled){
+        if(button==null)return;
+        button.setText(title);
+        button.setEnabled(enabled);
+        button.setClickable(enabled);
+        button.setAlpha(enabled?1f:0.42f);
+        T1JetourTheme.button(button,enabled?color:MUTED);
+    }
+    private void tripActions(Button start,Button pause,Button end,
+                             boolean paused,boolean active,boolean live,
+                             boolean canStart){
+        tripAction(start,"INICIAR",TEAL,canStart&&!paused);
+        tripAction(pause,paused?"REANUDAR":"PAUSAR",
+            paused?TEAL:GOLD,paused||active&&live);
+        tripAction(end,"TERMINAR",RED,active||paused);
+    }
     private LinearLayout controlCard(LinearLayout parent,String title,int slot){
         LinearLayout card=col();
         card.setPadding(5,3,5,3);
@@ -1075,8 +1091,8 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         clientRecordingLamp=text("○ VIAJE 1 DETENIDO",13,MUTED,true);
         clientControl.addView(clientRecordingLamp);
         LinearLayout clientActions=row();clientControl.addView(clientActions);
-        clientStartButton=compactButton(clientActions,"INICIAR",BLUE,this::askClient);
-        clientPauseButton=compactButton(clientActions,"PAUSAR",GOLD,this::pauseClient);
+        clientStartButton=compactButton(clientActions,"INICIAR",TEAL,this::askClient);
+        clientPauseButton=compactButton(clientActions,"PAUSAR",GOLD,()->{if(T1JourneyStore.paused(this))askClient();else pauseClient();});
         clientEndButton=compactButton(clientActions,"TERMINAR",RED,this::finishClient);
 
         LinearLayout dayControl=controlCard(controls,"",0);
@@ -1084,15 +1100,15 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         dayControl.addView(dayRecordingLamp);
         LinearLayout dayActions=row();dayControl.addView(dayActions);
         dayStartButton=compactButton(dayActions,"INICIAR",TEAL,this::startDay);
-        dayPauseButton=compactButton(dayActions,"PAUSAR",GOLD,this::pauseDay);
+        dayPauseButton=compactButton(dayActions,"PAUSAR",GOLD,()->{if(getSharedPreferences(T1TripRecorderService.PREFS,MODE_PRIVATE).getBoolean(T1TripRecorderService.PAUSED,false))startDay();else pauseDay();});
         dayEndButton=compactButton(dayActions,"TERMINAR",RED,this::endDay);
 
         LinearLayout secondControl=controlCard(controls,"",2);
         secondRecordingLamp=text("○ VIAJE 2 DETENIDO",13,MUTED,true);
         secondControl.addView(secondRecordingLamp);
         LinearLayout secondActions=row();secondControl.addView(secondActions);
-        secondStartButton=compactButton(secondActions,"INICIAR",BLUE,this::askSecond);
-        secondPauseButton=compactButton(secondActions,"PAUSAR",GOLD,this::pauseSecond);
+        secondStartButton=compactButton(secondActions,"INICIAR",TEAL,this::askSecond);
+        secondPauseButton=compactButton(secondActions,"PAUSAR",GOLD,()->{if(T1JourneyStore2.paused(this))askSecond();else pauseSecond();});
         secondEndButton=compactButton(secondActions,"TERMINAR",RED,this::finishSecond);
 
         // No import banners or long historical text before the gauges:
@@ -1613,35 +1629,19 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             secondRecordingLamp.setTextColor(secondPaused?GOLD:
                 secondLiveNow?TEAL:(second||secondPending)?GOLD:MUTED);
         }
-        // Independent button availability. The old client-dependent conditions
-        // grayed out JORNADA PAUSAR/TERMINAR while Viaje 1 was active.
-        if(dayStartButton!=null){
-            dayStartButton.setText(dayPaused?"REANUDAR":"INICIAR");
-            dayStartButton.setEnabled(!running&&(dayPaused||!dayDesired));
-        }
-        if(dayPauseButton!=null)dayPauseButton.setEnabled(
-            !dayPaused&&running&&fresh);
-        if(dayEndButton!=null)dayEndButton.setEnabled(dayDesired||dayPaused);
-        if(clientStartButton!=null){
-            clientStartButton.setText(clientPaused?"REANUDAR":"INICIAR");
-            clientStartButton.setEnabled(
-                (clientPaused&&!dayPaused&&!running?false:
-                    clientPaused||(!client&&!pending)));
-        }
-        if(clientPauseButton!=null)
-            clientPauseButton.setEnabled(client&&!clientPaused&&fresh&&!dayPaused);
-        if(clientEndButton!=null)
-            clientEndButton.setEnabled(client||pending);
-        if(secondStartButton!=null){
-            secondStartButton.setText(secondPaused?"REANUDAR":"INICIAR");
-            secondStartButton.setEnabled(
-                (secondPaused&&!dayPaused&&!running?false:
-                    secondPaused||(!second&&!secondPending)));
-        }
-        if(secondPauseButton!=null)
-            secondPauseButton.setEnabled(second&&!secondPaused&&fresh&&!dayPaused);
-        if(secondEndButton!=null)
-            secondEndButton.setEnabled(second||secondPending);
+        // One visual/action contract for all three independent recorders:
+        // stopped = green START; running = yellow PAUSE + red END;
+        // paused = green RESUME (on middle button) + red END.
+        // Gray controls are actually disabled, not merely recolored.
+        tripActions(dayStartButton,dayPauseButton,dayEndButton,
+            dayPaused,dayDesired||running,fresh||running,
+            !running&&!dayDesired);
+        tripActions(clientStartButton,clientPauseButton,clientEndButton,
+            clientPaused,client||pending,clientLive,
+            !client&&!pending);
+        tripActions(secondStartButton,secondPauseButton,secondEndButton,
+            secondPaused,second||secondPending,secondLiveNow,
+            !second&&!secondPending);
         if(clientRecoverButton!=null)
             clientRecoverButton.setVisibility(
                 T1JourneyStore.stuck(this)?
