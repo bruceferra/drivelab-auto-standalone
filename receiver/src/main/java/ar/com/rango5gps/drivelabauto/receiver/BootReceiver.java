@@ -10,8 +10,15 @@ public final class BootReceiver extends BroadcastReceiver {
         String action=intent.getAction();
         if(!Intent.ACTION_BOOT_COMPLETED.equals(action)&&
            !Intent.ACTION_MY_PACKAGE_REPLACED.equals(action))return;
-        if(context.getSharedPreferences(ReceiverService.PREFS,Context.MODE_PRIVATE)
-                .getBoolean("auto_boot",false)){
+        // Cluster auto-boot lives in a DIFFERENT preference file from
+        // Receiver's legacy auto_boot. The old gate silently skipped the
+        // entire Waze/Maps OFF(10 s)/ON sequence when ONLY the cluster
+        // auto-start option was enabled.
+        boolean receiverBoot=context.getSharedPreferences(
+            ReceiverService.PREFS,Context.MODE_PRIVATE)
+                .getBoolean("auto_boot",false);
+        boolean clusterBoot=T1ClusterWazeRouter.autoBoot(context);
+        if(receiverBoot||clusterBoot){
             try{
                 Intent start=new Intent(context,ReceiverService.class)
                     .setAction(ReceiverService.ACTION_START)
