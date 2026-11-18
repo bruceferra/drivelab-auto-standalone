@@ -73,6 +73,9 @@ public final class MirrorAutomationService extends Service {
     }
     static void activateOnAppOpen(Context context){
         SharedPreferences p=context.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
+        // A deliberate manual DOWN/UP choice must persist across app open
+        // and ignition. It may only be replaced by an explicit AUTO tap.
+        if(p.getBoolean(MirrorManualTiltService.SELECTED,false))return;
         long age=System.currentTimeMillis()-p.getLong(LAST_POLL,0L);
         if(p.getBoolean(SERVICE_ACTIVE,false)&&age>=0&&age<8000L)
             return; // live motion must not be interrupted by another activity
@@ -132,7 +135,8 @@ public final class MirrorAutomationService extends Service {
     /** Restart a stale worker only with an empty motion ledger. */
     static void ensureRunning(Context context){
         SharedPreferences p=context.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
-        if(!p.getBoolean(AUTO,false)||unresolved(p))return;
+        if(p.getBoolean(MirrorManualTiltService.SELECTED,false)||
+            !p.getBoolean(AUTO,false)||unresolved(p))return;
         long age=System.currentTimeMillis()-p.getLong(LAST_POLL,0L);
         if(p.getBoolean(SERVICE_ACTIVE,false)&&age>=0&&age<3000L)return;
         activateOnAppOpen(context);
@@ -262,6 +266,9 @@ public final class MirrorAutomationService extends Service {
                 .putString(STATUS,"ESPEJOS NARANJA · esperando P estable "+
                     "para subir "+l+" IZQ / "+r+" DER").commit();
         }else if(ACTION_AUTO.equals(action)){
+            // Explicit AUTO toggle is the ONLY way out of manual override.
+            prefs().edit().putBoolean(MirrorManualTiltService.SELECTED,false)
+                .apply();
             // Some Activity/watchdog paths resend ACTION_AUTO while a 20-pulse
             // tilt or its P+30s return is ALREADY RUNNING. Do NOT mistake the
             // correctly outstanding pulse ledger for an unsafe re-arm and
