@@ -21,9 +21,9 @@ public final class T1IgnitionMirrorRecircAndWheelTest{
     yes(activity.contains("T1OemMicrophoneService.ensureRunning(this)")&&
         mic.contains("static void ensureRunning(Context c)"),
         "Recover unified steering wheel subscription from foreground");
-    yes(toolbar.contains("boolean needsRecovery=unresolved;")&&
+    yes(toolbar.contains("MirrorManualTiltService.unverified(owner)")&&
         toolbar.contains("boolean unknown=unresolved&&!healthy;"),
-        "No phantom orange from historical text when pulse ledger is empty");
+        "Manual tilt icon reflects actual pending pulses and unverified physical pose");
     System.out.println("PASS ignition mirror/recirc/wheel recovery safeguards");
   }
 }
