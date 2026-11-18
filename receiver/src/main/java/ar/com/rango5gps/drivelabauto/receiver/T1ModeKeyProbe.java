@@ -35,13 +35,13 @@ final class T1ModeKeyProbe {
         String line="key="+code+" action="+action+" extra="+extra;
         String old=p.getString(HISTORY,"");
         p.edit().putInt(COUNT,n+1)
-            .putString(HISTORY,old+"\\n"+line).apply();
+            .putString(HISTORY,old+"\n"+line).apply();
     }
     static String status(Context c){
         SharedPreferences p=prefs(c);
         return (armed(c)?"CAPTURANDO MODE (hasta 30 segundos)":
             "Captura terminada")+" · "+p.getInt(COUNT,0)+
-            " eventos\\n"+p.getString(HISTORY,
+            " eventos\n"+p.getString(HISTORY,
                 "Sin prueba; no hay código MODE confirmado");
     }
 }
