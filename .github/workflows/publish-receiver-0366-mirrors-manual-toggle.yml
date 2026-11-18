@@ -1,4 +1,4 @@
-# 2026-11-18: Receiver v0.3.66: verified physical-reference recovery and manual on/off source contracts.
+# 2026-11-18: Receiver v0.3.66: final owner-controlled pulse-counter safety and source-contract correction.
 name: Signed Receiver 0.3.66 - manual mirror tilt owner on-off
 on:
   push:
