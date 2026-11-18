@@ -24,10 +24,10 @@ public final class T1BootHealthSpotifyOverlaySourceTest {
         ok(receiver.contains("scheduleWheelBootAudit();")&&
             receiver.contains("T1WheelAccessibilityRecovery.checkAtBoot(this)")&&
             receiver.contains("boot.postDelayed(")&&
-            receiver.contains("T1ClusterBootFocus.afterClusterBoot(this,boot,routeAt)")&&
-            receiver.indexOf("T1LastRoute.restore(this)")<
-                receiver.indexOf("T1ClusterBootFocus.afterClusterBoot(this,boot,routeAt)"),
-            "After boot audit wheel and only refocus maps after cluster route");
+            !receiver.contains("T1ClusterBootFocus.afterClusterBoot(this,boot,routeAt)")&&
+            receiver.contains("SUSPENDIDO en 0.3.69")&&
+            receiver.contains("T1LastRoute.restore(this)"),
+            "After empirical overlay regression, boot still restores wheel/route but skips failed auto focus");
         ok(wheel.contains("AUTO_BOOT_ADB=")&&
             wheel.contains("static String checkAtBoot(Context context)")&&
             wheel.contains("p.getBoolean(AUTO_BOOT_ADB,false)")&&
