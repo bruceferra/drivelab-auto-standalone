@@ -1,5 +1,5 @@
-# 2026-11-18: signed 0.3.56 independent ignition auto journeys and GPS points.
-name: Signed Receiver 0.3.56 - ignition AUTO journeys with GPS and charge scopes
+# 2026-11-18: signed 0.3.56 ignition sessions with date/hour/minute precise virtual trips.
+name: Signed Receiver 0.3.56 - ignition AUTO journeys, custom date and minute ranges
 on:
   push:
     branches: [main]
@@ -198,6 +198,16 @@ jobs:
             receiver/tests/T1AutoJourneySourceContractTest.java
           java -cp /tmp/t1-autotrip ar.com.rango5gps.drivelabauto.receiver.T1AutoDrivePolicyTest
           java -cp /tmp/t1-autotrip ar.com.rango5gps.drivelabauto.receiver.T1AutoJourneySourceContractTest
+      - name: Verify custom minute-precise journey time windows and CSV
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-auto-range
+          javac -encoding UTF-8 -d /tmp/t1-auto-range \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1AutoRangeMath.java \
+            receiver/tests/T1AutoRangeMathTest.java \
+            receiver/tests/T1AutoRangeWindowSourceContractTest.java
+          java -cp /tmp/t1-auto-range ar.com.rango5gps.drivelabauto.receiver.T1AutoRangeMathTest
+          java -cp /tmp/t1-auto-range ar.com.rango5gps.drivelabauto.receiver.T1AutoRangeWindowSourceContractTest
       - name: Build and verify signed Receiver 0.3.56
         run: |
           set -euo pipefail
@@ -248,8 +258,8 @@ jobs:
             output/DriveLab-Auto-Receiver-v0.3.56.apk \
             output/receiver.json output/sender.json output/receiver.sha256 \
             --target "$GITHUB_SHA" --latest \
-            --title 'DriveLab Auto Receiver 0.3.56 · Viajes automáticos por encendido' \
-            --notes 'Receiver 0.3.56/code157: agrega registro automático de TODOS los encendidos observados por OEM 1031 READY y movimiento (1033/2148), con exclusión de cargas por cable 1060. No hace falta iniciar Viaje 1, Viaje 2 ni Total. Guarda sesiones y muestras cronológicas de GPS, SOC 1062, voltaje/corriente HV 1063/1064, rpm 1035, velocidades y marcha en SQLite privado t1_ignition_journeys.db, con integración separada kWh SALIDA, ENTRADA (frenado + generador térmico, no separables) y NETO. No extrapola gaps de Android apagado; detecta reinicios/gaps y cierra la sesión anterior a la última muestra. Arranca por BOOT_COMPLETED y al entrar en DriveLab, servicio permanente con muestras 4s viajando y 15s cuando no hay vehículo READY, opt-out en pantalla. Nuevo Cockpit -> VIAJES AUTO · ENCENDIDOS / ÚLTIMA CARGA: HOY, ESTE MES y DESDE ÚLTIMA CARGA desde SQLite de cargas propio. Muestra estimación contable de consumo procedente del enchufe, acotada por kWh registrados, SIN afirmar que puede etiquetar origen físico. Exporta SESIONES y PUNTOS GPS a CSV mediante selector Android, para reconstrucción de trayectos. No importa ni modifica la SQLite privada de T1 Launcher; recorridos anteriores a esta versión necesitan exportación anterior. Mantiene las cargas automáticas 0.3.55, espejos 0.3.54 y funciones anteriores. No reemplaza HOME del sistema ni toca Sender 0.2.22. Señal 1031 y GPS en arranque OEM requieren confirmación física.'
+            --title 'DriveLab Auto Receiver 0.3.56 · Viajes AUTO y estadísticas por fecha/hora' \
+            --notes 'Receiver 0.3.56/code157: agrega registro automático de TODOS los encendidos observados por OEM 1031 READY y movimiento (1033/2148), con exclusión de cargas por cable 1060. No hace falta iniciar Viaje 1, Viaje 2 ni Total. Guarda sesiones y muestras cronológicas de GPS, SOC 1062, voltaje/corriente HV 1063/1064, rpm 1035, velocidades y marcha en SQLite privado t1_ignition_journeys.db, con integración separada kWh SALIDA, ENTRADA (frenado + generador térmico, no separables) y NETO. No extrapola gaps de Android apagado; detecta reinicios/gaps y cierra la sesión anterior a la última muestra. Arranca por BOOT_COMPLETED y al entrar en DriveLab, servicio permanente con muestras 4s viajando y 15s cuando no hay vehículo READY, opt-out en pantalla. Nuevo Cockpit -> VIAJES AUTO · ENCENDIDOS / ÚLTIMA CARGA: HOY, ESTE MES y DESDE ÚLTIMA CARGA desde SQLite de cargas propio. Muestra estimación contable de consumo procedente del enchufe, acotada por kWh registrados, SIN afirmar que puede etiquetar origen físico. Exporta SESIONES y PUNTOS GPS a CSV mediante selector Android, para reconstrucción de trayectos. No importa ni modifica la SQLite privada de T1 Launcher; recorridos anteriores a esta versión necesitan exportación anterior. Agrega GENERADOR DE VIAJES VIRTUALES por fecha y hora exacta (ej. sábado 19:00 a 23:50): recorta los acumuladores de puntos GPS/OEM sin sumar un encendido completo, distribuye intervalos que cruzan medianoche y muestra detalle total / POR DIA / POR ENCENDIDO, exporta resumen CSV y puntos GPS filtrados. No altera sesiones ni rellena tramos sin lectura; los litros por sesión no se suponen sin datos OEM. Mantiene las cargas automáticas 0.3.55, espejos 0.3.54 y funciones anteriores. No reemplaza HOME del sistema ni toca Sender 0.2.22. Señal 1031 y GPS en arranque OEM requieren confirmación física.'
           mkdir -p verify
           gh release download v0.3.56 --pattern receiver.json --dir verify
           gh release download v0.3.56 --pattern sender.json --dir verify
