@@ -700,6 +700,14 @@ jobs:
           javac -encoding UTF-8 -d /tmp/t1-trip-delete-0279 \
             receiver/tests/T1HistoryDeletionSourceContractTest.java
           java -cp /tmp/t1-trip-delete-0279 ar.com.rango5gps.drivelabauto.receiver.T1HistoryDeletionSourceContractTest
+      - name: Boot health and Spotify map overlay guarded focus contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-boot-health
+          javac -encoding UTF-8 -d /tmp/t1-boot-health \
+            receiver/tests/T1BootHealthSpotifyOverlaySourceTest.java
+          java -cp /tmp/t1-boot-health ar.com.rango5gps.drivelabauto.receiver.T1BootHealthSpotifyOverlaySourceTest
       - name: Manual wheel Accessibility reconnect with Android grant and local ADB
         shell: bash
         run: |
