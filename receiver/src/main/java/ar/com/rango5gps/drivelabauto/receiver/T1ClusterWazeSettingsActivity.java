@@ -65,6 +65,40 @@ public final class T1ClusterWazeSettingsActivity extends T1ImmersiveActivity {
         label(body,"ARRANQUE AUTO OFF/ON · "+p.getString(
             T1ClusterWazeRouter.BOOT_RELOAD_RESULT,
             "Aún no probado tras reiniciar la camioneta"),14);
+        boolean focusAuto=p.getBoolean(T1ClusterBootFocus.ENABLED,false);
+        label(body,"SPOTIFY ENCIMA DEL MAPA · "+
+            T1ClusterBootFocus.describe(this)+
+            "\\nEs una prueba de foco de Waze/Maps en Display 1, "+
+            "no cambia el audio Bluetooth ni cierra Spotify.",14);
+        button(body,focusAuto?
+            "MAPAS DELANTE AL ENCENDER · ON (APAGAR)":
+            "MAPAS DELANTE AL ENCENDER · OFF (ACTIVAR)",()->{
+            if(focusAuto){
+                p.edit().putBoolean(T1ClusterBootFocus.ENABLED,false)
+                    .putString(T1ClusterBootFocus.STATUS,
+                        "Desactivado por propietario").commit();
+                render();return;
+            }
+            new AlertDialog.Builder(this)
+                .setTitle("Mapas delante de Spotify al encender")
+                .setMessage("Prueba opcional. Una vez completado el "+
+                    "arranque de CLÚSTER con Waze y Maps en Display 1, "+
+                    "DriveLab intentará traer SOLO sus tareas existentes "+
+                    "al frente cuando confirme 0 km/h. No cierra "+
+                    "Spotify, no detiene la reproducción y no toca "+
+                    "aplicaciones OEM. Máximo dos intentos por encendido. "+
+                    "La capa de Spotify puede ser una ventana OEM que "+
+                    "Android no permita ocultar: el resultado no garantiza "+
+                    "que haya desaparecido. Podés apagarlo aquí.")
+                .setNegativeButton("CANCELAR",null)
+                .setPositiveButton("ACTIVAR PRUEBA",(d,w)->{
+                    p.edit().putBoolean(T1ClusterBootFocus.ENABLED,true)
+                        .putString(T1ClusterBootFocus.STATUS,
+                            "Prueba autorizada; esperará el próximo arranque")
+                        .commit();
+                    render();
+                }).show();
+        });
         button(body,"CONFIGURAR PANELES A/B · APLICAR",()->
             startActivity(new Intent(this,T1ClusterLayoutSettingsActivity.class)));
         if(T1ClusterWazeRouter.selected(this)==null)

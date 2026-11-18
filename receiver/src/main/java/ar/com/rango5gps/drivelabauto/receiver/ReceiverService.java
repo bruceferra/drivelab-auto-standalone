@@ -88,6 +88,7 @@ public final class ReceiverService extends Service {
             navigationThread.start();pairingThread.start();
             if(intent!=null&&intent.getBooleanExtra(FROM_BOOT,false)){
                 scheduleBootApp();
+                scheduleWheelBootAudit();
                 scheduleNativeClusterWaze();
             }
         }
@@ -352,6 +353,18 @@ public final class ReceiverService extends Service {
      * Never add floating center-screen windows or overwrite OEM HOME.
      * Android may still reject background launches; report real error.
      */
+    /** Boot-only Android Accessibility health check. The owner's
+     * separately saved ADB autorepair preference controls any Settings
+     * writes. Read-only check otherwise; no phone, internet or Termux.
+     */
+    private void scheduleWheelBootAudit(){
+        Handler boot=new Handler(Looper.getMainLooper());
+        boot.postDelayed(()->{
+            if(!running)return;
+            String result=T1WheelAccessibilityRecovery.checkAtBoot(this);
+            prefs().edit().putString("boot_wheel_health",result).apply();
+        },14000L);
+    }
     private void scheduleNativeClusterWaze(){
         if(!T1ClusterWazeRouter.autoBoot(this))return;
         Handler boot=new Handler(Looper.getMainLooper());
@@ -387,6 +400,13 @@ public final class ReceiverService extends Service {
                         // buttons, issue DPAD, or force Waze fullscreen.
                         T1OemMicrophoneService.ensureRunning(this);
                         T1WazeWheelService.requestClusterReady(this);
+                        // The pre-existing Spotify OEM layer is separate
+                        // from A2DP. Only if the owner OPTED IN, promote
+                        // the existing Waze/Maps tasks at 0 km/h after
+                        // this boot's clean OFF/ON and route restoration.
+                        long routeAt=T1ClusterWazeRouter.prefs(this)
+                            .getLong(T1ClusterWazeRouter.LAST_REQUEST_MS,0L);
+                        T1ClusterBootFocus.afterClusterBoot(this,boot,routeAt);
                     },3200L);
                 });
             },"T1-Cluster-Boot-SavedFreeform").start();

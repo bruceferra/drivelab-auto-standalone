@@ -184,6 +184,51 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
         button(body,"ABRIR AJUSTES DE ACCESIBILIDAD (SI EXISTEN)",()->{
             openAccessibilitySettings();
         });
+        boolean autoBootAdb=prefs().getBoolean(
+            T1WheelAccessibilityRecovery.AUTO_BOOT_ADB,false);
+        text(body,"SALUD AL ENCENDER · "+
+            prefs().getString(T1WheelAccessibilityRecovery.BOOT_STATUS,
+                "Todavía sin comprobación de arranque"),14);
+        button(body,autoBootAdb?
+            "AUTORRECUPERAR RUEDITA POR ADB AL ENCENDER · ON (APAGAR)":
+            "AUTORRECUPERAR RUEDITA POR ADB AL ENCENDER · OFF (ACTIVAR)",()->{
+            if(autoBootAdb){
+                prefs().edit().putBoolean(
+                    T1WheelAccessibilityRecovery.AUTO_BOOT_ADB,false)
+                    .commit();
+                report.setText("Autorrecuperación ADB al encender DESACTIVADA. "+
+                    "La ruedita sigue funcionando mientras Android la permita.");
+                recreate();
+                return;
+            }
+            if(!T1WazeWheelService.isServiceConnected()||
+               prefs().getLong(T1WazeWheelService.SERVICE_AT,0L)<=0){
+                report.setText("Primero conectá accesibilidad y comprobá "+
+                    "que funciona la ruedita. Después podés habilitar "+
+                    "la restauración automática del permiso al encender.");
+                return;
+            }
+            new android.app.AlertDialog.Builder(this)
+                .setTitle("Autorrecuperar permiso al encender")
+                .setMessage("Solo para esta T1: si Android quita de nuevo "+
+                    "DriveLab de accesibilidad, DriveLab podrá restaurar "+
+                    "su propio servicio usando ADB local ya autorizado "+
+                    "en 127.0.0.1:5556/5555. Conserva otros servicios, "+
+                    "incluido T1Launcher. No usa teléfono ni internet. "+
+                    "Puede activar accesibilidad general si la ROM la "+
+                    "apagó. Podés apagar esta opción cuando quieras. "+
+                    "No se ejecuta mientras la ruedita está apagada.")
+                .setNegativeButton("CANCELAR",null)
+                .setPositiveButton("AUTORIZAR AL ENCENDER",(d,w)->{
+                    prefs().edit().putBoolean(
+                        T1WheelAccessibilityRecovery.AUTO_BOOT_ADB,true)
+                        .commit();
+                    report.setText("Permiso de autorrecuperación ADB al "+
+                        "encender ACTIVADO; el diagnóstico se actualizará "+
+                        "en el próximo arranque real de Android.");
+                    recreate();
+                }).show();
+        });
         modeState=text(body,"MODO RUEDITA ACTUAL: SELECCIÓN DE BOTONES",20);
         panelA=button(body,"CONTROLAR PANEL A",()->{
             T1WheelTarget.select(this,false);refreshModes();
@@ -230,7 +275,10 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
             refreshModes();
         });
         bridgeOff=button(body,"DESACTIVAR VOLANTE OEM",()->{
-            prefs().edit().putBoolean(T1WazeWheelService.OEM_BINDER_ENABLED,false)
+            // Explicit wheel OFF also revokes the boot ADB grant.
+            prefs().edit().putBoolean(
+                T1WheelAccessibilityRecovery.AUTO_BOOT_ADB,false)
+                .putBoolean(T1WazeWheelService.OEM_BINDER_ENABLED,false)
                 .putString(T1WazeWheelService.OEM_BINDER_STATUS,
                     "Desconectado por usuario").apply();
             refreshModes();
