@@ -671,7 +671,7 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
             "\n"+a+"\n"+b+
             "\nCALIBRACIÓN CONFIRMADA POR MENÚ OEM JETOUR: "+
             "1041 raw72 = FORZADO 70%; raw56 = FORZADO 50%. "+
-            "raw64 / 60% SIGUEN SIN VALIDACIÓN.";
+            "1041 raw64 = FORZADO 60%.";
     }
     private void captureSocOem(boolean after){
         if(T1OptimizedAutoService.enabled(this)){
