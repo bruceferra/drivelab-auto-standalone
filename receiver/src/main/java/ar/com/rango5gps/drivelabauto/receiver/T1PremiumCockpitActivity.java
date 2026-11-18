@@ -895,10 +895,12 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
     private void tripActions(Button start,Button pause,Button end,
                              boolean paused,boolean active,boolean live,
                              boolean canStart,boolean canResume){
-        tripAction(start,"INICIAR",TEAL,canStart&&!paused);
+        T1TripActionPolicy.State state=T1TripActionPolicy.resolve(
+            paused,active,live,canStart,canResume);
+        tripAction(start,"INICIAR",TEAL,state.start);
         tripAction(pause,paused?"REANUDAR":"PAUSAR",
-            paused?TEAL:GOLD,paused?canResume:active&&live);
-        tripAction(end,"TERMINAR",RED,active||paused);
+            paused?TEAL:GOLD,paused?state.resume:state.pause);
+        tripAction(end,"TERMINAR",RED,state.end);
     }
     private LinearLayout controlCard(LinearLayout parent,String title,int slot){
         LinearLayout card=col();
