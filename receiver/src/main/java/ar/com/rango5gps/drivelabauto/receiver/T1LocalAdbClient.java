@@ -88,6 +88,7 @@ final class T1LocalAdbClient {
            !command.equals("pidof com.google.android.apps.maps")&&
            !command.equals("am stack list")&&
            !command.equals("dumpsys activity activities")&&
+           !command.equals("dumpsys window windows")&&
            !command.equals("dumpsys input")&&
            !command.matches(
                "settings put secure enabled_accessibility_services "+
