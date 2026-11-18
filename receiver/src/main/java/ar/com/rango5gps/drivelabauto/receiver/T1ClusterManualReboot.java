@@ -51,6 +51,30 @@ final class T1ClusterManualReboot {
         note(owner,"R 1/4 · Deteniendo Waze y Maps con CLÚSTER ON",update);
         new Thread(()->{
             try{
+                // This sequence FORCE-STOPS active navigation packages.
+                // Even with explicit confirmation it is forbidden in motion.
+                // Check P and zero speed TWICE from OEM before first ADB write.
+                MirrorAutomationOem safety=null;
+                try{
+                    safety=new MirrorAutomationOem(owner);
+                    for(int attempt=0;attempt<2;attempt++){
+                        int gear=safety.gear();
+                        double speed=safety.speedKmh();
+                        if(gear!=1||!Double.isFinite(speed)||
+                           speed<0||speed>0.5){
+                            finish(owner,update,
+                                "R BLOQUEADA · requiere P y 0 km/h "+
+                                "confirmados; OEM marcha="+gear+
+                                " velocidad="+speed+" km/h");
+                            return;
+                        }
+                        if(attempt==0)Thread.sleep(400L);
+                    }
+                }finally{
+                    if(safety!=null)safety.close();
+                }
+                note(owner,"R PREVIA · P y 0 km/h confirmados; "+
+                    "empieza el cierre de mapas",update);
                 // Verify ON, Waze+Maps, Display 1 and local ADB before OFF.
                 T1ClusterFreshStart.Result clean=T1ClusterFreshStart.prepare(owner);
                 if(!clean.ready){
