@@ -53,7 +53,8 @@ final class MirrorAutomationOem implements AutoCloseable{
 
     int gear()throws Exception{return readInt(1033);}
     int readInt(int id)throws Exception{
-        if(id!=1033 && id!=1089 && id!=2068 && id!=2069)
+        if(id!=1033 && id!=1089 && id!=2068 && id!=2069 &&
+           id!=1040 && id!=1041 && id!=1046)
             throw new SecurityException("Getter ID desconocido");
         if(binder==null||!binder.isBinderAlive())throw new IllegalStateException("OEM desconectado");
         Parcel d=Parcel.obtain(),r=Parcel.obtain();
