@@ -28,15 +28,16 @@ public final class T1ClusterFreeformAutobootRegressionTest {
             policy.contains("MODE_SPLIT.equals(mode(c))&&panelAOn(c)&&panelBOn(c)"),
             "Only an explicitly selected two-panel freeform layout is restored");
         String boot=router.substring(saved,pending);
-        ck(boot.contains("T1ClusterFreshStart.prepare(c)")&&
+        ck(!boot.contains("T1ClusterFreshStart.prepare(c)")&&
             !boot.contains("stoppedForSavedSplit(c)")&&
             boot.contains("Settings.canDrawOverlays(c)")&&
             !boot.contains("launchApp(")&&
-            boot.contains("T1ClusterAdbResize.closeClusterApps(c,")&&
-            boot.contains("putBoolean(ENABLED,false)")&&
-            boot.contains("putBoolean(ENABLED,true)")&&
+            !boot.contains("T1ClusterAdbResize.closeClusterApps(c,")&&
+            !boot.contains("putBoolean(ENABLED,false)")&&
+            !boot.contains("putBoolean(ENABLED,true)")&&
+            boot.contains("ARRANQUE SIMPLE 0.3.69")&&
             !boot.contains("am task")&&!boot.contains("gear()"),
-            "Cold boot performs actual OFF/ON and recovers saved FREEFORM without speed gate");
+            "Cold boot preserves user dual FREEFORM without the failing OFF/ON loop");
         int manual=bar.indexOf("private void toggleCluster()");
         int restore=bar.indexOf("if(T1ClusterLayoutPolicy.savedDualSplit(owner))",manual);
         int fallback=bar.indexOf("if(pendingLayout)",restore);
