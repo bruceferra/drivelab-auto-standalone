@@ -82,6 +82,8 @@ final class T1LocalAdbClient {
         if(!command.equals("am supports-split-screen-multi-window")&&
            !command.matches("am start --display 1 --windowingMode 3 -n com\\.waze/[A-Za-z0-9_.$/]{1,220}")&&
            !command.matches("am start --display 1 --windowingMode 4 -n com\\.google\\.android\\.apps\\.maps/[A-Za-z0-9_.$/]{1,220}")&&
+           !command.equals("pm clear --cache-only com.waze")&&
+           !command.equals("pm clear --cache-only com.google.android.apps.maps")&&
            !command.equals("am force-stop com.waze")&&
            !command.equals("am force-stop com.google.android.apps.maps")&&
            !command.equals("pidof com.waze")&&
