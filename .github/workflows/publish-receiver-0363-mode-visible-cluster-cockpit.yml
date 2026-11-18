@@ -1,4 +1,4 @@
-# 2026-11-18: signed 0.3.63 historical day reconstruction and weighted cockpit, retaining boot wheel/map features.
+# 2026-11-18: v0.3.63 signed release after updating the parked-only R source contract.
 name: Signed Receiver 0.3.63 - MODE capture visible and cockpit compact
 on:
   push:
