@@ -19,6 +19,17 @@ public final class BootReceiver extends BroadcastReceiver {
                 .getBoolean("auto_boot",false);
         boolean clusterBoot=T1ClusterWazeRouter.autoBoot(context);
         if(receiverBoot||clusterBoot){
+            // Persist a real ignition broadcast receipt so the owner can
+            // distinguish "never triggered" from a failed ADB step.
+            if(clusterBoot&&Intent.ACTION_BOOT_COMPLETED.equals(action)){
+                java.text.SimpleDateFormat time=new java.text.SimpleDateFormat(
+                    "dd/MM HH:mm:ss",java.util.Locale.ROOT);
+                T1ClusterWazeRouter.prefs(context).edit()
+                    .putString(T1ClusterWazeRouter.BOOT_RELOAD_RESULT,
+                        "BOOT_COMPLETED recibido "+time.format(
+                            new java.util.Date())+
+                        " · secuencia automática programada").commit();
+            }
             try{
                 Intent start=new Intent(context,ReceiverService.class)
                     .setAction(ReceiverService.ACTION_START)
