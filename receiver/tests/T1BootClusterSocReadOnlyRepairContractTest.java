@@ -25,10 +25,10 @@ public final class T1BootClusterSocReadOnlyRepairContractTest {
               boot.contains("if(receiverBoot||clusterBoot)")&&
               boot.contains("BOOT_COMPLETED recibido")&&
               receiver.contains("T1ClusterWazeRouter.onReceiverBoot(this)")&&
-              cluster.contains("T1ClusterFreshStart.prepare(c)")&&
-              cluster.contains("T1ClusterManualReboot.OFF_VISIBLE_MS")&&
-              cluster.contains("T1ClusterAdbResize.closeClusterApps(c,"),
-              "Real boot must dispatch cluster close/off 10sec/on independent of receiver preference");
+              cluster.contains("ARRANQUE SIMPLE 0.3.69")&&
+              !cluster.contains("T1ClusterFreshStart.prepare(c)")&&
+              !cluster.contains("T1ClusterAdbResize.closeClusterApps(c,"),
+              "Real boot must do simple map launch, NOT failed forced OFF/ON loop");
         check(toolbar.contains("REPARAR MAPAS")&&
               toolbar.contains("this::confirmClusterReload")&&
               toolbar.contains("T1ClusterManualReboot.run(owner,message->")&&
