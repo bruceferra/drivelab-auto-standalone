@@ -274,6 +274,17 @@ jobs:
             receiver/tests/T1TripEnergyAuditTest.java
           java -cp /tmp/t1-trip-cost ar.com.rango5gps.drivelabauto.receiver.T1TripCostModelTest
           java -cp /tmp/t1-trip-cost ar.com.rango5gps.drivelabauto.receiver.T1TripEnergyAuditTest
+      - name: Ignition AUTO trips with GPS and last-plug accounting
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-auto-drive
+          javac -encoding UTF-8 -d /tmp/t1-auto-drive \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1AutoDrivePolicy.java \
+            receiver/tests/T1AutoDrivePolicyTest.java \
+            receiver/tests/T1AutoJourneySourceContractTest.java
+          java -cp /tmp/t1-auto-drive ar.com.rango5gps.drivelabauto.receiver.T1AutoDrivePolicyTest
+          java -cp /tmp/t1-auto-drive ar.com.rango5gps.drivelabauto.receiver.T1AutoJourneySourceContractTest
       - name: Own SQLite charge module and OEM cable detector contracts
         shell: bash
         run: |
