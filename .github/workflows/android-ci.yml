@@ -84,6 +84,13 @@ jobs:
             receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1DrivingMode2053.java \
             receiver/tests/T1DrivingMode2053Test.java
           java -cp /tmp/t1-driving-mode ar.com.rango5gps.drivelabauto.receiver.T1DrivingMode2053Test
+      - name: Trip buttons and parked manual map repair regression
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-trip-actions
+          javac -encoding UTF-8 -d /tmp/t1-trip-actions receiver/tests/T1TripButtonAndMapRepairContractTest.java
+          java -cp /tmp/t1-trip-actions ar.com.rango5gps.drivelabauto.receiver.T1TripButtonAndMapRepairContractTest
       - name: Verify boot-only clean map restart and hidden REBOOT
         shell: bash
         run: |
