@@ -446,6 +446,28 @@ public final class T1OptimizedAutoService extends Service {
             }
             return;
         }
+        // STOP BEFORE the propulsion-mode (1043) phase, too: the
+        // previous implementation could switch 1043 to HEV and only
+        // discover that its requested forced target 70 had no known
+        // 1041 readback when the auxiliary pilot ran afterwards.
+        // Do not leave a partially applied road profile.
+        T1SocRegenWritePolicy.Targets planned=
+            T1SocRegenWritePolicy.desired(rule,battery);
+        if(planned.needsTarget()&&
+            T1SocTargetCodec.observedRawForPercent(planned.forcedSoc)<0){
+            String noMap="AUTO DETENIDO: FORZADO "+planned.forcedSoc+
+                "% SIN MAPEO OEM 1041. No se enviaron 1043/1040/"+
+                "1041/1046 para este nuevo perfil. "+
+                "Calibrá con A/B en MODO OPTIMIZADO y verificá "+
+                "el porcentaje en el menú original Jetour.";
+            T1OemDiagnosticLog.add(this,"OPT_PERFIL_BLOQUEADO_SIN_MAPEO",noMap);
+            pendingRoad("SOC FORZADO · CALIBRACIÓN PENDIENTE");
+            pref().edit().putBoolean(ENABLED,false)
+                .putString(STATUS,noMap).commit();
+            stopping=true;
+            stopSelf();
+            return;
+        }
         T1OptimizedAutoGate.Decision decision=gate.examine(
             road,rule,battery,snapshot.speed,snapshot.gear,
             snapshot.powerMode,SystemClock.elapsedRealtime(),confident,fresh);
