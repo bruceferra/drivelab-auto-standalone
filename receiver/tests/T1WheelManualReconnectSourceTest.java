@@ -32,7 +32,8 @@ public final class T1WheelManualReconnectSourceTest {
         must(recover.contains("T1LocalAdbClient.shell(app,")&&
             recover.contains("T1WheelAccessListPolicy.command(without)")&&
             recover.contains("T1WheelAccessListPolicy.command(original)")&&
-            !recover.contains("settings put secure accessibility_enabled")&&
+            recover.contains("reauthorizeWithOwnerApproval(Context context)")&&
+            recover.contains("settings put secure accessibility_enabled 1")&&
             !recover.contains("settings put secure enabled_accessibility_services \"\""),
             "Only the exact previous component list can be temporarily unbound");
         must(settings.contains("RECONECTAR ACCESIBILIDAD · RUEDITA")&&

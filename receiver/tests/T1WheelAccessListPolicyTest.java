@@ -44,6 +44,18 @@ public final class T1WheelAccessListPolicyTest {
             catch(IllegalArgumentException expected){rejected=true;}
             ok(rejected,"Unsafe component list must be rejected: "+unsafe);
         }
+        ok((a+":"+b+":"+own).equals(
+            T1WheelAccessListPolicy.withOurService(a+":"+b+":"+own)),
+            "Already enabled service idempotent");
+        ok((a+":"+b+":"+own).equals(
+            T1WheelAccessListPolicy.withOurService(a+":"+b)),
+            "Append ours without removing OEM or T1Launcher");
+        ok(own.equals(T1WheelAccessListPolicy.withOurService(null)),
+            "No entries permits only owner's explicit restore");
+        ok(T1WheelAccessListPolicy.withOurService(a+":"+own+":"+own)==null,
+            "Do not guess ambiguous duplicate");
+        ok(T1WheelAccessListPolicy.withOurService("foo;bad")==null,
+            "No unsafe shell inputs");
         System.out.println("PASS exact prior Accessibility consent; preserve T1Launcher and reject unsafe values");
     }
 }
