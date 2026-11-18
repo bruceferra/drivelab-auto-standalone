@@ -71,7 +71,7 @@ public final class T1MirrorUncertainRecoverySourceContractTest {
             svc.contains(".putInt(key,pending)") &&
             svc.contains("if(down && (gear!=2||speed>8))return counts;") &&
             svc.contains("if(!down && !(gear==4||(gear==1&&speed<=0.5)))") &&
-            ui.contains("RECUPERAR ESPEJOS") &&
+            ui.contains("showManualMirrorReference()") &&
             ui.contains("BAJAR ESPEJOS · MANUAL") &&
             ui.contains("PULSOS SIN COMPENSAR"),
             "Shift from R into P must preserve completed per-side pulse ledger "+
