@@ -9,8 +9,10 @@ public final class T1SocTargetCodecTest {
         check(Math.abs(actual-wanted)<0.001,why);
     }
     public static void main(String[] args){
-        final int[] raw={30,40,48,56};
-        final int[] selected={20,30,40,50};
+        // raw72 was physically paired with FORZADO 70 in the OEM
+        // Jetour menu; raw56 stayed paired with FORZADO 50.
+        final int[] raw={30,40,48,56,72};
+        final int[] selected={20,30,40,50,70};
         for(int i=0;i<raw.length;i++){
             int intRaw=raw[i],percent=selected[i];
             check(T1SocTargetCodec.observedPercentForRaw(intRaw)==percent,
@@ -34,8 +36,14 @@ public final class T1SocTargetCodecTest {
             "raw50 has no proved 1041 target mapping");
         check(!T1SocTargetCodec.confirmsRequested(60,64,1.0),
             "60% raw value not yet photographed - do not extrapolate");
-        check(!T1SocTargetCodec.confirmsRequested(70,72,1.0),
-            "70% raw value not yet photographed - do not extrapolate");
+        check(T1SocTargetCodec.confirmsRequested(70,72,1.0),
+            "Owner OEM 70% selected with raw72; 70 is now confirmed");
+        check(!T1SocTargetCodec.confirmsRequested(70,56,1.0),
+            "Raw56 belongs to 50%, never falsely confirm requested 70");
+        check(T1SocTargetCodec.observedRawForPercent(70)==72,
+            "Optimizer target preflight must allow 70 and expect raw72");
+        check(T1SocTargetCodec.observedRawForPercent(60)<0,
+            "Do not extrapolate raw64 from the 50/70 readings");
         check(T1SocTargetCodec.confirmsRequested(50,56,1.0),
             "raw 56 MUST confirm requested 50%");
         check(Double.isNaN(T1SocModePolicy.socTarget(70,1.0)),
