@@ -1638,10 +1638,10 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             !running&&!dayDesired,!running);
         tripActions(clientStartButton,clientPauseButton,clientEndButton,
             clientPaused,client||pending,clientLive,
-            !client&&!pending,!dayPaused&&!running);
+            !client&&!pending,!dayPaused&&running);
         tripActions(secondStartButton,secondPauseButton,secondEndButton,
             secondPaused,second||secondPending,secondLiveNow,
-            !second&&!secondPending,!dayPaused&&!running);
+            !second&&!secondPending,!dayPaused&&running);
         if(clientRecoverButton!=null)
             clientRecoverButton.setVisibility(
                 T1JourneyStore.stuck(this)?
