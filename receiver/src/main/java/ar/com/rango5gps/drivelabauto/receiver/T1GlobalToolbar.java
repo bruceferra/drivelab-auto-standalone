@@ -660,13 +660,17 @@ final class T1GlobalToolbar {
         // Tilted during a healthy live AUTO run is EXPECTED; uncertainty
         // matters when the service is gone and physical return was not seen.
         boolean unresolved=inFlight||pendingLeft>0||pendingRight>0;
-        boolean unknown=unresolved&&!healthy;
+        boolean manualSelected=MirrorManualTiltService.selected(owner);
+        // A deliberate successful manual DOWN has logged pending pulses;
+        // they are not an AUTO recovery fault. Only uncertainty is orange.
+        boolean unknown=(inFlight||(!manualSelected&&unresolved))&&!healthy;
         boolean bootRecovery=p.getBoolean(MirrorAutomationService.BOOT_RECOVERY,false);
         // An interrupted write or a previous uncatalogued tilt must never
         // render a neutral gray button just because pending counts are zero.
         if(!healthy&&safetyHold&&pose.startsWith("INCIERTA"))unknown=true;
         mirrorAutoButton.setText(bootRecovery?"ESPEJOS · RECUPERANDO EN P":
             unknown?"ESPEJOS · REVISAR POSICIÓN":
+            manualSelected?"REVERSA MANUAL":
             healthy?"REVERSA AUTO ✓":
             auto?"REVERSA AUTO · REVISAR":"REVERSA MANUAL");
         T1JetourTheme.button(mirrorAutoButton,(unknown||bootRecovery)?
@@ -730,6 +734,13 @@ final class T1GlobalToolbar {
         // No redundant confirmation dialog. Keep uncertainty guard: a prior
         // interrupted actuator motion still requires physical inspection.
         String pose=p.getString(MirrorAutomationService.POSITION,"");
+        if(MirrorManualTiltService.selected(owner)&&
+            MirrorManualTiltService.lowered(owner)&&
+            !MirrorManualTiltService.unverified(owner)){
+            note("Primero tocá SUBIR ESPEJOS · MANUAL "+
+                "para volver los pulsos antes de activar REVERSA AUTO.");
+            return;
+        }
         if(p.getBoolean(MirrorAutomationService.PULSE_IN_FLIGHT,false)||
                 p.getInt(MirrorAutomationService.PENDING_LEFT,0)>0||
                 p.getInt(MirrorAutomationService.PENDING_RIGHT,0)>0||
