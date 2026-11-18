@@ -1095,18 +1095,9 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         secondPauseButton=compactButton(secondActions,"PAUSAR",GOLD,this::pauseSecond);
         secondEndButton=compactButton(secondActions,"TERMINAR",RED,this::finishSecond);
 
-        // Owner-authorized one-time import: old LOCAL journeys are deleted
-        // on device only after this explicit tap; app install alone is safe.
-        LinearLayout rebuiltAction=row();root.addView(rebuiltAction);
-        compactButton(rebuiltAction,
-            "18/11 · BORRAR VIEJOS / IMPORTAR PARCIAL / SEGUIR JORNADA",
-            TEAL,this::confirmReconstructedMorning);
-        reconstructedMorningStatus=text(
-            "18/11 · reconstrucción pendiente de aplicar",
-            13,WHITE,true);
-        reconstructedMorningStatus.setBackground(bg(CARD,12));
-        reconstructedMorningStatus.setPadding(12,10,12,10);
-        root.addView(reconstructedMorningStatus);
+        // No import banners or long historical text before the gauges:
+        // this cockpit top area is for the instrument panel, not logs.
+        // Owner-confirmed history is available under DETALLES / HISTORIAL.
         // Unique navigation row: no duplicate rescue controls.
         // RAM/CPU access is preserved as a primary button.
 
@@ -1208,6 +1199,21 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         secondary=col();secondary.setVisibility(android.view.View.GONE);
         secondary.setPadding(8,7,8,7);
         root.addView(secondary);
+        // One-time historical import and multi-line cost evidence belong
+        // here, AFTER the six live indicators and behind DETAILS.
+        LinearLayout rebuiltAction=row();
+        secondary.addView(rebuiltAction);
+        Button rebuildButton=compactButton(rebuiltAction,
+            "18/11 · IMPORTAR PARCIAL HISTÓRICO (UNA SOLA VEZ)",
+            TEAL,this::confirmReconstructedMorning);
+        if(T1RebuiltMorning.installed(this))
+            rebuildButton.setVisibility(android.view.View.GONE);
+        reconstructedMorningStatus=text(
+            "18/11 · historial / cargo eléctrico",
+            12,WHITE,false);
+        reconstructedMorningStatus.setBackground(bg(CARD,12));
+        reconstructedMorningStatus.setPadding(10,7,10,7);
+        secondary.addView(reconstructedMorningStatus);
         LinearLayout rangeDetails=col();
         rangeDetails.setBackground(bg(CARD,14));
         secondary.addView(rangeDetails);
@@ -1650,7 +1656,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         totalScopeTitle.setText(dayPaused?"Ⅱ VIAJE TOTAL PAUSADO":
             dayDesired?"● VIAJE TOTAL · JORNADA":"○ VIAJE TOTAL · SIN GRABAR");
         totalScopeKm.setText(f(
-            T1RebuiltMorning.isToday(this)?T1RebuiltMorning.totalKm(this):
+            T1RebuiltMorning.isCarriedDay(this)?T1RebuiltMorning.totalKm(this):
                 total.km,2)+" km");
         scopeTitle.setText(clientPaused?"Ⅱ VIAJE 1 PAUSADO":
             client?"● VIAJE 1 · ACTIVO":
@@ -1671,7 +1677,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 m.getFloat(T1TripRecorderService.EV_DISTANCE,0f):0):
             selectedScope==2?(second?T1JourneyStore2.electricKm(this):0):
             client?T1JourneyStore.electricKm(this):0;
-        if(selectedScope==0&&T1RebuiltMorning.isToday(this))
+        if(selectedScope==0&&T1RebuiltMorning.isCarriedDay(this))
             electricRoadKm=T1RebuiltMorning.totalEvKm(this);
         evKmNow.setText(f(electricRoadKm,2)+" km");
         if(reconstructedMorningStatus!=null)
@@ -1698,7 +1704,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             "$ "+f(scoped.fuelCost,0):"SIN DATO");
         // The selected TOTAL scope is the new physical CSV plus a read-only
         // 18/11 carry. Client scope 1 and 2 remain INDEPENDENT.
-        if(selectedScope==0&&T1RebuiltMorning.isToday(this)){
+        if(selectedScope==0&&T1RebuiltMorning.isCarriedDay(this)){
             double dayKm=T1RebuiltMorning.totalKm(this);
             boolean hasNew=T1RebuiltMorning.attached(this);
             boolean gotFuel=hasNew&&scoped.fuelKnown&&
@@ -1892,7 +1898,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
                 T1RebuiltMorning.EV_KM,T1RebuiltMorning.LITERS,
                 T1RebuiltMorning.PACK_KWH,Double.NaN,Double.NaN,
                 false,false,0,""));
-            if(T1RebuiltMorning.isToday(this)){
+            if(T1RebuiltMorning.isCarriedDay(this)){
                 out.day="JORNADA 18/11 · "+T1RebuiltMorning.fmt(
                     T1RebuiltMorning.totalKm(this),2)+
                     " km (21,03 km históricos + nuevos OEM reales)"+
