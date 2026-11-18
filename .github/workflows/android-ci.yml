@@ -585,6 +585,18 @@ jobs:
           ! grep -q 'PANTALLA COMPLETA · ACTIVADA' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/ReceiverActivity.java
           ! grep -E 'CATEGORY_HOME|WRITE_SECURE_SETTINGS|SYSTEM_ALERT_WINDOW.*new' \
             receiver/src/main/AndroidManifest.xml
+      - name: Mirror ignition P-only recovery and orange warning (pure JVM)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/mirror-boot
+          javac -encoding UTF-8 -d /tmp/mirror-boot \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/MirrorParkingPolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/MirrorBootRecoveryPolicy.java \
+            receiver/tests/MirrorBootRecoveryPolicyTest.java \
+            receiver/tests/MirrorBootRecoverySourceContractTest.java
+          java -cp /tmp/mirror-boot ar.com.rango5gps.drivelabauto.receiver.MirrorBootRecoveryPolicyTest
+          java -cp /tmp/mirror-boot ar.com.rango5gps.drivelabauto.receiver.MirrorBootRecoverySourceContractTest
       - name: Mirror parking R/D policy regression (pure JVM)
         shell: bash
         run: |
