@@ -131,11 +131,9 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
             String result=T1WheelAccessibilityRecovery.requestManual(this);
             Toast.makeText(this,result,Toast.LENGTH_LONG).show();
             if(result.startsWith("DESHABILITADA EN ANDROID")){
-                try{
-                    startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
-                }catch(Exception error){
-                    startActivity(new Intent(this,T1WheelSettingsActivity.class));
-                }
+                // Jetour's Settings screen may be hidden; let the owner
+                // explicitly choose trusted ADB localhost or Android Settings.
+                T1WheelOwnerAdbDialog.show(this);
             }
         });
         label(body,"Xiaomi: "+p.getString("status","Sin iniciar")+

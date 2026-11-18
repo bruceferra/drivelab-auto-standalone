@@ -174,7 +174,12 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
                 "\nEl estado se actualiza automáticamente abajo. "+
                 "Si Android desactivó el permiso, tocá ABRIR AJUSTES.");
             // Do not claim success until Android invokes onServiceConnected.
+            if(reconnectMessage.startsWith("DESHABILITADA EN ANDROID"))
+                T1WheelOwnerAdbDialog.show(this);
             refreshModes();
+        });
+        button(body,"RESTAURAR PERMISO POR ADB LOCAL · SIN CELULAR",()->{
+            T1WheelOwnerAdbDialog.show(this);
         });
         button(body,"ABRIR AJUSTES DE ACCESIBILIDAD (SI EXISTEN)",()->{
             openAccessibilitySettings();
