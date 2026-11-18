@@ -2,6 +2,12 @@ package ar.com.rango5gps.drivelabauto.receiver;
 
 import android.app.AlertDialog;
 import android.content.Context;
+import android.content.ClipData;
+import android.view.DragEvent;
+import android.view.ViewGroup;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.List;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Typeface;
@@ -43,6 +49,9 @@ final class T1GlobalToolbar {
         }
     };
     private boolean foreground;
+    private static final int DRAG_TAG_ID=0x7f0f0f01;
+    private static final String ORDER_PREFS="drivelab_toolbar_order_v1";
+    private LinearLayout firstButtons,secondButtons;
     private long lastPoll=0, lastDevicesPoll=0;
     private int mirrorState=-1; // OEM 2003: 0 folded, 1 unfolded
     private int pedestrianState=-1; // OEM 2074: 1 ON, 0 OFF, -1 unknown
@@ -177,6 +186,9 @@ final class T1GlobalToolbar {
         reload.setContentDescription("Reparar mapas del clúster: detener Waze y Maps, "+
             "CLÚSTER OFF 10 segundos, ON y recuperar rueda");
         refreshClock();
+        // Rearrange only actual buttons; keep the title, status and clock anchored.
+        firstButtons=header;
+        enableRowReorder(header,"first");
 
         HorizontalScrollView strip=new HorizontalScrollView(owner);
         strip.setFillViewport(false);
@@ -227,6 +239,69 @@ final class T1GlobalToolbar {
         // Wheel calibration is a technical option, not a driving control.
         button(actions,"INICIO",T1JetourTheme.PANEL_HI,95,
             ()->navigate(ReceiverActivity.class));
+        secondButtons=actions;
+        enableRowReorder(actions,"second");
+    }
+    /** Long-press a button, drag horizontally and release over another button.
+     * Order persists across activities/reboots; controls never change rows.
+     * Read-only OEM indicators can move but cannot be activated.
+     */
+    private void enableRowReorder(LinearLayout row,String key){
+        final ArrayList<Button> buttons=new ArrayList<>();
+        for(int i=0;i<row.getChildCount();i++)
+            if(row.getChildAt(i) instanceof Button)
+                buttons.add((Button)row.getChildAt(i));
+        if(buttons.size()<2)return;
+        final String prefix="row_"+key+"_";
+        SharedPreferences prefs=owner.getSharedPreferences(ORDER_PREFS,Context.MODE_PRIVATE);
+        ArrayList<Button> ordered=new ArrayList<>(buttons);
+        Collections.sort(ordered,(a,b)->{
+            int ai=prefs.getInt(prefix+buttons.indexOf(a),buttons.indexOf(a));
+            int bi=prefs.getInt(prefix+buttons.indexOf(b),buttons.indexOf(b));
+            return Integer.compare(ai,bi);
+        });
+        // Move only buttons; fixed labels/status/clock remain in their slots.
+        for(Button b:ordered)row.removeView(b);
+        int insert=0;
+        for(Button b:ordered)row.addView(b,insert++);
+        for(Button b:buttons){
+            b.setTag(DRAG_TAG_ID,
+                Integer.valueOf(buttons.indexOf(b)));
+            b.setOnLongClickListener(v->{
+                ClipData clip=ClipData.newPlainText("drivelab-toolbar",key);
+                return v.startDragAndDrop(clip,new View.DragShadowBuilder(v),
+                    v,0);
+            });
+            b.setOnDragListener((target,event)->{
+                switch(event.getAction()){
+                    case DragEvent.ACTION_DRAG_STARTED:
+                        return event.getLocalState() instanceof Button &&
+                            ((Button)event.getLocalState()).getParent()==row;
+                    case DragEvent.ACTION_DROP:{
+                        Button source=(Button)event.getLocalState();
+                        if(source==target||source.getParent()!=row)return true;
+                        int dest=row.indexOfChild(target);
+                        row.removeView(source);
+                        row.addView(source,Math.min(dest,row.getChildCount()));
+                        SharedPreferences.Editor editor=owner.getSharedPreferences(
+                            ORDER_PREFS,Context.MODE_PRIVATE).edit();
+                        int order=0;
+                        for(int i=0;i<row.getChildCount();i++){
+                            View item=row.getChildAt(i);
+                            if(item instanceof Button){
+                                Object id=item.getTag(
+                                    DRAG_TAG_ID);
+                                if(id instanceof Integer)
+                                    editor.putInt(prefix+id,order++);
+                            }
+                        }
+                        editor.apply();
+                        return true;
+                    }
+                    default:return true;
+                }
+            });
+        }
     }
     private void navigate(Class<?> target){
         if(!foreground)return;
