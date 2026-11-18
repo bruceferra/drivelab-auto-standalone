@@ -2,19 +2,20 @@ package ar.com.rango5gps.drivelabauto.receiver;
 
 /**
  * Observed VehicleService 1041 READBACK conversion on the Argentine
- * Jetour T1. Source: four owner photos of the T1Launcher signal panel.
+ * Jetour T1. Sources: earlier T1Launcher signal photos plus owner's
+ * 18-Nov-2026 paired ORIGINAL Jetour OEM menu A/B snapshots:
+ *   SMART (stored OEM 70) -> 1040=2, 1041 raw72;
+ *   FORZADO 70%           -> 1040=4, 1041 raw72;
+ *   FORZADO 50%           -> 1040=4, 1041 raw56.
+ * Original verified older signal photos: raw30->20%, raw40->30%,
+ * raw48->40%, raw56->50%. On this unit raw72->70% is now measured.
+ * Neither the raw integer nor readFloat (observed 1) is the percentage.
  *
- * 1041 readInt is NOT the user's requested percentage. The adjacent
- * T1Launcher display reports:
- *       intRaw 30 => 20%, 40 => 30%, 48 => 40%, 56 => 50%.
- * Neither the raw integer nor 1041 readFloat (observed 1) is a
- * reliable percentage by itself.
- *
- * This is a READ-ONLY conversion. It does NOT authorize sending the
- * encoded integer to VehicleService: setter 1041 arguments have not
- * yet been reverse-engineered or physically validated.
- *
- * Do not extrapolate 60%/70% encodings from the four observed points.
+ * This is a READBACK conversion, NOT the setter encoding. 1041 setter
+ * is sent the allowlisted percentage (70), NEVER the raw code (72).
+ * A successful readback confirms the target only, not strategy/regen:
+ * those are independently verified using OEM 1040/1046.
+ * 60% remains entirely unknown; NEVER infer that raw64 means 60%.
  */
 final class T1SocTargetCodec {
     private T1SocTargetCodec(){}
@@ -25,6 +26,7 @@ final class T1SocTargetCodec {
             case 40:return 30;
             case 48:return 40;
             case 56:return 50;
+            case 72:return 70;
             default:return -1;
         }
     }
@@ -35,14 +37,15 @@ final class T1SocTargetCodec {
             case 30:return 40;
             case 40:return 48;
             case 50:return 56;
+            case 70:return 72;
             default:return -1;
         }
     }
 
     /**
-     * Confirm by a known raw->% pairing. The floating 1041 getter
-     * was observed as 1 and MUST NOT be treated as a percentage or
-     * as evidence of a successful write. 60/70 have no known mapping.
+     * Confirm only measured raw->% pairs. The floating 1041 getter
+     * was observed as 1 and MUST NOT be treated as a percentage.
+     * 70% now has the OEM menu pairing raw72; 60% is still unmapped.
      */
     static boolean confirmsRequested(int requested,int rawInt,double rawFloat){
         return T1SocRegenWritePolicy.accepted(1041,requested)&&
