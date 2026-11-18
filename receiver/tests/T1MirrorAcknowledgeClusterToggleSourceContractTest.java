@@ -37,12 +37,12 @@ public final class T1MirrorAcknowledgeClusterToggleSourceContractTest {
             mirror.contains("Hay pulsos sin compensar o inciertos."),
             "Require physical P0 user confirmation, durable reset and no worker race");
         check(toolbar.contains("mirrorRecoverButton=button(actions,")&&
-            toolbar.contains("ESPEJOS · SIN PENDIENTES")&&
-            toolbar.contains("boolean needsRecovery=unresolved;")&&
-            toolbar.contains("boolean unresolved=inFlight||pendingLeft>0||pendingRight>0;")&&
-            toolbar.contains("T1JetourTheme.AMBER_BUTTON:T1JetourTheme.PANEL_HI")&&
-            !toolbar.contains("button(actions,\"RECUPERAR ESPEJOS\",T1JetourTheme.AMBER_BUTTON"),
-            "Dedicated RECUPERAR button must stop glowing orange after confirmed zero-pulse NORMAL");
+            toolbar.contains("BAJAR ESPEJOS · MANUAL")&&
+            toolbar.contains("SUBIR ESPEJOS · MANUAL")&&
+            toolbar.contains("MirrorManualTiltService.unverified(owner)")&&
+            toolbar.contains("T1JetourTheme.GREEN_BUTTON:T1JetourTheme.PANEL_HI")&&
+            toolbar.contains("boolean unresolved=inFlight||pendingLeft>0||pendingRight>0;"),
+            "Second-row mirror button must be owner-controlled DOWN/UP with warning and color");
         int cluster=toolbar.indexOf("clusterButton=button(actions,");
         int optimized=toolbar.indexOf("optimizer=button(actions,");
         check(cluster>=0&&optimized>cluster&&
