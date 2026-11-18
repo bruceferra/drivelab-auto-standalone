@@ -3,6 +3,9 @@ package ar.com.rango5gps.drivelabauto.receiver;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.content.Intent;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.widget.Toast;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
@@ -35,6 +38,47 @@ public final class T1ClusterWazeSettingsActivity extends T1ImmersiveActivity {
     @Override protected void onResume(){
         super.onResume();render();
     }
+    /** Single persistent dialog: NEVER resets cluster, kills maps,
+     * launches Spotify, touches T1Launcher or sends a vehicle command. */
+    private void showClusterTaskSnapshot(){
+        TextView contents=new TextView(this);
+        contents.setText("Leyendo las tareas Android por ADB local…"+
+            "\nNo se cierran mapas ni se cambia el clúster.");
+        contents.setTextSize(15);
+        contents.setTextIsSelectable(true);
+        contents.setPadding(18,18,18,18);
+        ScrollView scroll=new ScrollView(this);
+        scroll.addView(contents);
+        AlertDialog dialog=new AlertDialog.Builder(this)
+            .setTitle("DRIVELAB · TAREAS DE MAPAS")
+            .setView(scroll)
+            .setNegativeButton("CERRAR",null)
+            .setPositiveButton("COPIAR INFORME",null)
+            .create();
+        dialog.show();
+        dialog.getButton(AlertDialog.BUTTON_POSITIVE).setEnabled(false);
+        new Thread(()->{
+            final String report=T1ClusterTaskSnapshot.capture(this);
+            runOnUiThread(()->{
+                if(isFinishing()||isDestroyed())return;
+                contents.setText(report);
+                dialog.setTitle("TAREAS / DISPLAY · RESULTADO GUARDADO");
+                android.widget.Button copy=dialog.getButton(
+                    AlertDialog.BUTTON_POSITIVE);
+                copy.setEnabled(true);
+                copy.setOnClickListener(v->{
+                    ClipboardManager board=(ClipboardManager)getSystemService(
+                        CLIPBOARD_SERVICE);
+                    if(board!=null)
+                        board.setPrimaryClip(ClipData.newPlainText(
+                            "DriveLab · mapa y capas",report));
+                    Toast.makeText(this,"Informe de tareas copiado",
+                        Toast.LENGTH_LONG).show();
+                }); // does NOT close itself on copy
+            });
+        },"T1-Cluster-Task-Snapshot-ReadOnly").start();
+    }
+
     private void render(){
         ScrollView scroll=new ScrollView(this);
         LinearLayout body=new LinearLayout(this);
@@ -65,6 +109,10 @@ public final class T1ClusterWazeSettingsActivity extends T1ImmersiveActivity {
         label(body,"ARRANQUE AUTO OFF/ON · "+p.getString(
             T1ClusterWazeRouter.BOOT_RELOAD_RESULT,
             "Aún no probado tras reiniciar la camioneta"),14);
+        label(body,"TAREAS WAZE / MAPS · "+
+            T1ClusterTaskSnapshot.last(this),12);
+        button(body,"DIAGNÓSTICO DISPLAY 1 / MAPAS · SOLO LEER",
+            this::showClusterTaskSnapshot);
         boolean focusAuto=p.getBoolean(T1ClusterBootFocus.ENABLED,false);
         label(body,"SPOTIFY ENCIMA DEL MAPA · "+
             T1ClusterBootFocus.describe(this)+
