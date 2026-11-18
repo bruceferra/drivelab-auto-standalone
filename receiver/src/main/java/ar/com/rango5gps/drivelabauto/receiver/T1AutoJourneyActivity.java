@@ -36,7 +36,7 @@ public final class T1AutoJourneyActivity extends T1ImmersiveActivity {
         SAVE_RANGE=4453,SAVE_RANGE_POINTS=4454,
         BG=0xFF101820,CARD=0xFF1F2F3A,WHITE=Color.WHITE,
         MUTED=0xFFBECDD6,BLUE=0xFF285A6B;
-    private TextView overview,rangeStatus;
+    private TextView overview,rangeStatus,reconciledHistorical;
     private LinearLayout entries,rangeDays,rangeIgnitions;
     private EditText dateFrom,dateUntil;
     private final AtomicBoolean computingRange=new AtomicBoolean(false);
@@ -75,6 +75,13 @@ public final class T1AutoJourneyActivity extends T1ImmersiveActivity {
             "Se crean sin tocar INICIAR. Independientes de Viaje 1, "+
             "Viaje 2 y Total. Datos locales con hora, SOC, GPS (si está "+
             "disponible) y energía HV de entrada/salida.",13,MUTED));
+        // One canonical external reconstruction, visible on the AUTO screen
+        // even if the original OEM SQLite sessions predate the import.
+        // Never overwrite raw OEM sessions with third-party values.
+        reconciledHistorical=label(
+            "18/11 · LEYENDO RECONSTRUCCIÓN T1LAUNCHER…",14,WHITE);
+        reconciledHistorical.setBackgroundColor(CARD);
+        root.addView(reconciledHistorical);
         LinearLayout controls=row(root);
         action(controls,"AUTO ON",()->setAuto(true));
         action(controls,"AUTO OFF",()->setAuto(false));
@@ -218,13 +225,26 @@ public final class T1AutoJourneyActivity extends T1ImmersiveActivity {
                 }
                 selectedFrom=from;selectedUntil=until;
                 rangeCsv=report.csv();
+                boolean includesReconstructed=from<=T1RebuiltMorning.FROM&&
+                    until>=T1RebuiltMorning.UNTIL;
+                String sourceWarning=includesReconstructed?
+                    "RECONSTRUCCIÓN HISTÓRICA T1LAUNCHER: "+
+                    T1RebuiltMorning.fmt(T1RebuiltMorning.KM,2)+" km, "+
+                    T1RebuiltMorning.fmt(T1RebuiltMorning.PACK_KWH,3)+
+                    " kWh UTILIZADOS, "+
+                    T1RebuiltMorning.fmt(T1RebuiltMorning.REGEN_KWH,3)+
+                    " kWh REGENERADOS. No se suman a los datos OEM.\n":
+                    "";
                 rangeStatus.setText(
-                    "VIAJE ESTADÍSTICO VIRTUAL"+
+                    "VIAJE ESTADÍSTICO VIRTUAL · OEM ORIGINAL"+
                     "\n"+dateFrom.getText()+" → "+dateUntil.getText()+
-                    "\n"+report.total.describe()+
-                    "\nLos km y kWh corresponden SOLO a puntos observados "+
-                    "en el intervalo. No incluyen viajes no grabados. "+
-                    "Los litros de nafta no están validados por sesión.");
+                    "\n"+sourceWarning+
+                    "\nOEM RAW (NO RECONCILIADO): "+
+                    report.total.describe()+
+                    "\nLos km y kWh OEM corresponden SOLO a puntos "+
+                    "observados en el intervalo. Si superponen "+
+                    "T1Launcher, no sumarlos ni confundir HV entrada "+
+                    "con regeneración de frenado.");
                 renderSlices(rangeDays,report.days.values());
                 renderSlices(rangeIgnitions,report.byIgnition.values());
             });
@@ -294,6 +314,9 @@ public final class T1AutoJourneyActivity extends T1ImmersiveActivity {
     }
     private void refresh(){
         if(overview==null)return;
+        if(reconciledHistorical!=null)
+            reconciledHistorical.setText(
+                T1RebuiltMorning.reconciledReference(this));
         SharedPreferences p=T1AutoJourneyService.prefs(this);
         boolean enabled=p.getBoolean(T1AutoJourneyStore.ENABLED,true);
         long last=p.getLong(T1AutoJourneyStore.LAST_OEM,0);
@@ -336,7 +359,8 @@ public final class T1AutoJourneyActivity extends T1ImmersiveActivity {
                         lastCharge.meterKwh,since.out,since.in,
                         lastCharge.price);
                 text.append("\n\n").append(since.describe(
-                    "DESDE ÚLTIMA CARGA"));
+                    "DESDE ÚLTIMA CARGA · OEM ORIGINAL, "+
+                    "NO ES RECONSTRUCCIÓN T1LAUNCHER"));
                 text.append("\nFecha de fin registrada: ")
                     .append(new SimpleDateFormat("dd/MM HH:mm",
                         Locale.getDefault()).format(new Date(chargedAt)))
@@ -428,8 +452,23 @@ public final class T1AutoJourneyActivity extends T1ImmersiveActivity {
             }
             for(T1AutoJourneyStore.Journey j:journeys){
                 String estimate=allocations.get(j.id);
-                TextView e=label("SESIÓN #"+j.id+"\n"+j.describe()+
-                    (estimate==null?"":"\n"+estimate),14,WHITE);
+                boolean overlapsHistorical=j.start<T1RebuiltMorning.UNTIL&&
+                    (j.end>0?j.end:j.last)>=T1RebuiltMorning.FROM;
+                // Some older AUTO records had the HV IN column presented
+                // as regeneration. Preserve the data for exports but do not
+                // mislabel the 6.23 kWh on overlapping historical screens.
+                String card=overlapsHistorical?
+                    "SESIÓN AUTO OEM ANTERIOR #"+j.id+
+                    " · SUPERPUESTA CON 18/11 RECONSTRUIDO"+
+                    "\nDATOS HV RAW NO RECONCILIADOS · "+
+                    "no interpretar HV ENTRADA como frenado regenerativo."+
+                    "\nNo sumar esta sesión al parcial T1Launcher. "+
+                    "Registro original conservado en EXPORTAR SESIONES."+
+                    "\nResumen corregido: 6,230 kWh UTILIZADOS; "+
+                    "1,590 kWh REGENERADOS (fuente T1Launcher).":
+                    "SESIÓN #"+j.id+"\n"+j.describe()+
+                    (estimate==null?"":"\n"+estimate);
+                TextView e=label(card,14,WHITE);
                 e.setBackgroundColor(CARD);
                 LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT,-2);
