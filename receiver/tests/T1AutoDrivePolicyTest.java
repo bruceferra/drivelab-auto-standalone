@@ -15,7 +15,7 @@ public final class T1AutoDrivePolicyTest {
         yes(!T1AutoDrivePolicy.stop(-1,0,1,0));
         double[] x=T1AutoDrivePolicy.integrate(320,20,36,4000);
         near(x[0],320*20*4/3600000d);near(x[1],0);
-        near(x[2],36*4/3600000d);
+        near(x[2],36*4/3600d);
         x=T1AutoDrivePolicy.integrate(320,-20,36,4000);
         near(x[0],0);near(x[1],320*20*4/3600000d);
         yes(T1AutoDrivePolicy.integrate(320,20,36,90000)[0]==0);
