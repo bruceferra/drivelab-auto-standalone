@@ -700,9 +700,9 @@ final class T1GlobalToolbar {
                 tilted?"Tocar para subir EXACTAMENTE los "+
                     MirrorManualTiltService.left(owner)+" pulsos izquierdos y "+
                     MirrorManualTiltService.right(owner)+
-                    " derechos pendientes; solo en P y 0 km/h":
+                    " derechos pendientes; orden manual sin restricción de marcha/velocidad":
                 "Tocar para bajar manualmente la cantidad configurada "+
-                    "de pasos, 15 por defecto; solo en P y 0 km/h");
+                    "de pasos, 15 por defecto; cualquier marcha/velocidad");
         }
         mirrorAutoButton.setContentDescription(bootRecovery?
             "Retorno de pulsos durables al encender, solo en P y parado":
@@ -802,7 +802,7 @@ final class T1GlobalToolbar {
             .setTitle("ESPEJOS · REFERENCIA MANUAL")
             .setMessage("El retorno anterior quedó incierto o con "+
                 "pulsos AUTO pendientes (IZQ "+l+" / DER "+r+")."+
-                "\n\nAntes de usar BAJAR/SUBIR, estacioná en P y "+
+                "\n\nAntes de usar BAJAR/SUBIR, "+
                 "ajustá AMBOS espejos a tu posición normal con los "+
                 "mandos originales Jetour.\n\nSolo cuando los "+
                 "veas normales, confirmá esta referencia. "+
@@ -818,7 +818,7 @@ final class T1GlobalToolbar {
                         owner.startForegroundService(new Intent(owner,
                             MirrorManualTiltService.class)
                             .setAction(MirrorManualTiltService.ACTION_REFERENCE));
-                        note("Verificando P / 0 y referencia visual manual");
+                        note("Registrando referencia visual manual");
                         main.postDelayed(this::refreshMirrorAuto,500);
                     }catch(Exception ex){
                         note("Referencia no solicitada: "+
@@ -912,7 +912,7 @@ final class T1GlobalToolbar {
                 p.getString(MirrorAutomationService.LAST_TRANSITION,"NINGUNA")+
             "\n\nBAJAR/SUBIR MANUAL: uno baja y el siguiente sube "+
             "solo los pulsos confirmados. 15 pasos por lado por defecto "+
-            "(1–20 configurables); requiere P y 0 km/h. "+
+            "(1–20 configurables); sin bloqueo de marcha ni velocidad. "+
             "Para modificar, primero desactivá AUTO R desde la barra.");
         diagnostic.setTextSize(14);
         diagnostic.setTextColor(android.graphics.Color.DKGRAY);
