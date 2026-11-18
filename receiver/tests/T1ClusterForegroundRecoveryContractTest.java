@@ -21,9 +21,9 @@ public final class T1ClusterForegroundRecoveryContractTest {
         check(!toolbar.contains("button(actions,\"TOMAR CONTROL\"")&&
             !toolbar.contains("this::takeClusterControl")&&
             toolbar.contains("this::confirmClusterReload")&&
-            toolbar.contains(".setPositiveButton(\"SÍ\"")&&
-            toolbar.contains(".setNegativeButton(\"NO\""),
-            "Retired TOMAR CONTROL button replaced by confirmed R after clock");
+            toolbar.contains("REPARAR MAPAS")&&
+            toolbar.contains("T1ClusterManualReboot.run(owner,message->"),
+            "Retired TOMAR CONTROL replaced by visible one-tap map repair");
         check(foreground.contains("T1ClusterLayoutPolicy.savedDualSplit(app)")&&
             foreground.contains("d.getDisplayId()!=1")&&
             foreground.contains("WAZE.equals(a)&&MAPS.equals(b)")&&
