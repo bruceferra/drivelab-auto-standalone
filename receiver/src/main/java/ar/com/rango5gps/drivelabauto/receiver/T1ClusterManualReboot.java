@@ -48,7 +48,7 @@ final class T1ClusterManualReboot {
             return;
         }
         T1ClusterWazeRouter.prefs(owner).edit().putString(TRACE,"").commit();
-        note(owner,"R 1/4 · Deteniendo Waze y Maps con CLÚSTER ON",update);
+        note(owner,"R 1/4 · Caché, detención y reinicio de Waze/Maps",update);
         new Thread(()->{
             try{
                 // This sequence FORCE-STOPS active navigation packages.
@@ -75,6 +75,40 @@ final class T1ClusterManualReboot {
                 }
                 note(owner,"R PREVIA · P y 0 km/h confirmados; "+
                     "empieza el cierre de mapas",update);
+                // Cache-only cleanup is manual, parked-only, and scoped to
+                // Waze/Maps. Never use "pm clear" without --cache-only:
+                // that would erase application data and preferences.
+                if(!T1ClusterWazeRouter.enabled(owner)||
+                   !T1ClusterLayoutPolicy.savedDualSplit(owner)||
+                   T1ClusterWazeRouter.selected(owner)==null||
+                   T1ClusterWazeRouter.selected(owner).getDisplayId()!=1||
+                   !T1ClusterAdbResize.enabled(owner)){
+                    finish(owner,update,"R BLOQUEADA · requiere clúster ON, "+
+                        "Waze/Maps en Display 1 y ADB autorizado");
+                    return;
+                }
+                String first=T1ClusterLayoutPolicy.firstPackage(owner);
+                String second=T1ClusterLayoutPolicy.secondPackage(owner);
+                if(!(("com.waze".equals(first)&&
+                       "com.google.android.apps.maps".equals(second))||
+                      ("com.waze".equals(second)&&
+                       "com.google.android.apps.maps".equals(first)))){
+                    finish(owner,update,"R BLOQUEADA · paneles distintos de Waze/Maps");
+                    return;
+                }
+                note(owner,"R CACHÉ · limpiando SOLO caché de Waze y Maps",update);
+                for(String pkg:new String[]{"com.waze",
+                                            "com.google.android.apps.maps"}){
+                    String reply=T1LocalAdbClient.shell(owner,
+                        "pm clear --cache-only "+pkg);
+                    if(!reply.trim().equalsIgnoreCase("Success")){
+                        finish(owner,update,"R NO COMPLETADA · Android no confirmó "+
+                            "limpieza de caché de "+pkg+": "+
+                            reply.trim().substring(0,Math.min(160,reply.trim().length())));
+                        return;
+                    }
+                    note(owner,"R CACHÉ OK · "+pkg,update);
+                }
                 // Verify ON, Waze+Maps, Display 1 and local ADB before OFF.
                 T1ClusterFreshStart.Result clean=T1ClusterFreshStart.prepare(owner);
                 if(!clean.ready){
