@@ -723,7 +723,9 @@ final class T1GlobalToolbar {
         String pose=p.getString(MirrorAutomationService.POSITION,"");
         if(p.getBoolean(MirrorAutomationService.PULSE_IN_FLIGHT,false)||
                 p.getInt(MirrorAutomationService.PENDING_LEFT,0)>0||
-                p.getInt(MirrorAutomationService.PENDING_RIGHT,0)>0){
+                p.getInt(MirrorAutomationService.PENDING_RIGHT,0)>0||
+                (p.getBoolean(MirrorAutomationService.SAFETY_HOLD,false)&&
+                 pose.startsWith("INCIERTA"))){
             showMirrorRecovery();
             return;
         }

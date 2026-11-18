@@ -281,8 +281,10 @@ public final class MirrorAutomationService extends Service {
             // First activation after a stopped/failed service is permitted
             // only with a known, visually acknowledged normal reference.
             String physical=prefs().getString(POSITION,"");
-            if((physical.startsWith("INCIERTA")||physical.startsWith("R · inclinados"))&&
-               unresolved(prefs())){
+            if((physical.startsWith("INCIERTA")&&
+                prefs().getBoolean(SAFETY_HOLD,false))||
+                ((physical.startsWith("INCIERTA")||
+                  physical.startsWith("R · inclinados"))&&unresolved(prefs()))){
                 prefs().edit().putBoolean(AUTO,false)
                     .putString(STATUS,"AUTO BLOQUEADO: la app no sabe si los espejos "+
                         "siguen bajos. Ajustá con mandos OEM, detenido en P, "+
