@@ -168,11 +168,14 @@ final class T1GlobalToolbar {
         clockBox.addView(clockDate);
         clockBox.addView(clockTime);
         header.addView(clockBox,new LinearLayout.LayoutParams(dp(180),-1));
-        // Permanent R button at top right, directly AFTER the clock.
-        Button reload=button(header,"R",T1JetourTheme.PANEL_HI,48,
+        // First-class visible repair for the owner's known-good procedure:
+        // stop Waze/Maps, cluster OFF >=10s, ON, restore wheel.
+        // No cryptic one-character R or hidden technical menu.
+        Button reload=button(header,"REPARAR MAPAS",T1JetourTheme.PANEL_HI,146,
             this::confirmClusterReload);
-        reload.setTextSize(19f);
-        reload.setContentDescription("Recargar Waze y Google Maps con CLÚSTER OFF/ON");
+        reload.setTextSize(13f);
+        reload.setContentDescription("Reparar mapas del clúster: detener Waze y Maps, "+
+            "CLÚSTER OFF 10 segundos, ON y recuperar rueda");
         refreshClock();
 
         HorizontalScrollView strip=new HorizontalScrollView(owner);
@@ -489,22 +492,16 @@ final class T1GlobalToolbar {
         note(T1WheelTarget.name(owner)+" · "+T1WheelTarget.application(owner));
     }
     private void confirmClusterReload(){
-        new AlertDialog.Builder(owner)
-            .setTitle("RECARGAR CLÚSTER")
-            .setMessage("¿Estás seguro? Se detendrán Waze y Google Maps, "+
-                "se hará CLÚSTER OFF, se cerrarán las tareas, "+
-                "se esperarán 10 segundos completos y después ON. "+
-                "Se puede interrumpir la navegación actual.")
-            .setNegativeButton("NO",null)
-            .setPositiveButton("SÍ",(dialog,which)->{
-                note("R: iniciando recarga de Waze, Maps y clúster");
-                T1ClusterManualReboot.run(owner,message->{
-                    if(foreground){
-                        refreshCluster();
-                        note(message);
-                    }
-                });
-            }).show();
+        if(!foreground)return;
+        // Tap starts the already guarded procedure; T1ClusterManualReboot
+        // verifies P/zero before force-stopping navigation packages.
+        note("REPARAR MAPAS · iniciando apagado/reinicio de clúster");
+        T1ClusterManualReboot.run(owner,message->{
+            if(foreground){
+                refreshCluster();
+                note(message);
+            }
+        });
     }
 
     private void toggleCluster(){
