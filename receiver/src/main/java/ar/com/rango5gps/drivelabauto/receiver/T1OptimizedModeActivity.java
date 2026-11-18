@@ -669,8 +669,9 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         String b=p.getString("after","B (FORZADO): aún sin captura");
         return "LECTURAS GUARDADAS · 1040=2 SMART / 4 FORZADO"+
             "\n"+a+"\n"+b+
-            "\nLos valores RAW 1041=64/72 todavía no se pueden "+
-            "interpretar como 60/70 % sin confirmar menú OEM.";
+            "\nCALIBRACIÓN CONFIRMADA POR MENÚ OEM JETOUR: "+
+            "1041 raw72 = FORZADO 70%; raw56 = FORZADO 50%. "+
+            "raw64 / 60% SIGUEN SIN VALIDACIÓN.";
     }
     private void captureSocOem(boolean after){
         if(T1OptimizedAutoService.enabled(this)){
