@@ -30,9 +30,11 @@ final class T1WheelAccessibilityRecovery {
             T1WazeWheelService.PREFS,Context.MODE_PRIVATE);
         if(T1WazeWheelService.isServiceConnected()||
            !prefs.getBoolean(T1WazeWheelService.ENABLED,false)||
-           !prefs.getBoolean(T1WazeWheelService.OEM_BINDER_ENABLED,false)||
-           !T1OemMicrophoneService.prefs(app).getBoolean(
-                T1OemMicrophoneService.ENABLED,false))return;
+           !prefs.getBoolean(T1WazeWheelService.OEM_BINDER_ENABLED,false))
+            return;
+        // The wheel can be configured without the microphone. The original
+        // gated auto-recovery on mic.enabled, leaving a formerly approved
+        // accessibility service forever disconnected when voice was OFF.
         long now=SystemClock.elapsedRealtime();
         if(lastAttempt>0L&&now>=lastAttempt&&
            now-lastAttempt<RETRY_MS)return;

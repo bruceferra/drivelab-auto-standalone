@@ -127,6 +127,17 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
             startActivity(new Intent(this,T1ClusterLayoutSettingsActivity.class)));
         button(body,"VEHÍCULO · ESTADO Y AJUSTES",()->
             startActivity(new Intent(this,ReceiverVehicleActivity.class)));
+        button(body,"RUEDITA · RECONECTAR ACCESIBILIDAD",()->{
+            String result=T1WheelAccessibilityRecovery.requestManual(this);
+            Toast.makeText(this,result,Toast.LENGTH_LONG).show();
+            if(result.startsWith("DESHABILITADA EN ANDROID")){
+                try{
+                    startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+                }catch(Exception error){
+                    startActivity(new Intent(this,T1WheelSettingsActivity.class));
+                }
+            }
+        });
         label(body,"Xiaomi: "+p.getString("status","Sin iniciar")+
             " · destinos recibidos: "+p.getInt("received",0),14);
         button(body,connectionExpanded?"OCULTAR CONEXIÓN XIAOMI":
