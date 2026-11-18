@@ -1,4 +1,4 @@
-# 2026-11-18: signed 0.3.58 explicit prior-authorized local ADB accessibility reauthorization.
+# 2026-11-18: signed 0.3.58 explicit prior-authorized local ADB accessibility reauthorization. Legacy wheel home test updated for ADB confirmation dialog.
 name: Signed Receiver 0.3.58 - restore prior wheel permission via local ADB
 on:
   push:
