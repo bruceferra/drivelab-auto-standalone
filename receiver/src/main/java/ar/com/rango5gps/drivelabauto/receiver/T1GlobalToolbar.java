@@ -206,8 +206,8 @@ final class T1GlobalToolbar {
             this::toggleMirrorAuto);
         button(actions,"CONFIG. ESPEJOS R",T1JetourTheme.PANEL_HI,168,
             this::configureReverseMirrors);
-        mirrorRecoverButton=button(actions,"RECUPERAR ESPEJOS",
-            T1JetourTheme.PANEL_HI,170,this::showMirrorRecovery);
+        mirrorRecoverButton=button(actions,"BAJAR ESPEJOS · MANUAL",
+            T1JetourTheme.PANEL_HI,184,this::toggleMirrorManual);
         mirrorButton=button(actions,"ESPEJOS · LEER",T1JetourTheme.PANEL_HI,150,
             this::toggleMirror);
         avsButton=button(actions,"PEATÓN · LEYENDO",T1JetourTheme.PANEL_HI,135,
@@ -673,26 +673,32 @@ final class T1GlobalToolbar {
             T1JetourTheme.AMBER_BUTTON:healthy?
             T1JetourTheme.GREEN_BUTTON:auto?
             T1JetourTheme.AMBER_BUTTON:T1JetourTheme.PANEL_HI);
-        // This recovery shortcut used to be hard-coded AMBER forever.
-        // Clear the warning once the owner acknowledged NORMAL visually
-        // and the exact pending ledger is empty. The button remains
-        // accessible in neutral gray for future manual recovery.
+        // Manual DOWN/UP is an independent on/off actuator. It displays
+        // the NEXT requested action and reflects durable per-side pulses,
+        // never a synthetic angle or an always-orange recovery badge.
         if(mirrorRecoverButton!=null){
-            boolean needsRecovery=unresolved;
-            if(!healthy&&safetyHold&&pose.startsWith("INCIERTA"))
-                needsRecovery=true;
-            T1JetourTheme.button(mirrorRecoverButton,needsRecovery?
-                T1JetourTheme.AMBER_BUTTON:T1JetourTheme.PANEL_HI);
-            mirrorRecoverButton.setText(bootRecovery?
-                "ESPEJOS · VOLVIENDO":
-                needsRecovery?(unresolved?
-                    "RECUPERAR ESPEJOS":"ESPEJOS · REVISAR MANUAL"):
-                "ESPEJOS · SIN PENDIENTES");
-            mirrorRecoverButton.setContentDescription(needsRecovery?
-                "Recuperación de espejos disponible. Pendientes izquierda "+
-                    pendingLeft+", derecha "+pendingRight:
-                "Espejos sin pulsos pendientes. Posición "+
-                    "normal confirmada o sin recuperación requerida.");
+            boolean manual=MirrorManualTiltService.selected(owner);
+            boolean moving=MirrorManualTiltService.busy(owner);
+            boolean uncertain=MirrorManualTiltService.unverified(owner)||
+                (!manual&&unresolved);
+            boolean tilted=manual&&MirrorManualTiltService.lowered(owner);
+            mirrorRecoverButton.setText(moving?"ESPEJOS · MOVIENDO…":
+                uncertain?"ESPEJOS · REVISAR POSICIÓN":
+                tilted?"SUBIR ESPEJOS · MANUAL":
+                    "BAJAR ESPEJOS · MANUAL");
+            T1JetourTheme.button(mirrorRecoverButton,moving||uncertain?
+                T1JetourTheme.AMBER_BUTTON:tilted?
+                T1JetourTheme.GREEN_BUTTON:T1JetourTheme.PANEL_HI);
+            mirrorRecoverButton.setContentDescription(moving?
+                "Movimiento OEM en curso; esperar a que termine":
+                uncertain?"Referencia de espejo incierta: "+
+                    "ajustar con controles originales antes del próximo pulso":
+                tilted?"Tocar para subir EXACTAMENTE los "+
+                    MirrorManualTiltService.left(owner)+" pulsos izquierdos y "+
+                    MirrorManualTiltService.right(owner)+
+                    " derechos pendientes; solo en P y 0 km/h":
+                "Tocar para bajar manualmente la cantidad configurada "+
+                    "de pasos, 15 por defecto; solo en P y 0 km/h");
         }
         mirrorAutoButton.setContentDescription(bootRecovery?
             "Retorno de pulsos durables al encender, solo en P y parado":
@@ -705,6 +711,9 @@ final class T1GlobalToolbar {
     private void toggleMirrorAuto(){
         SharedPreferences p=owner.getSharedPreferences(
             MirrorAutomationService.PREFS,Context.MODE_PRIVATE);
+        if(MirrorManualTiltService.busy(owner)){
+            note("Espejos: terminar movimiento manual antes de cambiar AUTO");return;
+        }
         if(p.getBoolean(MirrorAutomationService.AUTO,false)){
             try{
                 owner.startService(new Intent(owner,MirrorAutomationService.class)
@@ -739,6 +748,74 @@ final class T1GlobalToolbar {
             note("Espejos: AUTO no iniciado · "+
                 ex.getClass().getSimpleName());
         }
+    }
+    /** Single tap is DOWN, next is UP. No gear-transition return and
+     * no automatic reboot rearm after manual selection. OEM executor owns
+     * all writes and journals individual neutral-released pulses. */
+    private void toggleMirrorManual(){
+        if(!foreground)return;
+        if(MirrorManualTiltService.busy(owner)){
+            note("Espejos manuales: movimiento en curso; esperar");return;
+        }
+        SharedPreferences p=owner.getSharedPreferences(
+            MirrorAutomationService.PREFS,Context.MODE_PRIVATE);
+        boolean legacyAuto=p.getBoolean(MirrorAutomationService.AUTO,false);
+        boolean legacyOutstanding=!MirrorManualTiltService.selected(owner)&&
+            (p.getInt(MirrorAutomationService.PENDING_LEFT,0)>0||
+             p.getInt(MirrorAutomationService.PENDING_RIGHT,0)>0);
+        if(MirrorManualTiltService.unverified(owner)||legacyOutstanding){
+            showManualMirrorReference();
+            return;
+        }
+        try{
+            owner.startForegroundService(new Intent(owner,
+                MirrorManualTiltService.class)
+                .setAction(MirrorManualTiltService.ACTION_TOGGLE));
+            note("ESPEJOS MANUAL · "+
+                (MirrorManualTiltService.lowered(owner)?"SUBIR":"BAJAR")+
+                " solicitado. REVERSA AUTO se desactiva.");
+            main.postDelayed(this::refreshMirrorAuto,500L);
+        }catch(Exception ex){
+            note("ESPEJOS MANUAL NO INICIADO: "+
+                ex.getClass().getSimpleName());
+        }
+    }
+    private void showManualMirrorReference(){
+        SharedPreferences p=owner.getSharedPreferences(
+            MirrorAutomationService.PREFS,Context.MODE_PRIVATE);
+        boolean inFlight=p.getBoolean(
+            MirrorAutomationService.PULSE_IN_FLIGHT,false);
+        int l=MirrorManualTiltService.left(owner);
+        int r=MirrorManualTiltService.right(owner);
+        AlertDialog.Builder dialog=new AlertDialog.Builder(owner)
+            .setTitle("ESPEJOS · REFERENCIA MANUAL")
+            .setMessage("El retorno anterior quedó incierto o con "+
+                "pulsos AUTO pendientes (IZQ "+l+" / DER "+r+")."+
+                "\n\nAntes de usar BAJAR/SUBIR, estacioná en P y "+
+                "ajustá AMBOS espejos a tu posición normal con los "+
+                "mandos originales Jetour.\n\nSolo cuando los "+
+                "veas normales, confirmá esta referencia. "+
+                "DriveLab no puede medir el ángulo, ni va a enviar "+
+                "pulsos para confirmar.\n\n"+
+                (inFlight?"ATENCIÓN: existe un pulso sin liberación "+
+                    "confirmada. No se puede reiniciar el contador.":""))
+            .setNegativeButton("CERRAR",null);
+        if(!inFlight){
+            dialog.setPositiveButton(
+                "YA ESTÁN NORMALES · CONFIRMAR",(d,w)->{
+                    try{
+                        owner.startForegroundService(new Intent(owner,
+                            MirrorManualTiltService.class)
+                            .setAction(MirrorManualTiltService.ACTION_REFERENCE));
+                        note("Verificando P / 0 y referencia visual manual");
+                        main.postDelayed(this::refreshMirrorAuto,500);
+                    }catch(Exception ex){
+                        note("Referencia no solicitada: "+
+                            ex.getClass().getSimpleName());
+                    }
+                });
+        }
+        dialog.show();
     }
     /** No angle sensor: the only safe way out of a lost relative-motion
      * ledger is for the driver to set the actual pose using OEM controls.
@@ -807,6 +884,7 @@ final class T1GlobalToolbar {
         boolean live=p.getBoolean(MirrorAutomationService.SERVICE_ACTIVE,false)
             &&age>=0&&age<=8000;
         diagnostic.setText("MODO: "+(on?"AUTO":"MANUAL")+
+            "\\nCONTROL MANUAL: "+MirrorManualTiltService.summary(owner)+
             " · REARME AUTOMÁTICO: "+
                 (p.getBoolean(MirrorAutomationService.SAFETY_HOLD,true)?
                     "REQUIERE REVISIÓN VISUAL":"PERMITIDO SOLO A PEDIDO")+
@@ -821,7 +899,9 @@ final class T1GlobalToolbar {
             "\nÚLTIMO ERROR: "+p.getString(MirrorAutomationService.LAST_ERROR,"NINGUNO")+
             "\nÚLTIMA TRANSICIÓN: "+
                 p.getString(MirrorAutomationService.LAST_TRANSITION,"NINGUNA")+
-            "\n\nPasos relativos (1 a 20) por espejo, sin sensor de ángulo. "+
+            "\n\nBAJAR/SUBIR MANUAL: uno baja y el siguiente sube "+
+            "solo los pulsos confirmados. 15 pasos por lado por defecto "+
+            "(1–20 configurables); requiere P y 0 km/h. "+
             "Para modificar, primero desactivá AUTO R desde la barra.");
         diagnostic.setTextSize(14);
         diagnostic.setTextColor(android.graphics.Color.DKGRAY);
@@ -832,12 +912,14 @@ final class T1GlobalToolbar {
         NumberPicker left=new NumberPicker(owner);
         left.setMinValue(1);left.setMaxValue(MirrorParkingPolicy.MAX_PULSES_PER_SIDE);
         left.setValue(Math.max(1,Math.min(MirrorParkingPolicy.MAX_PULSES_PER_SIDE,
-            p.getInt(MirrorAutomationService.LEFT,2))));
+            p.getInt(MirrorAutomationService.LEFT,
+                MirrorManualTiltService.DEFAULT_PULSES))));
         left.setContentDescription("Pasos espejo izquierdo");
         NumberPicker right=new NumberPicker(owner);
         right.setMinValue(1);right.setMaxValue(MirrorParkingPolicy.MAX_PULSES_PER_SIDE);
         right.setValue(Math.max(1,Math.min(MirrorParkingPolicy.MAX_PULSES_PER_SIDE,
-            p.getInt(MirrorAutomationService.RIGHT,2))));
+            p.getInt(MirrorAutomationService.RIGHT,
+                MirrorManualTiltService.DEFAULT_PULSES))));
         right.setContentDescription("Pasos espejo derecho");
         TextView labelLeft=new TextView(owner);
         labelLeft.setText("IZQ");
