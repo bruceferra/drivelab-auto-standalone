@@ -7,6 +7,7 @@ package ar.com.rango5gps.drivelabauto.receiver;
  *   SMART (stored OEM 70) -> 1040=2, 1041 raw72;
  *   FORZADO 70%           -> 1040=4, 1041 raw72;
  *   FORZADO 50%           -> 1040=4, 1041 raw56.
+ *   FORZADO 60%           -> 1040=4, 1041 raw64 (owner confirmed).
  * Original verified older signal photos: raw30->20%, raw40->30%,
  * raw48->40%, raw56->50%. On this unit raw72->70% is now measured.
  * Neither the raw integer nor readFloat (observed 1) is the percentage.
@@ -15,7 +16,8 @@ package ar.com.rango5gps.drivelabauto.receiver;
  * is sent the allowlisted percentage (70), NEVER the raw code (72).
  * A successful readback confirms the target only, not strategy/regen:
  * those are independently verified using OEM 1040/1046.
- * 60% remains entirely unknown; NEVER infer that raw64 means 60%.
+ * 60% raw64 was explicitly confirmed by the owner after the A/B capture.
+ * This validates readback only; a complete DriveLab write is not yet proven.
  */
 final class T1SocTargetCodec {
     private T1SocTargetCodec(){}
@@ -26,6 +28,7 @@ final class T1SocTargetCodec {
             case 40:return 30;
             case 48:return 40;
             case 56:return 50;
+            case 64:return 60;
             case 72:return 70;
             default:return -1;
         }
@@ -37,6 +40,7 @@ final class T1SocTargetCodec {
             case 30:return 40;
             case 40:return 48;
             case 50:return 56;
+            case 60:return 64;
             case 70:return 72;
             default:return -1;
         }
@@ -45,7 +49,7 @@ final class T1SocTargetCodec {
     /**
      * Confirm only measured raw->% pairs. The floating 1041 getter
      * was observed as 1 and MUST NOT be treated as a percentage.
-     * 70% now has the OEM menu pairing raw72; 60% is still unmapped.
+     * 60% and 70% now have owner-confirmed OEM pairings raw64/raw72.
      */
     static boolean confirmsRequested(int requested,int rawInt,double rawFloat){
         return T1SocRegenWritePolicy.accepted(1041,requested)&&
