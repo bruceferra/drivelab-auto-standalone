@@ -4,7 +4,7 @@ import java.nio.file.Path;
 
 /** Prevent accidental Waze/Maps process termination on ordinary CLUSTER ON,
  * Sender route or app screen navigation. Cold boot + manual REBOOT only.
- * No gear/speed restrictions for navigation process management.
+ * Normal navigation is unrestricted; explicit destructive manual R requires P/0 twice.
  */
 public final class T1ClusterColdBootAndManualRebootContractTest {
     static String read(String n)throws Exception{
@@ -74,10 +74,11 @@ public final class T1ClusterColdBootAndManualRebootContractTest {
             router.contains("putBoolean(ENABLED,false)")&&
             router.contains("putBoolean(ENABLED,true)")&&
             reboot.contains("ReceiverService.ACTION_START")&&
-            !reboot.contains("speedKmh()")&&
-            !reboot.contains("oem.gear()")&&
+            reboot.contains("speedKmh()")&&
+            reboot.contains("gear!=1||!Double.isFinite(speed)")&&
+            reboot.contains("attempt<2")&&
             !reboot.contains("am force-stop ar.com.rango5gps.drivelabauto.receiver"),
-            "Both manual and cold boot refresh maps; manual R must not blank DriveLab UI");
-        System.out.println("PASS: boot and hidden REBOOT exclusively refresh maps, no speed/P gate");
+            "Manual R is P/0 gated and leaves DriveLab UI intact");
+        System.out.println("PASS: boot and parked-only REBOOT refresh maps without touching OEM UI");
     }
 }
