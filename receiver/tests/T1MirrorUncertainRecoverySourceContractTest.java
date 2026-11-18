@@ -42,11 +42,14 @@ public final class T1MirrorUncertainRecoverySourceContractTest {
             !svc.contains("INCIERTA · espejos posiblemente bajos tras reinicio"),
             "Only an actual in-flight or outstanding ledger blocks next ignition");
         check(svc.contains("RECUPERAR ESPEJOS · subiendo solo los pulsos registrados")&&
-            svc.contains("manual==3?prefs().getInt(PENDING_LEFT,0)")&&
-            svc.contains("manual==3?prefs().getInt(PENDING_RIGHT,0)")&&
+            svc.contains("manual==3||manual==4")&&
+            svc.contains("prefs().getInt(PENDING_LEFT,0):steps(LEFT)")&&
+            svc.contains("prefs().getInt(PENDING_RIGHT,0):steps(RIGHT)")&&
+            svc.contains("MirrorBootRecoveryPolicy.recoverable(")&&
+            svc.contains("MirrorBootRecoveryPolicy.parkedForRestore(")&&
             !svc.contains("int l=manual==3?10:steps(LEFT)")&&
             !svc.contains("AUTO REACTIVADO · próximo R nuevo"),
-            "Recovery must use exact logged pending pulses per side, not blind 10 UP");
+            "Recovery must use only logged P-stationary pulses, never blind 10 UP");
         check(ui.contains("ESPEJOS · REVISAR POSICIÓN")&&
             ui.contains("showMirrorRecovery()")&&
             ui.contains("MirrorAutomationService.ACTION_CONFIRM_NORMAL"),
