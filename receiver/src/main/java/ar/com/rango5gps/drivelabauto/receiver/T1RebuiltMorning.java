@@ -105,6 +105,19 @@ final class T1RebuiltMorning {
             new java.text.SimpleDateFormat("yyyy-MM-dd",Locale.ROOT)
                 .format(new java.util.Date()));
     }
+    /**
+     * The imported opening balance belongs ONLY to the original linked
+     * active or paused 18-Nov TRIP, never to a later new TRIP after STOP.
+     * Keep the historical record visible separately in the history pane.
+     */
+    static boolean isCarriedDay(Context c){
+        if(!isToday(c)||!attached(c))return false;
+        SharedPreferences live=c.getSharedPreferences(
+            T1TripRecorderService.PREFS,Context.MODE_PRIVATE);
+        return live.getBoolean(T1TripRecorderService.RUNNING,false)||
+            live.getBoolean(T1TripRecorderService.DESIRED,false)||
+            live.getBoolean(T1TripRecorderService.PAUSED,false);
+    }
     static boolean attached(Context c){
         if(!installed(c))return false;
         String bound=p(c).getString(TRIP_ID,"");
