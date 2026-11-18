@@ -33,11 +33,13 @@ public final class T1RebuiltMorningSourceContractTest {
             cockpit.contains("T1RebuiltMorning.summary(this)")&&
             cockpit.contains("selectedHistoryKey=\"1:\"+T1RebuiltMorning.ID"),
             "Cockpit closed partial and ongoing TOTAL shown independently");
-        yes(morning.contains("ELECTRICIDAD PAGADA REAL: SIN DATO")&&
-            morning.contains("ESCENARIO 6,23 kWh")&&
-            morning.contains("PONDERADO ECONÓMICO")&&
-            morning.contains("NO se descuenta dos veces"),
-            "Weighted price is an explicit counterfactual, not fabricated grid bill");
+        yes(morning.contains("chargeSummary(c)")&&
+            morning.contains("chargeTripAttribution(c,packKwh)")&&
+            morning.contains("PONDERADO ECONÓMICO IMPUTADO DESDE")&&
+            morning.contains("record.meterKwh/record.kwh")&&
+            morning.contains("NO se descuentan otra vez")&&
+            morning.contains("LATER_SOC_REPORTED=73.2"),
+            "Documented charge source, proportional cost, regen separation and later SOC");
         yes(!morning.contains("drop table")&&
             !morning.contains("getExternalStorageDirectory")&&
             !morning.contains("com.t1launcher."),
