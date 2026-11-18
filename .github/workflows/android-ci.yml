@@ -89,7 +89,11 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p /tmp/t1-trip-actions
-          javac -encoding UTF-8 -d /tmp/t1-trip-actions receiver/tests/T1TripButtonAndMapRepairContractTest.java
+          javac -encoding UTF-8 -d /tmp/t1-trip-actions \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripActionPolicy.java \
+            receiver/tests/T1TripActionPolicyTest.java \
+            receiver/tests/T1TripButtonAndMapRepairContractTest.java
+          java -cp /tmp/t1-trip-actions ar.com.rango5gps.drivelabauto.receiver.T1TripActionPolicyTest
           java -cp /tmp/t1-trip-actions ar.com.rango5gps.drivelabauto.receiver.T1TripButtonAndMapRepairContractTest
       - name: Verify boot-only clean map restart and hidden REBOOT
         shell: bash
