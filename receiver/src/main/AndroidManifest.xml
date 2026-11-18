@@ -118,6 +118,7 @@
             </intent-filter>
         </activity>
         <activity android:name=".T1ClusterWazeSettingsActivity" android:exported="false" />
+        <activity android:name=".T1CenterMosaicActivity" android:exported="false" />
         <activity android:name=".T1ClusterLayoutSettingsActivity"
             android:exported="false" />
         <activity android:name=".ReceiverVehicleActivity" android:exported="false" />
