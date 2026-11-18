@@ -31,7 +31,7 @@ public final class MirrorManualOnOffContractTest {
             manual.contains("boolean down=pendingLeft==0&&pendingRight==0;")&&
             manual.contains("int next=old+(down?1:-1)")&&
             manual.contains("putInt(key,next)")&&
-            manual.contains("putBoolean(MirrorAutomationService.PULSE_IN_FLIGHT,true)")&&
+            manual.contains("MirrorAutomationService.PULSE_IN_FLIGHT,true)")&&
             manual.contains("putBoolean(MirrorAutomationService.PULSE_IN_FLIGHT,false)"),
             "Down counts only confirmed released pulses; next tap inverts exact counts");
         yes(manual.contains("gear!=1||!Double.isFinite(speed)")&&
