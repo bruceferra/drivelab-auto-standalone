@@ -11,7 +11,7 @@ final class T1TripActionPolicy {
     static State resolve(boolean paused,boolean active,boolean live,
                          boolean canStart,boolean canResume){
         // Pending start is active, but must not allow a second START.
-        if(paused)return new State(false,false,active,canResume);
+        if(paused)return new State(false,false,true,canResume);
         if(active)return new State(false,live,true,false);
         return new State(canStart,false,false,false);
     }
