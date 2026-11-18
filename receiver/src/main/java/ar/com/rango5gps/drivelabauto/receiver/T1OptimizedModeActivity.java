@@ -449,13 +449,11 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
         T1JetourTheme.button(socDiag,T1JetourTheme.PANEL_HI);
         socDiag.setOnClickListener(v->showSocDiagnostic());
         root.addView(socDiag);
-        root.addView(text("CALIBRAR FORZADO OEM · SOLO LECTURA"+
-            "\nCon AUTO OFF, en P: capturá A en SMART, "+
-            "cambiá a FORZADO 70 desde el menú ORIGINAL Jetour y "+
-            "capturá B. NO envía ningún comando al auto. "+
-            "1040=4 demuestra estrategia FORZADO; "+
-            "1041 debe compararse con el porcentaje visible "+
-            "en la pantalla OEM. Sacá una foto del 70 %.",13,MUTED,false));
+        root.addView(text("FORZADO · PRUEBA FÁCIL (SOLO LECTURA)"+
+            "\n1. AUTO OFF y SMART en menú original: LEER A. "+
+            "2. Cambiá a FORZADO 70% EN JETOUR: LEER B. "+
+            "3. Compará 1040 (2 SMART / 4 FORZADO) y 1041. "+
+            "No escribe al auto ni exige marcha P para leer.",13,MUTED,false));
         LinearLayout socCaptureActions=horizontal();
         root.addView(socCaptureActions);
         Button beforeSoc=new Button(this);
@@ -684,35 +682,28 @@ public final class T1OptimizedModeActivity extends T1ImmersiveActivity {
             return;
         }
         if(socCalibrationStatus!=null)
-            socCalibrationStatus.setText("Leyendo OEM 1033 / velocidad "+
-                "/ 1040 / 1041 / 1046… sin escritura");
+            socCalibrationStatus.setText("Leyendo OEM 1040 / 1041 / 1046… sin escritura");
         new Thread(()->{
             MirrorAutomationOem oem=null;
             String observation=null;
             String failure=null;
             try{
                 oem=new MirrorAutomationOem(this);
-                int gear=oem.gear();
-                double speed=oem.speedKmh();
-                if(gear!=1||!Double.isFinite(speed)||speed<0||
-                    speed>0.5){
-                    failure="Requiere P y 0 km/h confirmados: "+
-                        "1033="+gear+" / velocidad="+speed;
-                }else{
-                    int strategy=oem.readInt(1040);
-                    int targetRaw=oem.readInt(1041);
-                    int regen=oem.readInt(1046);
-                    observation=(after?"B DESPUÉS":"A ANTES")+
-                        " · "+new java.text.SimpleDateFormat(
-                            "dd/MM HH:mm:ss",Locale.ROOT)
-                            .format(new java.util.Date())+
-                        " · 1040="+strategy+
-                        (strategy==4?" (FORZADO)":
-                            strategy==2?" (SMART)":" (SIN MAPEO)")+
-                        " · "+T1SocTargetCodec.explain(
-                            targetRaw,Double.NaN)+
-                        " · 1046="+regen;
-                }
+                // Read-only: gear/speed are NOT requirements. The
+                // original Jetour interface selects SMART/FORCED, never us.
+                int strategy=oem.readInt(1040);
+                int targetRaw=oem.readInt(1041);
+                int regen=oem.readInt(1046);
+                observation=(after?"B DESPUÉS":"A ANTES")+
+                    " · "+new java.text.SimpleDateFormat(
+                        "dd/MM HH:mm:ss",Locale.ROOT)
+                        .format(new java.util.Date())+
+                    " · 1040="+strategy+
+                    (strategy==4?" (FORZADO)":
+                        strategy==2?" (SMART)":" (SIN MAPEO)")+
+                    " · "+T1SocTargetCodec.explain(
+                        targetRaw,Double.NaN)+
+                    " · 1046="+regen;
             }catch(Exception ex){
                 failure=ex.getClass().getSimpleName()+
                     (ex.getMessage()==null?"":" · "+ex.getMessage());
