@@ -23,7 +23,7 @@ public final class T1SocOemReadOnlyCalibrationContractTest {
         yes(gate>0&&binder>gate&&
             pilot.contains("SOC_FORZADO_NO_AUTORIZADO_SIN_MAPEO")&&
             pilot.contains("NO se envió 1041/1040/1046"),
-            "Unknown target 60/70 MUST be blocked before Binder write");
+            "Unmapped target 60 MUST be blocked before Binder write");
         int safety=automatic.indexOf("OPT_PERFIL_BLOQUEADO_SIN_MAPEO");
         int drivingMode=automatic.indexOf("T1OptimizedAutoGate.Decision decision=gate.examine(");
         yes(safety>0&&drivingMode>safety&&
@@ -31,9 +31,11 @@ public final class T1SocOemReadOnlyCalibrationContractTest {
             automatic.contains("putBoolean(ENABLED,false)"),
             "Unmapped SOC must stop entire optimizer before ANY 1043 mode switch");
         yes(map.contains("case 56:return 50;")&&
-            !map.contains("case 72:return 70;")&&
-            !map.contains("case 64:return 60;"),
-            "Never guess the 1041 raw readback mapping");
+            map.contains("case 72:return 70;")&&
+            !map.contains("case 64:return 60;")&&
+            map.contains("case 70:return 72;")&&
+            !map.contains("case 60:return 64;"),
+            "70->raw72 proved by OEM original menu, 60 still unknown");
         yes(screen.contains("LEER A · ANTES")&&
             screen.contains("LEER B · DESPUÉS")&&
             screen.contains("captureSocOem(boolean after)")&&
