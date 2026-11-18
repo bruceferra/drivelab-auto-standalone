@@ -1,0 +1,223 @@
+package ar.com.rango5gps.drivelabauto.receiver;
+
+import android.content.ContentValues;
+import android.content.Context;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
+import android.database.sqlite.SQLiteOpenHelper;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.Locale;
+
+/** Independent, private SQLite charge history. No reference to T1Launcher
+ * files, shared UID, Android root, GPS trips or navigation services.
+ * Grid-meter kWh and HV battery-in kWh are NEVER the same metric. */
+final class T1ChargeStore extends SQLiteOpenHelper {
+    static final String PREFS="t1_charge_auto",ENABLED="enabled",
+        STATUS="status",LAST_CABLE="last_cable_raw",LAST_READ="last_read",
+        CURRENT_SESSION="current_session_id";
+    static final String DB="t1_charge_sessions.db",CSV="grid_charges_auto.csv";
+    static final class Record {
+        long id,start,end,last;
+        double socStart,socEnd,ah,kwh,meterKwh,price;
+        int samples,cable,open;
+        String source,note;
+        String describe(){
+            SimpleDateFormat fmt=new SimpleDateFormat("dd/MM HH:mm",Locale.getDefault());
+            double external=Double.isFinite(meterKwh)&&meterKwh>0?meterKwh:kwh;
+            String basis=Double.isFinite(meterKwh)&&meterKwh>0?
+                "RED (medidor)":"BATERÍA (est.)";
+            return fmt.format(new Date(end>0?end:start))+
+                " · "+(open==1?"CARGANDO":"FINALIZADA")+
+                " · "+fmt(socStart,0)+"→"+fmt(socEnd,0)+" %"+
+                "\n"+fmt(kwh,2)+" kWh batería · "+
+                fmt(ah,1)+" Ah · "+samples+" muestras"+
+                "\n"+fmt(external,2)+" kWh "+basis+" · $ "+
+                fmt(external*price,0)+" (tarifa $ "+fmt(price,2)+"/kWh)"+
+                "\n"+source+" · "+(note==null?"":note);
+        }
+    }
+    static String fmt(double n,int precision){
+        return Double.isFinite(n)?
+            String.format(Locale.getDefault(),"%."+precision+"f",n):"—";
+    }
+    T1ChargeStore(Context ctx){super(ctx,DB,null,1);}
+    @Override public void onCreate(SQLiteDatabase db){
+        db.execSQL("CREATE TABLE sessions("+
+            "_id INTEGER PRIMARY KEY AUTOINCREMENT,"+
+            "start_ms INTEGER NOT NULL,end_ms INTEGER NOT NULL DEFAULT 0,"+
+            "last_ms INTEGER NOT NULL DEFAULT 0,"+
+            "soc_start REAL,soc_end REAL,ah REAL NOT NULL DEFAULT 0,"+
+            "battery_kwh REAL NOT NULL DEFAULT 0,meter_kwh REAL,"+
+            "price_kwh REAL NOT NULL DEFAULT 0,"+
+            "samples INTEGER NOT NULL DEFAULT 0,"+
+            "cable_raw INTEGER NOT NULL DEFAULT -1,"+
+            "is_open INTEGER NOT NULL DEFAULT 1,"+
+            "source TEXT NOT NULL,note TEXT DEFAULT '')");
+        db.execSQL("CREATE INDEX ix_charge_end ON sessions(end_ms)");
+    }
+    @Override public void onUpgrade(SQLiteDatabase db,int from,int to){}
+    private static double val(Cursor c,int col){
+        return c.isNull(col)?Double.NaN:c.getDouble(col);
+    }
+    private static Record parse(Cursor c){
+        Record r=new Record();
+        r.id=c.getLong(0);r.start=c.getLong(1);r.end=c.getLong(2);
+        r.last=c.getLong(3);r.socStart=val(c,4);r.socEnd=val(c,5);
+        r.ah=c.getDouble(6);r.kwh=c.getDouble(7);r.meterKwh=val(c,8);
+        r.price=c.getDouble(9);r.samples=c.getInt(10);r.cable=c.getInt(11);
+        r.open=c.getInt(12);r.source=c.getString(13);r.note=c.getString(14);
+        return r;
+    }
+    private static final String COLS="_id,start_ms,end_ms,last_ms,soc_start,"+
+        "soc_end,ah,battery_kwh,meter_kwh,price_kwh,samples,cable_raw,"+
+        "is_open,source,note";
+    synchronized Record openSession(){
+        try(Cursor c=getReadableDatabase().rawQuery(
+                "SELECT "+COLS+" FROM sessions WHERE is_open=1 "+
+                    "ORDER BY _id DESC LIMIT 1",null)){
+            return c.moveToFirst()?parse(c):null;
+        }
+    }
+    synchronized long begin(long at,double soc,double price,int cable){
+        Record old=openSession();
+        if(old!=null)return old.id;
+        ContentValues v=new ContentValues();
+        v.put("start_ms",at);v.put("last_ms",at);
+        if(T1ChargeMath.validSoc(soc))v.put("soc_start",soc);
+        v.put("price_kwh",price);v.put("cable_raw",cable);
+        v.put("source","OEM CABLE 1060");
+        v.put("note","Estimado por 1063 V / 1064 A, no medidor de red");
+        return getWritableDatabase().insertOrThrow("sessions",null,v);
+    }
+    synchronized void sample(long id,T1ChargeOemReader.Reading reading){
+        if(id<=0)return;
+        Record r=openSession();
+        if(r==null||r.id!=id)return;
+        long elapsed=reading.timeMs-r.last;
+        double[] extra=T1ChargeMath.integrate(
+            reading.cable,reading.volts,reading.amps,elapsed);
+        ContentValues v=new ContentValues();
+        v.put("last_ms",reading.timeMs);
+        if(T1ChargeMath.validSoc(reading.soc))v.put("soc_end",reading.soc);
+        v.put("cable_raw",reading.cable);
+        if(extra[0]>0){
+            v.put("ah",r.ah+extra[0]);
+            v.put("battery_kwh",r.kwh+extra[1]);
+        }
+        v.put("samples",r.samples+1);
+        getWritableDatabase().update("sessions",v,"_id=?",
+            new String[]{Long.toString(id)});
+    }
+    synchronized boolean finish(long id,long at){
+        Record old=openSession();
+        if(old==null||old.id!=id)return false;
+        ContentValues v=new ContentValues();
+        v.put("is_open",0);
+        v.put("end_ms",Math.max(at,old.last));
+        int n=getWritableDatabase().update("sessions",v,"_id=?",
+            new String[]{Long.toString(id)});
+        return n==1;
+    }
+    synchronized long importLauncher(long finished,double soc0,double soc1,
+                                     double ah,double batteryKwh,
+                                     double meterKwh,double price)
+        throws IllegalArgumentException {
+        if(finished<=0||!T1ChargeMath.validSoc(soc0)||
+           !T1ChargeMath.validSoc(soc1)||soc1<soc0||
+           !Double.isFinite(ah)||ah<0||ah>300||
+           !Double.isFinite(batteryKwh)||batteryKwh<=0||batteryKwh>150||
+           !Double.isFinite(price)||price<0||price>100000||
+           (Double.isFinite(meterKwh)&&
+              (meterKwh<batteryKwh*0.5||meterKwh>150)))
+            throw new IllegalArgumentException("Datos de carga inválidos");
+        try(Cursor c=getReadableDatabase().rawQuery(
+                "SELECT COUNT(*) FROM sessions WHERE "+
+                    "ABS(CASE WHEN end_ms>0 THEN end_ms ELSE start_ms END - ?)<3600000",
+                new String[]{Long.toString(finished)})){
+            if(c.moveToFirst()&&c.getInt(0)>0)
+                throw new IllegalArgumentException(
+                    "Ya hay una sesión cercana a esa hora; evitar duplicados");
+        }
+        ContentValues v=new ContentValues();
+        v.put("start_ms",finished);v.put("end_ms",finished);
+        v.put("last_ms",finished);v.put("soc_start",soc0);
+        v.put("soc_end",soc1);v.put("ah",ah);
+        v.put("battery_kwh",batteryKwh);
+        if(Double.isFinite(meterKwh))v.put("meter_kwh",meterKwh);
+        v.put("price_kwh",price);v.put("samples",0);
+        v.put("cable_raw",1);v.put("is_open",0);
+        v.put("source","T1LAUNCHER · IMPORTACIÓN MANUAL");
+        v.put("note","Fecha final informada; no se importó SQLite original");
+        return getWritableDatabase().insertOrThrow("sessions",null,v);
+    }
+    synchronized ArrayList<Record> latest(int max){
+        ArrayList<Record> out=new ArrayList<>();
+        try(Cursor c=getReadableDatabase().rawQuery(
+                "SELECT "+COLS+" FROM sessions ORDER BY "+
+                    "COALESCE(NULLIF(end_ms,0),start_ms) DESC LIMIT "+
+                    Math.max(1,Math.min(500,max)),null)){
+            while(c.moveToNext())out.add(parse(c));
+        }
+        return out;
+    }
+    synchronized String csv(){
+        StringBuilder b=new StringBuilder();
+        b.append("id;inicio_epoch_ms;fin_epoch_ms;soc_inicial;soc_final;"+
+            "ah_bateria;kwh_bateria_est;kwh_medidor_red;precio_kwh;"+
+            "estado;origen;nota\n");
+        for(Record r:latest(500)){
+            b.append(r.id).append(';').append(r.start).append(';')
+                .append(r.end).append(';').append(fmtCsv(r.socStart)).append(';')
+                .append(fmtCsv(r.socEnd)).append(';').append(fmtCsv(r.ah))
+                .append(';').append(fmtCsv(r.kwh)).append(';')
+                .append(fmtCsv(r.meterKwh)).append(';')
+                .append(fmtCsv(r.price)).append(';')
+                .append(r.open==1?"ABIERTA":"CERRADA").append(';')
+                .append(clean(r.source)).append(';')
+                .append(clean(r.note)).append('\n');
+        }
+        return b.toString();
+    }
+    private static String fmtCsv(double x){
+        return Double.isFinite(x)?
+            String.format(Locale.ROOT,"%.5f",x):"";
+    }
+    private static String clean(String x){
+        return x==null?"":x.replace(';',',')
+            .replace('\r',' ').replace('\n',' ');
+    }
+    /** Separate auto CSV: do not overwrite existing manual grid_charges.csv.
+     * A battery-in estimate is a lower bound for grid draw (losses excluded),
+     * so it is ALWAYS labeled ESTIMADO in the financial projection.
+     */
+    synchronized void exportForCosts(Context context)throws IOException{
+        File dst=new File(T1TripRecorderService.tripDir(context),CSV);
+        File temp=new File(dst.getParentFile(),CSV+".tmp");
+        StringBuilder body=new StringBuilder(
+            "fecha_epoch_ms;kwh_red_medidos;precio_kwh;importe_ars;nota\n");
+        for(Record r:latest(500)){
+            if(r.open!=0||r.end<=0)continue;
+            boolean metered=Double.isFinite(r.meterKwh)&&r.meterKwh>0;
+            double purchased=metered?r.meterKwh:r.kwh;
+            if(!Double.isFinite(purchased)||purchased<=0)continue;
+            body.append(r.end).append(';').append(fmtCsv(purchased))
+                .append(';').append(fmtCsv(r.price)).append(';')
+                .append(fmtCsv(purchased*r.price)).append(';')
+                .append("DRIVELAB_AUTO_ID=").append(r.id).append(' ')
+                .append(metered?"RED MEDIDOR":"BATERIA_ESTIMADA_NO_MEDIDOR")
+                .append(" · ").append(clean(r.source)).append('\n');
+        }
+        try(FileOutputStream out=new FileOutputStream(temp,false)){
+            out.write(body.toString().getBytes(StandardCharsets.UTF_8));
+            out.flush();out.getFD().sync();
+        }
+        if(!temp.renameTo(dst))
+            throw new IOException("No se pudo publicar CSV automático");
+    }
+}
