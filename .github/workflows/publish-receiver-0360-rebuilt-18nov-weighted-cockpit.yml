@@ -1,9 +1,9 @@
-# 2026-11-18: signed 0.3.60 opt-in cold boot wheel health check and Spotify map foreground experiment.
+# 2026-11-18: signed 0.3.60 historical day reconstruction and weighted cockpit, retaining boot wheel/map features.
 name: Signed Receiver 0.3.60 - 18 Nov rebuilt journey and cost-weighted cockpit
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/publish-receiver-0360-boot-wheel-spotify-map.yml']
+    paths: ['.github/workflows/publish-receiver-0360-rebuilt-18nov-weighted-cockpit.yml']
   workflow_dispatch:
 permissions:
   contents: write
