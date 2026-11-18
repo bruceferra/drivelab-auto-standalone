@@ -289,120 +289,26 @@ final class T1ClusterWazeRouter {
             status(c,reason);
             return reason;
         }
-        // The owner identified the missing ordering constraint on the T1:
-        // Android Settings > Force stop Waze/Maps works when their tasks are
-        // ALREADY PRESENT on Display 1 and CLUSTER is still ON. If we first
-        // force-stop while those apps are absent from the cluster, the OEM
-        // Spotify layer can remain above newly created FREEFORM windows.
-        // Only run this sequence on the actual boot path; CLUSTER ON normal
-        // and Sender destinations never force-stop a running route.
+        // 18-Nov physical regression report (v0.3.68): the repeated
+        // auto force-stop/OFF/ON visibly worsened Spotify layering and
+        // made the previously useful owner's manual method unreliable.
+        // Revert to the NON-DESTRUCTIVE single launch used by the normal
+        // cluster-on path, keeping saved A/B geometry and wheel controls.
+        // No force-stop, stack remove, OFF/ON toggling or delay in BOOT.
         if(T1ClusterLayoutPolicy.savedDualSplit(c)){
             if(!Settings.canDrawOverlays(c)&&!ReceiverActivity.isVisible()){
-                String reason="Arranque FREEFORM pendiente: Android no permite "+
-                    "abrir las apps en segundo plano sin permiso.";
+                String reason="ARRANQUE SIMPLE: Android no permitió "+
+                    "abrir los dos paneles desde segundo plano.";
+                prefs(c).edit().putString(BOOT_RELOAD_RESULT,reason).commit();
                 status(c,reason);
                 return reason;
             }
-            // 1. Make both map tasks exist in Display 1 while CLUSTER=ON.
-            String initial=T1ClusterLayoutPolicy.reopenSavedPanelsStopped(c);
-            if(initial.split("APP SOLICITADA",-1).length!=3){
-                status(c,"ARRANQUE: falta alguno de los mapas iniciales. "+initial);
-                return initial;
-            }
-            // 2. Give Android's vendor task manager a short chance to place
-            //    the FREEFORM windows on the instrument display. This worker
-            //    is off the UI thread. No gear/speed restriction or OEM write.
-            try{Thread.sleep(1600L);}
-            catch(InterruptedException ex){
-                Thread.currentThread().interrupt();
-                status(c,"Arranque de clúster interrumpido; mapas iniciales conservados");
-                return initial;
-            }
-            if(!autoBoot(c)){
-                status(c,"Clúster OFF durante arranque; no se forzó detención");
-                return initial;
-            }
-            // 3. EXACT same operations as the owner-verified manual R:
-            // force-stop both with CLUSTER ON; then OFF with task close;
-            // visibly keep OEM cluster OFF; then ON and reopen both panes.
-            // This code runs on ReceiverService's dedicated boot worker,
-            // never on the Android main/UI thread.
-            T1ClusterFreshStart.Result clean=T1ClusterFreshStart.prepare(c);
-            if(!autoBoot(c)){
-                status(c,"Arranque interrumpido: CLÚSTER ya no está en ON");
-                return initial;
-            }
-            if(!clean.ready){
-                if(!clean.changed){
-                    String diagnostic="ARRANQUE SIN RECARGA: ADB no confirmó "+
-                        "force-stop. "+clean.message;
-                    prefs(c).edit().putString(BOOT_RELOAD_RESULT,diagnostic).commit();
-                    status(c,diagnostic);
-                    T1ClusterEdgeFade.refresh(c);
-                    return initial;
-                }
-                String repaired=T1ClusterLayoutPolicy.reopenSavedPanelsStopped(c);
-                String diagnostic="ARRANQUE PARCIAL: force-stop incompleto, "+
-                    "mapas recuperados. "+clean.message;
-                prefs(c).edit().putString(BOOT_RELOAD_RESULT,diagnostic).commit();
-                status(c,diagnostic);
-                return repaired;
-            }
-            SharedPreferences p=prefs(c);
-            // Real CLUSTER OFF: same flags and same ADB task removal as R.
-            p.edit().putBoolean(ENABLED,false).putBoolean(AUTO_BOOT,false)
-                .putBoolean(CLOSE_PENDING,true)
-                .putBoolean(RELOAD_HOLD,true)
-                .putString(BOOT_RELOAD_RESULT,
-                    "AUTO 1/3: CLÚSTER OFF naranja; cerrando tareas, luego 10 s")
-                .putString(STATUS,
-                    "ARRANQUE: CLÚSTER OFF naranja; cerrando Waze/Maps").commit();
-            T1ClusterEdgeFade.hide(c);
-            final java.util.concurrent.CountDownLatch closed=
-                new java.util.concurrent.CountDownLatch(1);
-            final java.util.concurrent.atomic.AtomicBoolean offConfirmed=
-                new java.util.concurrent.atomic.AtomicBoolean(false);
-            final java.util.concurrent.atomic.AtomicReference<String> offMessage=
-                new java.util.concurrent.atomic.AtomicReference<>("sin respuesta");
-            T1ClusterAdbResize.closeClusterApps(c,(message,confirmed)->{
-                offMessage.set(message);
-                offConfirmed.set(confirmed);
-                closed.countDown();
-            });
-            boolean closeResponded=false;
-            try{
-                closeResponded=closed.await(16L,java.util.concurrent.TimeUnit.SECONDS);
-            }catch(InterruptedException ex){
-                Thread.currentThread().interrupt();
-            }
-            // The full ten seconds start AFTER closing returns or times out.
-            // SystemClock.sleep guarantees at least this delay even if the
-            // worker is interrupted: never skip straight back to ON.
-            p.edit().putString(BOOT_RELOAD_RESULT,
-                "AUTO 1/3: CLÚSTER OFF naranja; ESPERANDO 10 s"+
-                (closeResponded?" tras cierre ADB":" tras timeout ADB"))
-                .putString(STATUS,
-                "ARRANQUE: CLÚSTER OFF naranja · ESPERANDO 10 s").commit();
-            android.os.SystemClock.sleep(T1ClusterManualReboot.OFF_VISIBLE_MS);
-            // No speed/gear writes and no OEM process manipulation.
-            // Recover ON even if ADB close times out or cannot confirm.
-            p.edit().putBoolean(ENABLED,true).putBoolean(AUTO_BOOT,true)
-                .putBoolean(CLOSE_PENDING,false)
-                .putBoolean(RELOAD_HOLD,false)
-                .putString(BOOT_RELOAD_RESULT,
-                    "AUTO 2/3: CLÚSTER ON tras 10 s OFF; OFF ADB "+
-                    (closeResponded&&offConfirmed.get()?"confirmado":"NO confirmado")+
-                    " · "+offMessage.get())
-                .commit();
             String opened=T1ClusterLayoutPolicy.reopenSavedPanelsStopped(c);
-            if(opened.split("APP SOLICITADA",-1).length==3)
-                T1ClusterEdgeFade.refresh(c);
-            String report=(closeResponded&&offConfirmed.get()?
-                "ARRANQUE OFF/ON COMPLETADO":"ARRANQUE OFF/ON PARCIAL")+
-                ": ADB "+(closeResponded?"respondió":"agotó tiempo")+
-                "; cierre tareas "+(offConfirmed.get()?"confirmado":"NO confirmado")+
-                "; ventanas "+opened;
-            p.edit().putString(BOOT_RELOAD_RESULT,report).commit();
+            String report="ARRANQUE SIMPLE 0.3.69: dos paneles "+
+                "solicitados SIN force-stop, SIN cerrar tareas, SIN "+
+                "CLÚSTER OFF/ON y SIN intentar tapar Spotify; "+
+                "observar visualmente. Resultado: "+opened;
+            prefs(c).edit().putString(BOOT_RELOAD_RESULT,report).commit();
             status(c,report);
             return opened;
         }
