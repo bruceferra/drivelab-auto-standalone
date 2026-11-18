@@ -60,11 +60,11 @@ public final class T1ClusterEdgeFadeContractTest {
             !fade.contains("am force-stop")&&
             !fade.contains("CarPropertyManager"),
             "Fade is decorative touch-through Display 1 overlay, not OEM or steering command");
-        yes(router.contains("T1ClusterEdgeFade.refresh(c)")&&
-            toolbar.contains("T1ClusterEdgeFade.hide(owner)")&&
+        yes(toolbar.contains("T1ClusterEdgeFade.hide(owner)")&&
             toolbar.contains("T1ClusterEdgeFade.refresh(owner)")&&
-            reboot.contains("T1ClusterEdgeFade.refresh(owner)"),
-            "Fade present after both maps launch, removed on CLUSTER OFF");
+            reboot.contains("T1ClusterEdgeFade.refresh(owner)")&&
+            immersive.contains("T1ClusterEdgeFade.refresh(this)"),
+            "Fade stays available through explicit CLUSTER and UI resume; no automatic boot requirement");
         yes(fade.contains(".putInt(WIDTH_PX,safe).commit()")&&
             fade.contains("view.isAttachedToWindow()")&&
             fade.contains("static void navigationWindowChanged(Context c)")&&
