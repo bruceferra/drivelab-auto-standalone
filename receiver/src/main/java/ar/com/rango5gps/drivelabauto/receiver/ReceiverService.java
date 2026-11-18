@@ -400,13 +400,18 @@ public final class ReceiverService extends Service {
                         // buttons, issue DPAD, or force Waze fullscreen.
                         T1OemMicrophoneService.ensureRunning(this);
                         T1WazeWheelService.requestClusterReady(this);
-                        // The pre-existing Spotify OEM layer is separate
-                        // from A2DP. Only if the owner OPTED IN, promote
-                        // the existing Waze/Maps tasks at 0 km/h after
-                        // this boot's clean OFF/ON and route restoration.
-                        long routeAt=T1ClusterWazeRouter.prefs(this)
-                            .getLong(T1ClusterWazeRouter.LAST_REQUEST_MS,0L);
-                        T1ClusterBootFocus.afterClusterBoot(this,boot,routeAt);
+                        // Temporarily suppress extra focus moves too:
+                        // the owner reported persistent Spotify overlay and
+                        // a regression of his formerly working manual
+                        // recovery after the auto-boot sequence. Restore the
+                        // known simple launch and DO NOT reorder tasks again
+                        // while diagnosing which display owns Google Maps.
+                        T1ClusterWazeRouter.prefs(this).edit()
+                            .putString(T1ClusterBootFocus.STATUS,
+                                "SUSPENDIDO en 0.3.69: arranque simple sin "+
+                                "movimiento extra de ventanas. La superposición "+
+                                "Spotify requiere diagnóstico de tareas.")
+                            .commit();
                     },3200L);
                 });
             },"T1-Cluster-Boot-SavedFreeform").start();
