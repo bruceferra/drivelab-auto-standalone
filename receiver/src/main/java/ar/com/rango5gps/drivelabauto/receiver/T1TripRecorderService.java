@@ -192,6 +192,9 @@ public final class T1TripRecorderService extends Service {
                 Locale.ROOT).format(new Date(started));
             started+=1000;
         }while(new File(tripDir(this),"trip_"+name+".csv").exists());
+        // Bind the owner's immutable 18/11 morning carry only to this NEW
+        // real recorder. Never synthesize OEM CSV samples.
+        T1RebuiltMorning.bindNewTrip(this,name);
         p().edit().putString(ID,name).putBoolean(DESIRED,true)
             .putBoolean(PAUSED,false).putBoolean(RUNNING,true)
             .putLong(START_TIME,System.currentTimeMillis()).remove(END_TIME)
