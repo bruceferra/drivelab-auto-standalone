@@ -319,38 +319,74 @@ public final class T1AutoJourneyActivity extends T1ImmersiveActivity {
                 .describe("HOY")).append("\n")
                 .append(db.since(first).describe("ESTE MES"));
             long chargedAt=0;
-            double externalKwh=Double.NaN;
-            String source="SIN CARGA REGISTRADA";
-            for(T1ChargeStore.Record r:chargeDb.latest(300)){
-                if(r.open!=0||r.end<=0||r.end>System.currentTimeMillis())
-                    continue;
-                if(r.end>chargedAt){
-                    chargedAt=r.end;
-                    boolean measured=Double.isFinite(r.meterKwh)&&
-                        r.meterKwh>0;
-                    externalKwh=measured?r.meterKwh:r.kwh;
-                    source=measured?"RED MEDIDOR":"BATERÍA · ESTIMADO";
+            T1ChargeStore.Record lastCharge=null;
+            for(T1ChargeStore.Record record:chargeDb.latest(300)){
+                if(record.open!=0||record.end<=0||
+                   record.end>System.currentTimeMillis())continue;
+                if(record.end>chargedAt){
+                    chargedAt=record.end;lastCharge=record;
                 }
             }
-            if(chargedAt>0){
+            if(lastCharge!=null){
                 T1AutoJourneyStore.Summary since=db.since(chargedAt);
+                T1PlugEnergyLedger.Result allocation=
+                    T1PlugEnergyLedger.estimate(lastCharge.kwh,
+                        lastCharge.meterKwh,since.out,since.in,
+                        lastCharge.price);
                 text.append("\n\n").append(since.describe(
                     "DESDE ÚLTIMA CARGA"));
-                text.append("\nCarga finalizada: ")
+                text.append("\nFecha de fin registrada: ")
                     .append(new SimpleDateFormat("dd/MM HH:mm",
                         Locale.getDefault()).format(new Date(chargedAt)))
-                    .append(" · ").append(T1AutoJourneyStore.fmt(
-                        externalKwh,2)).append(" kWh ").append(source);
-                if(Double.isFinite(externalKwh)&&externalKwh>0)
-                    text.append("\nImputación tentativa de enchufe: ")
-                        .append(T1AutoJourneyStore.fmt(Math.min(
-                            externalKwh,Math.max(0,since.net())),3))
-                        .append(" kWh de saldo; el flujo interno se "+
-                            "descuenta del consumo neto de batería");
+                    .append(lastCharge.source.contains("IMPORTACIÓN MANUAL")?
+                        " · informada manualmente":" · cable desconectado");
+                if(allocation!=null){
+                    text.append("\nELECTRICIDAD DEL ENCHUFE · ESTIMACIÓN CONTABLE")
+                        .append("\nCargados a batería: ")
+                        .append(T1AutoJourneyStore.fmt(
+                            allocation.fromPlugBatteryKwh,3)).append(" kWh")
+                        .append("\nBatería salida: ")
+                        .append(T1AutoJourneyStore.fmt(
+                            allocation.hvDischargeKwh,3)).append(" kWh")
+                        .append(" · entrada interna: ")
+                        .append(T1AutoJourneyStore.fmt(
+                            allocation.hvRechargeKwh,3)).append(" kWh")
+                        .append(" (motor + frenadas)")
+                        .append("\nNeto batería después de enchufar: ")
+                        .append(T1AutoJourneyStore.fmt(
+                            allocation.hvNetKwh,3)).append(" kWh")
+                        .append("\nImputado al enchufe (no medido): ")
+                        .append(T1AutoJourneyStore.fmt(
+                            allocation.assignedPlugKwh,3)).append(" kWh")
+                        .append(" · saldo teórico ")
+                        .append(T1AutoJourneyStore.fmt(
+                            allocation.remainingPlugKwh,3)).append(" kWh");
+                    if(allocation.gridMeterKnown)
+                        text.append("\nEquivalente imputado de red: ")
+                            .append(T1AutoJourneyStore.fmt(
+                                allocation.allocatedGridKwh,3))
+                            .append(" kWh, pérdidas proporcionales incluidas");
+                    if(allocation.priceKnown)
+                        text.append("\nCosto eléctrico imputado: $")
+                            .append(T1AutoJourneyStore.fmt(
+                                allocation.electricCost,2))
+                            .append(allocation.gridMeterKnown?
+                                " (con medidor)":" (sin pérdidas de red medidas)");
+                    if(allocation.unattributedKwh>0)
+                        text.append("\nExcedente sin atribución a esta carga: ")
+                            .append(T1AutoJourneyStore.fmt(
+                                allocation.unattributedKwh,3))
+                            .append(" kWh; no se factura automáticamente");
+                    text.append("\nNo se puede identificar físicamente de "+
+                        "qué origen es cada kWh: incluye reserva anterior, "+
+                        "térmico y regeneración. El 15% protegido no "+
+                        "define por sí solo su origen ni su precio.");
+                }else{
+                    text.append("\nCarga sin kWh válidos para atribuir costos");
+                }
             }else{
-                text.append("\n\nDESDE ÚLTIMA CARGA: ")
-                    .append(source)
-                    .append(". Importala en CARGAS AUTOMÁTICAS.");
+                text.append("\n\nDESDE ÚLTIMA CARGA: no hay una "+
+                    "carga cerrada; importala en CARGAS AUTOMÁTICAS.");
             }
             ArrayList<T1AutoJourneyStore.Journey> journeys=db.latest(100);
             for(T1AutoJourneyStore.Journey j:journeys){
