@@ -2,6 +2,11 @@ package ar.com.rango5gps.drivelabauto.receiver;
 
 import android.content.Context;
 import android.content.Intent;
+import android.app.AlertDialog;
+import android.content.ClipData;
+import android.content.ClipboardManager;
+import android.os.SystemClock;
+import android.widget.Toast;
 import android.content.SharedPreferences;
 import android.os.Bundle;
 import android.os.Handler;
@@ -17,7 +22,9 @@ import android.widget.TextView;
 /** Explicit opt-in for Waze-only steering key / route alternatives experiment. */
 public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
     private final Handler ui=new Handler(Looper.getMainLooper());
-    private TextView report,modeState,bridgeState,eventState;
+    private TextView report,modeState,bridgeState,eventState,modeReport,modeDialogReport;
+    private AlertDialog modeDialog;
+    private boolean modeChecking;
     private Button selectionButton,zoomButton,bridgeOn,bridgeOff,panelA,panelB,genericControls;
     private boolean visible;
     private final Runnable ticker=new Runnable(){
@@ -25,6 +32,7 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
             if(!visible)return;
             SharedPreferences p=prefs();
             refreshModes();
+            refreshModeCapture();
             report.setText(T1WazeWheelService.describe(
                 T1WheelSettingsActivity.this)+
                 "\n\nCONTROL DE LA APP: "+
@@ -235,46 +243,16 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
             "Esta captura sólo registra eventos del Binder OEM ya "+
             "conectado. Nunca envía pulsaciones ni cambia fuentes de "+
             "audio. Probá únicamente en P, detenido.",13);
-        button(body,"CAPTURAR BOTÓN MODE · 30 S (SOLO LECTURA)",()->{
-            report.setText("Comprobando marcha P y velocidad cero antes "+
-                "de activar la captura de botón MODE…");
-            new Thread(()->{
-                boolean safe=false;
-                String error="No se confirmó P / 0 km/h";
-                MirrorAutomationOem oem=null;
-                try{
-                    oem=new MirrorAutomationOem(this);
-                    int gear=oem.gear();
-                    double speed=oem.speedKmh();
-                    safe=gear==1&&Double.isFinite(speed)&&
-                        speed>=0&&speed<=0.5;
-                    if(!safe)error="Lectura OEM marcha="+gear+
-                        " velocidad="+speed+" km/h · solo en P";
-                }catch(Exception ex){
-                    error="OEM no disponible: "+ex.getClass().getSimpleName();
-                }finally{
-                    if(oem!=null)oem.close();
-                }
-                final boolean permitted=safe;
-                final String detail=error;
-                runOnUiThread(()->{
-                    if(!permitted){
-                        report.setText("CAPTURA MODE BLOQUEADA: "+detail);return;
-                    }
-                    T1OemMicrophoneService.ensureRunning(this);
-                    T1ModeKeyProbe.arm(this);
-                    report.setText("Captura MODE iniciada por 30 s. Pulsá "+
-                        "el botón físico MODE una o dos veces. "+
-                        "Después tocá VER RESULTADO MODE. "+
-                        "No se envían comandos al auto.");
-                });
-            },"T1-Mode-ReadOnly-Park-Check").start();
-        });
-        button(body,"VER RESULTADO MODE / COMPARTIR CÓDIGOS",()->{
-            report.setText(T1ModeKeyProbe.status(this)+
-                "\\nSi no llega código OEM, tocá la prueba Android "+
-                "KEYEVENT de abajo.");
-        });
+        modeReport=text(body,
+            "MODE · sin captura. Tocá CAPTURAR (30 S) y "+
+            "después VER RESULTADO. Los eventos quedan guardados.",14);
+        modeReport.setBackgroundColor(T1JetourTheme.PANEL_HI);
+        modeReport.setTextIsSelectable(true);
+        modeReport.setMaxLines(4);
+        button(body,"CAPTURAR BOTÓN MODE · 30 S (SOLO LECTURA)",
+            this::startModeCapture);
+        button(body,"VER RESULTADO MODE / COMPARTIR CÓDIGOS",
+            this::showModeResult);
         button(body,"CAPTURAR MODE COMO TECLA ANDROID (90 S)",()->
             startActivity(new Intent(this,T1SteeringKeysActivity.class)));
                 modeState=text(body,"MODO RUEDITA ACTUAL: SELECCIÓN DE BOTONES",20);
@@ -378,6 +356,145 @@ public final class T1WheelSettingsActivity extends T1ImmersiveActivity {
         setContentView(scroll);
         refreshModes();
     }
+
+    /** MODE has its OWN view/dialog; the 750ms wheel ticker never rewrites it. */
+    private String modeReportText(){
+        android.content.SharedPreferences p=T1ModeKeyProbe.prefs(this);
+        long left=p.getLong(T1ModeKeyProbe.UNTIL,0L)-
+            SystemClock.elapsedRealtime();
+        boolean active=T1ModeKeyProbe.armed(this);
+        String head=active?
+            "● CAPTURANDO MODE · "+Math.max(0,(left+999)/1000)+
+            " s restantes · pulsá MODE físico":
+            "■ CAPTURA TERMINADA · informe guardado";
+        String binder=T1OemMicrophoneService.prefs(this).getString(
+            T1OemMicrophoneService.STATUS,"Binder OEM sin estado");
+        boolean alive=T1OemMicrophoneService.serviceAlive(this);
+        return head+"\nListener OEM: "+(alive?"SERVICIO ACTIVO":
+            "SIN SERVICIO ACTIVO")+
+            "\nEstado: "+binder+"\n"+T1ModeKeyProbe.status(this)+
+            (active?"\nMantené esta pantalla abierta durante la captura.":
+                "\nSi hay 0 eventos, MODE podría estar interceptado "+
+                "por la ROM o no estar llegando al Binder.");
+    }
+    private void refreshModeCapture(){
+        if(modeReport==null)return;
+        android.content.SharedPreferences p=T1ModeKeyProbe.prefs(this);
+        int count=p.getInt(T1ModeKeyProbe.COUNT,0);
+        long left=p.getLong(T1ModeKeyProbe.UNTIL,0L)-
+            SystemClock.elapsedRealtime();
+        modeReport.setText(T1ModeKeyProbe.armed(this)?
+            "● MODE · GRABANDO "+Math.max(0,(left+999)/1000)+
+            " s · "+count+" eventos. Tocá VER RESULTADO.":
+            "MODE · "+count+" evento(s) guardados. "+
+            "Tocá VER RESULTADO para el informe completo.");
+        if(modeDialogReport!=null&&modeDialog!=null&&
+           modeDialog.isShowing()){
+            modeDialogReport.setText(modeReportText());
+            modeDialog.setTitle(T1ModeKeyProbe.armed(this)?
+                "MODE · GRABANDO 30 S":"MODE · RESULTADO CONSERVADO");
+        }
+    }
+    private void showModeResult(){
+        if(modeDialog!=null&&modeDialog.isShowing()){
+            modeDialogReport.setText(modeReportText());return;
+        }
+        TextView content=new TextView(this);
+        content.setText(modeReportText());
+        content.setTextColor(T1JetourTheme.WHITE);
+        content.setTextSize(16);
+        content.setTextIsSelectable(true);
+        content.setPadding(18,18,18,18);
+        android.widget.ScrollView scroll=new android.widget.ScrollView(this);
+        scroll.setFillViewport(true);
+        scroll.addView(content);
+        modeDialogReport=content;
+        modeDialog=new AlertDialog.Builder(this)
+            .setTitle("MODE · RESULTADO GUARDADO")
+            .setView(scroll)
+            .setNegativeButton("CERRAR",(d,w)->{})
+            .setNeutralButton("COPIAR CÓDIGOS",(d,w)->{
+                ClipboardManager board=(ClipboardManager)getSystemService(
+                    CLIPBOARD_SERVICE);
+                if(board!=null)
+                    board.setPrimaryClip(ClipData.newPlainText(
+                        "DriveLab MODE · códigos",modeReportText()));
+                Toast.makeText(this,"Códigos MODE copiados",
+                    Toast.LENGTH_LONG).show();
+            })
+            .create();
+        modeDialog.setOnDismissListener(d->{
+            modeDialog=null;modeDialogReport=null;
+        });
+        modeDialog.show(); // Never auto-closes or flashes away
+    }
+    private void startModeCapture(){
+        if(modeChecking){
+            if(modeReport!=null)
+                modeReport.setText("MODE: comprobando P y 0 km/h…");
+            return;
+        }
+        modeChecking=true;
+        if(modeReport!=null)
+            modeReport.setText("MODE · comprobando P y 0 km/h OEM…");
+        new Thread(()->{
+            boolean safe=false;
+            String error="No se confirmó P / 0 km/h";
+            MirrorAutomationOem oem=null;
+            try{
+                oem=new MirrorAutomationOem(this);
+                int gear=oem.gear();
+                double speed=oem.speedKmh();
+                safe=gear==1&&Double.isFinite(speed)&&
+                    speed>=0&&speed<=0.5;
+                if(!safe)error="OEM marcha="+gear+
+                    ", velocidad="+speed+" km/h · solo en P";
+            }catch(Exception ex){
+                error="OEM no disponible: "+ex.getClass().getSimpleName();
+            }finally{
+                if(oem!=null)oem.close();
+            }
+            final boolean permitted=safe;
+            final String detail=error;
+            runOnUiThread(()->{
+                modeChecking=false;
+                if(isFinishing()||isDestroyed())return;
+                if(!permitted){
+                    if(modeReport!=null)
+                        modeReport.setText("MODE NO INICIADA: "+detail);
+                    new AlertDialog.Builder(this)
+                        .setTitle("MODE · CAPTURA BLOQUEADA")
+                        .setMessage(detail+"\nLa prueba sólo se inicia "+
+                            "estacionado y con marcha P confirmada.")
+                        .setPositiveButton("ENTENDIDO",null).show();
+                    return;
+                }
+                // Reuse existing authorized Binder, never silently enable
+                // microphone, wheel or vehicle controls just for a probe.
+                T1OemMicrophoneService.ensureRunning(this);
+                if(!T1OemMicrophoneService.prefs(this)
+                    .getBoolean(T1OemMicrophoneService.ENABLED,false)){
+                    if(modeReport!=null)
+                        modeReport.setText("MODE NO INICIADA: "+
+                            "listener Binder OEM deshabilitado");
+                    new AlertDialog.Builder(this)
+                        .setTitle("MODE · BINDER NO HABILITADO")
+                        .setMessage("El listener OEM compartido del "+
+                            "micrófono/volante está desactivado. "+
+                            "No voy a simular una captura de cero eventos. "+
+                            "Habilitá el listener en configuración de voz "+
+                            "y reintentá. No se modificó ningún permiso "+
+                            "ni control del vehículo.")
+                        .setPositiveButton("ENTENDIDO",null).show();
+                    return;
+                }
+                T1ModeKeyProbe.arm(this);
+                refreshModeCapture();
+                showModeResult(); // Live stable, copyable capture window
+            });
+        },"T1-Mode-ReadOnly-Park-Check").start();
+    }
+
     @Override public boolean dispatchKeyEvent(KeyEvent event){
         // Additional diagnostic channel when the user has DriveLab open:
         // no activity switching; never steal OEM key functions.
