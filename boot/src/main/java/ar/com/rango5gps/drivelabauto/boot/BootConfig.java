@@ -25,7 +25,7 @@ final class BootConfig {
             context.getPackageName(),RECEIVER)!=
                 android.content.pm.PackageManager.SIGNATURE_MATCH)
             throw new SecurityException(
-                "Instalá Receiver 0.3.92 firmado para usar DriveLab Boot");
+                "Instalá Receiver 0.3.94 o posterior para configurar ambas pantallas");
     }
     /** User explicitly elected to delegate boot UI opening to Boot app.
      * This only disables ReceiverService.launch_app_on_boot, not its FGS
@@ -36,6 +36,10 @@ final class BootConfig {
         Intent request=new Intent(
             "ar.com.rango5gps.drivelabauto.receiver.action.BOOT_MOSAIC_TAKEOVER");
         request.setComponent(new ComponentName(RECEIVER,BRIDGE));
+        // Unified opt-in: disable only the legacy independent cluster launch
+        // when Boot itself is configured to manage the same Display 1.
+        request.putExtra("cluster_enabled",
+            prefs(context).getBoolean("cluster_enabled",false));
         context.sendBroadcast(request);
     }
     static void send(Context context){
@@ -55,6 +59,34 @@ final class BootConfig {
                 throw new IllegalStateException("Elegí la app del panel "+(i+1));
             request.putExtra("pkg"+i,pkg);
         }
+        // Display 1 uses existing Receiver layout/routing, not a new
+        // shell executor. Disabled by default and never controls OEM dials.
+        boolean cluster=p.getBoolean("cluster_enabled",false);
+        request.putExtra("cluster_enabled",cluster);
+        if(cluster){
+            int panels=p.getInt("cluster_count",2);
+            int ratio=p.getInt("cluster_percent",50);
+            if((panels!=1&&panels!=2)||ratio<30||ratio>70)
+                throw new IllegalArgumentException("Configuración Display 1 inválida");
+            request.putExtra("cluster_count",panels);
+            request.putExtra("cluster_percent",ratio);
+            for(int i=0;i<panels;i++){
+                String pkg=p.getString("cluster_pkg"+i,
+                    i==0?"com.waze":"com.google.android.apps.maps");
+                if(!"com.waze".equals(pkg)&&
+                    !"com.google.android.apps.maps".equals(pkg))
+                    throw new SecurityException(
+                        "Display 1 sólo admite Waze y Google Maps");
+                if(i==1&&pkg.equals(p.getString("cluster_pkg0","com.waze")))
+                    throw new IllegalArgumentException(
+                        "Elegí dos navegadores distintos para Display 1");
+                request.putExtra("cluster_pkg"+i,pkg);
+            }
+        }
+        int caption=p.getInt("caption_safe_dp",44);
+        if(caption<0||caption>88)
+            throw new IllegalArgumentException("Margen superior inválido");
+        request.putExtra("caption_safe_dp",caption);
         context.sendBroadcast(request);
         p.edit().putString("last_status",
             "Solicitud enviada al Receiver · esperando ADB y Freeform")
