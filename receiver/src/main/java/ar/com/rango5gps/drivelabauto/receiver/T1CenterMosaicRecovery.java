@@ -37,10 +37,10 @@ final class T1CenterMosaicRecovery {
                 SharedPreferences p=context.getSharedPreferences(
                     SETTINGS,Context.MODE_PRIVATE);
                 int mode=p.getInt("mode",0);
-                if(mode<0||mode>3)
+                if(mode<0||mode>4)
                     throw new IllegalStateException(
                         "Distribución guardada inválida");
-                int count=mode==T1CenterMosaicGeometry.TWO_COLUMNS?2:3;
+                int count=mode==4?1:mode==T1CenterMosaicGeometry.TWO_COLUMNS?2:3;
                 ids=new int[count];
                 names=new String[count];
                 T1AdbTaskParser.Box[] windows=
