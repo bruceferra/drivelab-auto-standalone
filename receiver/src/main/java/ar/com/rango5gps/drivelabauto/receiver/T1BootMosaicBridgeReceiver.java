@@ -25,19 +25,36 @@ public final class T1BootMosaicBridgeReceiver extends BroadcastReceiver {
             context.getPackageName(),BOOT_PACKAGE)!=
             PackageManager.SIGNATURE_MATCH)return;
         if(ACTION_TAKEOVER.equals(intent.getAction())){
-            // Only the former generic APP-UI auto-open is turned off.
-            // ReceiverService boot, Waze cluster recovery, trips, charging,
-            // mirrors and climate opt-ins remain untouched.
+            // When Boot becomes sole owner, turn OFF only redundant app-UI
+            // autostart and (if explicitly selected) independent cluster
+            // auto-launch. Keep all Receiver foreground trip/charge/OEM
+            // services, the HOME role and T1 Launcher themselves intact.
+            boolean ownership=intent.getBooleanExtra("boot_enabled",true);
+            if(!ownership){
+                T1BootMosaicBridgeService.report(context,
+                    "Autoarranque de DriveLab Boot desactivado por usuario. "+
+                    "No se reactivaron autoinicios anteriores automáticamente.");
+                return;
+            }
+            boolean cluster=intent.getBooleanExtra("cluster_enabled",false);
             boolean saved=context.getSharedPreferences(
                 ReceiverService.PREFS,Context.MODE_PRIVATE)
                 .edit().putBoolean("launch_app_on_boot",false)
                 .putString("boot_status",
-                    "DriveLab Boot administra la apertura; "+
-                    "servicios y clúster siguen normales").commit();
+                    "DriveLab Boot administra las pantallas configuradas; "+
+                    "servicios OEM y registros siguen independientes").commit();
+            if(cluster){
+                boolean clusterSaved=T1ClusterWazeRouter.prefs(context).edit()
+                    .putBoolean(T1ClusterWazeRouter.AUTO_BOOT,false).commit();
+                saved=saved&&clusterSaved;
+            }
             T1BootMosaicBridgeService.report(context,saved?
-                "DriveLab original ya no abrirá su interfaz al encender. "+
-                "Sus servicios, T1 Launcher y clúster siguen sin cambios.":
-                "No se guardó la desactivación del inicio de interfaz Receiver");
+                "DriveLab Boot es el único autoinicio de mosaicos. "+
+                (cluster?"El autoinicio separado de mapas del clúster "+
+                    "se desactivó. ":"")+
+                "Receiver mantiene viajes, cargas, controles, T1 Launcher "+
+                "y avisos del tablero sin cambios.":
+                "No se pudo guardar completamente la coordinación de arranque");
             return;
         }
         try{
