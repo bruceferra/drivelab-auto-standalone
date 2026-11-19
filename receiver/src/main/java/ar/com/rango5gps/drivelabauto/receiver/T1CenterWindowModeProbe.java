@@ -102,12 +102,12 @@ final class T1CenterWindowModeProbe {
             String changed=read(app,"am task resizeable "+taskId+" 2");
             result.append("ADB resizeable(2): ").append(safe(changed)).append("\n");
             if(T1CenterWindowModePolicy.shellRejected(changed))
-                return result+"La ROM rechazó explícitamente el "+
-                    "modo redimensionable.";
+                throw new IllegalStateException(
+                    "ROM rechazó explícitamente el modo redimensionable");
             T1AdbTaskParser.Task afterMode=find(app,pkg);
             if(afterMode==null||afterMode.id!=taskId||afterMode.display!=0)
-                return result+"La tarea cambió al intentar ajustar "+
-                    "resizeable; no se ejecutó resize.";
+                throw new IllegalStateException(
+                    "Tarea cambió tras modo resizeable; no se ejecutó resize");
             String resized=read(app,"am task resize "+taskId+
                 " 0 0 "+half+" "+originalBounds.bottom);
             result.append("ADB resize(50%): ").append(safe(resized)).append("\n");
