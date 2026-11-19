@@ -56,8 +56,8 @@ public final class T1BootInstallerSourceContractTest {
             !install.contains("Runtime.getRuntime()")&&
             !install.contains("settings put ")&&
             !install.contains("android.intent.category.HOME")&&
-            build.contains("versionCode 196")&&
-            build.contains("versionName '0.3.95'"),
+            build.contains("versionCode 197")&&
+            build.contains("versionName '0.3.96'"),
             "Installer must not change car HOME, use ADB, or reuse old version");
         System.out.println("PASS Boot native installer SHA, certificate, package, UI, consent and OEM isolation");
     }
