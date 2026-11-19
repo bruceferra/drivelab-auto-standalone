@@ -20,7 +20,26 @@ final class BootConfig {
     /** One explicit, signature-protected broadcast. No generic ADB/shell,
      * no HOME or vehicle processes, and no actions targeting Display 1.
      */
+    static void assertReceiver(Context context){
+        if(context.getPackageManager().checkSignatures(
+            context.getPackageName(),RECEIVER)!=
+                android.content.pm.PackageManager.SIGNATURE_MATCH)
+            throw new SecurityException(
+                "Instalá Receiver 0.3.92 firmado para usar DriveLab Boot");
+    }
+    /** User explicitly elected to delegate boot UI opening to Boot app.
+     * This only disables ReceiverService.launch_app_on_boot, not its FGS
+     * or cluster. T1 Launcher HOME is never changed.
+     */
+    static void takeOver(Context context){
+        assertReceiver(context);
+        Intent request=new Intent(
+            "ar.com.rango5gps.drivelabauto.receiver.action.BOOT_MOSAIC_TAKEOVER");
+        request.setComponent(new ComponentName(RECEIVER,BRIDGE));
+        context.sendBroadcast(request);
+    }
     static void send(Context context){
+        assertReceiver(context);
         SharedPreferences p=prefs(context);
         int mode=p.getInt("mode",3),percent=p.getInt("percent",50);
         if(mode<0||mode>4||percent<1||percent>99)
