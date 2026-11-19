@@ -60,7 +60,7 @@ final class T1ScreenshotShareStore {
         }finally{
             if(cpu!=null&&!cpu.isRecycled())cpu.recycle();
             if(hardware!=null&&!hardware.isRecycled())hardware.recycle();
-            buffer.close();
+            if(buffer!=null)buffer.close();
         }
     }
     static File selected(Context context,String name){
