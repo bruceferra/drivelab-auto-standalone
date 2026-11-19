@@ -100,8 +100,10 @@ public final class T1ChargeRecorderService extends Service {
                     if(T1ChargeMath.plugged(raw)){
                         cableConnected++;
                         cableRemoved=0;
-                        if(!open && cableConnected>=2 &&
-                            T1ChargeMath.charging(raw,data.volts,data.amps)){
+                        // Stable OEM plug state opens a connection session.
+                        // HV current sign is uncalibrated; do not lose the
+                        // event while waiting for a valid energy sample.
+                        if(!open && cableConnected>=2){
                             double price=getSharedPreferences(
                                 T1TripRecorderService.PREFS,MODE_PRIVATE)
                                 .getFloat(T1TripRecorderService.KWH_PRICE,0f);
@@ -112,16 +114,25 @@ public final class T1ChargeRecorderService extends Service {
                         if(open){
                             db.sample(openId,data);
                             T1ChargeStore.Record latest=db.openSession();
+                            boolean flow=T1ChargeMath.charging(
+                                raw,data.volts,data.amps);
                             status("CABLE 1060=1 · SESIÓN "+openId+
+                                " · "+(flow?"flujo HV detectado":
+                                    "cable conectado; flujo HV no validado")+
+                                " · 1063="+T1ChargeStore.fmt(data.volts,1)+" V"+
+                                " · 1064="+T1ChargeStore.fmt(data.amps,2)+" A"+
                                 " · batería +"+(latest==null?"—":
-                                  T1ChargeStore.fmt(latest.kwh,3))+
+                                    T1ChargeStore.fmt(latest.kwh,3))+
                                 " kWh est. · "+
                                 (T1ChargeMath.validSoc(data.soc)?
                                     T1ChargeStore.fmt(data.soc,1)+" %":"SOC no leído"),
                                 raw,data.timeMs);
                         }else{
-                            status("Cable 1060=1 · esperando corriente "+
-                                "de carga 1064 negativa para abrir sesión",
+                            status("Cable 1060=1 · confirmando conexión "+
+                                cableConnected+"/2; tensión 1063="+
+                                T1ChargeStore.fmt(data.volts,1)+" V, "+
+                                "corriente 1064="+
+                                T1ChargeStore.fmt(data.amps,2)+" A",
                                 raw,data.timeMs);
                         }
                     }else if(T1ChargeMath.unplugged(raw)){
