@@ -26,6 +26,21 @@ final class T1CenterSavedFreeformMosaic {
         "ar.com.rango5gps.drivelabauto.receiver";
     private T1CenterSavedFreeformMosaic(){}
 
+    /** Forget a stale managed task after the owner explicitly closes it.
+     * Does not stop any process or modify a task by itself.
+     */
+    static void forget(Context context,String pkg){
+        if(pkg==null||!(SELF.equals(pkg)||
+                T1CenterUserPackagePolicy.allowed(pkg)))return;
+        context.getSharedPreferences(PREFS,Context.MODE_PRIVATE)
+            .edit().remove("task_"+pkg).apply();
+    }
+    static int rememberedTaskId(Context context,String pkg){
+        if(pkg==null||!(SELF.equals(pkg)||
+                T1CenterUserPackagePolicy.allowed(pkg)))return -1;
+        return context.getSharedPreferences(PREFS,Context.MODE_PRIVATE)
+            .getInt("task_"+pkg,-1);
+    }
     static void apply(Context context,String[] packages,
             T1CenterMosaicGeometry.Tile[] tiles,int count,Done done){
         Context app=context.getApplicationContext();
