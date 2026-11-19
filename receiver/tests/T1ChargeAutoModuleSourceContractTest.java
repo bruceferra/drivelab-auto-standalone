@@ -64,6 +64,18 @@ public final class T1ChargeAutoModuleSourceContractTest {
             maths.contains("double ah=-amps*dtMs/3600000d"),
             "Charge recorder must expose read-only voltage candidates; "+
             "integrate measured Ah without inventing battery kWh");
+        yes(oem.contains("HAL_EXT_BATT_VOLT=559940910")&&
+            oem.contains("HAL_EXT_BATT_CURRENT=559940911")&&
+            oem.contains("HAL_EXT_BATT_POWER=557843808")&&
+            oem.contains("HAL_SINGLE_CHARGE_ENERGY=559940899")&&
+            oem.contains("alCarFloat(b,HAL_EXT_BATT_VOLT)")&&
+            oem.contains("alCarFloat(b,HAL_EXT_BATT_CURRENT)")&&
+            oem.contains("matchingCurrent")&&
+            oem.contains("halVoltageValid")&&
+            !oem.contains("transact(15")&&
+            service.contains("data.voltageSource"),
+            "Full VHAL IDs must be read-only and voltage can be used only "+
+            "after independent HAL/vehicle current agreement");
         yes(store.contains("SQLiteOpenHelper")&&
             store.contains("t1_charge_sessions.db")&&
             store.contains("grid_charges_auto.csv")&&
@@ -73,8 +85,9 @@ public final class T1ChargeAutoModuleSourceContractTest {
             store.contains("BATERIA_ESTIMADA_NO_MEDIDOR")&&
             store.contains("getFD().sync()"),
             "Independent SQLite, explicit grid meter vs battery and durable CSV");
-        yes(maths.contains("amps>=-0.5")&&
+        yes(maths.contains("currentCharging(cable,amps)")&&
             maths.contains("dtMs>12000")&&
+            maths.contains("amps< -0.5")&&
             maths.contains("plugged(cable)"),
             "Only connected cable HV-in can accrue a charging session");
         yes(screen.contains("IMPORTAR 1.ª CARGA")&&
