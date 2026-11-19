@@ -257,7 +257,7 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
     private void testOwnFreeformOnCenter(){
         new AlertDialog.Builder(this)
             .setTitle("PRUEBA AISLADA FREEFORM · DISPLAY 0")
-            .setMessage("Se abrirá durante unos 11 segundos una tarea "+
+            .setMessage("Se abrirá durante unos 18 segundos una tarea "+
                 "temporal de DriveLab en modo Freeform (5). "+
                 "Después se intentará darle exactamente media pantalla "+
                 "(960 × 1080 en el T1) y comprobar las dimensiones reales. "+
