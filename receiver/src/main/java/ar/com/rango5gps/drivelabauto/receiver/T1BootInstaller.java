@@ -41,17 +41,17 @@ import java.io.ByteArrayOutputStream;
 public final class T1BootInstaller {
     private T1BootInstaller(){}
     private static final String PKG="ar.com.rango5gps.drivelabauto.boot";
-    private static final String VERSION="0.1.1";
-    private static final long CODE=2L;
+    private static final String VERSION="0.1.2";
+    private static final long CODE=3L;
     private static final String OWNER=
         "https://api.github.com/repos/bruceferra/drivelab-auto-standalone/";
-    private static final String RELEASE_API=OWNER+"releases/tags/v0.3.94";
+    private static final String RELEASE_API=OWNER+"releases/tags/v0.3.95";
     private static final String ASSET_API=OWNER+"releases/assets/";
     private static final String URL=
         "https://github.com/bruceferra/drivelab-auto-standalone/releases/download/"+
-        "v0.3.94/DriveLab-Boot-v0.1.1.apk";
-    private static final String EXPECTED_SHA="expected_boot_011_sha256";
-    private static final String EXPECTED_SIZE="expected_boot_011_size";
+        "v0.3.95/DriveLab-Boot-v0.1.2.apk";
+    private static final String EXPECTED_SHA="expected_boot_012_sha256";
+    private static final String EXPECTED_SIZE="expected_boot_012_size";
     private static final long LIMIT=12L*1024*1024;
     private static final String PREFS="drivelab_boot_install";
     private static final String STATUS="last_status";
@@ -67,7 +67,7 @@ public final class T1BootInstaller {
     }
     private static File apk(Context c){
         return new File(new File(c.getCacheDir(),"boot_install"),
-            "DriveLab-Boot-v0.1.1.apk");
+            "DriveLab-Boot-v0.1.2.apk");
     }
     static boolean installed(Context c){
         try{
@@ -89,7 +89,7 @@ public final class T1BootInstaller {
         if(BUSY.get()){reporter.report("Instalación de DriveLab Boot en curso");return;}
         new AlertDialog.Builder(a)
             .setTitle("Instalar DriveLab Boot · sin WebADB")
-            .setMessage("Descargar/actualizar DriveLab Boot 0.1.1 (aprox. 32 KB) desde la "+
+            .setMessage("Descargar/actualizar DriveLab Boot 0.1.2 (aprox. 32 KB) desde la "+
                 "publicación oficial. Se verificará SHA-256, paquete y "+
                 "certificado idéntico al Receiver. Android pedirá confirmar "+
                 "la instalación.\n\nNo reemplaza T1 Launcher, HOME ni capas OEM. "+
@@ -227,7 +227,7 @@ public final class T1BootInstaller {
             }finally{BUSY.set(false);}
         },"DriveLab-Boot-Install-Download").start();
     }
-    /** The only trusted metadata source for Boot v0.1.1.
+    /** The only trusted metadata source for Boot v0.1.2.
      * GitHub asset SHA-256 is checked in addition to our own signing cert.
      */
     private static final class ReleaseAsset {
@@ -256,7 +256,7 @@ public final class T1BootInstaller {
         }finally{conn.disconnect();}
         JSONObject release=new JSONObject(
             new String(raw,java.nio.charset.StandardCharsets.UTF_8));
-        if(!"v0.3.94".equals(release.getString("tag_name"))||
+        if(!"v0.3.95".equals(release.getString("tag_name"))||
            release.optBoolean("draft",false)||
            release.optBoolean("prerelease",false))
             throw new SecurityException("La publicación Boot no es estable");
@@ -264,13 +264,13 @@ public final class T1BootInstaller {
         JSONObject found=null;
         for(int i=0;i<assets.length();i++){
             JSONObject a=assets.getJSONObject(i);
-            if("DriveLab-Boot-v0.1.1.apk".equals(a.optString("name"))){
+            if("DriveLab-Boot-v0.1.2.apk".equals(a.optString("name"))){
                 if(found!=null)
                     throw new SecurityException("APK Boot duplicada en release");
                 found=a;
             }
         }
-        if(found==null)throw new IOException("Release sin DriveLab Boot 0.1.1");
+        if(found==null)throw new IOException("Release sin DriveLab Boot 0.1.2");
         String digest=found.getString("digest").toLowerCase(Locale.ROOT);
         String address=found.getString("browser_download_url");
         String api=found.getString("url");
@@ -318,7 +318,7 @@ public final class T1BootInstaller {
             conn.setInstanceFollowRedirects(false);
             conn.setConnectTimeout(14000);
             conn.setReadTimeout(70000);
-            conn.setRequestProperty("User-Agent","DriveLab-Boot-Installer/0.3.94");
+            conn.setRequestProperty("User-Agent","DriveLab-Boot-Installer/0.3.95");
             if(host.equals("api.github.com")){
                 conn.setRequestProperty("Accept",current.getPath().contains("/assets/")?
                     "application/octet-stream":"application/vnd.github+json");
