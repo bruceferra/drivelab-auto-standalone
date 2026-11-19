@@ -25,7 +25,7 @@ public final class T1CenterFreeformTestActivity extends Activity {
     @Override protected void onCreate(Bundle saved){
         super.onCreate(saved);
         TextView label=new TextView(this);
-        label.setText("DRIVELAB · PRUEBA TEMPORAL FREEFORM\\n"+
+        label.setText("DRIVELAB · PRUEBA TEMPORAL FREEFORM\n"+
             "Solo Display 0. Se cierra automáticamente.");
         label.setTextSize(20f);
         label.setGravity(Gravity.CENTER);
@@ -40,12 +40,18 @@ public final class T1CenterFreeformTestActivity extends Activity {
             return;
         }
         record("INICIADA · esperando geometría",getTaskId());
+        // Allow enough time for exact-task ADB verification and a single
+        // bounds change while this disposable freeform task stays alive.
+        // Never becomes HOME or remains resident after the diagnostic.
         main.postDelayed(this::capture,850L);
-        main.postDelayed(this::capture,1600L);
+        main.postDelayed(this::capture,1700L);
+        main.postDelayed(this::capture,3200L);
+        main.postDelayed(this::capture,5200L);
+        main.postDelayed(this::capture,7200L);
         main.postDelayed(()->{
             capture();
             finishAndRemoveTask();
-        },3800L);
+        },10500L);
     }
     private void capture(){
         if(isFinishing())return;
