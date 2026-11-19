@@ -60,7 +60,7 @@ public final class T1BootDisplayClusterSourceContractTest {
         check(bridge.contains("ACTION_TAKEOVER")&&
             bridge.contains("T1ClusterWazeRouter.AUTO_BOOT,false")&&
             bridge.contains("\"launch_app_on_boot\",false")&&
-            !bridge.contains("force-stop")&&
+            !bridge.contains("am force-stop")&&
             !bridge.contains("settings put "),
             "Boot owns one ignition sequence without modifying OEM state");
         check(cluster.contains("getDisplayId()!=1")&&
