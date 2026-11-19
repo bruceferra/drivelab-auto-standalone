@@ -147,6 +147,10 @@ final class T1TripDeletion {
             // Data already moved out of readable history; no background
             // worker may start because inactive() rejected desired sessions.
             clearTripState(c);
+            // Also remove the one virtual 18-Nov morning card. This record
+            // is created from preferences; no trip_*.csv file exists for it.
+            if(T1RebuiltMorning.installed(c))
+                T1RebuiltMorning.removeReconstructedTrip(c);
             int remaining=0;
             for(File file:moved)
                 if(!new File(trash,file.getName()).delete())remaining++;
@@ -241,6 +245,8 @@ final class T1TripDeletion {
         if(!BUSY.compareAndSet(false,true))throw new IOException("Ya hay un borrado en curso");
         try{
             inactive(c);
+            if(slot==1&&T1RebuiltMorning.ID.equals(id))
+                return T1RebuiltMorning.removeReconstructedTrip(c);
             File dir=T1TripRecorderService.tripDir(c);
             if(slot==0){
                 if(!id.matches("[0-9]{8}_[0-9]{6}"))
