@@ -62,9 +62,10 @@ public final class T1ClusterEdgeFadeContractTest {
             "Fade is decorative touch-through Display 1 overlay, not OEM or steering command");
         yes(toolbar.contains("T1ClusterEdgeFade.hide(owner)")&&
             toolbar.contains("T1ClusterEdgeFade.refresh(owner)")&&
-            reboot.contains("T1ClusterEdgeFade.refresh(owner)")&&
+            reboot.contains("REPARAR MAPAS DESACTIVADO POR SEGURIDAD")&&
+            !reboot.contains("T1ClusterEdgeFade.refresh(owner)")&&
             immersive.contains("T1ClusterEdgeFade.refresh(this)"),
-            "Fade stays available through explicit CLUSTER and UI resume; no automatic boot requirement");
+            "Fade stays available through explicit CLUSTER and UI resume; destructive REBOOT is disabled");
         yes(fade.contains(".putInt(WIDTH_PX,safe).commit()")&&
             fade.contains("view.isAttachedToWindow()")&&
             fade.contains("static void navigationWindowChanged(Context c)")&&
