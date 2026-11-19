@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Both independent APKs use existing Receiver signing identity.
+         Only an APK with the same certificate can request launch. -->
+    <permission android:name="ar.com.rango5gps.drivelabauto.receiver.permission.BOOT_MOSAIC"
+        android:protectionLevel="signature" />
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Foreground, one-shot speech only after user enters voice screen. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
@@ -51,6 +55,18 @@
             android:grantUriPermissions="true" />
         <receiver android:name=".ReceiverInstallResultReceiver"
             android:exported="false" />
+        <!-- DriveLab Boot is a SEPARATE APK, not Jetour HOME or cluster.
+             An explicitly protected broadcast starts Receiver's existing
+             paired-ADB mosaic. No raw shell interface is exported. -->
+        <receiver android:name=".T1BootMosaicBridgeReceiver"
+            android:exported="true"
+            android:permission="ar.com.rango5gps.drivelabauto.receiver.permission.BOOT_MOSAIC">
+            <intent-filter>
+                <action android:name="ar.com.rango5gps.drivelabauto.receiver.action.APPLY_BOOT_MOSAIC" />
+            </intent-filter>
+        </receiver>
+        <service android:name=".T1BootMosaicBridgeService"
+            android:exported="false" android:foregroundServiceType="dataSync" />
         <!-- Physical microphone key from APK: OEM 1010/100, opt-in only. -->
         <service android:name=".T1OemMicrophoneService"
             android:exported="false" />
