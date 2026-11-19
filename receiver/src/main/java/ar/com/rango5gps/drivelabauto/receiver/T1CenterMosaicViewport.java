@@ -31,7 +31,7 @@ final class T1CenterMosaicViewport {
             T1CenterMosaicGeometry.Tile t=original[i];
             int top=inset+Math.round(t.top*usable/(float)displayHeight);
             int bottom=inset+Math.round(t.bottom*usable/(float)displayHeight);
-            if(bottom-top<80||t.right-t.left<80)
+            if(bottom-top<110||t.right-t.left<110)
                 throw new IllegalArgumentException(
                     "Panel demasiado estrecho para Android: "+(i+1)+
                     ". Ajustá el deslizador.");
