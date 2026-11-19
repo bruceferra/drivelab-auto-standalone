@@ -4,4 +4,4 @@ dependencyResolutionManagement {
     repositories { google(); mavenCentral() }
 }
 rootProject.name = 'DriveLabAutoStandalone'
-include ':common', ':sender', ':receiver'
+include ':common', ':sender', ':receiver', ':boot'
