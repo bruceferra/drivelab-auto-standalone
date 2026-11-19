@@ -14,6 +14,14 @@ public final class T1ChargeMathTest {
         equal(T1ChargeMath.integrate(1,320,-20,60000)[1],0);
         equal(T1ChargeMath.integrate(1,320,20,5000)[1],0);
         equal(T1ChargeMath.integrate(2,320,-20,5000)[1],0);
+        // User-observed HAL 0910 voltage is not mapped to a validated
+        // Android property yet: current still gives measured Ah, NOT kWh.
+        double[] missingVoltage=T1ChargeMath.integrate(
+            1,Double.NaN,-8.4,5000);
+        equal(missingVoltage[0],8.4*5/3600d);
+        equal(missingVoltage[1],0);
+        yes(T1ChargeMath.currentCharging(1,-8.4));
+        yes(!T1ChargeMath.charging(1,Double.NaN,-8.4));
         yes(T1ChargeMath.validSoc(14)&&T1ChargeMath.validSoc(100));
         yes(!T1ChargeMath.validSoc(120));
         System.out.println("PASS charge only with explicit cable 1060 and HV-in current");
