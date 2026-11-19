@@ -119,6 +119,8 @@
         </activity>
         <activity android:name=".T1ClusterWazeSettingsActivity" android:exported="false" />
         <activity android:name=".T1CenterMosaicActivity" android:exported="false" />
+        <!-- User-confirmed Android 11 task inventory and safe app closing. -->
+        <activity android:name=".T1AppTaskManagerActivity" android:exported="false" />
         <!-- Explicit shell-only, disposable app-owned window test; never HOME.
              Own affinity isolates the probe from Receiver and vehicle tasks.
              Exported for adb shell explicit component; no intent filters or data. -->
