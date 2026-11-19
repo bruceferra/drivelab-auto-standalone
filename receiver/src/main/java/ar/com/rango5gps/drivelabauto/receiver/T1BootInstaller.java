@@ -154,6 +154,12 @@ public final class T1BootInstaller {
         try{
             Intent launch=new Intent();
             launch.setClassName(PKG,PKG+".BootActivity");
+            // Without NEW_TASK Android can put Boot configuration INSIDE
+            // Receiver's activity task; Back then looks like Boot opened
+            // Receiver. Boot must have its own task and its own icon.
+            launch.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|
+                Intent.FLAG_ACTIVITY_CLEAR_TOP|
+                Intent.FLAG_ACTIVITY_SINGLE_TOP);
             a.startActivity(launch);
         }catch(Exception e){
             reporter.report("Boot está instalado, pero Android no abrió su pantalla: "+
