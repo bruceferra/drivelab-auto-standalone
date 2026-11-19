@@ -14,10 +14,20 @@
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
     </queries>
-    <application android:label="DriveLab Boot & Receiver" android:icon="@drawable/ic_drivelab_boot"
+    <application android:label="DriveLab Bridge" android:icon="@drawable/ic_drivelab_boot"
         android:allowBackup="false"
         android:usesCleartextTraffic="false"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        <activity android:name=".BridgeLayersActivity"
+            android:exported="false"
+            android:resizeableActivity="true" />
+        <provider android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.updatefiles"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/bridge_update_files" />
+        </provider>
         <activity android:name=".BootActivity" android:exported="true"
             android:resizeableActivity="true"
             android:taskAffinity="ar.com.rango5gps.drivelabauto.boot.config"
