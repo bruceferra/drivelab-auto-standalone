@@ -20,7 +20,8 @@ public final class T1CenterMosaicForegroundHandoffContractTest {
         String handoff=ui.substring(callback,next);
         require(ui.contains("private void showMosaicTiles()")&&
             ui.contains("moveTaskToBack(true)")&&
-            ui.contains("MOSTRAR PANELES · OCULTAR CONFIGURACIÓN"),
+            ui.contains("VOLVER A LOS PANELES · RECUPERAR TAREAS")&&
+            ui.contains("T1CenterMosaicRecovery.restore(this,"),
             "Provide explicit, own-task-only way to reveal the mosaics");
         require(handoff.contains("ESTADO: VENTANAS PREPARADAS.")&&
             handoff.contains("showMosaicTiles();"),
