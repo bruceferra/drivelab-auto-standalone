@@ -36,6 +36,14 @@ public final class T1ChargeAutoModuleSourceContractTest {
             service.contains("getBoolean(T1ChargeStore.ENABLED,false)")&&
             service.contains("db.exportForCosts(this)"),
             "Debounced opt-in low-frequency charge service and persisted DB");
+        yes(service.contains("if(!open && cableConnected>=2)")&&
+            !service.contains("cableConnected>=2 &&")&&
+            service.contains("T1ChargeMath.charging(")&&
+            service.contains("T1ChargeStore.fmt(data.amps,2)")&&
+            service.contains("T1ChargeStore.fmt(data.volts,1)")&&
+            store.contains("ENCHUFADO · flujo HV por confirmar"),
+            "Stable cable opens session independently of signed HV current; "+
+            "actual V/A remain visible without inventing energy");
         yes(store.contains("SQLiteOpenHelper")&&
             store.contains("t1_charge_sessions.db")&&
             store.contains("grid_charges_auto.csv")&&
