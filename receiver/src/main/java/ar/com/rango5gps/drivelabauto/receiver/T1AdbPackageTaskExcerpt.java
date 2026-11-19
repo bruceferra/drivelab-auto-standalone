@@ -13,7 +13,12 @@ final class T1AdbPackageTaskExcerpt {
     private String stack="";
     private int hits=0;
     T1AdbPackageTaskExcerpt(String pkg){
-        if(!T1CenterUserPackagePolicy.allowed(pkg))
+        this(pkg,false);
+    }
+    T1AdbPackageTaskExcerpt(String pkg,boolean ownReceiver){
+        boolean own=ownReceiver&&pkg.equals(
+            "ar.com.rango5gps.drivelabauto.receiver");
+        if(!own&&!T1CenterUserPackagePolicy.allowed(pkg))
             throw new SecurityException("No se puede leer tarea de paquete OEM");
         target=" "+pkg+"/";
     }
