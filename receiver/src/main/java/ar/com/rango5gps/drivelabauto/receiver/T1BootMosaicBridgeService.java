@@ -57,7 +57,8 @@ public final class T1BootMosaicBridgeService extends Service {
     @Override public int onStartCommand(Intent incoming,int flags,int startId){
         if(!BUSY.compareAndSet(false,true)){
             report(this,"MOSAICO OCUPADO: ya hay una operación en curso");
-            stopSelf(startId);
+            // Do not stop the active foreground worker that owns the
+            // earlier (and still running) ADB resize operation.
             return START_NOT_STICKY;
         }
         try{
@@ -112,7 +113,7 @@ public final class T1BootMosaicBridgeService extends Service {
                         "APLICACIÓN SOLICITADA: ":"NO CONFIRMADO: ")+result);
                 }finally{
                     BUSY.set(false);
-                    stopSelf(startId);
+                    stopSelf();
                 }
             });
         }catch(Exception e){
