@@ -62,7 +62,7 @@ public final class T1CenterMosaicRestoreSourceContractTest {
             target.contains("finishAndRemoveTask()"),
             "Only transient shortcut task is removed after restore");
         ck(manifest.contains("android:name=\".T1MosaicShortcutActivity\"")&&
-            manifest.contains("android:taskAffinity=\"\${applicationId}.restoremosaic\"")&&
+            manifest.contains("android:taskAffinity=\"${applicationId}.restoremosaic\"")&&
             manifest.contains("android.permission.REORDER_TASKS"),
             "Independent shortcut task and REORDER_TASKS are required");
         int begin=manifest.indexOf(
