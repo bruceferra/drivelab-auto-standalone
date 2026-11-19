@@ -27,6 +27,7 @@ android {
 dependencies {
   implementation project(':common')
   implementation 'com.google.zxing:core:3.5.4'
+  implementation 'androidx.core:core:1.13.1'
 }
 gradle.taskGraph.whenReady { graph ->
   if (graph.hasTask(':receiver:assembleRelease') && !System.getenv('RECEIVER_KEYSTORE')) {
