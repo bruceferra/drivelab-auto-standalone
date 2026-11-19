@@ -24,18 +24,18 @@ public final class T1BootDisplayClusterSourceContractTest {
         String bootBuild=read("boot/build.gradle");
         String receiverBuild=read("receiver/build.gradle");
 
-        check(bootBuild.contains("versionCode 2")&&
-            bootBuild.contains("versionName '0.1.1'")&&
-            receiverBuild.contains("versionCode 195")&&
-            receiverBuild.contains("versionName '0.3.94'"),
+        check(bootBuild.contains("versionCode 3")&&
+            bootBuild.contains("versionName '0.1.2'")&&
+            receiverBuild.contains("versionCode 196")&&
+            receiverBuild.contains("versionName '0.3.95'"),
             "Both independently installed APKs need new signed versions");
         check(ui.contains("DISPLAY 0 · PANTALLA CENTRAL")&&
-            ui.contains("DISPLAY 1 · CLÚSTER / NAVEGACIÓN")&&
+            ui.contains("DISPLAY 1 · CLÚSTER / MAPAS")&&
             ui.contains("clusterEnabled")&&
             ui.contains("clusterCount")&&
             ui.contains("clusterPercent")&&
             ui.contains("captionSafeDp")&&
-            ui.contains("CONFIRMAR VISUALMENTE DISPLAY 1"),
+            ui.contains("CONFIRMAR DISEÑO DEL CLÚSTER TRAS VERLO"),
             "Boot must configure both displays, caption and physical gate");
         check(config.contains("request.putExtra(\"cluster_enabled\",cluster)")&&
             config.contains("request.putExtra(\"cluster_confirmed\"")&&
