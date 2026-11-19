@@ -20,8 +20,8 @@ public final class T1BootInstallerSourceContractTest {
         String paths=file("receiver/src/main/res/xml/t1_boot_install_files.xml");
         String build=file("receiver/build.gradle");
 
-        check(install.contains("v0.3.95/DriveLab-Boot-v0.1.2.apk")&&
-            install.contains("RELEASE_API=OWNER+\"releases/tags/v0.3.95\"")&&
+        check(install.contains("v0.3.97/DriveLab-Boot-v0.1.3.apk")&&
+            install.contains("RELEASE_API=OWNER+\"releases/tags/v0.3.97\"")&&
             install.contains("fetchReleaseAsset()")&&
             install.contains("digest.matches(\"sha256:[a-f0-9]{64}\")")&&
             install.contains("!expected.equals(hex(md.digest()))")&&
@@ -56,8 +56,8 @@ public final class T1BootInstallerSourceContractTest {
             !install.contains("Runtime.getRuntime()")&&
             !install.contains("settings put ")&&
             !install.contains("android.intent.category.HOME")&&
-            build.contains("versionCode 197")&&
-            build.contains("versionName '0.3.96'"),
+            build.contains("versionCode 198")&&
+            build.contains("versionName '0.3.97'"),
             "Installer must not change car HOME, use ADB, or reuse old version");
         System.out.println("PASS Boot native installer SHA, certificate, package, UI, consent and OEM isolation");
     }
