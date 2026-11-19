@@ -2500,8 +2500,17 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
             boolean success;
             ArrayList<T1MasterTripHistory.Entry> freshMaster=null;
             try{
-                result=slot<0?T1TripDeletion.deleteAll(getApplicationContext()):
-                    T1TripDeletion.deleteSelected(getApplicationContext(),slot,id);
+                // The 18/11 07:43 record is virtual and stored in
+                // SharedPreferences, not client_trips.csv. A normal CSV
+                // deletion says "already deleted" and leaves it displayed.
+                // Use precise source tombstone; never touch AUTO SQLite,
+                // other real journeys, the live recorder or charges.
+                result=slot==1&&T1RebuiltMorning.ID.equals(id)?
+                    T1RebuiltMorning.removeReconstructedTrip(
+                        getApplicationContext()):
+                    slot<0?T1TripDeletion.deleteAll(getApplicationContext()):
+                        T1TripDeletion.deleteSelected(
+                            getApplicationContext(),slot,id);
                 // Do not claim the operation finished until a fresh master
                 // read checks what remains ON DISK. Never reuse old cache.
                 SharedPreferences p=getSharedPreferences(
