@@ -32,6 +32,8 @@
         <package android:name="com.google.android.apps.maps" />
         <package android:name="com.google.android.apps.bard" />
         <package android:name="com.openai.chatgpt" />
+        <!-- Android 11 package visibility for the optional standalone launcher. -->
+        <package android:name="ar.com.rango5gps.drivelabauto.boot" />
         <!-- Required by Android 11+ target package visibility to initialize
              system TextToSpeech: without this the Jetour can be text-only. -->
         <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>
@@ -56,6 +58,16 @@
             android:grantUriPermissions="true" />
         <receiver android:name=".ReceiverInstallResultReceiver"
             android:exported="false" />
+        <!-- Explicit owner-tapped Boot installation; private APK via scoped FileProvider. -->
+        <receiver android:name=".T1BootInstallResultReceiver"
+            android:exported="false" />
+        <provider android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.bootfiles"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/t1_boot_install_files" />
+        </provider>
         <!-- PNGs stay private; Android chooser gets read-only access
              only to the file explicitly selected by the user. -->
         <provider android:name="androidx.core.content.FileProvider"
