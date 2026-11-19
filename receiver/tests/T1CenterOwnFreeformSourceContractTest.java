@@ -40,11 +40,20 @@ public final class T1CenterOwnFreeformSourceContractTest {
         check(ui.contains("PROBAR FREEFORM AISLADO · DISPLAY 0")&&
             ui.contains("T1CenterOwnFreeformProbe.run(this,result->"),
             "Expose a separate, opt-in freeform test");
+        check(own.contains("T1AdbTaskParser.exactCenter(")&&
+            own.contains("isOwnDisposableTask(")&&
+            own.contains("T1CenterWindowModePolicy.isFreeform(")&&
+            own.contains("check.bounds.near(bounds,0)")&&
+            own.contains("am task resize ")&&
+            own.contains("after.bounds.near(target,20)"),
+            "Resize is limited to an exact, still-live DriveLab test task "+
+            "and must verify the resulting 50% geometry");
         check(!own.contains("am task resizeable ")&&
-            !own.contains("am task resize ")&&
             !own.contains("settings put")&&
-            !own.contains("am stack remove "),
-            "The isolated test must never mutate foreign task/window settings");
+            !own.contains("am stack remove ")&&
+            !own.contains("com.autolink."),
+            "Probe may resize only its disposable task, never OEM or "+
+            "other packages");
         System.out.println("PASS isolated self-closing Display 0 Freeform experiment");
     }
 }
