@@ -9,11 +9,14 @@
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
     </queries>
-    <application android:label="DriveLab Boot" android:allowBackup="false"
+    <application android:label="DriveLab BOOT · Config" android:icon="@drawable/ic_drivelab_boot"
+        android:allowBackup="false"
         android:usesCleartextTraffic="false"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity android:name=".BootActivity" android:exported="true"
-            android:resizeableActivity="true">
+            android:resizeableActivity="true"
+            android:taskAffinity="ar.com.rango5gps.drivelabauto.boot.config"
+            android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />
