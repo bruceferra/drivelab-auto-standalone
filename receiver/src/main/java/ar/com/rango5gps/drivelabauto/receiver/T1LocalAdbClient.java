@@ -81,6 +81,7 @@ final class T1LocalAdbClient {
         // No global BACK, tap, display 0, arbitrary shell, or OEM writes.
         if(!command.equals("am supports-split-screen-multi-window")&&
            !command.equals("am supports-multiwindow")&&
+           !command.equals("am start --display 0 --windowingMode 5 -n ar.com.rango5gps.drivelabauto.receiver/.T1CenterFreeformTestActivity")&&
            !command.matches("am start --display 1 --windowingMode 3 -n com\\.waze/[A-Za-z0-9_.$/]{1,220}")&&
            !command.matches("am start --display 1 --windowingMode 4 -n com\\.google\\.android\\.apps\\.maps/[A-Za-z0-9_.$/]{1,220}")&&
            !command.equals("pm clear --cache-only com.waze")&&
