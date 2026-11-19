@@ -193,9 +193,9 @@ final class T1CenterSavedFreeformMosaic {
             "MOSAICO CONFIGURABLE · DISPLAY 0\n"+
             "Freeform 5 + tareas creadas por DriveLab.\n");
         try{
-            if(count<2||count>3||tiles==null||
+            if(count<1||count>3||tiles==null||
                 packages.length<count||tiles.length<count)
-                throw new IllegalArgumentException("Elegí 2 o 3 paneles");
+                throw new IllegalArgumentException("Elegí de 1 a 3 paneles");
             HashSet<String> distinct=new HashSet<>();
             ComponentName[] starters=new ComponentName[count];
             for(int i=0;i<count;i++){
