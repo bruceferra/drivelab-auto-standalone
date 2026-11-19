@@ -30,7 +30,8 @@ public final class T1BootStandaloneUiIsolationSourceTest {
             "Boot must expose distinct, versioned two-tab configuration");
         ck(ui.contains("▶ PROBAR SOLO DISPLAY 1 · SIN SALIR DE BOOT")&&
             ui.contains("BootConfig.sendClusterOnly(this)")&&
-            ui.contains("▶ ABRIR / PROBAR MOSAICO CENTRAL")&&
+            ui.contains("MOSTRAR MOSAICO · RECUPERAR VENTANAS")&&
+            ui.contains("PREPARAR / CAMBIAR DISTRIBUCIÓN")&&
             ui.contains("BootConfig.sendCenterOnly(this)")&&
             !ui.contains("T1MosaicShortcutActivity")&&
             !ui.contains("startActivity(target)"),
@@ -51,10 +52,11 @@ public final class T1BootStandaloneUiIsolationSourceTest {
             read("boot/src/main/res/drawable/ic_drivelab_boot.xml")
                 .contains("<vector"),
             "Launching Boot from Receiver must use a separate task and icon");
-        ck(!ui.contains("moveTaskToBack(true);\n        }catch")&&
-            ui.contains("SEGUIR CONFIGURANDO")&&
-            ui.contains("MOSTRAR MOSAICO"),
-            "Only explicit owner confirmation can hide Boot configuration");
+        ck(ui.contains("MOSAICO_RECUPERADO_SOLICITADO:")&&
+            ui.contains("revealPending=false")&&
+            !ui.contains("Se configuró solamente la pantalla central")&&
+            ui.contains("BootConfig.revealCenter(this)"),
+            "Only verified Receiver acknowledgement permits backgrounding Boot");
         System.out.println("PASS Boot independent task, tabs, Waze/Maps, isolated actions and icon");
     }
 }
