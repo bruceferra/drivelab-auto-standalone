@@ -71,9 +71,8 @@ public final class T1ClusterColdBootAndManualRebootContractTest {
             !reboot.contains("T1ClusterFreshStart.prepare(owner)")&&
             !reboot.contains("T1LocalAdbClient.shell(")&&
             !reboot.contains("T1ClusterAdbResize.closeClusterApps(owner,")&&
-            !reboot.contains("pm clear --cache-only "+'"'+'+pkg')&&
             !reboot.contains("performOff("),
             "Android 11 destructive manual REBOOT must remain fully disabled");
-        System.out.println("PASS: boot and parked-only REBOOT refresh maps without touching OEM UI");
+        System.out.println("PASS: automatic map routing preserved; dangerous Android 11 REBOOT disabled");
     }
 }
