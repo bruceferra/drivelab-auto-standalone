@@ -24,10 +24,10 @@ public final class T1BootDisplayClusterSourceContractTest {
         String bootBuild=read("boot/build.gradle");
         String receiverBuild=read("receiver/build.gradle");
 
-        check(bootBuild.contains("versionCode 3")&&
-            bootBuild.contains("versionName '0.1.2'")&&
-            receiverBuild.contains("versionCode 197")&&
-            receiverBuild.contains("versionName '0.3.96'"),
+        check(bootBuild.contains("versionCode 4")&&
+            bootBuild.contains("versionName '0.1.3'")&&
+            receiverBuild.contains("versionCode 198")&&
+            receiverBuild.contains("versionName '0.3.97'"),
             "Both independently installed APKs need new signed versions");
         check(ui.contains("DISPLAY 0 · PANTALLA CENTRAL")&&
             ui.contains("DISPLAY 1 · CLÚSTER / MAPAS")&&
@@ -41,7 +41,7 @@ public final class T1BootDisplayClusterSourceContractTest {
             config.contains("request.putExtra(\"cluster_confirmed\"")&&
             config.contains("request.putExtra(\"from_boot\",fromBoot)")&&
             config.contains("request.putExtra(\"caption_safe_dp\"")&&
-            config.contains("receiverCode<196L")&&
+            config.contains("receiverCode<198L")&&
             auto.contains("BootConfig.send(this,true)"),
             "Only compatible signed Receiver can run guarded ignition request");
         check(service.contains("T1CenterSavedFreeformMosaic.apply(")&&
