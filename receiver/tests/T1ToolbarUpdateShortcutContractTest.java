@@ -20,7 +20,7 @@ public final class T1ToolbarUpdateShortcutContractTest {
         int clock=toolbar.indexOf("header.addView(clockBox,");
         int repair=toolbar.indexOf("Button reload=button(header,");
         int update=toolbar.indexOf("Button update=button(header,");
-        int arrange=toolbar.indexOf("enableRowReorder(header,\"first\")");
+        int arrange=toolbar.indexOf("enableRowReorder(leading,\"first\")");
         require(clock>=0&&repair>clock&&update>repair&&arrange>update,
             "Top right order must be clock, small Maps repair, last update icon");
         require(toolbar.contains("button(header,\"MAPAS\"")&&
