@@ -56,6 +56,29 @@
             android:grantUriPermissions="true" />
         <receiver android:name=".ReceiverInstallResultReceiver"
             android:exported="false" />
+        <!-- PNGs stay private; Android chooser gets read-only access
+             only to the file explicitly selected by the user. -->
+        <provider android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.screenshotfiles"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/t1_screenshot_files" />
+        </provider>
+        <activity android:name=".T1ScreenshotReviewActivity"
+            android:exported="false" />
+        <!-- Disabled until explicitly enabled via Android Accessibility.
+             Can affect touch exploration; NEVER enabled by app or boot. -->
+        <service android:name=".T1ScreenshotGestureService"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService"/>
+            </intent-filter>
+            <meta-data android:name="android.accessibilityservice"
+                android:resource="@xml/t1_screenshot_accessibility" />
+        </service>
+
         <!-- DriveLab Boot is a SEPARATE APK, not Jetour HOME or cluster.
              An explicitly protected broadcast starts Receiver's existing
              paired-ADB mosaic. No raw shell interface is exported. -->
