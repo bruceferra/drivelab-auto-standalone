@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="t1_screenshot_accessibility_description">Captura manual de pantalla en Display 0: deslizá tres dedos hacia abajo para guardar un PNG privado. No lee texto de otras apps ni envía datos por Internet. Solo compartirás una captura si luego tocás Compartir. Este gesto necesita exploración táctil de Android, que puede modificar la interacción con la pantalla. Activá el servicio únicamente con el vehículo detenido y desactivalo si afecta el táctil.</string>
+</resources>
