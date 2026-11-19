@@ -1,5 +1,5 @@
 name: Signed Receiver 0.3.79 - user-identified HAL battery voltage
-# Retry after updating drag/drop contracts for shared visual cues
+# Read-only HAL 559940910/559940911, source test tracks full-ID battery probe
 on:
   push:
     branches: [main]
