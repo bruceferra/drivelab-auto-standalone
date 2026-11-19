@@ -21,12 +21,12 @@ public final class BootAutoService extends Service {
         startForeground(7634,new Notification.Builder(this,"drivelab_boot_auto")
             .setSmallIcon(android.R.drawable.ic_menu_view)
             .setContentTitle("DriveLab Boot · mosaico")
-            .setContentText("Preparando la pantalla central")
+            .setContentText("Preparando las pantallas configuradas")
             .setOngoing(true).build());
         new Thread(()->{
             try{
                 Thread.sleep(15000L);
-                if(BootConfig.enabled(this))BootConfig.send(this);
+                if(BootConfig.enabled(this))BootConfig.send(this,true);
             }catch(Exception ex){
                 BootConfig.prefs(this).edit().putString("last_status",
                     "No se pudo iniciar mosaico al encender: "+
