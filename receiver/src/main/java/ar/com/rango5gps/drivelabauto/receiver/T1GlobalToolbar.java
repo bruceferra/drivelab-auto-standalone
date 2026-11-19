@@ -124,33 +124,48 @@ final class T1GlobalToolbar {
         header.setOrientation(LinearLayout.HORIZONTAL);
         header.setGravity(Gravity.CENTER_VERTICAL);
         container.addView(header,new LinearLayout.LayoutParams(-1,dp(54)));
+        // The OEM actions need more than 1300dp at full width. In Freeform
+        // 70/60/50/33% they scroll horizontally while clock, mosaic
+        // restore, maps repair and update remain pinned on the right.
+        HorizontalScrollView firstStrip=new HorizontalScrollView(owner);
+        firstStrip.setHorizontalScrollBarEnabled(false);
+        firstStrip.setFillViewport(false);
+        firstStrip.setHorizontalFadingEdgeEnabled(true);
+        LinearLayout leading=new LinearLayout(owner);
+        leading.setOrientation(LinearLayout.HORIZONTAL);
+        leading.setGravity(Gravity.CENTER_VERTICAL);
+        leading.setPadding(0,0,dp(8),0);
+        firstStrip.addView(leading,new HorizontalScrollView.LayoutParams(
+            ViewGroup.LayoutParams.WRAP_CONTENT,
+            ViewGroup.LayoutParams.MATCH_PARENT));
+        header.addView(firstStrip,new LinearLayout.LayoutParams(0,-1,1f));
         TextView title=new TextView(owner);
         title.setText("DRIVELAB / T1");
         title.setTextSize(15);
         title.setTypeface(null,Typeface.BOLD);
         title.setTextColor(T1JetourTheme.WHITE);
         title.setPadding(dp(9),0,dp(12),0);
-        header.addView(title);
-        modes[0]=button(header,"EV",T1JetourTheme.PANEL_HI,85,()->changeMode(1));
-        modes[1]=button(header,"HEV",T1JetourTheme.PANEL_HI,85,()->changeMode(2));
-        modes[2]=button(header,"EV MAX",T1JetourTheme.PANEL_HI,100,()->changeMode(3));
+        leading.addView(title);
+        modes[0]=button(leading,"EV",T1JetourTheme.PANEL_HI,85,()->changeMode(1));
+        modes[1]=button(leading,"HEV",T1JetourTheme.PANEL_HI,85,()->changeMode(2));
+        modes[2]=button(leading,"EV MAX",T1JetourTheme.PANEL_HI,100,()->changeMode(3));
         // OEM 2053: ONE read-only button changes its label and palette color.
         // 0 ECO green, 1 NORMAL blue, 2 SPORT red, 3 SNOW light/white.
         // Same width as HEV, immediately after EV MAX; never sends commands.
-        drivingModeIndicator=readOnlyIndicator(header,"SIN DATO",85);
+        drivingModeIndicator=readOnlyIndicator(leading,"SIN DATO",85);
         // Read-only dynamic road-mode chip: CITY/ROAD/MOTORWAY/UNKNOWN.
         // The OEM powertrain buttons above remain active manual controls;
         // this one never sends vehicle commands and cannot be tapped.
-        roadModeButton=button(header,"MODO DESCONOCIDO",
+        roadModeButton=button(leading,"MODO DESCONOCIDO",
             T1JetourTheme.PANEL_HI,183,()->{});
         roadModeButton.setOnClickListener(null);
         roadModeButton.setClickable(false);
         roadModeButton.setLongClickable(false);
         roadModeButton.setFocusable(false);
         // Same permanent top row as EV/HEV/EV MAX and the applied road profile.
-        regenIndicator=readOnlyIndicator(header,"REGEN · SIN LECTURA",138);
-        batteryIndicator=readOnlyIndicator(header,"BATERÍA · SIN LECTURA",158);
-        socTargetIndicator=readOnlyIndicator(header,"SOC OBJ. · S/L",130);
+        regenIndicator=readOnlyIndicator(leading,"REGEN · SIN LECTURA",138);
+        batteryIndicator=readOnlyIndicator(leading,"BATERÍA · SIN LECTURA",158);
+        socTargetIndicator=readOnlyIndicator(leading,"SOC OBJ. · S/L",130);
         info=new TextView(owner);
         info.setText("Modo OEM: verificando…");
         info.setTextColor(T1JetourTheme.CYAN);
@@ -158,7 +173,7 @@ final class T1GlobalToolbar {
         info.setSingleLine(true);
         info.setEllipsize(TextUtils.TruncateAt.END);
         info.setPadding(dp(12),0,dp(5),0);
-        header.addView(info,new LinearLayout.LayoutParams(0,-2,1));
+        leading.addView(info,new LinearLayout.LayoutParams(dp(190),-2));
         // Read-only clock stays at upper right, outside scrolling controls.
         LinearLayout clockBox=new LinearLayout(owner);
         clockBox.setOrientation(LinearLayout.VERTICAL);
@@ -201,10 +216,33 @@ final class T1GlobalToolbar {
         update.setTextSize(27f);
         update.setContentDescription("Buscar e instalar actualización DriveLab Auto Receiver");
         update.setTooltipText("Actualizar DriveLab Auto");
+        // Scale only the right-hand chrome at narrow window widths.
+        // Keep critical OEM buttons accessible by swiping firstStrip.
+        final boolean[] compactHeader={false};
+        header.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob)->{
+            boolean compact=(r-l)<dp(760);
+            if(compact==compactHeader[0])return;
+            compactHeader[0]=compact;
+            ((LinearLayout.LayoutParams)clockBox.getLayoutParams())
+                .width=dp(compact?88:148);
+            ((LinearLayout.LayoutParams)recoverMosaic.getLayoutParams())
+                .width=dp(compact?44:54);
+            ((LinearLayout.LayoutParams)reload.getLayoutParams())
+                .width=dp(compact?61:90);
+            ((LinearLayout.LayoutParams)update.getLayoutParams())
+                .width=dp(compact?42:46);
+            clockDate.setTextSize(compact?10.5f:14f);
+            clockTime.setTextSize(compact?15f:19f);
+            recoverMosaic.setTextSize(compact?20f:25f);
+            reload.setText(compact?"MAP":"MAPAS");
+            reload.setTextSize(compact?10f:12f);
+            update.setTextSize(compact?21f:27f);
+            header.requestLayout();
+        });
         refreshClock();
         // Rearrange only actual buttons; keep the title, status and clock anchored.
-        firstButtons=header;
-        enableRowReorder(header,"first");
+        firstButtons=leading;
+        enableRowReorder(leading,"first");
 
         HorizontalScrollView strip=new HorizontalScrollView(owner);
         strip.setFillViewport(false);
