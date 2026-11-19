@@ -94,17 +94,44 @@ final class T1LocalAdbClient {
      */
     static String shellApprovedAppTasks(Context context,String pkg)
             throws Exception{
-        if(!pkg.equals("ar.com.promanager.nativeapp")&&
-            !pkg.equals("ar.com.rango5gps.uberbeta"))
-            throw new SecurityException("App no habilitada para diagnóstico");
-        return shellInternal(context,"am stack list",-1,pkg);
+        verifyCenterUserApp(context,pkg);
+        return shellInternal(context,"am stack list",-1,pkg,false);
+    }
+    static String shellStartCenterUserFreeform(Context context,
+            android.content.ComponentName component)throws Exception{
+        if(component==null)
+            throw new SecurityException("Componente nulo");
+        String pkg=component.getPackageName();
+        verifyCenterUserApp(context,pkg);
+        android.content.Intent launcher=context.getPackageManager()
+            .getLaunchIntentForPackage(pkg);
+        if(launcher==null||launcher.getComponent()==null||
+            !component.equals(launcher.getComponent()))
+            throw new SecurityException("Sólo launcher real de app instalada");
+        String flattened=component.flattenToString();
+        if(!flattened.matches("[A-Za-z0-9_.$]+/[A-Za-z0-9_.$/]{1,220}"))
+            throw new SecurityException("Componente de lanzamiento inválido");
+        return shellInternal(context,
+            "am start --display 0 --windowingMode 5 -f 0x18000000 -n "+
+            flattened,-1,null,true);
+    }
+    private static void verifyCenterUserApp(Context context,String pkg)
+            throws Exception{
+        if(!T1CenterUserPackagePolicy.allowed(pkg))
+            throw new SecurityException("Paquete OEM/DriveLab no permitido");
+        android.content.pm.ApplicationInfo userApp=
+            context.getPackageManager().getApplicationInfo(pkg,0);
+        if((userApp.flags&(android.content.pm.ApplicationInfo.FLAG_SYSTEM|
+                android.content.pm.ApplicationInfo.FLAG_UPDATED_SYSTEM_APP))!=0)
+            throw new SecurityException("No se redimensionan apps del sistema");
     }
     private static String shellInternal(Context context,String command,int taskId)
             throws Exception{
-        return shellInternal(context,command,taskId,null);
+        return shellInternal(context,command,taskId,null,false);
     }
     private static String shellInternal(Context context,String command,
-            int taskId,String approvedPackage)throws Exception{
+            int taskId,String approvedPackage,boolean userAppLaunch)
+            throws Exception{
         // STRICT command whitelist, no shell metacharacters or package names.
         // Only known Waze/Maps force-stop + process checks, task/geometry
         // management, and exact accessibility-list recovery are authorized.
@@ -117,6 +144,9 @@ final class T1LocalAdbClient {
            !command.equals("am start --display 0 --windowingMode 5 -n ar.com.rango5gps.drivelabauto.receiver/.T1CenterDualRightActivity")&&
            !command.matches("am start --display 0 --windowingMode 5 -f 0x18000000 -n ar\\.com\\.promanager\\.nativeapp/[A-Za-z0-9_.$/]{1,220}")&&
            !command.matches("am start --display 0 --windowingMode 5 -f 0x18000000 -n ar\\.com\\.rango5gps\\.uberbeta/[A-Za-z0-9_.$/]{1,220}")&&
+           !(userAppLaunch&&command.matches(
+               "am start --display 0 --windowingMode 5 -f 0x18000000 -n "+
+               "[A-Za-z0-9_.$]+/[A-Za-z0-9_.$/]{1,220}"))&&
            !command.matches("am start --display 1 --windowingMode 3 -n com\\.waze/[A-Za-z0-9_.$/]{1,220}")&&
            !command.matches("am start --display 1 --windowingMode 4 -n com\\.google\\.android\\.apps\\.maps/[A-Za-z0-9_.$/]{1,220}")&&
            !command.equals("pm clear --cache-only com.waze")&&
