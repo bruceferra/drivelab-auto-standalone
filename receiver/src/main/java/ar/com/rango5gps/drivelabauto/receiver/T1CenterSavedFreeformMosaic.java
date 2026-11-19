@@ -22,6 +22,8 @@ final class T1CenterSavedFreeformMosaic {
     interface Done {void completed(String result);}
     private static final Handler MAIN=new Handler(Looper.getMainLooper());
     private static final String PREFS="drivelab_center_managed_freeform_v1";
+    private static final String SELF=
+        "ar.com.rango5gps.drivelabauto.receiver";
     private T1CenterSavedFreeformMosaic(){}
 
     static void apply(Context context,String[] packages,
@@ -40,9 +42,13 @@ final class T1CenterSavedFreeformMosaic {
     }
     private static ComponentName selectedLauncher(Context c,String pkg)
             throws Exception{
+        // A second, independent task shows the original DriveLab Cockpit.
+        // All external apps remain subject to PackageManager/OEM checking.
+        if(SELF.equals(pkg))
+            return new ComponentName(c,ReceiverActivity.class);
         if(!T1CenterUserPackagePolicy.allowed(pkg))
             throw new SecurityException(
-                "Solo aplicaciones externas; no DriveLab ni sistemas OEM: "+pkg);
+                "No se permiten aplicaciones del sistema/OEM: "+pkg);
         PackageManager pm=c.getPackageManager();
         ApplicationInfo info=pm.getApplicationInfo(pkg,0);
         if((info.flags&(ApplicationInfo.FLAG_SYSTEM|
@@ -57,7 +63,8 @@ final class T1CenterSavedFreeformMosaic {
     private static List<T1AdbTaskParser.Task> tasks(Context c,String pkg)
             throws Exception{
         return T1AdbTaskParser.tasksOnCenter(
-            T1LocalAdbClient.shellApprovedAppTasks(c,pkg),pkg);
+            SELF.equals(pkg)?T1LocalAdbClient.shellOwnReceiverTasks(c):
+                T1LocalAdbClient.shellApprovedAppTasks(c,pkg),pkg);
     }
     private static Set<Integer> ids(List<T1AdbTaskParser.Task> tasks){
         Set<Integer> out=new HashSet<>();
@@ -79,6 +86,10 @@ final class T1CenterSavedFreeformMosaic {
         if(!T1CenterWindowModePolicy.isFreeform(mode,taskId,pkg))
             throw new IllegalStateException(
                 "La tarea "+taskId+" no está en Freeform");
+        if(SELF.equals(pkg)&&
+            !raw.contains("T1PremiumCockpitActivity"))
+            throw new IllegalStateException(
+                "La tarea "+taskId+" no corresponde a un segundo Cockpit");
         return found;
     }
     private static int managedId(SharedPreferences prefs,String pkg){
@@ -99,11 +110,13 @@ final class T1CenterSavedFreeformMosaic {
             SharedPreferences prefs,String pkg,ComponentName launcher)
             throws Exception{
         Set<Integer> previous=ids(tasks(c,pkg));
-        String output=T1LocalAdbClient.shellStartCenterUserFreeform(c,launcher);
+        String output=SELF.equals(pkg)?
+            T1LocalAdbClient.shellStartOwnCockpitFreeform(c):
+            T1LocalAdbClient.shellStartCenterUserFreeform(c,launcher);
         if(T1CenterWindowModePolicy.shellRejected(output))
             throw new IllegalStateException(
                 "ADB rechazó Freeform: "+compact(output));
-        Thread.sleep(850L);
+        Thread.sleep(SELF.equals(pkg)?1450L:850L);
         T1AdbTaskParser.Task fresh=null;
         for(T1AdbTaskParser.Task t:tasks(c,pkg)){
             if(previous.contains(t.id))continue;
