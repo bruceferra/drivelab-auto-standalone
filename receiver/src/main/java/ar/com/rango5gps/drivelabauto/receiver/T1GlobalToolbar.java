@@ -207,11 +207,11 @@ final class T1GlobalToolbar {
         recoverMosaic.setTooltipText("Volver al mosaico guardado");
         // Keep the remaining actions fixed to the RIGHT of the clock. The repair
         // button is narrower so the final small updater fits on Display 0.
-        Button reload=button(header,"MAPAS",T1JetourTheme.PANEL_HI,90,
+        Button reload=button(header,"MAPAS · OFF",T1JetourTheme.PANEL_HI,110,
             this::confirmClusterReload);
         reload.setTextSize(12f);
-        reload.setContentDescription("Reparar mapas del clúster: detener Waze y Maps, "+
-            "CLÚSTER OFF 10 segundos, ON y recuperar rueda");
+        reload.setContentDescription("Reparación automática de mapas desactivada por seguridad: "+
+            "no borra datos ni caché");
         // Last control in the permanent toolbar on every Receiver screen.
         // Exactly the same verified OTA updater as Inicio > Conexión Xiaomi.
         // Never redirect to Xiaomi settings, a browser or an unverified APK.
@@ -665,15 +665,20 @@ final class T1GlobalToolbar {
     }
     private void confirmClusterReload(){
         if(!foreground)return;
-        // Tap starts the already guarded procedure; T1ClusterManualReboot
-        // verifies P/zero before force-stopping navigation packages.
-        note("REPARAR MAPAS · iniciando apagado/reinicio de clúster");
-        T1ClusterManualReboot.run(owner,message->{
-            if(foreground){
-                refreshCluster();
-                note(message);
-            }
-        });
+        // EMERGENCY BLOCK (Android 11 Jetour):
+        // The former "pm clear --cache-only" is unsupported in Android 11.
+        // It deletes ALL Waze/Maps app data, accounts and downloaded maps.
+        // Do not run any ADB cleanup, force-stop or OFF/ON sequence here.
+        new android.app.AlertDialog.Builder(owner)
+            .setTitle("MAPAS · REPARACIÓN DESACTIVADA")
+            .setMessage("Por seguridad, se desactivó la reparación "+
+                "automática de mapas. En Android 11 la limpieza anterior "+
+                "podía borrar los datos y las sesiones de Waze/Google Maps. "+
+                "Esta opción YA NO toca sus datos, caché ni procesos. "+
+                "Para navegar, abrí Waze o Google Maps normalmente.")
+            .setPositiveButton("ENTENDIDO",null).show();
+        note("MAPAS: reparación automática desactivada; "+
+            "no se modificó ninguna aplicación.");
     }
 
     private void toggleCluster(){
