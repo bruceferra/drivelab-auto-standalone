@@ -21,11 +21,11 @@ public final class T1CenterSavedFreeformMosaicSourceContractTest {
             ui.contains("ApplicationInfo.FLAG_SYSTEM")&&
             ui.contains("ApplicationInfo.FLAG_UPDATED_SYSTEM_APP"),
             "Only legitimate user-installed apps can appear in chooser");
-        ck(apply.contains("count<2||count>3")&&
+        ck(apply.contains("count<1||count>3")&&
             apply.contains("T1CenterUserPackagePolicy.allowed(pkg)")&&
             apply.contains("FLAG_SYSTEM")&&
             apply.contains("FLAG_UPDATED_SYSTEM_APP"),
-            "Mosaic validates 2 or 3 distinct non-system applications");
+            "Mosaic validates 1, 2 or 3 distinct non-system applications");
         ck(apply.contains("previous.contains(t.id)")&&
             apply.contains("shellStartCenterUserFreeform(c,launcher)")&&
             apply.contains("newTask")==false&&
@@ -63,6 +63,6 @@ public final class T1CenterSavedFreeformMosaicSourceContractTest {
             !apply.contains("am task resizeable ")&&
             !apply.contains("com.autolink.bluetooth"),
             "Daily app mosaic cannot mutate OEM tasks/global settings");
-        System.out.println("PASS configurable Freeform 2/3 mosaic with task provenance and OEM exclusion");
+        System.out.println("PASS configurable Freeform 1/2/3 mosaic with task provenance and OEM exclusion");
     }
 }
