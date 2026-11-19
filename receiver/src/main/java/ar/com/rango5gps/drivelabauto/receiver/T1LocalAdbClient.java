@@ -89,8 +89,22 @@ final class T1LocalAdbClient {
             throw new SecurityException("Consulta ADB de tarea no permitida");
         return shellInternal(context,command,taskId);
     }
+    /** Read ADB tasks of only the two chosen user apps, without saving
+     * the full 100KB+ activity list or trusting PID as a task ID.
+     */
+    static String shellApprovedAppTasks(Context context,String pkg)
+            throws Exception{
+        if(!pkg.equals("ar.com.promanager.nativeapp")&&
+            !pkg.equals("ar.com.rango5gps.uberbeta"))
+            throw new SecurityException("App no habilitada para diagnóstico");
+        return shellInternal(context,"am stack list",-1,pkg);
+    }
     private static String shellInternal(Context context,String command,int taskId)
             throws Exception{
+        return shellInternal(context,command,taskId,null);
+    }
+    private static String shellInternal(Context context,String command,
+            int taskId,String approvedPackage)throws Exception{
         // STRICT command whitelist, no shell metacharacters or package names.
         // Only known Waze/Maps force-stop + process checks, task/geometry
         // management, and exact accessibility-list recovery are authorized.
@@ -101,6 +115,8 @@ final class T1LocalAdbClient {
            !command.equals("am start --display 0 --windowingMode 5 -n ar.com.rango5gps.drivelabauto.receiver/.T1CenterFreeformTestActivity")&&
            !command.equals("am start --display 0 --windowingMode 5 -n ar.com.rango5gps.drivelabauto.receiver/.T1CenterDualLeftActivity")&&
            !command.equals("am start --display 0 --windowingMode 5 -n ar.com.rango5gps.drivelabauto.receiver/.T1CenterDualRightActivity")&&
+           !command.matches("am start --display 0 --windowingMode 5 -f 0x18000000 -n ar\\.com\\.promanager\\.nativeapp/[A-Za-z0-9_.$/]{1,220}")&&
+           !command.matches("am start --display 0 --windowingMode 5 -f 0x18000000 -n ar\\.com\\.rango5gps\\.uberbeta/[A-Za-z0-9_.$/]{1,220}")&&
            !command.matches("am start --display 1 --windowingMode 3 -n com\\.waze/[A-Za-z0-9_.$/]{1,220}")&&
            !command.matches("am start --display 1 --windowingMode 4 -n com\\.google\\.android\\.apps\\.maps/[A-Za-z0-9_.$/]{1,220}")&&
            !command.equals("pm clear --cache-only com.waze")&&
@@ -164,19 +180,22 @@ final class T1LocalAdbClient {
             ByteArrayOutputStream output=new ByteArrayOutputStream();
             T1AdbTaskExcerpt excerpt=taskId>0?
                 new T1AdbTaskExcerpt(command,taskId):null;
+            T1AdbPackageTaskExcerpt approvedExcerpt=approvedPackage!=null?
+                new T1AdbPackageTaskExcerpt(approvedPackage):null;
             int scannedBytes=0;
-            for(int i=0;i<(excerpt==null?150:8192);i++){
+            for(int i=0;i<(excerpt==null&&approvedExcerpt==null?150:8192);i++){
                 Message msg=read(in);
                 if(msg.is("OKAY")){
                     if(remote==0)remote=msg.arg0;
                 }else if(msg.is("WRTE")){
                     if(remote==0)remote=msg.arg0;
-                    if(excerpt!=null){
+                    if(excerpt!=null||approvedExcerpt!=null){
                         scannedBytes+=msg.payload.length;
                         if(scannedBytes>8*1024*1024)
                             throw new IllegalStateException(
                                 "Diagnóstico ADB supera límite de 8 MB");
-                        excerpt.accept(msg.payload);
+                        if(excerpt!=null)excerpt.accept(msg.payload);
+                        else approvedExcerpt.accept(msg.payload);
                     }else{
                         if(output.size()+msg.payload.length>96*1024)
                             throw new IllegalStateException("Salida ADB excesiva");
@@ -190,6 +209,10 @@ final class T1LocalAdbClient {
                     if(excerpt!=null){
                         excerpt.finish();
                         return excerpt.result();
+                    }
+                    if(approvedExcerpt!=null){
+                        approvedExcerpt.finish();
+                        return approvedExcerpt.result();
                     }
                     return new String(output.toByteArray(),StandardCharsets.UTF_8);
                 }else if(msg.is("AUTH"))
