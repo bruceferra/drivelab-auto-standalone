@@ -10,9 +10,9 @@ final class T1CenterMosaicGeometry {
     }
     static Tile[] layout(int width,int height,int mode,int mainPercent){
         if(width<3||height<3)throw new IllegalArgumentException("Invalid display dimensions");
-        int ratio=Math.max(30,Math.min(70,mainPercent));
-        int x=Math.max(1,Math.min(width-2,Math.round(width*ratio/100f)));
-        int y=Math.max(1,Math.min(height-2,Math.round(height*ratio/100f)));
+        int ratio=Math.max(1,Math.min(99,mainPercent));
+        int x=Math.max(1,Math.min(width-1,Math.round(width*ratio/100f)));
+        int y=Math.max(1,Math.min(height-1,Math.round(height*ratio/100f)));
         if(mode==SIDE_STACK){
             int half=height/2;
             return new Tile[]{new Tile(0,0,x,height),new Tile(x,0,width,half),
