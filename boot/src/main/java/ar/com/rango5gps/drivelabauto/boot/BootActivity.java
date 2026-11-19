@@ -349,6 +349,10 @@ public final class BootActivity extends Activity
         text("Son DOS apps distintas. Esta pantalla es Boot; Receiver "+
             "se usa sólo como motor de las ventanas.",13,QUIET);
         navigation();
+        text("DIAGNÓSTICO MODE · FIRMWARE JETOUR",17,WHITE);
+        button("INSPECCIONAR CAPAS EN EL TABLERO · SOLO LECTURA",
+            ()->startActivity(
+                new Intent(this,BridgeLayersActivity.class)));
 
         if(activeDisplay==0){
             text("DISPLAY 0 · PANTALLA CENTRAL",20,WHITE);
