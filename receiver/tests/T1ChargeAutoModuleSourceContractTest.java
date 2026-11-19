@@ -44,6 +44,16 @@ public final class T1ChargeAutoModuleSourceContractTest {
             store.contains("ENCHUFADO · flujo HV por confirmar"),
             "Stable cable opens session independently of signed HV current; "+
             "actual V/A remain visible without inventing energy");
+        yes(service.contains("LAST_SAMPLE_AT")&&
+            service.contains("LAST_VOLTS")&&
+            service.contains("LAST_AMPS")&&
+            service.contains("LAST_SAMPLE_OK")&&
+            screen.contains("T1ChargeRecorderService.startIfEnabled(this)")&&
+            screen.contains("refreshHandler.postDelayed(refreshLoop,5000L)")&&
+            screen.contains("SEÑALES OEM · última muestra")&&
+            screen.contains("T1ChargeStore.LAST_AMPS"),
+            "Charge page must restart the enabled worker and show live OEM "+
+            "signals even without a registered session");
         yes(store.contains("SQLiteOpenHelper")&&
             store.contains("t1_charge_sessions.db")&&
             store.contains("grid_charges_auto.csv")&&
