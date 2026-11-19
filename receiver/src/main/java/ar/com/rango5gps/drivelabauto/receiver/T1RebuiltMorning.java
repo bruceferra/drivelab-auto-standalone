@@ -28,12 +28,38 @@ final class T1RebuiltMorning {
     private static SharedPreferences p(Context c){
         return c.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
     }
-    static boolean installed(Context c){return p(c).getBoolean(APPLIED,false);}
+    static boolean installed(Context c){
+        return p(c).getBoolean(APPLIED,false)&&
+            !p(c).getBoolean("removed_by_owner",false);
+    }
+    /** This synthetic 18/11 07:43 checkpoint is rendered from private
+     * preferences, not client_trips.csv. Delete ONLY its source flag.
+     * Preserve every real OEM journey, AUTO SQLite sample and charge.
+     */
+    static synchronized String removeReconstructedTrip(Context c)
+            throws IOException{
+        SharedPreferences z=p(c);
+        if(!z.edit().putBoolean(APPLIED,false)
+                .putBoolean(PENDING,false)
+                .putBoolean("removed_by_owner",true)
+                .putLong("removed_at",System.currentTimeMillis())
+                .remove(TRIP_ID).commit())
+            throw new IOException("No se guardó la baja del reconstruido");
+        if(installed(c))
+            throw new IOException("El reconstruido 18/11 sigue habilitado");
+        return "BORRADO VERIFICADO: registro reconstruido "+
+            "2026-11-18 07:43 eliminado del historial local. "+
+            "Jornadas OEM, registros AUTO y cargas se conservan.";
+    }
     static boolean isReconstructed(String key){
         return ("1:"+ID).equals(key);
     }
     static synchronized String install(Context c)throws IOException{
         if(installed(c))return "Reconstrucción 18/11 ya instalada; no se repite el borrado.";
+        if(p(c).getBoolean("removed_by_owner",false))
+            throw new IOException(
+                "El propietario eliminó el reconstruido 18/11; "+
+                "no se reimporta automáticamente.");
         String guard=T1TripDeletion.blockReason(c);
         if(guard!=null)throw new IOException(guard);
         // Clear all OLD manual journeys via the existing guarded deletion.
