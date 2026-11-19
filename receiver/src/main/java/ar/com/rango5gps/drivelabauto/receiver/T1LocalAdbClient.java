@@ -80,6 +80,7 @@ final class T1LocalAdbClient {
         // No steering wheel key injection or arbitrary ADB commands.
         // No global BACK, tap, display 0, arbitrary shell, or OEM writes.
         if(!command.equals("am supports-split-screen-multi-window")&&
+           !command.equals("am supports-multiwindow")&&
            !command.matches("am start --display 1 --windowingMode 3 -n com\\.waze/[A-Za-z0-9_.$/]{1,220}")&&
            !command.matches("am start --display 1 --windowingMode 4 -n com\\.google\\.android\\.apps\\.maps/[A-Za-z0-9_.$/]{1,220}")&&
            !command.equals("pm clear --cache-only com.waze")&&
@@ -90,6 +91,7 @@ final class T1LocalAdbClient {
            !command.equals("pidof com.google.android.apps.maps")&&
            !command.equals("am stack list")&&
            !command.equals("dumpsys activity activities")&&
+           !command.equals("dumpsys activity recents")&&
            !command.equals("dumpsys window windows")&&
            !command.equals("dumpsys input")&&
            !command.matches(
@@ -100,6 +102,8 @@ final class T1LocalAdbClient {
            !command.equals("settings get secure accessibility_enabled")&&
            !command.matches(
               "am task resize [1-9][0-9]{0,6}( [0-9]{1,5}){4}")&&
+           !command.matches(
+              "am task resizeable [1-9][0-9]{0,6} [0-3]")&&
            !command.matches("am stack remove [1-9][0-9]{0,6}"))
             throw new SecurityException("Comando ADB no permitido");
         String phase="abrir TCP 127.0.0.1:5556/5555";
