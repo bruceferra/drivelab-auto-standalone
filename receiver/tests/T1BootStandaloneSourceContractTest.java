@@ -57,7 +57,7 @@ public final class T1BootStandaloneSourceContractTest {
             "Boot must expose one/two/three panels, free ratios and existing task recovery");
         ck(auto.contains("Thread.sleep(15000L)")&&
             auto.contains("BootConfig.enabled(this)")&&
-            auto.contains("BootConfig.send(this)")&&
+            auto.contains("BootConfig.send(this,true)")&&
             bootReceiver.contains("Intent.ACTION_BOOT_COMPLETED")&&
             bootReceiver.contains("BootConfig.enabled(context)")&&
             config.contains("getBoolean(\"enabled\",false)"),
