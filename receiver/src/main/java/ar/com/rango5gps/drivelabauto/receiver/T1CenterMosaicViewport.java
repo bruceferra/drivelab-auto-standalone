@@ -19,7 +19,7 @@ final class T1CenterMosaicViewport {
     private T1CenterMosaicViewport(){}
     static Plan calculate(T1CenterMosaicGeometry.Tile[] original,
             int displayHeight,int inset){
-        if(original==null||original.length<2||original.length>3||
+        if(original==null||original.length<1||original.length>3||
             displayHeight<480||inset<0||inset>220||inset>=displayHeight/3)
             throw new IllegalArgumentException("Viewport de pantalla no válido");
         int usable=displayHeight-inset;
@@ -55,7 +55,7 @@ final class T1CenterMosaicViewport {
             Math.abs(measured.bottom-target.bottom)<=20;
     }
     static boolean disjoint(T1AdbTaskParser.Box[] panels){
-        if(panels==null||panels.length<2)return false;
+        if(panels==null||panels.length<1)return false;
         for(int i=0;i<panels.length;i++){
             T1AdbTaskParser.Box a=panels[i];
             if(a==null)return false;
