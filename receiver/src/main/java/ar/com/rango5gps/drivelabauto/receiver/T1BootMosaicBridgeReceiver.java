@@ -33,6 +33,13 @@ public final class T1BootMosaicBridgeReceiver extends BroadcastReceiver {
         if(context.getPackageManager().checkSignatures(
             context.getPackageName(),BOOT_PACKAGE)!=
             PackageManager.SIGNATURE_MATCH)return;
+        if(ACTION_CLUSTER_STATE.equals(intent.getAction())){
+            // Fast, read-only IPC: no foreground service, no ADB or
+            // modification to live map windows merely to view state.
+            T1BootMosaicBridgeService.reportClusterState(context,
+                "Lectura del diseño real; sin abrir ni cerrar mapas.");
+            return;
+        }
         if(ACTION_TAKEOVER.equals(intent.getAction())){
             // When Boot becomes sole owner, turn OFF only redundant app-UI
             // autostart and (if explicitly selected) independent cluster
