@@ -227,6 +227,37 @@ final class T1ChargeStore extends SQLiteOpenHelper {
             throw new IllegalStateException("No se actualizó la sesión");
     }
 
+    /** Owner-confirmed cleanup of a closed manually imported CHARGE only.
+     * Never touches live OEM charge sessions or trip/journey samples.
+     * Exact ID/source/status are rechecked atomically at delete time.
+     */
+    synchronized boolean deleteManualImport(long id){
+        if(id<=0)throw new IllegalArgumentException("ID de carga inválido");
+        SQLiteDatabase db=getWritableDatabase();
+        db.beginTransaction();
+        try{
+            long[] check=new long[1];
+            try(Cursor c=db.rawQuery(
+                    "SELECT COUNT(*) FROM sessions WHERE _id=? "+
+                    "AND is_open=0 AND source LIKE '%IMPORTACIÓN MANUAL%'",
+                    new String[]{Long.toString(id)})){
+                if(c.moveToFirst())check[0]=c.getLong(0);
+            }
+            if(check[0]!=1)
+                throw new IllegalStateException(
+                    "No se borra: carga no manual, abierta o inexistente");
+            int deleted=db.delete("sessions",
+                "_id=? AND is_open=0 AND source LIKE ?",
+                new String[]{Long.toString(id),"%IMPORTACIÓN MANUAL%"});
+            if(deleted!=1)
+                throw new IllegalStateException("La carga no pudo eliminarse");
+            db.setTransactionSuccessful();
+            return true;
+        }finally{
+            db.endTransaction();
+        }
+    }
+
     synchronized ArrayList<Record> latest(int max){
         ArrayList<Record> out=new ArrayList<>();
         try(Cursor c=getReadableDatabase().rawQuery(
