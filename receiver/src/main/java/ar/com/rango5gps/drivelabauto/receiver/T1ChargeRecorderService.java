@@ -141,8 +141,12 @@ public final class T1ChargeRecorderService extends Service {
                             T1ChargeStore.Record latest=db.openSession();
                             boolean flow=T1ChargeMath.charging(
                                 raw,data.volts,data.amps);
+                            boolean currentFlow=T1ChargeMath.currentCharging(
+                                raw,data.amps);
                             status("CABLE 1060=1 · SESIÓN "+openId+
-                                " · "+(flow?"flujo HV detectado":
+                                " · "+(flow?"energía HV medible":
+                                    currentFlow?"corriente de carga detectada; "+
+                                        "falta voltaje para kWh":
                                     "cable conectado; flujo HV no validado")+
                                 " · 1063="+T1ChargeStore.fmt(data.volts,1)+" V"+
                                 " · 1064="+T1ChargeStore.fmt(data.amps,2)+" A"+
