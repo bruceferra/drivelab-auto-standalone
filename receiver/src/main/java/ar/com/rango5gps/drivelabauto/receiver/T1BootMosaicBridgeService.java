@@ -95,11 +95,29 @@ public final class T1BootMosaicBridgeService extends Service {
                 T1CenterMosaicGeometry.layout(size.x,size.y,mode,percent);
             if(tiles.length!=count)
                 throw new IllegalStateException("Cantidad de paneles inválida");
+            // Boot can reserve a small band INSIDE its own Receiver
+            // freeform cockpit window for Jetour's grey maximize caption.
+            // Does not touch OEM window manager, bottom nav dock or HOME.
+            int caption=incoming.getIntExtra("caption_safe_dp",44);
+            if(caption<0||caption>88)
+                throw new IllegalArgumentException("Separación Freeform inválida");
+            if(!getSharedPreferences("drivelab_freeform_ui_v1",MODE_PRIVATE)
+                .edit().putInt("caption_safe_dp",caption).commit())
+                throw new IllegalStateException("No se guardó el margen de controles");
+            boolean cluster=incoming.getBooleanExtra("cluster_enabled",false);
+            boolean fromBoot=incoming.getBooleanExtra("from_boot",false);
+            boolean confirmed=incoming.getBooleanExtra("cluster_confirmed",false);
+            int clusterCount=incoming.getIntExtra("cluster_count",-1);
+            int clusterPercent=incoming.getIntExtra("cluster_percent",-1);
+            String[] clusterPackages=cluster?new String[]{
+                incoming.getStringExtra("cluster_pkg0"),
+                incoming.getStringExtra("cluster_pkg1")}:
+                new String[0];
             final int finalMode=mode,finalPercent=percent;
             T1CenterSavedFreeformMosaic.apply(this,packages,tiles,count,result->{
+                boolean prepared=result.contains(
+                    "ESTADO: VENTANAS PREPARADAS.");
                 try{
-                    boolean prepared=result.contains(
-                        "ESTADO: VENTANAS PREPARADAS.");
                     if(prepared){
                         SharedPreferences.Editor edit=getSharedPreferences(
                             PREFS,MODE_PRIVATE).edit()
@@ -109,11 +127,39 @@ public final class T1BootMosaicBridgeService extends Service {
                             edit.putString("pkg"+i,packages[i]);
                         edit.apply();
                     }
-                    report(this,(prepared?
-                        "APLICACIÓN SOLICITADA: ":"NO CONFIRMADO: ")+result);
-                }finally{
+                    String center=(prepared?
+                        "DISPLAY 0 · APLICACIÓN SOLICITADA: ":
+                        "DISPLAY 0 · NO CONFIRMADO: ")+result+
+                        "\nMargen interior de protección de controles: "+
+                        caption+" dp. Cabecera Freeform y barra inferior "+
+                        "del Jetour siguen bajo control del sistema.";
+                    if(!cluster){
+                        report(this,center);
+                        BUSY.set(false);
+                        stopSelf(startId);
+                        return;
+                    }
+                    // Cluster work must not block Receiver UI. A separate
+                    // stage keeps one BUSY owner until both displays finish.
+                    new Thread(()->{
+                        try{
+                            String secondary=T1BootClusterLayout.apply(
+                                this,clusterCount,clusterPercent,
+                                clusterPackages,fromBoot,confirmed);
+                            report(this,center+"\n"+secondary);
+                        }catch(Exception e){
+                            report(this,center+"\nDISPLAY 1 NO CONFIRMADO: "+
+                                e.getClass().getSimpleName()+": "+e.getMessage());
+                        }finally{
+                            BUSY.set(false);
+                            stopSelf(startId);
+                        }
+                    },"DriveLab-Boot-Display1-After-Center").start();
+                }catch(Exception e){
+                    report(this,"ARRANQUE INCOMPLETO: "+
+                        e.getClass().getSimpleName()+": "+e.getMessage());
                     BUSY.set(false);
-                    stopSelf();
+                    stopSelf(startId);
                 }
             });
         }catch(Exception e){
