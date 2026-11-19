@@ -1,6 +1,7 @@
 package ar.com.rango5gps.drivelabauto.receiver;
 
 import android.app.AlertDialog;
+import ar.com.rango5gps.drivelabauto.common.Updater;
 import android.content.Context;
 import android.content.ClipData;
 import android.view.DragEvent;
@@ -162,7 +163,7 @@ final class T1GlobalToolbar {
         LinearLayout clockBox=new LinearLayout(owner);
         clockBox.setOrientation(LinearLayout.VERTICAL);
         clockBox.setGravity(Gravity.CENTER_VERTICAL|Gravity.RIGHT);
-        clockBox.setPadding(dp(4),0,dp(14),0);
+        clockBox.setPadding(dp(4),0,dp(8),0);
         clockDate=new TextView(owner);
         clockDate.setGravity(Gravity.RIGHT);
         clockDate.setSingleLine(true);
@@ -176,15 +177,22 @@ final class T1GlobalToolbar {
         clockTime.setTextSize(19f);
         clockBox.addView(clockDate);
         clockBox.addView(clockTime);
-        header.addView(clockBox,new LinearLayout.LayoutParams(dp(180),-1));
-        // First-class visible repair for the owner's known-good procedure:
-        // stop Waze/Maps, cluster OFF >=10s, ON, restore wheel.
-        // No cryptic one-character R or hidden technical menu.
-        Button reload=button(header,"REPARAR MAPAS",T1JetourTheme.PANEL_HI,146,
+        header.addView(clockBox,new LinearLayout.LayoutParams(dp(148),-1));
+        // Keep both actions fixed to the RIGHT of the clock. The repair
+        // button is narrower so the final small updater fits on Display 0.
+        Button reload=button(header,"MAPAS",T1JetourTheme.PANEL_HI,90,
             this::confirmClusterReload);
-        reload.setTextSize(13f);
+        reload.setTextSize(12f);
         reload.setContentDescription("Reparar mapas del clúster: detener Waze y Maps, "+
             "CLÚSTER OFF 10 segundos, ON y recuperar rueda");
+        // Last control in the permanent toolbar on every Receiver screen.
+        // Exactly the same verified OTA updater as Inicio > Conexión Xiaomi.
+        // Never redirect to Xiaomi settings, a browser or an unverified APK.
+        Button update=button(header,"⟳",T1JetourTheme.GREEN_BUTTON,46,
+            this::checkReceiverUpdate);
+        update.setTextSize(27f);
+        update.setContentDescription("Buscar e instalar actualización DriveLab Auto Receiver");
+        update.setTooltipText("Actualizar DriveLab Auto");
         refreshClock();
         // Rearrange only actual buttons; keep the title, status and clock anchored.
         firstButtons=header;
@@ -248,7 +256,13 @@ final class T1GlobalToolbar {
      */
     private void enableRowReorder(LinearLayout row,String key){
         final ArrayList<Button> buttons=new ArrayList<>();
-        for(int i=0;i<row.getChildCount();i++)
+        // The top-row clock and its actions (MAPAS, ⟳) are anchored at the
+        // far right, not part of the draggable controls to its left.
+        View clockAnchor=clockTime==null?null:(View)clockTime.getParent();
+        int end=row==firstButtons && clockAnchor!=null?
+            row.indexOfChild(clockAnchor):row.getChildCount();
+        if(end<0)end=row.getChildCount();
+        for(int i=0;i<end;i++)
             if(row.getChildAt(i) instanceof Button)
                 buttons.add((Button)row.getChildAt(i));
         if(buttons.size()<2)return;
@@ -304,6 +318,21 @@ final class T1GlobalToolbar {
                 }
             });
         }
+    }
+    /** Fixed one-touch access to the existing Receiver OTA flow.
+     * This button does not check Sender or bypass signed APK validation.
+     */
+    private void checkReceiverUpdate(){
+        if(!foreground)return;
+        android.widget.Toast.makeText(owner,
+            "Buscando actualización DriveLab Receiver…",
+            android.widget.Toast.LENGTH_SHORT).show();
+        Updater.check(owner,"receiver",message->{
+            note(message);
+            if(message.startsWith("Ya se está comprobando"))
+                android.widget.Toast.makeText(owner,message,
+                    android.widget.Toast.LENGTH_LONG).show();
+        });
     }
     private void navigate(Class<?> target){
         if(!foreground)return;
