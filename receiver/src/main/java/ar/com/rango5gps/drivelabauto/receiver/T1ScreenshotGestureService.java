@@ -29,9 +29,24 @@ public final class T1ScreenshotGestureService extends AccessibilityService {
     private static final String CHANNEL="t1_screenshot_user";
     private long lastGesture;
     private volatile boolean busy;
+    private static volatile T1ScreenshotGestureService active;
+    static boolean manualCapture(){
+        T1ScreenshotGestureService service=active;
+        if(service==null||service.busy)return false;
+        service.capture();
+        return true;
+    }
+    @Override protected void onServiceConnected(){
+        super.onServiceConnected();
+        active=this;
+    }
+    @Override public void onDestroy(){
+        if(active==this)active=null;
+        super.onDestroy();
+    }
     @Override public void onAccessibilityEvent(AccessibilityEvent event){}
     @Override public void onInterrupt(){}
-    @Override protected boolean onGesture(AccessibilityGestureEvent gesture){
+    @Override public boolean onGesture(AccessibilityGestureEvent gesture){
         if(gesture==null||
             gesture.getGestureId()!=GESTURE_3_FINGER_SWIPE_DOWN||
             gesture.getDisplayId()!=Display.DEFAULT_DISPLAY)return false;
