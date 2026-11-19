@@ -1604,6 +1604,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         // Freeform 70/60/50/33% gets readable, reflowed cards and smaller
         // text, without restarting the activity, trip or OEM services.
         T1CockpitResponsive responsive=new T1CockpitResponsive(scroll);
+        responsive.register(top,9,3,2);
         responsive.register(controls,3,3,1);
         responsive.register(powertrain,2,2,1);
         responsive.register(overview,3,3,1);
