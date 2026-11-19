@@ -33,6 +33,8 @@ public final class BootActivity extends Activity
         "Tres columnas",
         "Dos columnas",
         "Una aplicación (100 % de la zona útil)"};
+    private static volatile boolean bridgeUiVisible=false;
+    static boolean isVisible(){return bridgeUiVisible;}
     private int mode,percent;
     private int activeDisplay=0;
     private boolean revealPending=false;
@@ -66,11 +68,13 @@ public final class BootActivity extends Activity
     }
     @Override protected void onResume(){
         super.onResume();
+        bridgeUiVisible=true;
         prefs().registerOnSharedPreferenceChangeListener(this);
         if(content!=null)draw();
         onSharedPreferenceChanged(prefs(),"last_status");
     }
     @Override protected void onPause(){
+        bridgeUiVisible=false;
         prefs().unregisterOnSharedPreferenceChangeListener(this);
         super.onPause();
     }
