@@ -208,8 +208,9 @@ final class T1LocalAdbClient {
             boolean ownReceiverScan,boolean taskInventory,
             boolean confirmedUserStop)throws Exception{
         // STRICT command whitelist, no shell metacharacters or package names.
-        // Only known Waze/Maps force-stop + process checks, task/geometry
-        // management, and exact accessibility-list recovery are authorized.
+        // Never permit pm clear (even with --cache-only): Android 11's
+        // package-manager parser ignores the flag and wipes ALL app data.
+        // Only scoped task/geometry/probe commands are authorized.
         // No steering wheel key injection or arbitrary ADB commands.
         // No global BACK, tap, display 0, arbitrary shell, or OEM writes.
         if(!command.equals("am supports-split-screen-multi-window")&&
@@ -225,8 +226,6 @@ final class T1LocalAdbClient {
                "[A-Za-z0-9_.$]+/[A-Za-z0-9_.$/]{1,220}"))&&
            !command.matches("am start --display 1 --windowingMode 3 -n com\\.waze/[A-Za-z0-9_.$/]{1,220}")&&
            !command.matches("am start --display 1 --windowingMode 4 -n com\\.google\\.android\\.apps\\.maps/[A-Za-z0-9_.$/]{1,220}")&&
-           !command.equals("pm clear --cache-only com.waze")&&
-           !command.equals("pm clear --cache-only com.google.android.apps.maps")&&
            !command.equals("am force-stop com.waze")&&
            !command.equals("am force-stop com.google.android.apps.maps")&&
            !(confirmedUserStop&&command.matches(
