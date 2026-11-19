@@ -30,7 +30,7 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
         "ar.com.rango5gps.drivelabauto.receiver","com.spotify.music",""};
     private int mode=0,percent=50;
     private final String[] packages=new String[3];
-    private final String[] names={"DriveLab","Spotify","Elegir aplicación"};
+    private final String[] names={"DriveLab Auto","Spotify","DriveLab Uber Beta"};
     private LinearLayout root;
     @Override protected void onCreate(Bundle state){
         super.onCreate(state);
