@@ -54,6 +54,16 @@ public final class T1ChargeAutoModuleSourceContractTest {
             screen.contains("T1ChargeStore.LAST_AMPS"),
             "Charge page must restart the enabled worker and show live OEM "+
             "signals even without a registered session");
+        yes(oem.contains("getIntOrUnknown(b,1063)")&&
+            oem.contains("getFloatOrUnknown(b,1090)")&&
+            oem.contains("readAlcar1063()")&&
+            service.contains("LAST_VOLTAGE_PROBE")&&
+            service.contains("currentCharging(")&&
+            screen.contains("LAST_VOLTAGE_PROBE")&&
+            maths.contains("double kwh=Double.isFinite(volts)")&&
+            maths.contains("double ah=-amps*dtMs/3600000d"),
+            "Charge recorder must expose read-only voltage candidates; "+
+            "integrate measured Ah without inventing battery kWh");
         yes(store.contains("SQLiteOpenHelper")&&
             store.contains("t1_charge_sessions.db")&&
             store.contains("grid_charges_auto.csv")&&
