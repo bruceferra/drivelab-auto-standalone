@@ -26,8 +26,8 @@ public final class T1BootDisplayClusterSourceContractTest {
 
         check(bootBuild.contains("versionCode 3")&&
             bootBuild.contains("versionName '0.1.2'")&&
-            receiverBuild.contains("versionCode 196")&&
-            receiverBuild.contains("versionName '0.3.95'"),
+            receiverBuild.contains("versionCode 197")&&
+            receiverBuild.contains("versionName '0.3.96'"),
             "Both independently installed APKs need new signed versions");
         check(ui.contains("DISPLAY 0 · PANTALLA CENTRAL")&&
             ui.contains("DISPLAY 1 · CLÚSTER / MAPAS")&&
