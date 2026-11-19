@@ -1,9 +1,9 @@
-name: Signed Receiver 0.3.76 - center ADB mosaic
+name: Signed Receiver 0.3.76 - center ADB diagnostic
 # Retry after updating drag/drop contracts for shared visual cues
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/publish-receiver-0376-center-adb.yml']
+    paths: ['.github/workflows/publish-receiver-0376-center-diagnostic.yml']
   workflow_dispatch:
 permissions:
   contents: write
