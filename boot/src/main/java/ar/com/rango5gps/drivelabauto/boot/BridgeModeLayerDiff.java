@@ -20,7 +20,7 @@ import java.util.regex.Pattern;
  */
 final class BridgeModeLayerDiff {
     private static final Pattern WINDOW=Pattern.compile(
-        "^\\s*Window\\s+#\\d+\\s+Window\\{[^}]*\\}\\s*:?\\s*(.*)$");
+        "^\\s*Window\\s+#\\d+\\s+Window\\{([^}]*)\\}\\s*:?.*$");
     private static final Pattern DISPLAY=Pattern.compile(
         "(?:mDisplayId|displayId|display)\\s*[=:]\\s*(\\d+)");
     private static final Pattern LAYER=Pattern.compile(
