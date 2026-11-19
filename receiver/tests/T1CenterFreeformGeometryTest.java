@@ -30,6 +30,25 @@ public final class T1CenterFreeformGeometryTest {
         yes(!T1CenterFreeformGeometry.twoColumns(
             actual,box(960,350,1920,1430),1920,1080),
             "Incorrect vertical alignment must not pass");
+        T1CenterMosaicGeometry.Tile left=new T1CenterMosaicGeometry.Tile(
+            0,0,960,1080);
+        T1CenterMosaicGeometry.Tile right=new T1CenterMosaicGeometry.Tile(
+            960,0,1920,1080);
+        yes(T1CenterFreeformGeometry.tile(actual,left),
+            "Any selected user's 50% tile must allow the measured +101px offset");
+        yes(T1CenterFreeformGeometry.tile(box(960,101,1920,1181),right),
+            "Right selected user's 50% tile must allow same offset");
+        yes(!T1CenterFreeformGeometry.tile(
+            box(0,101,1920,1181),left),
+            "Fullscreen is not a verified configurable mosaic");
+        T1CenterMosaicGeometry.Tile[] three=T1CenterMosaicGeometry.layout(
+            1920,1080,T1CenterMosaicGeometry.THREE_COLUMNS,50);
+        for(int i=0;i<3;i++){
+            T1CenterMosaicGeometry.Tile t=three[i];
+            yes(T1CenterFreeformGeometry.tile(
+                box(t.left,t.top+101,t.right,t.bottom+101),t),
+                "Three column geometry must tolerate common Y shift");
+        }
         System.out.println("PASS half-screen geometry and +101px Android freeform offset");
     }
 }
