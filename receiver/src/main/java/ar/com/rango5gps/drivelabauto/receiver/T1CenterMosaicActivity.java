@@ -254,6 +254,27 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
                 }))
             .show();
     }
+    private void testOwnFreeformOnCenter(){
+        new AlertDialog.Builder(this)
+            .setTitle("PRUEBA AISLADA FREEFORM · DISPLAY 0")
+            .setMessage("Se abrirá durante unos segundos una ventana "+
+                "temporal de DriveLab solicitando modo Freeform (5). "+
+                "Se cerrará automáticamente y se comprobará si Android "+
+                "aceptó ese modo. No modifica ProManager, Uber, apps OEM, "+
+                "configuración global, HOME ni Display 1. "+
+                "Realizá la prueba con el vehículo detenido. ¿Probar?")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("PROBAR",(dialog,which)->
+                T1CenterOwnFreeformProbe.run(this,result->{
+                    getSharedPreferences(PREFS,MODE_PRIVATE).edit()
+                        .putString("last_own_freeform_probe",result).apply();
+                    new AlertDialog.Builder(this)
+                        .setTitle("RESULTADO · FREEFORM DISPLAY 0")
+                        .setMessage(result)
+                        .setPositiveButton("OK",null).show();
+                }))
+            .show();
+    }
     private void draw(){
         ScrollView scroll=new ScrollView(this);
         scroll.setBackgroundColor(0xFF101A23);
@@ -307,6 +328,14 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
                 .setMessage(getSharedPreferences(PREFS,MODE_PRIVATE)
                     .getString("last_window_mode_probe",
                         "Aún no probaste el modo de ventana"))
+                .setPositiveButton("OK",null).show());
+        button("PROBAR FREEFORM AISLADO · DISPLAY 0",
+            this::testOwnFreeformOnCenter);
+        button("VER RESULTADO FREEFORM AISLADO",()->
+            new AlertDialog.Builder(this).setTitle("ÚLTIMA PRUEBA FREEFORM")
+                .setMessage(getSharedPreferences(PREFS,MODE_PRIVATE)
+                    .getString("last_own_freeform_probe",
+                        "Sin prueba aislada todavía"))
                 .setPositiveButton("OK",null).show());
         button("PROBAR MOSAICO REAL · ADB DISPLAY 0",this::applyAdbOnCenter);
         // Old ActivityOptions-only trial intentionally hidden: OEM ignored bounds.
