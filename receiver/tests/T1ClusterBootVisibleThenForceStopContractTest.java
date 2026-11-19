@@ -37,10 +37,11 @@ public final class T1ClusterBootVisibleThenForceStopContractTest {
               service.contains("T1WazeWheelService.requestClusterReady(this)")&&
               service.contains("T1LastRoute.restore(this)"),
               "Keep wheel and route, do not reorder boot tasks above Spotify");
-        check(toolbar.contains("REPARAR MAPAS")&&
-              manual.contains("T1ClusterFreshStart.prepare(owner)")&&
-              manual.contains("T1ClusterAdbResize.closeClusterApps(owner,"),
-              "Explicit manual repair remains, but never invoked automatically");
+        check(toolbar.contains("MAPAS · REPARACIÓN DESACTIVADA")&&
+              manual.contains("REPARAR MAPAS DESACTIVADO POR SEGURIDAD")&&
+              !manual.contains("T1ClusterFreshStart.prepare(owner)")&&
+              !manual.contains("T1LocalAdbClient.shell("),
+              "Both manual and automatic destructive map repair must be disabled");
         System.out.println("PASS no automatic destructive map restart or task focus");
     }
 }
