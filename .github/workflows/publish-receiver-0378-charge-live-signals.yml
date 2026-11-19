@@ -1,0 +1,129 @@
+name: Signed Receiver 0.3.78 - auto charge live signals
+# Retry after updating drag/drop contracts for shared visual cues
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-receiver-0378-charge-live-signals.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: signed-drivelabauto-publication
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    env:
+      RECEIVER_STORE_PASSWORD: ${{ secrets.RECEIVER_STORE_PASSWORD }}
+      RECEIVER_KEY_ALIAS: ${{ secrets.RECEIVER_KEY_ALIAS }}
+      RECEIVER_KEY_PASSWORD: ${{ secrets.RECEIVER_KEY_PASSWORD }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Prepare Android SDK and existing signing identity
+        env:
+          RECEIVER_KEYSTORE_B64: ${{ secrets.RECEIVER_KEYSTORE_B64 }}
+        run: |
+          set -euo pipefail
+          tool=$(command -v sdkmanager || find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)
+          "$tool" 'platforms;android-35' 'build-tools;35.0.0'
+          test -n "$RECEIVER_KEYSTORE_B64" && test -n "$RECEIVER_STORE_PASSWORD"
+          test -n "$RECEIVER_KEY_ALIAS" && test -n "$RECEIVER_KEY_PASSWORD"
+          printf %s "$RECEIVER_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/receiver.p12"
+          chmod 600 "$RUNNER_TEMP/receiver.p12"
+          echo "RECEIVER_KEYSTORE=$RUNNER_TEMP/receiver.p12" >> "$GITHUB_ENV"
+      - name: Verify trip actions, toolbar and cockpit drag ordering
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/drivelab-0378
+          javac -encoding UTF-8 -d /tmp/drivelab-0378 \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripActionPolicy.java \
+            receiver/tests/T1TripActionPolicyTest.java \
+            receiver/tests/T1TripButtonAndMapRepairContractTest.java \
+            receiver/tests/T1ToolbarDragDropContractTest.java \
+            receiver/tests/T1CockpitBlockDragDropContractTest.java
+          for test in T1TripActionPolicyTest T1TripButtonAndMapRepairContractTest T1ToolbarDragDropContractTest T1CockpitBlockDragDropContractTest; do
+            java -cp /tmp/drivelab-0378 ar.com.rango5gps.drivelabauto.receiver.$test
+          done
+      - name: Verify center mosaic opt-in launch without OEM speed Binder
+        run: |
+          set -euo pipefail
+          source=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CenterMosaicActivity.java
+          grep -Fq 'PROBAR MOSAICO REAL · ADB DISPLAY 0' "$source"
+          grep -Fq 'setTitle("REDIMENSIONAR DISPLAY 0")' "$source"
+          grep -Fq 'T1CenterAdbResize.allowed(packages[i])' "$source"
+          grep -Fq 'T1CenterAdbResize.apply(this,selected,' "$source"
+          adb_source=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CenterAdbResize.java
+          grep -Fq 'findTask(before,beforeDump,packages[i])' "$adb_source"
+          grep -Fq 'am task resize ' "$adb_source"
+          grep -Fq '!pkg.startsWith("com.jetour.")' "$adb_source"
+          grep -Fq 'DIAGNOSTICAR TAREAS ADB · DISPLAY 0' "$source"
+          grep -Fq 'VER DETALLE DE LA ÚLTIMA PRUEBA ADB' "$source"
+          grep -Fq 'am supports-split-screen-multi-window' "$adb_source"
+          grep -Fq 'DIAGNÓSTICO DISPLAY 0 · SOLO LECTURA' "$adb_source"
+          grep -Fq 'geometría diferente' "$adb_source"
+      - name: Verify stable cable starts charge session independent of HV sign
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/drivelab-charge-0378
+          javac -encoding UTF-8 -d /tmp/drivelab-charge-0378 \
+            receiver/tests/T1ChargeAutoModuleSourceContractTest.java
+          java -cp /tmp/drivelab-charge-0378 \
+            ar.com.rango5gps.drivelabauto.receiver.T1ChargeAutoModuleSourceContractTest
+      - name: Compile signed Receiver 0.3.78 and verify package and certificate
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'bruceferra/drivelab-auto-standalone'
+          ! gh release view v0.3.78 >/dev/null 2>&1
+          gradle --no-daemon :receiver:assembleRelease
+          apk=receiver/build/outputs/apk/release/receiver-release.apk
+          test -s "$apk"
+          sig="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          "$sig" verify --print-certs "$apk"
+          badge=$("$aapt" dump badging "$apk" | head -1)
+          echo "$badge" | grep -F "package: name='ar.com.rango5gps.drivelabauto.receiver'"
+          echo "$badge" | grep -F "versionCode='179'"
+          echo "$badge" | grep -F "versionName='0.3.78'"
+          mkdir -p old output
+          gh release download v0.3.71 --pattern 'DriveLab-Auto-Receiver-v0.3.71.apk' --dir old
+          gh release download v0.3.71 --pattern 'sender.json' --dir output
+          before=$("$sig" verify --print-certs old/DriveLab-Auto-Receiver-v0.3.71.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          after=$("$sig" verify --print-certs "$apk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          test -n "$before" && test "$before" = "$after"
+          cp "$apk" output/DriveLab-Auto-Receiver-v0.3.78.apk
+          export RECEIVER_SHA=$(sha256sum output/DriveLab-Auto-Receiver-v0.3.78.apk | awk '{print $1}')
+          python3 - <<'PY'
+          import json,os
+          manifest={'packageName':'ar.com.rango5gps.drivelabauto.receiver',
+                    'versionName':'0.3.78','versionCode':179,
+                    'sha256':os.environ['RECEIVER_SHA'],
+                    'apkUrl':'https://github.com/bruceferra/drivelab-auto-standalone/releases/download/v0.3.78/DriveLab-Auto-Receiver-v0.3.78.apk'}
+          with open('output/receiver.json','w') as f:json.dump(manifest,f,indent=2)
+          with open('output/sender.json') as f:sender=json.load(f)
+          assert sender['versionCode']==23 and sender['versionName']=='0.2.22'
+          PY
+          sha256sum output/DriveLab-Auto-Receiver-v0.3.78.apk > output/receiver.sha256
+      - name: Publish signed Receiver and preserve Sender updater
+        run: |
+          set -euo pipefail
+          ! gh release view v0.3.78 >/dev/null 2>&1
+          gh release create v0.3.78 \
+            output/DriveLab-Auto-Receiver-v0.3.78.apk \
+            output/receiver.json output/sender.json output/receiver.sha256 \
+            --target "$GITHUB_SHA" --latest \
+            --title 'DriveLab Auto Receiver 0.3.78 · controles y bloques reordenables' \
+            --notes 'Receiver 0.3.78 (179): arrastrar y soltar horizontalmente botones de ambas filas y bloques de viajes, temperaturas y métricas del cockpit; orden persistente. Nueva política compartida de acciones de viajes y reparación manual de mapas. Mosaico central: prueba ADB de resize en Display 0, con diagnóstico y verificación de tareas. No modifica el clúster. Diagnóstico ADB por panel con respuestas de resize, IDs, bounds reales y prueba de capacidades de solo lectura. Si freeform no está soportado, Android puede ignorar dimensiones. Carga automática: al abrir la pantalla reanuda el monitor AUTO habilitado tras actualización del APK. Muestra lecturas 1062 SOC, 1063 V y 1064 A incluso sin sesión, con sello horario y actualización cada 5s. Con cable 1060=1 en dos lecturas abre sesión sin exigir corriente negativa; kWh solo con flujo HV válido. Sender sin cambios.'
+          mkdir -p verify
+          gh release download v0.3.78 --pattern receiver.json --dir verify
+          gh release download v0.3.78 --pattern sender.json --dir verify
+          cmp output/receiver.json verify/receiver.json
+          cmp output/sender.json verify/sender.json
