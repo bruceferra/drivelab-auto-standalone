@@ -63,6 +63,32 @@ public final class T1BootMosaicBridgeService extends Service {
         }
         try{
             if(incoming==null)throw new IllegalArgumentException("Sin pedido");
+            if(incoming.getBooleanExtra("cluster_only",false)){
+                // The standalone Boot "PROBAR DISPLAY 1" button intentionally
+                // does NOT launch another Receiver Activity, Freeform task or
+                // the Display 0 Cockpit. Keep configuration in Boot foreground.
+                final int count=incoming.getIntExtra("cluster_count",-1);
+                final int ratio=incoming.getIntExtra("cluster_percent",-1);
+                final String[] packages=new String[count==2?2:1];
+                packages[0]=incoming.getStringExtra("cluster_pkg0");
+                if(count==2)packages[1]=incoming.getStringExtra("cluster_pkg1");
+                new Thread(()->{
+                    try{
+                        String result=T1BootClusterLayout.apply(this,count,ratio,
+                            packages,false,false);
+                        report(this,"PRUEBA SOLAMENTE DISPLAY 1: "+result+
+                            "\nDriveLab Boot sigue siendo el único menú "+
+                            "de configuración. No se abrió Receiver.");
+                    }catch(Exception error){
+                        report(this,"DISPLAY 1 NO ABIERTO: "+
+                            error.getClass().getSimpleName()+": "+error.getMessage());
+                    }finally{
+                        BUSY.set(false);
+                        stopSelf(startId);
+                    }
+                },"DriveLab-Boot-Manual-Display1-Only").start();
+                return START_NOT_STICKY;
+            }
             int mode=incoming.getIntExtra("mode",-1);
             int percent=incoming.getIntExtra("percent",-1);
             if(mode<0||mode>4||percent<1||percent>99)
