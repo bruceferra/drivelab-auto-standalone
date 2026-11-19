@@ -11,6 +11,8 @@ final class BootConfig {
     static final String ACTION="ar.com.rango5gps.drivelabauto.receiver.action.APPLY_BOOT_MOSAIC";
     static final String ACTION_CLUSTER=
         "ar.com.rango5gps.drivelabauto.receiver.action.APPLY_BOOT_CLUSTER_ONLY";
+    static final String ACTION_REVEAL=
+        "ar.com.rango5gps.drivelabauto.receiver.action.REVEAL_BOOT_CENTER";
     static final String BRIDGE=
         "ar.com.rango5gps.drivelabauto.receiver.T1BootMosaicBridgeReceiver";
     static SharedPreferences prefs(Context context){
@@ -119,6 +121,35 @@ final class BootConfig {
             "Solicitud Display 0 enviada · esperando ADB y Freeform")
             .putLong("last_request",System.currentTimeMillis()).apply();
     }
+    /**
+     * Owner's primary action "MOSTRAR MOSAICO": foreground the EXISTING
+     * managed Display 0 Freeform tasks only; never start another instance,
+     * clear app data or force-stop an application.
+     */
+    static void revealCenter(Context context){
+        assertReceiver(context);
+        SharedPreferences p=prefs(context);
+        int mode=p.getInt("mode",3);
+        if(mode<0||mode>4)
+            throw new IllegalArgumentException("Diseño central inválido");
+        int count=mode==4?1:mode==3?2:3;
+        Intent request=new Intent(ACTION_REVEAL);
+        request.setComponent(new ComponentName(RECEIVER,BRIDGE));
+        request.putExtra("reveal_count",count);
+        java.util.HashSet<String> unique=new java.util.HashSet<>();
+        for(int i=0;i<count;i++){
+            String pkg=p.getString("pkg"+i,"");
+            if(!unique.add(pkg)||pkg.isEmpty())
+                throw new IllegalArgumentException("Panel duplicado o no seleccionado");
+            request.putExtra("pkg"+i,pkg);
+        }
+        context.sendBroadcast(request);
+        p.edit().putString("last_status",
+            "RECUPERANDO: buscando tareas existentes del Display 0. "+
+            "No se cierra ni se borra ninguna app.")
+            .putLong("last_request",System.currentTimeMillis()).apply();
+    }
+
     /** Manual Display 1 test only: never launches, resizes, or hides the
      * center-display mosaic. Does not navigate away from Boot's own screen.
      */
