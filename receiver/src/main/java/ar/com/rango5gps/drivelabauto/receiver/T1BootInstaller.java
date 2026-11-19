@@ -27,25 +27,31 @@ import java.security.MessageDigest;
 import java.util.Locale;
 import java.util.TreeSet;
 import java.util.concurrent.atomic.AtomicBoolean;
+import org.json.JSONArray;
+import org.json.JSONObject;
+import java.io.ByteArrayOutputStream;
 
 /**
- * Owner-initiated first installation of the separate signed DriveLab Boot APK.
- * No USB/WebADB, shell, root or vehicle settings. This immutable known-good
- * release is SHA-256 pinned and must use the installed Receiver signing cert.
+ * Owner-initiated installation/update of the separate signed DriveLab Boot APK.
+ * No USB/WebADB, shell, root or vehicle settings. Fetches SHA-256 from the
+ * EXACT official GitHub release asset, verifies it on every install, then
+ * requires the installed Receiver signing certificate and exact package.
  * Android's native PackageInstaller still requires explicit user approval.
  */
 public final class T1BootInstaller {
     private T1BootInstaller(){}
     private static final String PKG="ar.com.rango5gps.drivelabauto.boot";
-    private static final String VERSION="0.1.0";
-    private static final long CODE=1L;
+    private static final String VERSION="0.1.1";
+    private static final long CODE=2L;
+    private static final String OWNER=
+        "https://api.github.com/repos/bruceferra/drivelab-auto-standalone/";
+    private static final String RELEASE_API=OWNER+"releases/tags/v0.3.94";
+    private static final String ASSET_API=OWNER+"releases/assets/";
     private static final String URL=
         "https://github.com/bruceferra/drivelab-auto-standalone/releases/download/"+
-        "v0.3.92/DriveLab-Boot-v0.1.0.apk";
-    private static final String API_ASSET=
-        "https://api.github.com/repos/bruceferra/drivelab-auto-standalone/releases/assets/769037850";
-    private static final String SHA256=
-        "e08f0c217943a1a87b261d7a4bbbf7f454c34d118211c156f1cc7ca01099591c";
+        "v0.3.94/DriveLab-Boot-v0.1.1.apk";
+    private static final String EXPECTED_SHA="expected_boot_011_sha256";
+    private static final String EXPECTED_SIZE="expected_boot_011_size";
     private static final long LIMIT=12L*1024*1024;
     private static final String PREFS="drivelab_boot_install";
     private static final String STATUS="last_status";
@@ -61,7 +67,7 @@ public final class T1BootInstaller {
     }
     private static File apk(Context c){
         return new File(new File(c.getCacheDir(),"boot_install"),
-            "DriveLab-Boot-v0.1.0.apk");
+            "DriveLab-Boot-v0.1.1.apk");
     }
     static boolean installed(Context c){
         try{
@@ -83,10 +89,10 @@ public final class T1BootInstaller {
         if(BUSY.get()){reporter.report("Instalación de DriveLab Boot en curso");return;}
         new AlertDialog.Builder(a)
             .setTitle("Instalar DriveLab Boot · sin WebADB")
-            .setMessage("Descargar DriveLab Boot 0.1.0 (28 KB) desde la "+
+            .setMessage("Descargar/actualizar DriveLab Boot 0.1.1 (aprox. 32 KB) desde la "+
                 "publicación oficial. Se verificará SHA-256, paquete y "+
                 "certificado idéntico al Receiver. Android pedirá confirmar "+
-                "la instalación.\n\nNo cambia T1 Launcher, HOME ni clúster. "+
+                "la instalación.\n\nNo reemplaza T1 Launcher, HOME ni capas OEM. "+
                 "El inicio automático queda DESACTIVADO hasta que lo habilites.")
             .setNegativeButton("CANCELAR",null)
             .setPositiveButton("DESCARGAR E INSTALAR",
@@ -166,12 +172,18 @@ public final class T1BootInstaller {
                 File target=apk(a),dir=target.getParentFile();
                 if(!dir.isDirectory()&&!dir.mkdirs())
                     throw new IOException("No se pudo preparar almacenamiento privado");
-                // Use only the exact immutable released APK. Never accept latest
-                // unsigned JSON or an arbitrary user-supplied URL.
+                // Verify the exact release asset's immutable filename,
+                // official HTTPS URL and server-published SHA-256 before
+                // downloading; never accept a user-supplied URL or package.
                 if(!cached(a)){
+                    ReleaseAsset release=fetchReleaseAsset();
+                    if(!a.getSharedPreferences(PREFS,Context.MODE_PRIVATE)
+                        .edit().putString(EXPECTED_SHA,release.sha256)
+                        .putLong(EXPECTED_SIZE,release.size).commit())
+                        throw new IOException("No se guardó la firma de descarga");
                     File part=new File(dir,"boot-download.part");
                     Exception first=null;
-                    for(String source:new String[]{URL,API_ASSET}){
+                    for(String source:new String[]{URL,release.apiAssetUrl}){
                         if(part.isFile())part.delete();
                         try{
                             notice(a,reporter,"Descargando DriveLab Boot desde GitHub…");
@@ -185,7 +197,7 @@ public final class T1BootInstaller {
                         }catch(IOException io){
                             first=first==null?io:first;
                             part.delete();
-                            if(source.equals(API_ASSET))
+                            if(source.equals(release.apiAssetUrl))
                                 throw new IOException("No se pudo descargar Boot de GitHub: "+
                                     first.getMessage()+"; "+io.getMessage(),io);
                         }catch(Exception invalid){
@@ -209,6 +221,63 @@ public final class T1BootInstaller {
             }finally{BUSY.set(false);}
         },"DriveLab-Boot-Install-Download").start();
     }
+    /** The only trusted metadata source for Boot v0.1.1.
+     * GitHub asset SHA-256 is checked in addition to our own signing cert.
+     */
+    private static final class ReleaseAsset {
+        final String sha256,apiAssetUrl;
+        final long size;
+        ReleaseAsset(String hash,String api,long length){
+            sha256=hash;apiAssetUrl=api;size=length;
+        }
+    }
+    private static ReleaseAsset fetchReleaseAsset()throws Exception{
+        HttpURLConnection conn=openHttps(RELEASE_API);
+        byte[] raw;
+        try{
+            if(conn.getContentLengthLong()>256000)
+                throw new IOException("Respuesta de GitHub demasiado grande");
+            try(InputStream in=conn.getInputStream();
+                ByteArrayOutputStream out=new ByteArrayOutputStream()){
+                byte[] buffer=new byte[4096];int n;
+                while((n=in.read(buffer))!=-1){
+                    if(out.size()+n>256000)
+                        throw new IOException("Metadatos GitHub demasiado grandes");
+                    out.write(buffer,0,n);
+                }
+                raw=out.toByteArray();
+            }
+        }finally{conn.disconnect();}
+        JSONObject release=new JSONObject(
+            new String(raw,java.nio.charset.StandardCharsets.UTF_8));
+        if(!"v0.3.94".equals(release.getString("tag_name"))||
+           release.optBoolean("draft",false)||
+           release.optBoolean("prerelease",false))
+            throw new SecurityException("La publicación Boot no es estable");
+        JSONArray assets=release.getJSONArray("assets");
+        JSONObject found=null;
+        for(int i=0;i<assets.length();i++){
+            JSONObject a=assets.getJSONObject(i);
+            if("DriveLab-Boot-v0.1.1.apk".equals(a.optString("name"))){
+                if(found!=null)
+                    throw new SecurityException("APK Boot duplicada en release");
+                found=a;
+            }
+        }
+        if(found==null)throw new IOException("Release sin DriveLab Boot 0.1.1");
+        String digest=found.getString("digest").toLowerCase(Locale.ROOT);
+        String address=found.getString("browser_download_url");
+        String api=found.getString("url");
+        long id=found.getLong("id");
+        long size=found.getLong("size");
+        if(!URL.equals(address)||id<1||!ASSET_API.concat(
+                String.valueOf(id)).equals(api)||
+           !digest.matches("sha256:[a-f0-9]{64}")||
+           size<1024||size>LIMIT)
+            throw new SecurityException("Release Boot inválida (URL/SHA/tamaño)");
+        return new ReleaseAsset(digest.substring(7),api,size);
+    }
+
     private static void transfer(String source,File destination)throws Exception{
         HttpURLConnection c=openHttps(source);
         try{
@@ -243,9 +312,10 @@ public final class T1BootInstaller {
             conn.setInstanceFollowRedirects(false);
             conn.setConnectTimeout(14000);
             conn.setReadTimeout(70000);
-            conn.setRequestProperty("User-Agent","DriveLab-Boot-Installer/0.3.93");
+            conn.setRequestProperty("User-Agent","DriveLab-Boot-Installer/0.3.94");
             if(host.equals("api.github.com")){
-                conn.setRequestProperty("Accept","application/octet-stream");
+                conn.setRequestProperty("Accept",current.getPath().contains("/assets/")?
+                    "application/octet-stream":"application/vnd.github+json");
                 conn.setRequestProperty("X-GitHub-Api-Version","2022-11-28");
             }
             int status=conn.getResponseCode();
@@ -272,7 +342,15 @@ public final class T1BootInstaller {
             byte[] buf=new byte[16384];int n;
             while((n=in.read(buf))!=-1)md.update(buf,0,n);
         }
-        if(!SHA256.equals(hex(md.digest())))
+        android.content.SharedPreferences p=c.getSharedPreferences(
+            PREFS,Context.MODE_PRIVATE);
+        String expected=p.getString(EXPECTED_SHA,"");
+        long expectedSize=p.getLong(EXPECTED_SIZE,0L);
+        if(!expected.matches("[a-f0-9]{64}")||
+           expectedSize<1024||expectedSize>LIMIT||file.length()!=expectedSize)
+            throw new SecurityException(
+                "La descarga no coincide con el manifiesto GitHub aprobado");
+        if(!expected.equals(hex(md.digest())))
             throw new SecurityException("El SHA-256 de Boot no coincide");
         try(InputStream in=new FileInputStream(file)){
             if(in.read()!=0x50||in.read()!=0x4b)
