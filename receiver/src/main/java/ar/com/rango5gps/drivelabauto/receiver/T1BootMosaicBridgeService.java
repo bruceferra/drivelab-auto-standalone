@@ -39,6 +39,42 @@ public final class T1BootMosaicBridgeService extends Service {
                 T1BootMosaicBridgeReceiver.PERMISSION);
         }catch(Exception ignored){}
     }
+    /**
+     * Receiver is the ONLY authoritative persisted Display 1 layout.
+     * Send an exact signed snapshot back to Boot for display, never
+     * synchronize by guessing from Boot's duplicated 50/50 defaults.
+     */
+    static void reportClusterState(Context context,String note){
+        android.content.SharedPreferences prefs=T1ClusterWazeRouter.prefs(context);
+        int ratio=T1ClusterLayoutPolicy.number(context,
+            T1ClusterLayoutPolicy.SPLIT_PERCENT,50,30,70);
+        boolean dual=T1ClusterLayoutPolicy.savedDualSplit(context);
+        String a=T1ClusterLayoutPolicy.firstPackage(context);
+        String b=T1ClusterLayoutPolicy.secondPackage(context);
+        String source="RECEIVER · DISPLAY 1 · "+(dual?"DOS PANELES":"UN PANEL")+
+            " · "+a+(dual?" + "+b:"")+
+            (dual?" · "+ratio+"/"+(100-ratio):" · 100%")+
+            "\n"+note;
+        try{
+            Intent reply=new Intent(RESULT_ACTION);
+            reply.setClassName(T1BootMosaicBridgeReceiver.BOOT_PACKAGE,
+                "ar.com.rango5gps.drivelabauto.boot.BootResultReceiver");
+            reply.putExtra("result",source);
+            reply.putExtra("cluster_snapshot",true);
+            reply.putExtra("cluster_count",dual?2:1);
+            reply.putExtra("cluster_percent",ratio);
+            reply.putExtra("cluster_pkg0",a);
+            reply.putExtra("cluster_pkg1",b);
+            reply.putExtra("cluster_enabled",
+                T1ClusterWazeRouter.enabled(context));
+            reply.putExtra("cluster_display_id",
+                prefs.getInt(T1ClusterWazeRouter.DISPLAY_ID,-1));
+            context.sendBroadcast(reply,T1BootMosaicBridgeReceiver.PERMISSION);
+        }catch(Exception error){
+            report(context,"NO SE PUDO LEER ESTADO DE DISPLAY 1: "+
+                error.getClass().getSimpleName());
+        }
+    }
     @Override public IBinder onBind(Intent intent){return null;}
     @Override public void onCreate(){
         super.onCreate();
@@ -63,6 +99,14 @@ public final class T1BootMosaicBridgeService extends Service {
         }
         try{
             if(incoming==null)throw new IllegalArgumentException("Sin pedido");
+            if(incoming.getBooleanExtra("cluster_state_only",false)){
+                // Read-only, no window changes, and never launch a map.
+                reportClusterState(this,"Estado real guardado; "+
+                    "no confirma visibilidad de dos ventanas.");
+                BUSY.set(false);
+                stopSelf(startId);
+                return START_NOT_STICKY;
+            }
             if(incoming.getBooleanExtra("reveal_only",false)){
                 // Only identify and move the tasks that DriveLab already
                 // created on Display 0. Never force-stop a running app or
@@ -104,9 +148,9 @@ public final class T1BootMosaicBridgeService extends Service {
                     try{
                         String result=T1BootClusterLayout.apply(this,count,ratio,
                             packages,false,false);
-                        report(this,"PRUEBA SOLAMENTE DISPLAY 1: "+result+
-                            "\nDriveLab Boot sigue siendo el único menú "+
-                            "de configuración. No se abrió Receiver.");
+                        reportClusterState(this,"PRUEBA DISPLAY 1: "+result+
+                            "\nBoot administra el diseño; Receiver ejecuta "+
+                            "sin abrir otra pantalla de ajustes.");
                     }catch(Exception error){
                         report(this,"DISPLAY 1 NO ABIERTO: "+
                             error.getClass().getSimpleName()+": "+error.getMessage());
@@ -200,7 +244,7 @@ public final class T1BootMosaicBridgeService extends Service {
                             String secondary=T1BootClusterLayout.apply(
                                 this,clusterCount,clusterPercent,
                                 clusterPackages,fromBoot,confirmed);
-                            report(this,center+"\n"+secondary);
+                            reportClusterState(this,center+"\n"+secondary);
                         }catch(Exception e){
                             report(this,center+"\nDISPLAY 1 NO CONFIRMADO: "+
                                 e.getClass().getSimpleName()+": "+e.getMessage());
