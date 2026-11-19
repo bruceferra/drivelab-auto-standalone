@@ -49,8 +49,11 @@ public final class T1BootMosaicBridgeService extends Service {
         int ratio=T1ClusterLayoutPolicy.number(context,
             T1ClusterLayoutPolicy.SPLIT_PERCENT,50,30,70);
         boolean dual=T1ClusterLayoutPolicy.savedDualSplit(context);
-        String a=T1ClusterLayoutPolicy.firstPackage(context);
-        String b=T1ClusterLayoutPolicy.secondPackage(context);
+        String a=dual?T1ClusterLayoutPolicy.firstPackage(context):
+            T1ClusterLayoutPolicy.singlePackage(context);
+        String b=dual?T1ClusterLayoutPolicy.secondPackage(context):
+            (a.equals("com.waze")?
+                "com.google.android.apps.maps":"com.waze");
         String source="RECEIVER · DISPLAY 1 · "+(dual?"DOS PANELES":"UN PANEL")+
             " · "+a+(dual?" + "+b:"")+
             (dual?" · "+ratio+"/"+(100-ratio):" · 100%")+
