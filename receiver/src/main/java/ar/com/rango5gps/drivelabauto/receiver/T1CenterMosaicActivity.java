@@ -276,6 +276,28 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
                 }))
             .show();
     }
+    private void testDualFreeformOnCenter(){
+        new AlertDialog.Builder(this)
+            .setTitle("PROBAR DOS VENTANAS · DISPLAY 0")
+            .setMessage("Con el vehículo detenido, se abrirán dos "+
+                "ventanas temporales y separadas de DriveLab: "+
+                "izquierda y derecha. Se pedirá 50% para cada una y "+
+                "se verificará si ambas son visibles simultáneamente. "+
+                "Cada una se elimina sola a los 30 segundos. "+
+                "No toca ProManager, Uber, HOME, controles OEM, "+
+                "configuración global ni Display 1. ¿Ejecutar?")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("PROBAR",(dialog,which)->
+                T1CenterDualFreeformProbe.run(this,result->{
+                    getSharedPreferences(PREFS,MODE_PRIVATE).edit()
+                        .putString("last_dual_freeform_probe",result).apply();
+                    new AlertDialog.Builder(this)
+                        .setTitle("RESULTADO · DOS VENTANAS DISPLAY 0")
+                        .setMessage(result)
+                        .setPositiveButton("OK",null).show();
+                }))
+            .show();
+    }
     private void draw(){
         ScrollView scroll=new ScrollView(this);
         scroll.setBackgroundColor(0xFF101A23);
@@ -337,6 +359,15 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
                 .setMessage(getSharedPreferences(PREFS,MODE_PRIVATE)
                     .getString("last_own_freeform_probe",
                         "Sin prueba aislada todavía"))
+                .setPositiveButton("OK",null).show());
+        button("PROBAR DOS VENTANAS PROPIAS · DISPLAY 0",
+            this::testDualFreeformOnCenter);
+        button("VER RESULTADO · DOS VENTANAS",()->
+            new AlertDialog.Builder(this)
+                .setTitle("ÚLTIMO RESULTADO · DOS VENTANAS")
+                .setMessage(getSharedPreferences(PREFS,MODE_PRIVATE)
+                    .getString("last_dual_freeform_probe",
+                        "Aún no probaste las dos ventanas"))
                 .setPositiveButton("OK",null).show());
         button("PROBAR MOSAICO REAL · ADB DISPLAY 0",this::applyAdbOnCenter);
         // Old ActivityOptions-only trial intentionally hidden: OEM ignored bounds.
