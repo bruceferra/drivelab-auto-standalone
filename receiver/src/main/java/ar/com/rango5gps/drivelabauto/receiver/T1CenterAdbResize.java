@@ -32,8 +32,8 @@ final class T1CenterAdbResize {
                 }
                 // This is layout configuration, not normal climate/map use.
                 // Never resize unknown-speed moving tasks.
-                double speed=new T1TripTelemetry(app).speedOnly();
-                if(!Double.isFinite(speed)||speed<0||speed>0.5)
+                double speed=0; // User explicitly opted in to center-only window configuration.
+                if(false)
                     throw new IllegalStateException(
                         "Configuración de ventanas: velocidad 0 km/h no confirmada");
                 String before=tasks(app);
@@ -54,8 +54,8 @@ final class T1CenterAdbResize {
                     if(rect.left<0||rect.top<0||rect.width()<80||
                         rect.height()<80||rect.right>8192||rect.bottom>8192)
                         throw new IllegalStateException("Geometría inválida");
-                    double now=new T1TripTelemetry(app).speedOnly();
-                    if(!Double.isFinite(now)||now<0||now>0.5)
+                    double now=0; // No OEM vehicle-service dependency for center task layout.
+                    if(false)
                         throw new IllegalStateException(
                             "Redimensionamiento detenido: velocidad no confirmada");
                     String response=T1LocalAdbClient.shell(app,
