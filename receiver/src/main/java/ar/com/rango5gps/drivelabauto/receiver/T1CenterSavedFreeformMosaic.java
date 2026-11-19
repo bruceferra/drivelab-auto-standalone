@@ -41,6 +41,17 @@ final class T1CenterSavedFreeformMosaic {
         return context.getSharedPreferences(PREFS,Context.MODE_PRIVATE)
             .getInt("task_"+pkg,-1);
     }
+    /** Read and validate the exact previously created task without
+     * starting, resizing or removing any Android activity.
+     */
+    static T1AdbTaskParser.Task verifiedRememberedTask(
+            Context context,String pkg)throws Exception{
+        int task=rememberedTaskId(context,pkg);
+        if(task<=0)
+            throw new IllegalStateException(
+                "No hay tarea del mosaico guardada para "+pkg);
+        return exact(context,task,pkg);
+    }
     static void apply(Context context,String[] packages,
             T1CenterMosaicGeometry.Tile[] tiles,int count,Done done){
         Context app=context.getApplicationContext();
