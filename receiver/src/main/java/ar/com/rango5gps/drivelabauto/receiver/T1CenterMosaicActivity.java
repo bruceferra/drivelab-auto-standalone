@@ -66,6 +66,17 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
         for(ResolveInfo info:pm.queryIntentActivities(query,0)){
             if(info.activityInfo==null)continue;
             String pkg=info.activityInfo.packageName;
+            // Daily mosaics only handle external user-installed launchers.
+            // Never present vehicle/Home/system apps as movable panels.
+            if(!T1CenterUserPackagePolicy.allowed(pkg))continue;
+            try{
+                android.content.pm.ApplicationInfo ai=
+                    pm.getApplicationInfo(pkg,0);
+                if((ai.flags&(
+                    android.content.pm.ApplicationInfo.FLAG_SYSTEM|
+                    android.content.pm.ApplicationInfo.FLAG_UPDATED_SYSTEM_APP))!=0)
+                    continue;
+            }catch(Exception ex){continue;}
             apps.put(info.loadLabel(pm)+" · "+pkg,pkg);
         }
         if(apps.isEmpty()){text("No se encontraron aplicaciones visibles",14);return;}
@@ -298,6 +309,66 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
                 }))
             .show();
     }
+    /** Driver-triggered, persistent layout. Uses verified Freeform mode 5
+     * + exact task IDs, NOT the old fullscreen ActivityOptions trial.
+     */
+    private void applySavedFreeformMosaic(){
+        int count=mode==T1CenterMosaicGeometry.TWO_COLUMNS?2:3;
+        java.util.HashSet<String> unique=new java.util.HashSet<>();
+        for(int i=0;i<count;i++){
+            String pkg=packages[i];
+            if(!T1CenterUserPackagePolicy.allowed(pkg)||!unique.add(pkg)){
+                new AlertDialog.Builder(this)
+                    .setTitle("ELEGIR APLICACIONES EXTERNAS")
+                    .setMessage("Elegí "+count+" aplicaciones instaladas, "+
+                        "diferentes entre sí, desde PANEL 1, 2"+
+                        (count==3?" y 3":"")+
+                        ". No se permiten DriveLab Auto, HOME ni apps "+
+                        "del sistema del vehículo. Los paneles existentes "+
+                        "no se modificaron.")
+                    .setPositiveButton("ENTENDIDO",null).show();
+                return;
+            }
+        }
+        T1CenterMosaicGeometry.Tile[] desired;
+        try{
+            android.util.DisplayMetrics metrics=new android.util.DisplayMetrics();
+            getWindowManager().getDefaultDisplay().getRealMetrics(metrics);
+            desired=T1CenterMosaicGeometry.layout(
+                metrics.widthPixels,metrics.heightPixels,mode,percent);
+        }catch(Exception ex){
+            new AlertDialog.Builder(this).setTitle("MOSAICO")
+                .setMessage("No se obtuvo la geometría: "+ex.getMessage())
+                .setPositiveButton("OK",null).show();
+            return;
+        }
+        String[] requested=packages.clone();
+        new AlertDialog.Builder(this)
+            .setTitle("APLICAR MOSAICO FREEFORM · DISPLAY 0")
+            .setMessage("Abrir "+count+" aplicaciones externas en la "+
+                "distribución "+MODES[mode]+" ("+percent+"%). "+
+                "Se iniciarán como Freeform 5 y luego se ajustará "+
+                "cada ventana. Si hay ventanas creadas por este mosaico, "+
+                "se reutilizarán al cambiar el tamaño; las tareas "+
+                "antiguas ajenas a DriveLab no se redimensionan. "+
+                "Dejá el vehículo detenido para configurar el mosaico. "+
+                "HOME, OEM y clúster quedan intactos. ¿Aplicar?")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("APLICAR",(dialog,which)->{
+                save();
+                T1CenterSavedFreeformMosaic.apply(this,requested,desired,
+                    count,result->{
+                        getSharedPreferences(PREFS,MODE_PRIVATE).edit()
+                            .putString("last_saved_freeform",result).apply();
+                        if(!isFinishing()&&!isDestroyed()){
+                            new AlertDialog.Builder(this)
+                                .setTitle("RESULTADO · MOSAICO CONFIGURABLE")
+                                .setMessage(result)
+                                .setPositiveButton("OK",null).show();
+                        }
+                    });
+            }).show();
+    }
     private void testExternalFreeformOnCenter(){
         new AlertDialog.Builder(this)
             .setTitle("PROBAR PROMANAGER + UBER · DISPLAY 0")
@@ -360,7 +431,17 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
                 .append(names[i]).append(" · ").append(tiles[i].bounds())
                 .append("\n");
         text(preview.toString(),14);
-        text("DISPLAY 0 · Pantalla central. La prueba utiliza ADB y no modifica las tareas del clúster (Display 1).",13);
+        text("DISPLAY 0 · Elegí 2 o 3 aplicaciones externas. "+
+            "El mosaico Freeform funciona sin alterar Display 1 ni HOME.",13);
+        button("APLICAR MOSAICO GUARDADO · FREEFORM REAL",
+            this::applySavedFreeformMosaic);
+        button("VER RESULTADO · MOSAICO GUARDADO",()->
+            new AlertDialog.Builder(this)
+                .setTitle("ÚLTIMO MOSAICO GUARDADO")
+                .setMessage(getSharedPreferences(PREFS,MODE_PRIVATE)
+                    .getString("last_saved_freeform",
+                        "Todavía no aplicaste un mosaico configurable"))
+                .setPositiveButton("OK",null).show());
         String last=getSharedPreferences(PREFS,MODE_PRIVATE)
             .getString("last_apply","Nunca aplicado");
         String brief=last.split("\n",2)[0];
@@ -404,7 +485,8 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
                     .getString("last_external_freeform_probe",
                         "Aún no probaste ProManager y Uber Beta"))
                 .setPositiveButton("OK",null).show());
-        button("PROBAR MOSAICO REAL · ADB DISPLAY 0",this::applyAdbOnCenter);
+        // Old fullscreen-only ADB experiment kept in source for historic
+        // diagnostics, but hidden: the verified path is Freeform mode 5.
         // Old ActivityOptions-only trial intentionally hidden: OEM ignored bounds.
         button("GUARDAR CONFIGURACIÓN",()->{
             save();new AlertDialog.Builder(this).setMessage(
