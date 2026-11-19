@@ -23,7 +23,7 @@ public final class T1ToolbarUpdateShortcutContractTest {
         int arrange=toolbar.indexOf("enableRowReorder(leading,\"first\")");
         require(clock>=0&&repair>clock&&update>repair&&arrange>update,
             "Top right order must be clock, small Maps repair, last update icon");
-        require(toolbar.contains("button(header,\"MAPAS\"")&&
+        require(toolbar.contains("button(header,\"MAPAS · OFF\"")&&
             toolbar.contains("Button update=button(header,\"⟳\"")&&
             toolbar.contains("T1JetourTheme.GREEN_BUTTON,46,"),
             "Updater should be a distinct small square refresh icon");
