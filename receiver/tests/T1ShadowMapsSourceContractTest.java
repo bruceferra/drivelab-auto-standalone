@@ -44,9 +44,9 @@ public final class T1ShadowMapsSourceContractTest {
             ui.contains("ACTUALIZAR MÉTRICAS · 3 MAPAS")&&
             ui.contains("SUBIR DIAGNÓSTICO 3 MAPAS"),
             "Install, audit and upload comparison via existing QR");
-        ok(toolbar.contains("regenIndicator=readOnlyIndicator(header")&&
-            toolbar.contains("batteryIndicator=readOnlyIndicator(header")&&
-            toolbar.contains("socTargetIndicator=readOnlyIndicator(header")&&
+        ok(toolbar.contains("regenIndicator=readOnlyIndicator(leading")&&
+            toolbar.contains("batteryIndicator=readOnlyIndicator(leading")&&
+            toolbar.contains("socTargetIndicator=readOnlyIndicator(leading")&&
             toolbar.contains("snapshot.regen1046")&&
             toolbar.contains("snapshot.socTargetInt"),
             "Permanent first-row indicators show actual OEM readbacks");
