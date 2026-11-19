@@ -62,7 +62,7 @@ jobs:
           grep -Fq 'T1CenterAdbResize.allowed(packages[i])' "$source"
           grep -Fq 'T1CenterAdbResize.apply(this,selected,' "$source"
           adb_source=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CenterAdbResize.java
-          grep -Fq 'uniqueCenter(before,packages[i])' "$adb_source"
+          grep -Fq 'findTask(before,beforeDump,packages[i])' "$adb_source"
           grep -Fq 'am task resize ' "$adb_source"
           grep -Fq '!pkg.startsWith("com.jetour.")' "$adb_source"
           grep -Fq 'DIAGNOSTICAR TAREAS ADB · DISPLAY 0' "$source"
