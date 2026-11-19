@@ -21,9 +21,9 @@ public final class T1ClusterForegroundRecoveryContractTest {
         check(!toolbar.contains("button(actions,\"TOMAR CONTROL\"")&&
             !toolbar.contains("this::takeClusterControl")&&
             toolbar.contains("this::confirmClusterReload")&&
-            toolbar.contains("REPARAR MAPAS")&&
-            toolbar.contains("T1ClusterManualReboot.run(owner,message->"),
-            "Retired TOMAR CONTROL replaced by visible one-tap map repair");
+            toolbar.contains("MAPAS · REPARACIÓN DESACTIVADA")&&
+            !toolbar.contains("T1ClusterManualReboot.run(owner,message->"),
+            "Retired TOMAR CONTROL stays unavailable; Android 11 destructive MAPAS repair disabled");
         check(foreground.contains("T1ClusterLayoutPolicy.savedDualSplit(app)")&&
             foreground.contains("d.getDisplayId()!=1")&&
             foreground.contains("WAZE.equals(a)&&MAPS.equals(b)")&&
