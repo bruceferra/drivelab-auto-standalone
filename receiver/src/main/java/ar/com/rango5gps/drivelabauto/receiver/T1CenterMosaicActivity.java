@@ -90,50 +90,16 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
                 "ignorar los límites si Jetour deshabilitó freeform. "+
                 "No se toca el clúster ni el HOME original. "+
                 "Para volver, abrí DriveLab desde su icono. "+
-                "¿Aplicar ahora con el vehículo detenido?")
+                "¿Abrir la distribución guardada? Si estás conduciendo, usá solo controles simples y evitá configurar ventanas.")
             .setNegativeButton("CANCELAR",null)
             .setPositiveButton("APLICAR",(d,w)->launchCenterTiles())
             .show();
     }
     private void launchCenterTiles(){
         try{
-            // A failed OEM binder is NOT proof of zero speed. Keep the
-            // safety gate, but report a diagnostic instead of a raw exception.
-            double speed;
-            try{
-                MirrorAutomationOem oem=new MirrorAutomationOem(this);
-                try{speed=oem.speedKmh();}finally{oem.close();}
-            }catch(Exception oemFailure){
-                // The cockpit already reads 2148/1089 via its independent,
-                // read-only trip telemetry connector. Retry that established
-                // path instead of treating mirror Binder failure as global.
-                double alternate=new T1TripTelemetry(this).speedOnly();
-                if(Double.isFinite(alternate)&&alternate>=0&&alternate<=220){
-                    speed=alternate;
-                }else{
-                String message="BLOQUEADO: Vehicle Service no responde. "+
-                    "No se abrieron ventanas porque DriveLab no pudo "+
-                    "confirmar 0 km/h. Revisá VEHÍCULO · ESTADO Y AJUSTES "+
-                    "y volvé a probar cuando la lectura OEM funcione. "+
-                    "Detalle: "+oemFailure.getClass().getSimpleName()+
-                    " · "+String.valueOf(oemFailure.getMessage());
-                getSharedPreferences(PREFS,MODE_PRIVATE).edit()
-                    .putString("last_apply",message).apply();
-                new AlertDialog.Builder(this)
-                    .setTitle("MOSAICO · VELOCIDAD OEM NO DISPONIBLE")
-                    .setMessage(message)
-                    .setPositiveButton("ENTENDIDO",null).show();
-                return;
-                }
-            }
-            if(!Double.isFinite(speed)||speed<0||speed>0.5){
-                String message="BLOQUEADO: velocidad 0 km/h no confirmada "+
-                    "(lectura OEM "+speed+" km/h). No se abrieron ventanas.";
-                getSharedPreferences(PREFS,MODE_PRIVATE).edit()
-                    .putString("last_apply",message).apply();
-                Toast.makeText(this,message,Toast.LENGTH_LONG).show();
-                return;
-            }
+            // Everyday launch is not an OEM operation. No Vehicle Service
+            // query: missing mirror/speed Binder must not block saved apps.
+            // Keep editing and dragging as separate deliberate actions.
             android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
             getWindowManager().getDefaultDisplay().getRealMetrics(dm);
             int w=dm.widthPixels,h=dm.heightPixels;
