@@ -133,6 +133,17 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
         label(body,"FUNCIONES",17);
         button(body,"COCKPIT · VIAJES Y ENERGÍA",()->
             startActivity(new Intent(this,T1PremiumCockpitActivity.class)));
+        button(body,"▦ VOLVER AL MOSAICO · RECUPERAR VENTANAS",
+            ()->T1CenterMosaicRecovery.restore(this,(requested,report)->{
+                if(requested||isFinishing()||isDestroyed())return;
+                new AlertDialog.Builder(this)
+                    .setTitle("MOSAICO NO RECUPERADO")
+                    .setMessage(report)
+                    .setNegativeButton("CERRAR",null)
+                    .setPositiveButton("CONFIGURAR",(d,w)->
+                        startActivity(new Intent(this,
+                            T1CenterMosaicActivity.class))).show();
+            }));
         button(body,"MOSAICO · PANTALLA CENTRAL",()->
             startActivity(new Intent(this,T1CenterMosaicActivity.class)));
         button(body,"APPS ABIERTAS · CERRAR / LIMPIAR MEMORIA",()->
