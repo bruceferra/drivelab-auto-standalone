@@ -70,9 +70,9 @@ final class T1CenterOwnFreeformProbe {
             report.append("ANTES Activity: task=").append(task)
                 .append(" · ").append(ui).append('\n');
             String pkg=app.getPackageName();
-            String stack=T1LocalAdbClient.shell(app,"am stack list");
-            String activities=T1LocalAdbClient.shell(app,
-                "dumpsys activity activities");
+            String stack=T1LocalAdbClient.shellTaskExcerpt(app,"am stack list",task);
+            String activities=T1LocalAdbClient.shellTaskExcerpt(app,
+                "dumpsys activity activities",task);
             T1AdbTaskParser.Task before=T1AdbTaskParser.exactCenter(
                 stack,task,pkg);
             boolean own=isOwnDisposableTask(stack,task,pkg);
@@ -101,7 +101,7 @@ final class T1CenterOwnFreeformProbe {
             T1AdbTaskParser.Box target=new T1AdbTaskParser.Box(
                 0,0,half,bounds.bottom);
             // Reconfirm correct temporary component immediately before ADB.
-            String fresh=T1LocalAdbClient.shell(app,"am stack list");
+            String fresh=T1LocalAdbClient.shellTaskExcerpt(app,"am stack list",task);
             T1AdbTaskParser.Task check=T1AdbTaskParser.exactCenter(
                 fresh,task,pkg);
             if(check==null||check.id!=task||check.display!=0||
@@ -116,11 +116,11 @@ final class T1CenterOwnFreeformProbe {
                 return report+"La ROM rechazó el resize de la "+
                     "tarea Freeform propia.";
             Thread.sleep(1400L);
-            String afterStack=T1LocalAdbClient.shell(app,"am stack list");
+            String afterStack=T1LocalAdbClient.shellTaskExcerpt(app,"am stack list",task);
             T1AdbTaskParser.Task after=T1AdbTaskParser.exactCenter(
                 afterStack,task,pkg);
-            String afterDump=T1LocalAdbClient.shell(app,
-                "dumpsys activity activities");
+            String afterDump=T1LocalAdbClient.shellTaskExcerpt(app,
+                "dumpsys activity activities",task);
             boolean afterFreeform=T1CenterWindowModePolicy.isFreeform(
                 afterDump,task,pkg);
             boolean sized=after!=null&&
