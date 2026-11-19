@@ -13,6 +13,8 @@ public final class T1BootMosaicBridgeReceiver extends BroadcastReceiver {
     static final String BOOT_PACKAGE="ar.com.rango5gps.drivelabauto.boot";
     static final String ACTION_APPLY=
         "ar.com.rango5gps.drivelabauto.receiver.action.APPLY_BOOT_MOSAIC";
+    static final String ACTION_CLUSTER=
+        "ar.com.rango5gps.drivelabauto.receiver.action.APPLY_BOOT_CLUSTER_ONLY";
     static final String ACTION_TAKEOVER=
         "ar.com.rango5gps.drivelabauto.receiver.action.BOOT_MOSAIC_TAKEOVER";
     static final String PERMISSION=
@@ -20,6 +22,7 @@ public final class T1BootMosaicBridgeReceiver extends BroadcastReceiver {
     @Override public void onReceive(Context context,Intent intent){
         if(intent==null||!(
             ACTION_APPLY.equals(intent.getAction())||
+            ACTION_CLUSTER.equals(intent.getAction())||
             ACTION_TAKEOVER.equals(intent.getAction())))return;
         if(context.getPackageManager().checkSignatures(
             context.getPackageName(),BOOT_PACKAGE)!=
@@ -60,6 +63,7 @@ public final class T1BootMosaicBridgeReceiver extends BroadcastReceiver {
         try{
             Intent service=new Intent(context,T1BootMosaicBridgeService.class);
             service.putExtras(intent);
+            service.putExtra("cluster_only",ACTION_CLUSTER.equals(intent.getAction()));
             context.startForegroundService(service);
         }catch(Exception ex){
             T1BootMosaicBridgeService.report(context,
