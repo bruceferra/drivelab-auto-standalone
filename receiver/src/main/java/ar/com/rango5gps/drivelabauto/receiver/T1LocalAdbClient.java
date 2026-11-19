@@ -89,59 +89,6 @@ final class T1LocalAdbClient {
             throw new SecurityException("Consulta ADB de tarea no permitida");
         return shellInternal(context,command,taskId);
     }
-    private static final class TaskLineFilter {
-        private final boolean stacks;
-        private final String exactTask,taskHeader;
-        private final StringBuilder line=new StringBuilder();
-        private final StringBuilder selected=new StringBuilder();
-        private String latestStack="";
-        private int captured=0;
-        TaskLineFilter(String command,int id){
-            stacks=command.equals("am stack list");
-            exactTask="taskId="+id+":";
-            taskHeader="#"+id;
-        }
-        void accept(byte[] payload){
-            // Structural Android task output is ASCII even if other dump lines
-            // contain non-ASCII user labels; only structural lines are retained.
-            String text=new String(payload,StandardCharsets.UTF_8);
-            for(int i=0;i<text.length();i++){
-                char ch=text.charAt(i);
-                if(ch=='\n'){
-                    takeLine(line.toString());
-                    line.setLength(0);
-                }else if(line.length()<3072){
-                    line.append(ch);
-                }
-            }
-        }
-        void finish(){if(line.length()>0)takeLine(line.toString());}
-        private void takeLine(String raw){
-            String trimmed=raw.trim();
-            if(stacks){
-                if(trimmed.startsWith("Stack id=")||trimmed.startsWith("Stack ")){
-                    latestStack=raw;
-                    return;
-                }
-                if(raw.contains(exactTask)){
-                    if(!latestStack.isEmpty())append(latestStack);
-                    append(raw);
-                }
-            }else if(raw.contains(taskHeader)){
-                // Guard numeric task boundaries; do not match #2810 inside #28101.
-                int pos=raw.indexOf(taskHeader);
-                if(pos>=0&&(pos+taskHeader.length()==raw.length()||
-                    !Character.isDigit(raw.charAt(pos+taskHeader.length()))))
-                    append(raw);
-            }
-        }
-        private void append(String text){
-            if(++captured>12||selected.length()+text.length()>16384)
-                throw new IllegalStateException("Demasiadas coincidencias de tarea ADB");
-            selected.append(text).append('\n');
-        }
-        String result(){return selected.toString();}
-    }
     private static String shellInternal(Context context,String command,int taskId)
             throws Exception{
         // STRICT command whitelist, no shell metacharacters or package names.
@@ -213,8 +160,8 @@ final class T1LocalAdbClient {
             send(sock,"OPEN",1,0,ascii("shell:"+command+"\0"));
             int remote=0;
             ByteArrayOutputStream output=new ByteArrayOutputStream();
-            TaskLineFilter excerpt=taskId>0?
-                new TaskLineFilter(command,taskId):null;
+            T1AdbTaskExcerpt excerpt=taskId>0?
+                new T1AdbTaskExcerpt(command,taskId):null;
             int scannedBytes=0;
             for(int i=0;i<(excerpt==null?150:8192);i++){
                 Message msg=read(in);
