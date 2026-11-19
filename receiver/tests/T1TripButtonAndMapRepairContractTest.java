@@ -36,17 +36,13 @@ public final class T1TripButtonAndMapRepairContractTest {
         check(ui.contains("if(T1JourneyStore.paused(this))askClient();else pauseClient()")&&
             ui.contains("if(T1JourneyStore2.paused(this))askSecond();else pauseSecond()"),
             "Paused trip must resume rather than start another trip");
-        check(adb.contains("pm clear --cache-only com.waze")&&
-            adb.contains("pm clear --cache-only com.google.android.apps.maps")&&
-            !adb.contains("command.equals(\"pm clear com.waze\")")&&
-            !adb.contains("command.equals(\"pm clear com.google.android.apps.maps\")"),
-            "Manual repair may clear cache only, never app data");
-        check(reboot.contains("gear!=1||!Double.isFinite(speed)")&&
-            reboot.contains("T1LocalAdbClient.shell(owner,")&&
-            reboot.contains("\"pm clear --cache-only \"+pkg")&&
-            reboot.contains("T1ClusterFreshStart.prepare(owner)")&&
-            reboot.contains("performOff(owner,update)"),
-            "Manual repair requires parked safety gate, cache clear, stop, and OFF/ON");
+        check(!adb.contains("!command.equals(\"pm clear")&&
+            !adb.contains("!command.matches(\"pm clear"),
+            "Android 11 must forbid all pm clear: --cache-only erases user data");
+        check(!reboot.contains("T1LocalAdbClient.shell(")&&
+            !reboot.contains("T1ClusterFreshStart.prepare(")&&
+            reboot.contains("REPARAR MAPAS DESACTIVADO POR SEGURIDAD"),
+            "Manual REBOOT must never erase accounts, offline maps or settings");
         System.out.println("Trip controls and manual map repair: OK");
     }
 }
