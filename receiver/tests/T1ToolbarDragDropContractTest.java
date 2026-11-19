@@ -8,7 +8,7 @@ public final class T1ToolbarDragDropContractTest {
     public static void main(String[] args)throws Exception{
         String s=Files.readString(Path.of(
             "receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1GlobalToolbar.java"));
-        check(s.contains("enableRowReorder(header,\"first\")")&&
+        check(s.contains("enableRowReorder(leading,\"first\")")&&
             s.contains("enableRowReorder(actions,\"second\")"),
             "Both button rows must support reordering");
         check(s.contains("T1DragCue.attach(")&&
