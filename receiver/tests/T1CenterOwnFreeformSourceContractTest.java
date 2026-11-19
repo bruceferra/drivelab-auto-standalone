@@ -51,7 +51,7 @@ public final class T1CenterOwnFreeformSourceContractTest {
             own.contains("T1CenterWindowModePolicy.isFreeform(")&&
             own.contains("check.bounds.near(bounds,0)")&&
             own.contains("am task resize ")&&
-            own.contains("after.bounds.near(target,20)"),
+            own.contains("T1CenterFreeformGeometry.half(after.bounds,target)"),
             "Resize is limited to an exact, still-live DriveLab test task "+
             "and must verify the resulting 50% geometry");
         check(!own.contains("am task resizeable ")&&
