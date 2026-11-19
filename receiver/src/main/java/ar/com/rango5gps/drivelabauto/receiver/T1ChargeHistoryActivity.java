@@ -154,12 +154,42 @@ public final class T1ChargeHistoryActivity extends T1ImmersiveActivity {
                     ViewGroup.LayoutParams.MATCH_PARENT,
                     ViewGroup.LayoutParams.WRAP_CONTENT);
                 lp.topMargin=8;history.addView(card,lp);
+                if(entry.open==0&&entry.source!=null&&
+                    entry.source.contains("IMPORTACIÓN MANUAL")){
+                    LinearLayout row=row();history.addView(row);
+                    button(row,"BORRAR SOLO ESTA CARGA MANUAL #"+
+                        entry.id,()->confirmDeleteManualCharge(entry));
+                }
             }
             if(rows.isEmpty())history.addView(text(
                 "Todavía no hay sesiones. Activá AUTO para la próxima "+
                 "carga, o importá la primera desde T1 Launcher.",14,MUTED));
         }catch(Exception ex){history.addView(text(
             "Error de SQLite: "+ex.getClass().getSimpleName(),14,MUTED));}
+    }
+    private void confirmDeleteManualCharge(T1ChargeStore.Record row){
+        if(row==null||row.open!=0||row.source==null||
+            !row.source.contains("IMPORTACIÓN MANUAL"))return;
+        new AlertDialog.Builder(this)
+            .setTitle("BORRAR CARGA MANUAL #"+row.id)
+            .setMessage("Eliminar ÚNICAMENTE la primera carga agregada "+
+                "manualmente desde T1 Launcher, con ID "+row.id+
+                ". Esto NO elimina cargas automáticas ni afectará "+
+                "la carga que hagas esta noche. Es irreversible en "+
+                "la base local. Antes podés EXPORTAR CSV para "+
+                "conservar un respaldo. ¿Eliminarla?")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("BORRAR CARGA MANUAL",(dialog,which)->{
+                try(T1ChargeStore db=new T1ChargeStore(this)){
+                    db.deleteManualImport(row.id);
+                    db.exportForCosts(this);
+                    msg("Carga manual #"+row.id+
+                        " eliminada. Las automáticas permanecen.");
+                    refresh();
+                }catch(Exception ex){
+                    msg("NO se eliminó la carga: "+ex.getMessage());
+                }
+            }).show();
     }
     private EditText number(LinearLayout parent,String name,String sample){
         EditText e=new EditText(this);e.setSingleLine(true);
