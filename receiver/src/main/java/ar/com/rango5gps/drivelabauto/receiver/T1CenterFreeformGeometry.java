@@ -17,6 +17,20 @@ final class T1CenterFreeformGeometry {
             Math.abs(actual.left-desired.left)<=20&&
             actual.top>=desired.top-20&&actual.top<=desired.top+200;
     }
+    /** General tile match for configurable two/three-panel layouts.
+     * Android 11's Freeform task Y origin may be shifted +101px. Require
+     * exact X and dimensions, and a bounded nonnegative common Y offset.
+     */
+    static boolean tile(T1AdbTaskParser.Box actual,
+            T1CenterMosaicGeometry.Tile desired){
+        if(actual==null||desired==null)return false;
+        return Math.abs((actual.right-actual.left)-
+                (desired.right-desired.left))<=20&&
+            Math.abs((actual.bottom-actual.top)-
+                (desired.bottom-desired.top))<=20&&
+            Math.abs(actual.left-desired.left)<=20&&
+            actual.top>=desired.top-20&&actual.top<=desired.top+180;
+    }
     static boolean twoColumns(T1AdbTaskParser.Box left,
             T1AdbTaskParser.Box right,int centerWidth,int height){
         if(left==null||right==null||centerWidth<600||height<480)return false;
