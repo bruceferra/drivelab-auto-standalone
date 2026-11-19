@@ -2,9 +2,9 @@ package ar.com.rango5gps.drivelabauto.receiver;
 
 import java.nio.charset.StandardCharsets;
 
-/** Keep only task headers of one explicitly approved user-installed package.
+/** Keep only task headers of one PackageManager-verified user-installed package.
  * Used to distinguish a newly opened external app from any existing task.
- * Never allows OEM, system or arbitrary package queries.
+ * Always refuses OEM/system package names; installation verified by caller.
  */
 final class T1AdbPackageTaskExcerpt {
     private final String target;
@@ -13,9 +13,8 @@ final class T1AdbPackageTaskExcerpt {
     private String stack="";
     private int hits=0;
     T1AdbPackageTaskExcerpt(String pkg){
-        if(!pkg.equals("ar.com.promanager.nativeapp")&&
-            !pkg.equals("ar.com.rango5gps.uberbeta"))
-            throw new SecurityException("Sólo ProManager y Uber Beta");
+        if(!T1CenterUserPackagePolicy.allowed(pkg))
+            throw new SecurityException("No se puede leer tarea de paquete OEM");
         target=" "+pkg+"/";
     }
     void accept(byte[] bytes){
