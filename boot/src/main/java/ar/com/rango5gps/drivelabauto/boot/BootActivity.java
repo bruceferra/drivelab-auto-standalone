@@ -35,6 +35,9 @@ public final class BootActivity extends Activity {
         "Una aplicación (100 % de la zona útil)"};
     private int mode,percent;
     private final String[] selected=new String[3];
+    private boolean clusterEnabled;
+    private int clusterCount,clusterPercent,captionSafeDp;
+    private final String[] clusterApps=new String[2];
     private LinearLayout content;
     private TextView percentLabel;
     private static final int BG=0xFF101B25,PANEL=0xFF23313C,
@@ -48,6 +51,13 @@ public final class BootActivity extends Activity {
         for(int i=0;i<3;i++)
             selected[i]=p.getString("pkg"+i,
                 i==0?BootConfig.RECEIVER:i==1?"com.spotify.music":"");
+        clusterEnabled=p.getBoolean("cluster_enabled",false);
+        clusterCount=Math.min(2,Math.max(1,p.getInt("cluster_count",2)));
+        clusterPercent=Math.min(70,Math.max(30,p.getInt("cluster_percent",50)));
+        captionSafeDp=Math.min(88,Math.max(0,p.getInt("caption_safe_dp",44)));
+        for(int i=0;i<2;i++)
+            clusterApps[i]=p.getString("cluster_pkg"+i,
+                i==0?"com.waze":"com.google.android.apps.maps");
         draw();
     }
     @Override protected void onResume(){
@@ -56,8 +66,13 @@ public final class BootActivity extends Activity {
     }
     private void persist(){
         SharedPreferences.Editor e=prefs().edit().putInt("mode",mode)
-            .putInt("percent",percent);
+            .putInt("percent",percent)
+            .putBoolean("cluster_enabled",clusterEnabled)
+            .putInt("cluster_count",clusterCount)
+            .putInt("cluster_percent",clusterPercent)
+            .putInt("caption_safe_dp",captionSafeDp);
         for(int i=0;i<3;i++)e.putString("pkg"+i,selected[i]);
+        for(int i=0;i<2;i++)e.putString("cluster_pkg"+i,clusterApps[i]);
         e.apply();
     }
     private int count(){return mode==4?1:mode==3?2:3;}
@@ -155,11 +170,14 @@ public final class BootActivity extends Activity {
         }
         new AlertDialog.Builder(this)
             .setTitle("ACTIVAR AL ENCENDER EL T1")
-            .setMessage("DriveLab Boot intentará abrir el mosaico guardado "+
+            .setMessage("DriveLab Boot intentará abrir Display 0 y, si "+
+                "lo habilitaste, el diseño de navegación de Display 1 "+
                 "después de que Android termine de arrancar. "+
-                "No reemplaza T1 Launcher, HOME ni el clúster. "+
-                "DriveLab Receiver debe estar instalado con ADB emparejado. "+
-                "Si Jetour bloquea el autoinicio, podrás iniciarlo "+
+                "El autoinicio independiente anterior del clúster se "+
+                "desactivará para evitar tareas duplicadas. No reemplaza "+
+                "T1 Launcher ni los indicadores OEM. "+
+                "Receiver debe estar instalado con ADB autorizado. "+
+                "Si Jetour bloquea el autoinicio, podrás aplicarlo "+
                 "manualmente. ¿Activar?")
             .setNegativeButton("CANCELAR",null)
             .setPositiveButton("ACTIVAR",(d,w)->{
@@ -235,6 +253,7 @@ public final class BootActivity extends Activity {
         text("DRIVELAB BOOT",26,WHITE);
         text("Lanzador independiente · pantalla central Display 0. "+
             "El HOME y clúster de T1 Launcher no se modifican.",13,QUIET);
+        text("DISPLAY 0 · PANTALLA CENTRAL",19,WHITE);
         button("DISTRIBUCIÓN · "+MODES[mode],this::chooseMode);
         for(int i=0;i<count();i++){
             final int index=i;
@@ -264,15 +283,85 @@ public final class BootActivity extends Activity {
                 percent=50;persist();draw();
             });
         }
-        button("▶ APLICAR MOSAICO AHORA",this::apply);
+        text("BARRA GRIS DE ANDROID · ÁREA SEGURA",18,WHITE);
+        text("Freeform agrega un encabezado del sistema. Este ajuste "+
+            "desplaza los controles propios de DriveLab para que no "+
+            "queden debajo de maximizar; no elimina las barras OEM ni "+
+            "las de aplicaciones externas.",12,QUIET);
+        TextView captionLabel=text(
+            "Separación superior de controles DriveLab: "+captionSafeDp+" dp",
+            14,WHITE);
+        SeekBar captionSeek=new SeekBar(this);
+        captionSeek.setMax(88);captionSeek.setProgress(captionSafeDp);
+        captionSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+            @Override public void onProgressChanged(SeekBar bar,int v,
+                    boolean fromUser){
+                captionSafeDp=v;
+                captionLabel.setText("Separación superior de controles DriveLab: "+
+                    v+" dp");
+                if(fromUser)persist();
+            }
+            @Override public void onStartTrackingTouch(SeekBar bar){}
+            @Override public void onStopTrackingTouch(SeekBar bar){persist();}
+        });
+        content.addView(captionSeek);
+        text("DISPLAY 1 · CLÚSTER / NAVEGACIÓN",19,WHITE);
+        button(clusterEnabled?
+            "INCLUIR DISPLAY 1 EN AUTOBOOT: SÍ · DESACTIVAR":
+            "INCLUIR DISPLAY 1 EN AUTOBOOT: NO · ACTIVAR",
+            ()->{clusterEnabled=!clusterEnabled;persist();draw();});
+        if(clusterEnabled){
+            text("Se reutiliza el Display 1 ya seleccionado y habilitado "+
+                "en Receiver. Primero elegilo en CLÚSTER y probalo "+
+                "con el vehículo detenido. No modifica agujas, "+
+                "alertas ni servicios OEM.",12,QUIET);
+            button(clusterCount==1?
+                "CLÚSTER: UNA APP 100 % · CAMBIAR A DOS":
+                "CLÚSTER: DOS APPS DIVIDIDAS · CAMBIAR A UNA",
+                ()->{clusterCount=clusterCount==1?2:1;persist();draw();});
+            for(int i=0;i<clusterCount;i++){
+                final int slot=i;
+                button("CLÚSTER PANEL "+(i+1)+" · "+
+                    ("com.waze".equals(clusterApps[i])?"Waze":"Google Maps"),
+                    ()->new AlertDialog.Builder(this)
+                        .setTitle("NAVEGACIÓN DISPLAY 1 · PANEL "+(slot+1))
+                        .setItems(new String[]{"Waze","Google Maps"},
+                            (d,which)->{
+                                clusterApps[slot]=which==0?
+                                    "com.waze":"com.google.android.apps.maps";
+                                persist();draw();
+                            })
+                        .setNegativeButton("CANCELAR",null).show());
+            }
+            if(clusterCount==2){
+                TextView clusterLabel=text(
+                    "Clúster: "+clusterPercent+" % / "+
+                    (100-clusterPercent)+" %",14,WHITE);
+                SeekBar cs=new SeekBar(this);
+                cs.setMin(30);cs.setMax(70);cs.setProgress(clusterPercent);
+                cs.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+                    @Override public void onProgressChanged(SeekBar bar,int v,
+                            boolean fromUser){
+                        clusterPercent=v;
+                        clusterLabel.setText("Clúster: "+v+" % / "+(100-v)+" %");
+                        if(fromUser)persist();
+                    }
+                    @Override public void onStartTrackingTouch(SeekBar bar){}
+                    @Override public void onStopTrackingTouch(SeekBar bar){persist();}
+                });
+                content.addView(cs);
+            }
+        }
+        button("▶ APLICAR PANTALLAS CONFIGURADAS",this::apply);
         button("▦ RECUPERAR VENTANAS ABIERTAS",this::reopen);
         boolean enabled=BootConfig.enabled(this);
         button(enabled?"AUTOINICIO AL ENCENDER: ACTIVADO · DESACTIVAR":
             "AUTOINICIO AL ENCENDER: DESACTIVADO · ACTIVAR",
             this::setAuto);
         text("Autoinicio: un intento por encendido, unos segundos "+
-            "después de Android. Requiere Receiver y ADB previamente "+
-            "autorizado; no reinicia ni fuerza detención de apps.",12,QUIET);
+            "después de Android. Display 0 usa Receiver y ADB autorizado; "+
+            "Display 1 usa el motor de navegación ya instalado. "+
+            "Sin root, sin forzar detención ni reemplazar T1 Launcher.",12,QUIET);
         text("ÚLTIMO DIAGNÓSTICO",18,WHITE);
         String status=prefs().getString("last_status",
             "Sin lanzamientos realizados todavía");
