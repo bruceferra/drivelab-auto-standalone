@@ -97,6 +97,21 @@ public final class T1ChargeRecorderService extends Service {
                     T1ChargeOemReader.Reading data=oem.poll();
                     raw=data.cable;
                     errors=0;
+                    boolean hvValid=Double.isFinite(data.volts)&&
+                        data.volts>=100&&data.volts<=1000;
+                    String hvDetail=hvValid?
+                        "1063 float validado "+T1ChargeStore.fmt(data.volts,1)+" V":
+                        "SIN VOLTAJE HV VERIFICADO · candidatos NO calibrados: "+
+                        "VEHICLE 1063/int="+
+                        (data.volts1063Int==Integer.MIN_VALUE?"—":
+                            Integer.toString(data.volts1063Int))+
+                        " · 1090/float="+T1ChargeStore.fmt(
+                            data.volts1090Float,2)+
+                        " · 1090/int="+
+                        (data.volts1090Int==Integer.MIN_VALUE?"—":
+                            Integer.toString(data.volts1090Int))+
+                        " · ALCAR 1063/float="+T1ChargeStore.fmt(
+                            data.volts1063AlcarFloat,2);
                     // Persist raw OEM readings even before a charge session
                     // exists. This lets the owner diagnose current polarity.
                     prefs().edit()
@@ -105,6 +120,7 @@ public final class T1ChargeRecorderService extends Service {
                         .putFloat(T1ChargeStore.LAST_AMPS,(float)data.amps)
                         .putLong(T1ChargeStore.LAST_SAMPLE_AT,data.timeMs)
                         .putBoolean(T1ChargeStore.LAST_SAMPLE_OK,true)
+                        .putString(T1ChargeStore.LAST_VOLTAGE_PROBE,hvDetail)
                         .apply();
                     if(T1ChargeMath.plugged(raw)){
                         cableConnected++;
