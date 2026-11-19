@@ -32,7 +32,7 @@ public final class T1CenterSavedFreeformMosaicSourceContractTest {
             apply.contains("exact(c,fresh.id,pkg)"),
             "New Freeform launches must be identified by unique newly allocated task");
         ck(apply.contains("prefs.edit().putInt(\"task_\"+pkg,checked.id)")&&
-            apply.contains("managed(c,managed,pkg)")&&
+            apply.contains("managed(c,ownership,pkg)")&&
             apply.contains("return exact(c,id,pkg)"),
             "Only tasks created by this mosaic can be reused for a later apply");
         ck(apply.contains("T1CenterMosaicViewport.calculate(")&&
