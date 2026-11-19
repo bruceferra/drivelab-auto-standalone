@@ -1,4 +1,5 @@
 name: Signed Receiver 0.3.90 - return to saved Freeform mosaic from launcher
+# Java source-contract placeholder fixed; run full signing checks.
 # Read-only HAL 559940910/559940911, source test tracks full-ID battery probe
 on:
   push:
