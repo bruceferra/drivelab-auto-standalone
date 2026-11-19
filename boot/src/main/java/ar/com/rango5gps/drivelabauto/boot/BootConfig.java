@@ -18,7 +18,8 @@ final class BootConfig {
         return prefs(context).getBoolean("enabled",false);
     }
     /** One explicit, signature-protected broadcast. No generic ADB/shell,
-     * no HOME or vehicle processes, and no actions targeting Display 1.
+     * no HOME or vehicle processes. Display 1 is delegated to Receiver's
+     * existing guarded Waze/Maps router, never a raw shell.
      */
     static void assertReceiver(Context context){
         if(context.getPackageManager().checkSignatures(
@@ -26,6 +27,15 @@ final class BootConfig {
                 android.content.pm.PackageManager.SIGNATURE_MATCH)
             throw new SecurityException(
                 "Instalá Receiver 0.3.94 o posterior para configurar ambas pantallas");
+        try{
+            long receiverCode=context.getPackageManager()
+                .getPackageInfo(RECEIVER,0).getLongVersionCode();
+            if(receiverCode<195L)
+                throw new SecurityException(
+                    "Actualizá primero Receiver 0.3.94 (build 195)");
+        }catch(android.content.pm.PackageManager.NameNotFoundException ex){
+            throw new SecurityException("DriveLab Receiver no está instalado");
+        }
     }
     /** User explicitly elected to delegate boot UI opening to Boot app.
      * This only disables ReceiverService.launch_app_on_boot, not its FGS
