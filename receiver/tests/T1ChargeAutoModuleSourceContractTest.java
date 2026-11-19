@@ -56,7 +56,7 @@ public final class T1ChargeAutoModuleSourceContractTest {
             "signals even without a registered session");
         yes(oem.contains("getIntOrUnknown(b,1063)")&&
             oem.contains("getFloatOrUnknown(b,1090)")&&
-            oem.contains("readAlcar1063()")&&
+            oem.contains("readHalBattery()")&&
             service.contains("LAST_VOLTAGE_PROBE")&&
             service.contains("currentCharging(")&&
             screen.contains("LAST_VOLTAGE_PROBE")&&
