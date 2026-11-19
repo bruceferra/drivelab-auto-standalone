@@ -20,10 +20,14 @@ public final class T1BootInstallerSourceContractTest {
         String paths=file("receiver/src/main/res/xml/t1_boot_install_files.xml");
         String build=file("receiver/build.gradle");
 
-        check(install.contains("v0.3.92/DriveLab-Boot-v0.1.0.apk")&&
-            install.contains("e08f0c217943a1a87b261d7a4bbbf7f454c34d118211c156f1cc7ca01099591c")&&
-            install.contains("SHA256.equals(hex(md.digest()))"),
-            "Download must match the immutable released APK exact SHA-256");
+        check(install.contains("v0.3.94/DriveLab-Boot-v0.1.1.apk")&&
+            install.contains("RELEASE_API=OWNER+\"releases/tags/v0.3.94\"")&&
+            install.contains("fetchReleaseAsset()")&&
+            install.contains("digest.matches(\"sha256:[a-f0-9]{64}\")")&&
+            install.contains("!expected.equals(hex(md.digest()))")&&
+            install.contains("expectedSize>LIMIT")&&
+            install.contains("!URL.equals(address)"),
+            "Boot update must match the exact trusted GitHub release SHA and URL");
         check(install.contains("PackageManager.GET_SIGNING_CERTIFICATES")&&
             install.contains("certHashes(candidate).equals(certHashes(receiver))")&&
             install.contains("PKG.equals(candidate.packageName)")&&
@@ -52,8 +56,8 @@ public final class T1BootInstallerSourceContractTest {
             !install.contains("Runtime.getRuntime()")&&
             !install.contains("settings put ")&&
             !install.contains("android.intent.category.HOME")&&
-            build.contains("versionCode 194")&&
-            build.contains("versionName '0.3.93'"),
+            build.contains("versionCode 195")&&
+            build.contains("versionName '0.3.94'"),
             "Installer must not change car HOME, use ADB, or reuse old version");
         System.out.println("PASS Boot native installer SHA, certificate, package, UI, consent and OEM isolation");
     }
