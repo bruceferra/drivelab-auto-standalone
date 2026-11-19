@@ -2,6 +2,7 @@ package ar.com.rango5gps.drivelabauto.receiver;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.res.Configuration;
 import android.content.SharedPreferences;
 import android.graphics.Color;
 import android.os.Bundle;
@@ -17,6 +18,9 @@ import android.widget.LinearLayout;
  * when the user scrolls, labels and buttons must never slide behind the
  * always-visible OEM voice assistant. We do NOT hide or intercept the overlay.
  * The strip can be adjusted (including zero) without root or system settings.
+ * On freeform Display 0, Boot may add a user-selected safe top inset
+ * INSIDE our own Receiver task so Android's grey caption cannot cover
+ * DriveLab's first toolbar. This cannot remove the OEM caption/nav dock.
  */
 public abstract class T1ImmersiveActivity extends Activity {
     private static final java.util.concurrent.atomic.AtomicBoolean AUTO_INITIALIZED=
@@ -68,6 +72,27 @@ public abstract class T1ImmersiveActivity extends Activity {
     @Override public void onWindowFocusChanged(boolean hasFocus){
         super.onWindowFocusChanged(hasFocus);
         if(hasFocus)T1ImmersiveMode.apply(this);
+        if(hasFocus)updateFreeformCaptionClearance();
+    }
+    @Override public void onMultiWindowModeChanged(
+            boolean inMultiWindowMode,Configuration newConfig){
+        super.onMultiWindowModeChanged(inMultiWindowMode,newConfig);
+        updateFreeformCaptionClearance();
+    }
+    private int freeformCaptionDp(){
+        if(!isInMultiWindowMode())return 0;
+        int stored=getSharedPreferences("drivelab_freeform_ui_v1",
+            Context.MODE_PRIVATE).getInt("caption_safe_dp",44);
+        return Math.max(0,Math.min(88,stored));
+    }
+    private void updateFreeformCaptionClearance(){
+        if(clearStrip==null)return;
+        ViewGroup.LayoutParams params=clearStrip.getLayoutParams();
+        int desired=px(clearanceDp()+freeformCaptionDp());
+        if(params.height!=desired){
+            params.height=desired;
+            clearStrip.setLayoutParams(params);
+        }
     }
     /**
      * This app uses setContentView(View) for its screens; wrap the content
@@ -89,7 +114,8 @@ public abstract class T1ImmersiveActivity extends Activity {
         blank.setBackgroundColor(overlayClearBackgroundColor());
         clearStrip=blank;
         shell.addView(blank,new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,px(clearanceDp())));
+            ViewGroup.LayoutParams.MATCH_PARENT,
+            px(clearanceDp()+freeformCaptionDp())));
 
         globalToolbar=new T1GlobalToolbar(this);
         shell.addView(globalToolbar.view(),new LinearLayout.LayoutParams(
@@ -123,7 +149,7 @@ public abstract class T1ImmersiveActivity extends Activity {
             .edit().putInt(CLEAR_HEIGHT,value).apply();
         if(clearStrip!=null){
             ViewGroup.LayoutParams params=clearStrip.getLayoutParams();
-            params.height=px(value);
+            params.height=px(value+freeformCaptionDp());
             clearStrip.setLayoutParams(params);
         }
     }
