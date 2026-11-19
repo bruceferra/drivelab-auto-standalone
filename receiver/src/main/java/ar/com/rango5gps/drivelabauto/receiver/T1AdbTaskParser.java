@@ -126,6 +126,19 @@ final class T1AdbTaskParser {
                 current.app,current.bounds));
         return new ArrayList<>(found.values());
     }
+    /** Enumerate all known tasks for an explicitly selected package.
+     * The caller must compare task IDs before and after launch, and refuse
+     * to touch pre-existing tasks when Android reuses an activity.
+     */
+    static List<Task> tasksOnCenter(String raw,String pkg){
+        List<Task> result=new ArrayList<>();
+        if(pkg==null||!pkg.matches(
+            "[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)+"))
+            return result;
+        for(Task t:scan(raw,pkg))
+            if(t.display==0&&pkg.equals(t.app))result.add(t);
+        return result;
+    }
     /** The car may have multiple Waze tasks on several displays. Reject all
      * ambiguity instead of accidentally resizing a center-screen window.
      */
