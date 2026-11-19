@@ -923,15 +923,20 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         for(android.view.View card:sorted)row.removeView(card);
         for(android.view.View card:sorted)row.addView(card);
         for(android.view.View card:original){
-            card.setOnLongClickListener(v->v.startDragAndDrop(
-                android.content.ClipData.newPlainText("drivelab-block",rowKey),
-                new android.view.View.DragShadowBuilder(v),v,0));
+            T1DragCue.attach(card,rowKey);
             card.setOnDragListener((target,event)->{
                 switch(event.getAction()){
                     case android.view.DragEvent.ACTION_DRAG_STARTED:
                         return event.getLocalState() instanceof android.view.View&&
                             ((android.view.View)event.getLocalState()).getParent()==row;
+                    case android.view.DragEvent.ACTION_DRAG_ENTERED:
+                        T1DragCue.target(target,true);return true;
+                    case android.view.DragEvent.ACTION_DRAG_EXITED:
+                        T1DragCue.target(target,false);return true;
+                    case android.view.DragEvent.ACTION_DRAG_ENDED:
+                        T1DragCue.reset(target);return true;
                     case android.view.DragEvent.ACTION_DROP:
+                        T1DragCue.reset(target);
                         android.view.View source=(android.view.View)event.getLocalState();
                         if(source==target||source.getParent()!=row)return true;
                         int destination=row.indexOfChild(target);
