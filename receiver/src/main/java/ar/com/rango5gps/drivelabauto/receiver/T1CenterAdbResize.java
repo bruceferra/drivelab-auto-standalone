@@ -155,7 +155,7 @@ final class T1CenterAdbResize {
     private static String taskLine(String dump,int id){
         if(dump==null||dump.isEmpty())return "sin datos";
         java.util.regex.Pattern p=java.util.regex.Pattern.compile(
-            "(?:taskId[=:]\\\\s*|Task\\\\{[^}]*?#)"+id+"(?![0-9])");
+            "(?:taskId[=:]\\s*|Task\\{[^}]*?#)"+id+"(?![0-9])");
         for(String raw:dump.split("\\r?\\n")){
             if(p.matcher(raw).find())return shortOutput(raw,230);
         }
