@@ -17,6 +17,8 @@ public final class T1BootMosaicBridgeReceiver extends BroadcastReceiver {
         "ar.com.rango5gps.drivelabauto.receiver.action.APPLY_BOOT_CLUSTER_ONLY";
     static final String ACTION_REVEAL=
         "ar.com.rango5gps.drivelabauto.receiver.action.REVEAL_BOOT_CENTER";
+    static final String ACTION_CLUSTER_STATE=
+        "ar.com.rango5gps.drivelabauto.receiver.action.READ_BOOT_CLUSTER_STATE";
     static final String ACTION_TAKEOVER=
         "ar.com.rango5gps.drivelabauto.receiver.action.BOOT_MOSAIC_TAKEOVER";
     static final String PERMISSION=
@@ -26,6 +28,7 @@ public final class T1BootMosaicBridgeReceiver extends BroadcastReceiver {
             ACTION_APPLY.equals(intent.getAction())||
             ACTION_CLUSTER.equals(intent.getAction())||
             ACTION_REVEAL.equals(intent.getAction())||
+            ACTION_CLUSTER_STATE.equals(intent.getAction())||
             ACTION_TAKEOVER.equals(intent.getAction())))return;
         if(context.getPackageManager().checkSignatures(
             context.getPackageName(),BOOT_PACKAGE)!=
@@ -68,6 +71,8 @@ public final class T1BootMosaicBridgeReceiver extends BroadcastReceiver {
             service.putExtras(intent);
             service.putExtra("cluster_only",ACTION_CLUSTER.equals(intent.getAction()));
             service.putExtra("reveal_only",ACTION_REVEAL.equals(intent.getAction()));
+            service.putExtra("cluster_state_only",
+                ACTION_CLUSTER_STATE.equals(intent.getAction()));
             context.startForegroundService(service);
         }catch(Exception ex){
             T1BootMosaicBridgeService.report(context,
