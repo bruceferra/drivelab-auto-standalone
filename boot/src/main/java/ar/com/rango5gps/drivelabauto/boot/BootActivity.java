@@ -2,8 +2,6 @@ package ar.com.rango5gps.drivelabauto.boot;
 
 import android.app.Activity;
 import android.app.AlertDialog;
-import android.content.ComponentName;
-import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
@@ -34,6 +32,7 @@ public final class BootActivity extends Activity {
         "Dos columnas",
         "Una aplicación (100 % de la zona útil)"};
     private int mode,percent;
+    private int activeDisplay=0;
     private final String[] selected=new String[3];
     private boolean clusterEnabled,clusterConfirmed;
     private int clusterCount,clusterPercent,captionSafeDp;
@@ -210,143 +209,165 @@ public final class BootActivity extends Activity {
                 }
             }).show();
     }
-    private void apply(){
+    /** Opening Display 0 is a separate, explicit action. If Cockpit is a
+     * chosen tile, seeing Receiver in that tile is expected, not a Boot menu.
+     */
+    private void applyCenter(){
         persist();
         try{
-            if(getPackageManager().checkSignatures(getPackageName(),
-                BootConfig.RECEIVER)!=PackageManager.SIGNATURE_MATCH)
-                throw new SecurityException(
-                    "Primero instalá Receiver compatible, firmado igual");
+            BootConfig.assertReceiver(this);
             java.util.HashSet<String> unique=new java.util.HashSet<>();
             for(int i=0;i<count();i++){
-                if(!safe(selected[i])&&
-                    !BootConfig.RECEIVER.equals(selected[i]))
+                if((!safe(selected[i])&&
+                    !BootConfig.RECEIVER.equals(selected[i]))||
+                    !unique.add(selected[i]))
                     throw new IllegalStateException(
-                        "Panel "+(i+1)+": seleccioná una app válida");
-                if(!unique.add(selected[i]))
-                    throw new IllegalStateException(
-                        "Elegí aplicaciones distintas en cada panel");
+                        "Display 0 · Panel "+(i+1)+": elegí apps distintas y válidas");
             }
-            if(clusterEnabled&&clusterCount==2&&
-                clusterApps[0].equals(clusterApps[1]))
-                throw new IllegalStateException(
-                    "Display 1: elegí Waze y Google Maps, no dos iguales");
-            if(BootConfig.enabled(this)&&clusterEnabled)
-                BootConfig.takeOver(this,true);
-            BootConfig.send(this);
-            Toast.makeText(this,
-                "Mosaico solicitado · Receiver usa el ADB existente",
-                Toast.LENGTH_LONG).show();
-            // A fullscreen settings Activity can hide the actual
-            // tiles. Move only Boot's own task behind them.
-            moveTaskToBack(true);
-        }catch(Exception e){
+            BootConfig.sendCenterOnly(this);
             new AlertDialog.Builder(this)
-                .setTitle("NO SE ENVIÓ")
-                .setMessage(e.getMessage())
-                .setPositiveButton("OK",null).show();
+                .setTitle("DISPLAY 0 · MOSAICO SOLICITADO")
+                .setMessage("Se configuró solamente la pantalla central. "+
+                    "Si elegiste DriveLab Cockpit en un panel, esa ventana "+
+                    "ES Receiver, pero Boot sigue siendo tu configuración. "+
+                    "¿Querés ocultar este menú y ver el mosaico ahora?")
+                .setNegativeButton("SEGUIR CONFIGURANDO",null)
+                .setPositiveButton("MOSTRAR MOSAICO",
+                    (d,w)->moveTaskToBack(true)).show();
+        }catch(Exception error){
+            new AlertDialog.Builder(this)
+                .setTitle("DISPLAY 0 · NO ENVIADO")
+                .setMessage(error.getMessage())
+                .setPositiveButton("CERRAR",null).show();
         }
     }
-    private void reopen(){
+    /** This does not open the Receiver menus or alter Display 0 tasks. */
+    private void applyCluster(){
+        persist();
         try{
-            Intent target=new Intent(Intent.ACTION_VIEW);
-            target.setComponent(new ComponentName(BootConfig.RECEIVER,
-                BootConfig.RECEIVER+".T1MosaicShortcutActivity"));
-            startActivity(target);
-        }catch(Exception e){
+            if(clusterCount==2&&clusterApps[0].equals(clusterApps[1]))
+                throw new IllegalStateException(
+                    "Display 1 · Elegí Waze y Google Maps, no dos iguales");
+            BootConfig.sendClusterOnly(this);
             new AlertDialog.Builder(this)
-                .setMessage("Primero instalá Receiver compatible. "+
-                    "No se pudo recuperar el mosaico: "+
-                    e.getClass().getSimpleName())
-                .setPositiveButton("OK",null).show();
+                .setTitle("DISPLAY 1 · PRUEBA ENVIADA")
+                .setMessage("Sólo se solicitó el clúster, sin cambiar "+
+                    "las ventanas de la pantalla central ni salir de "+
+                    "DriveLab Boot. Comprobá visualmente Waze/Maps "+
+                    "en el tablero con el vehículo detenido. "+
+                    "Después tocá ACTUALIZAR DIAGNÓSTICO.")
+                .setPositiveButton("ENTENDIDO",null).show();
+        }catch(Exception error){
+            new AlertDialog.Builder(this)
+                .setTitle("DISPLAY 1 · NO ENVIADO")
+                .setMessage(error.getMessage())
+                .setPositiveButton("CERRAR",null).show();
+        }
+    }
+    private String packageVersion(String pkg){
+        try{
+            return getPackageManager().getPackageInfo(pkg,0).versionName;
+        }catch(Exception ignored){return "NO INSTALADO";}
+    }
+    private void navigation(){
+        LinearLayout tabs=new LinearLayout(this);
+        tabs.setOrientation(LinearLayout.HORIZONTAL);
+        content.addView(tabs,new LinearLayout.LayoutParams(-1,-2));
+        for(int i=0;i<2;i++){
+            final int tab=i;
+            Button b=new Button(this);
+            b.setAllCaps(false);
+            b.setText(tab==0?"CENTRAL · 0":"CLÚSTER · 1");
+            b.setTextSize(17);
+            b.setTextColor(WHITE);
+            b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
+                activeDisplay==tab?0xFF096D82:0xFF293D4A));
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,
+                ViewGroup.LayoutParams.WRAP_CONTENT,1f);
+            lp.setMargins(3,3,3,6);
+            tabs.addView(b,lp);
+            b.setOnClickListener(v->{activeDisplay=tab;draw();});
         }
     }
     private void draw(){
         ScrollView scroll=new ScrollView(this);
-        scroll.setBackgroundColor(BG);scroll.setFillViewport(true);
+        scroll.setBackgroundColor(BG);
+        scroll.setFillViewport(true);
         content=new LinearLayout(this);
         content.setOrientation(LinearLayout.VERTICAL);
-        content.setPadding(16,10,16,30);
+        content.setPadding(14,8,14,24);
         scroll.addView(content);
-        text("DRIVELAB BOOT",26,WHITE);
-        text("Administrador de pantallas: Display 0 y navegación opcional "+
-            "en Display 1. Sin reemplazar HOME, clúster OEM ni avisos "+
-            "del vehículo.",13,QUIET);
-        text("DISPLAY 0 · PANTALLA CENTRAL",19,WHITE);
-        button("DISTRIBUCIÓN · "+MODES[mode],this::chooseMode);
-        for(int i=0;i<count();i++){
-            final int index=i;
-            button("PANEL "+(i+1)+" · "+labelFor(selected[i]),
-                ()->chooseApp(index));
-        }
-        if(mode!=4){
-            percentLabel=text("Panel principal: "+percent+" % / "+
-                (100-percent)+" %",17,WHITE);
-            SeekBar seek=new SeekBar(this);
-            seek.setMin(1);seek.setMax(99);seek.setProgress(percent);
-            seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
-                @Override public void onProgressChanged(SeekBar bar,int v,
-                        boolean fromUser){
-                    percent=v;
-                    percentLabel.setText("Panel principal: "+percent+
-                        " % / "+(100-percent)+" %");
-                    if(fromUser)persist();
-                }
-                @Override public void onStartTrackingTouch(SeekBar bar){}
-                @Override public void onStopTrackingTouch(SeekBar bar){
-                    persist();
-                }
-            });
-            content.addView(seek);
-            button("VOLVER A 50 / 50",()->{
-                percent=50;persist();draw();
-            });
-        }
-        text("BARRA GRIS DE ANDROID · ÁREA SEGURA",18,WHITE);
-        text("Freeform agrega un encabezado del sistema. Este ajuste "+
-            "desplaza los controles propios de DriveLab para que no "+
-            "queden debajo de maximizar; no elimina las barras OEM ni "+
-            "las de aplicaciones externas.",12,QUIET);
-        TextView captionLabel=text(
-            "Separación superior de controles DriveLab: "+captionSafeDp+" dp",
-            14,WHITE);
-        SeekBar captionSeek=new SeekBar(this);
-        captionSeek.setMax(88);captionSeek.setProgress(captionSafeDp);
-        captionSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
-            @Override public void onProgressChanged(SeekBar bar,int v,
-                    boolean fromUser){
-                captionSafeDp=v;
-                captionLabel.setText("Separación superior de controles DriveLab: "+
-                    v+" dp");
-                if(fromUser)persist();
+
+        text("DRIVELAB BOOT · CONFIGURACIÓN",24,WHITE);
+        text("BOOT "+packageVersion(getPackageName())+
+            "   |   RECEIVER "+packageVersion(BootConfig.RECEIVER),14,QUIET);
+        text("Son DOS apps distintas. Esta pantalla es Boot; Receiver "+
+            "se usa sólo como motor de las ventanas.",13,QUIET);
+        navigation();
+
+        if(activeDisplay==0){
+            text("DISPLAY 0 · PANTALLA CENTRAL",20,WHITE);
+            text("Elegí las apps que aparecerán juntas. "+
+                "No hace falta entrar al menú Mosaico del Receiver.",13,QUIET);
+            button("DISEÑO · "+MODES[mode],this::chooseMode);
+            for(int i=0;i<count();i++){
+                final int slot=i;
+                button("PANEL "+(slot+1)+" · "+labelFor(selected[slot]),
+                    ()->chooseApp(slot));
             }
-            @Override public void onStartTrackingTouch(SeekBar bar){}
-            @Override public void onStopTrackingTouch(SeekBar bar){persist();}
-        });
-        content.addView(captionSeek);
-        text("DISPLAY 1 · CLÚSTER / NAVEGACIÓN",19,WHITE);
-        button(clusterEnabled?
-            "INCLUIR DISPLAY 1 EN AUTOBOOT: SÍ · DESACTIVAR":
-            "INCLUIR DISPLAY 1 EN AUTOBOOT: NO · ACTIVAR",
-            ()->{clusterEnabled=!clusterEnabled;clusterConfirmed=false;
-                persist();draw();});
-        if(clusterEnabled){
-            text("Se reutiliza el Display 1 ya seleccionado y habilitado "+
-                "en Receiver. Primero elegilo en CLÚSTER y probalo "+
-                "con el vehículo detenido. No modifica agujas, "+
-                "alertas ni servicios OEM.",12,QUIET);
+            if(mode!=4){
+                TextView ratio=text("Reparto principal: "+percent+
+                    " % / "+(100-percent)+" %",15,WHITE);
+                SeekBar slider=new SeekBar(this);
+                slider.setMin(1);slider.setMax(99);slider.setProgress(percent);
+                slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+                    @Override public void onProgressChanged(SeekBar b,int v,boolean user){
+                        percent=v;
+                        ratio.setText("Reparto principal: "+v+
+                            " % / "+(100-v)+" %");
+                        if(user)persist();
+                    }
+                    @Override public void onStartTrackingTouch(SeekBar b){}
+                    @Override public void onStopTrackingTouch(SeekBar b){persist();}
+                });
+                content.addView(slider);
+            }
+            TextView caption=text("BARRA GRIS · MARGEN INTERIOR: "+
+                captionSafeDp+" dp",15,WHITE);
+            SeekBar safeSeek=new SeekBar(this);
+            safeSeek.setMax(88);safeSeek.setProgress(captionSafeDp);
+            safeSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+                @Override public void onProgressChanged(SeekBar b,int v,boolean user){
+                    captionSafeDp=v;
+                    caption.setText("BARRA GRIS · MARGEN INTERIOR: "+v+" dp");
+                    if(user)persist();
+                }
+                @Override public void onStartTrackingTouch(SeekBar b){}
+                @Override public void onStopTrackingTouch(SeekBar b){persist();}
+            });
+            content.addView(safeSeek);
+            text("Este margen protege los botones propios de DriveLab. "+
+                "No elimina las barras de Android o Jetour.",12,QUIET);
+            button("▶ ABRIR / PROBAR MOSAICO CENTRAL",this::applyCenter);
+            button("VER VENTANAS YA ABIERTAS · OCULTAR BOOT",
+                ()->moveTaskToBack(true));
+        }else{
+            text("DISPLAY 1 · CLÚSTER / MAPAS",20,WHITE);
+            text("Elegí Waze y Google Maps ACÁ. No hace falta abrir "+
+                "la pantalla «PROBAR» del Receiver.",13,QUIET);
             button(clusterCount==1?
-                "CLÚSTER: UNA APP 100 % · CAMBIAR A DOS":
-                "CLÚSTER: DOS APPS DIVIDIDAS · CAMBIAR A UNA",
+                "DISEÑO: 1 MAPA PANTALLA COMPLETA · CAMBIAR":
+                "DISEÑO: 2 MAPAS DIVIDIDOS · CAMBIAR",
                 ()->{clusterCount=clusterCount==1?2:1;
                     clusterConfirmed=false;persist();draw();});
             for(int i=0;i<clusterCount;i++){
                 final int slot=i;
-                button("CLÚSTER PANEL "+(i+1)+" · "+
-                    ("com.waze".equals(clusterApps[i])?"Waze":"Google Maps"),
+                String choice="com.waze".equals(clusterApps[i])?
+                    "WAZE":"GOOGLE MAPS";
+                button("ELEGIR MAPA "+(slot+1)+" · "+choice,
                     ()->new AlertDialog.Builder(this)
-                        .setTitle("NAVEGACIÓN DISPLAY 1 · PANEL "+(slot+1))
-                        .setItems(new String[]{"Waze","Google Maps"},
+                        .setTitle("DISPLAY 1 · MAPA "+(slot+1))
+                        .setItems(new String[]{"WAZE","GOOGLE MAPS"},
                             (d,which)->{
                                 clusterApps[slot]=which==0?
                                     "com.waze":"com.google.android.apps.maps";
@@ -355,67 +376,67 @@ public final class BootActivity extends Activity {
                         .setNegativeButton("CANCELAR",null).show());
             }
             if(clusterCount==2){
-                TextView clusterLabel=text(
-                    "Clúster: "+clusterPercent+" % / "+
-                    (100-clusterPercent)+" %",14,WHITE);
-                SeekBar cs=new SeekBar(this);
-                cs.setMin(30);cs.setMax(70);cs.setProgress(clusterPercent);
-                cs.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
-                    @Override public void onProgressChanged(SeekBar bar,int v,
-                            boolean fromUser){
+                TextView split=text("DIVISIÓN: "+clusterPercent+" % / "+
+                    (100-clusterPercent)+" %",15,WHITE);
+                SeekBar slider=new SeekBar(this);
+                slider.setMin(30);slider.setMax(70);
+                slider.setProgress(clusterPercent);
+                slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
+                    @Override public void onProgressChanged(SeekBar b,int v,boolean user){
                         clusterPercent=v;
-                        if(fromUser)clusterConfirmed=false;
-                        clusterLabel.setText("Clúster: "+v+" % / "+(100-v)+" %");
-                        if(fromUser)persist();
+                        if(user)clusterConfirmed=false;
+                        split.setText("DIVISIÓN: "+v+" % / "+(100-v)+" %");
+                        if(user)persist();
                     }
-                    @Override public void onStartTrackingTouch(SeekBar bar){}
-                    @Override public void onStopTrackingTouch(SeekBar bar){persist();}
+                    @Override public void onStartTrackingTouch(SeekBar b){}
+                    @Override public void onStopTrackingTouch(SeekBar b){persist();}
                 });
-                content.addView(cs);
+                content.addView(slider);
             }
+            button("▶ PROBAR SOLO DISPLAY 1 · SIN SALIR DE BOOT",
+                this::applyCluster);
+            text("La prueba requiere que Receiver ya tenga identificado "+
+                "el Display 1 y detecte 0 km/h. Si no, no moverá "+
+                "ventanas y lo indicará el diagnóstico.",12,QUIET);
             button(clusterConfirmed?
-                "DISPLAY 1 · VISUALIZACIÓN CONFIRMADA · VOLVER A PROBAR":
-                "CONFIRMAR VISUALMENTE DISPLAY 1 · TRAS PRUEBA",
+                "CONFIGURACIÓN COMPROBADA · RECONFIRMAR":
+                "CONFIRMAR DISEÑO DEL CLÚSTER TRAS VERLO",
                 ()->new AlertDialog.Builder(this)
-                    .setTitle("CONFIRMACIÓN FÍSICA DEL CLÚSTER")
-                    .setMessage("Solo confirmá si, estando estacionado, "+
-                        "ya aplicaste este diseño y verificaste que Waze/Maps "+
-                        "están visibles en el Display 1 correcto, sin tapar "+
-                        "alertas ni instrumentos OEM. "+
-                        "¿Habilitar este diseño para el próximo encendido?")
-                    .setNegativeButton("CANCELAR",null)
-                    .setPositiveButton("SÍ, SE VE BIEN",(d,w)->{
+                    .setTitle("CONFIRMACIÓN VISUAL")
+                    .setMessage("¿Viste físicamente Waze y/o Google Maps "+
+                        "en Display 1, con el vehículo estacionado "+
+                        "y sin tapar alertas ni instrumentos?")
+                    .setNegativeButton("TODAVÍA NO",null)
+                    .setPositiveButton("SÍ, CONFIRMADO",(d,w)->{
                         clusterConfirmed=true;persist();draw();
                     }).show());
-            text(clusterConfirmed?
-                "Diseño confirmado por el usuario. Queda pendiente "+
-                "verificar cómo reaparece después de encender el Jetour.":
-                "PENDIENTE: prueba física y confirmación para autoinicio "+
-                "de Display 1.",12,QUIET);
+            button(clusterEnabled?
+                "AUTOBOOT INCLUYE CLÚSTER: SÍ · CAMBIAR":
+                "AUTOBOOT INCLUYE CLÚSTER: NO · CAMBIAR",
+                ()->{
+                    clusterEnabled=!clusterEnabled;
+                    if(!clusterEnabled)clusterConfirmed=false;
+                    persist();draw();
+                });
+            text(clusterEnabled?
+                "Display 1 se incluirá en el próximo encendido SOLO "+
+                    "si su diseño fue confirmado.":
+                "Display 1 puede probarse manualmente, pero no "+
+                    "se abrirá con Boot al encender.",12,QUIET);
         }
-        button("▶ APLICAR PANTALLAS CONFIGURADAS",this::apply);
-        button("▦ RECUPERAR VENTANAS ABIERTAS",this::reopen);
+        text("INICIO AUTOMÁTICO DE BOOT",17,WHITE);
         boolean enabled=BootConfig.enabled(this);
-        button(enabled?"AUTOINICIO AL ENCENDER: ACTIVADO · DESACTIVAR":
-            "AUTOINICIO AL ENCENDER: DESACTIVADO · ACTIVAR",
-            this::setAuto);
-        text("Autoinicio: un intento por encendido, unos segundos "+
-            "después de Android. Display 0 usa Receiver y ADB autorizado; "+
-            "Display 1 usa el motor de navegación ya instalado. "+
-            "Sin root, sin forzar detención ni reemplazar T1 Launcher.",12,QUIET);
-        text("ÚLTIMO DIAGNÓSTICO",18,WHITE);
-        String status=prefs().getString("last_status",
-            "Sin lanzamientos realizados todavía");
-        TextView diagnosis=text(status,13,QUIET);
-        diagnosis.setBackgroundColor(PANEL);
-        diagnosis.setTextIsSelectable(true);
-        button("ACTUALIZAR DIAGNÓSTICO",this::draw);
-        text("Spotify se ha probado a 33 %. YouTube puede rechazar "+
-            "el modo Freeform (Illegal transform). "+
-            "El modo inmersivo del lanzador no garantiza ocultar "+
-            "las barras de Jetour dentro de otras apps.",12,QUIET);
+        button(enabled?"AUTOINICIO: ACTIVADO · DESACTIVAR":
+            "AUTOINICIO: DESACTIVADO · ACTIVAR",this::setAuto);
+        text("ESTADO / ERRORES DEL ÚLTIMO PEDIDO",17,WHITE);
+        TextView status=text(prefs().getString("last_status",
+            "Todavía no hay un diagnóstico"),13,QUIET);
+        status.setBackgroundColor(PANEL);
+        status.setTextIsSelectable(true);
+        button("ACTUALIZAR DIAGNÓSTICO (SIN SALIR)",this::draw);
         setContentView(scroll);
         getWindow().getDecorView().setSystemUiVisibility(
+            View.SYSTEM_UI_FLAG_LAYOUT_STABLE|
             View.SYSTEM_UI_FLAG_FULLSCREEN|
             View.SYSTEM_UI_FLAG_HIDE_NAVIGATION|
             View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY);
