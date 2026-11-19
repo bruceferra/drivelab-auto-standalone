@@ -179,52 +179,99 @@ final class T1CenterSavedFreeformMosaic {
                         "Elegí aplicaciones diferentes por panel");
                 starters[i]=selectedLauncher(c,pkg);
             }
-            SharedPreferences managed=c.getSharedPreferences(
+            SharedPreferences ownership=c.getSharedPreferences(
                 PREFS,Context.MODE_PRIVATE);
             int[] taskIds=new int[count];
+            int screenWidth=0,screenHeight=0;
+            for(T1CenterMosaicGeometry.Tile tile:tiles){
+                screenWidth=Math.max(screenWidth,tile.right);
+                screenHeight=Math.max(screenHeight,tile.bottom);
+            }
+            if(screenWidth<800||screenHeight<480)
+                throw new IllegalArgumentException(
+                    "Pantalla central no identificada");
+
+            // First use the controlled first pane as a disposable geometry
+            // calibration: Jetour moves y=0 to the system's safe top (~101).
+            // This changes only the task created by THIS mosaic, never HOME.
+            T1AdbTaskParser.Task first=managed(c,ownership,packages[0]);
+            boolean firstNew=first==null;
+            if(firstNew)first=create(c,ownership,packages[0],starters[0]);
+            T1CenterMosaicGeometry.Tile calibration=
+                new T1CenterMosaicGeometry.Tile(
+                    0,0,screenWidth,screenHeight);
+            resize(c,first.id,packages[0],calibration);
+            Thread.sleep(250L);
+            T1AdbTaskParser.Task measured=exact(
+                c,first.id,packages[0]);
+            int inset=measured.bounds.top;
+            if(Math.abs(measured.bounds.left)>20||
+                Math.abs(measured.bounds.right-screenWidth)>20||
+                Math.abs((measured.bounds.bottom-measured.bounds.top)-
+                    screenHeight)>20||
+                inset<0||inset>220)
+                throw new IllegalStateException(
+                    "No se pudo medir el espacio útil: "+measured);
+            T1CenterMosaicViewport.Plan viewport=
+                T1CenterMosaicViewport.calculate(tiles,screenHeight,inset);
+            out.append("Display 0: ").append(screenWidth).append("×")
+                .append(screenHeight).append(" · barra Android=")
+                .append(inset).append("px · alto útil=")
+                .append(viewport.usableHeight).append("px\n");
+            T1AdbTaskParser.Box[] actuals=
+                new T1AdbTaskParser.Box[count];
             for(int i=0;i<count;i++){
                 String pkg=packages[i];
-                T1AdbTaskParser.Task t=managed(c,managed,pkg);
-                String origin="YA CREADA";
-                if(t==null){
-                    t=create(c,managed,pkg,starters[i]);
-                    origin="NUEVA";
+                T1AdbTaskParser.Task t;
+                boolean created=false;
+                if(i==0){
+                    t=first;created=firstNew;
+                }else{
+                    t=managed(c,ownership,pkg);
+                    if(t==null){
+                        t=create(c,ownership,pkg,starters[i]);
+                        created=true;
+                    }
                 }
                 taskIds[i]=t.id;
-                resize(c,t.id,pkg,tiles[i]);
+                resize(c,t.id,pkg,viewport.commands[i]);
                 Thread.sleep(300L);
                 t=exact(c,t.id,pkg);
-                boolean ok=T1CenterFreeformGeometry.tile(t.bounds,tiles[i]);
+                actuals[i]=t.bounds;
+                boolean match=T1CenterMosaicViewport.near(
+                    t.bounds,viewport.visible[i]);
                 out.append("Panel ").append(i+1).append(" · ")
-                    .append(pkg).append(" · ").append(origin)
+                    .append(pkg).append(created?" · NUEVA":" · YA CREADA")
                     .append(" · tarea ").append(t.id)
                     .append(" · REAL ").append(t.bounds)
-                    .append(" · geometría ").append(ok?"OK":"DIFERENTE")
+                    .append(" · esperado ").append(
+                        viewport.visible[i].bounds())
+                    .append(" · geometría ").append(match?"OK":"DIFERENTE")
                     .append('\n');
-                if(!ok)throw new IllegalStateException(
-                    "El panel "+(i+1)+" no respetó su tamaño; "+
-                    "se detiene sin modificar otras tareas");
+                if(!match)
+                    throw new IllegalStateException(
+                        "Panel "+(i+1)+" no respetó límites de "+
+                        "la pantalla útil; revisá el diagnóstico");
             }
-            Thread.sleep(600L);
+            Thread.sleep(650L);
             boolean allVisible=true,allSized=true;
-            int commonOffset=Integer.MIN_VALUE;
             for(int i=0;i<count;i++){
-                T1AdbTaskParser.Task t=exact(c,taskIds[i],packages[i]);
-                boolean sized=T1CenterFreeformGeometry.tile(
-                    t.bounds,tiles[i]);
-                allSized&=sized;
+                T1AdbTaskParser.Task t=exact(
+                    c,taskIds[i],packages[i]);
+                actuals[i]=t.bounds;
+                allSized&=T1CenterMosaicViewport.near(
+                    t.bounds,viewport.visible[i]);
                 allVisible&=visible(c,t.id,packages[i]);
-                int offset=t.bounds.top-tiles[i].top;
-                if(commonOffset==Integer.MIN_VALUE)commonOffset=offset;
-                else if(Math.abs(offset-commonOffset)>30)allSized=false;
             }
+            boolean disjoint=T1CenterMosaicViewport.disjoint(actuals);
             out.append("Geometrías ").append(allSized?"SÍ":"NO")
                 .append(" · Todos visibles ")
-                .append(allVisible?"SÍ":"NO").append('\n');
-            out.append(allSized&&allVisible?
-                "ÉXITO: mosaico configurable verificado en Display 0.":
-                "PARCIAL: revisá tamaños y visibilidad; "+
-                "no se confirma mosaico completo.");
+                .append(allVisible?"SÍ":"NO")
+                .append(" · Sin solapamiento ")
+                .append(disjoint?"SÍ":"NO").append('\n');
+            out.append(allSized&&allVisible&&disjoint?
+                "ÉXITO: mosaico completo dentro del alto útil Display 0.":
+                "PARCIAL: revisá tamaños, visibilidad y solapamiento.");
         }catch(InterruptedException ex){
             Thread.currentThread().interrupt();
             out.append("Interrumpido.");
