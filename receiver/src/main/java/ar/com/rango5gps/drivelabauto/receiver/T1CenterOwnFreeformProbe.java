@@ -150,9 +150,9 @@ final class T1CenterOwnFreeformProbe {
                     String.valueOf(e.getMessage())));
         }finally{
             if(launched){
-                // Activity itself executes finishAndRemoveTask after 10.5 s.
+                // Activity itself executes finishAndRemoveTask after 18 s.
                 // Wait for cleanup before showing the report over Receiver.
-                long remain=11200L-(System.currentTimeMillis()-startAt);
+                long remain=18800L-(System.currentTimeMillis()-startAt);
                 if(remain>0)try{Thread.sleep(remain);}
                 catch(InterruptedException e){Thread.currentThread().interrupt();}
                 report.append("\nVentana temporal programada para "+
