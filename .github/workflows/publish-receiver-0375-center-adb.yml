@@ -57,11 +57,14 @@ jobs:
         run: |
           set -euo pipefail
           source=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CenterMosaicActivity.java
-          grep -Fq 'PROBAR APLICAR EN PANTALLA CENTRAL' "$source"
-          grep -Fq 'options.setLaunchDisplayId(Display.DEFAULT_DISPLAY)' "$source"
-          grep -Fq 'options.setLaunchBounds(new Rect(' "$source"
-          grep -Fq 'No Vehicle Service' "$source"
-          grep -Fq 'setPositiveButton("APLICAR"' "$source"
+          grep -Fq 'PROBAR MOSAICO REAL · ADB DISPLAY 0' "$source"
+          grep -Fq 'setTitle("REDIMENSIONAR DISPLAY 0")' "$source"
+          grep -Fq 'T1CenterAdbResize.allowed(packages[i])' "$source"
+          grep -Fq 'T1CenterAdbResize.apply(this,selected,' "$source"
+          adb_source=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CenterAdbResize.java
+          grep -Fq 'uniqueCenter(before,packages[i])' "$adb_source"
+          grep -Fq 'am task resize ' "$adb_source"
+          grep -Fq '!pkg.startsWith("com.jetour.")' "$adb_source"
       - name: Compile signed Receiver 0.3.75 and verify package and certificate
         run: |
           set -euo pipefail
@@ -88,7 +91,7 @@ jobs:
           python3 - <<'PY'
           import json,os
           manifest={'packageName':'ar.com.rango5gps.drivelabauto.receiver',
-                    'versionName':'0.3.75','versionCode':174,
+                    'versionName':'0.3.75','versionCode':176,
                     'sha256':os.environ['RECEIVER_SHA'],
                     'apkUrl':'https://github.com/bruceferra/drivelab-auto-standalone/releases/download/v0.3.75/DriveLab-Auto-Receiver-v0.3.75.apk'}
           with open('output/receiver.json','w') as f:json.dump(manifest,f,indent=2)
@@ -105,7 +108,7 @@ jobs:
             output/receiver.json output/sender.json output/receiver.sha256 \
             --target "$GITHUB_SHA" --latest \
             --title 'DriveLab Auto Receiver 0.3.75 · controles y bloques reordenables' \
-            --notes 'Receiver 0.3.75 (174): arrastrar y soltar horizontalmente botones de ambas filas y bloques de viajes, temperaturas y métricas del cockpit; orden persistente. Nueva política compartida de acciones de viajes y reparación manual de mapas. Mosaico central: prueba ADB de resize en Display 0, con diagnóstico y verificación de tareas. No modifica el clúster. Android puede ignorar límites si freeform no está habilitado. Escritura OEM SOC pendiente de prueba física. Sender sin cambios.'
+            --notes 'Receiver 0.3.75 (176): arrastrar y soltar horizontalmente botones de ambas filas y bloques de viajes, temperaturas y métricas del cockpit; orden persistente. Nueva política compartida de acciones de viajes y reparación manual de mapas. Mosaico central: prueba ADB de resize en Display 0, con diagnóstico y verificación de tareas. No modifica el clúster. Android puede ignorar límites si freeform no está habilitado. Escritura OEM SOC pendiente de prueba física. Sender sin cambios.'
           mkdir -p verify
           gh release download v0.3.75 --pattern receiver.json --dir verify
           gh release download v0.3.75 --pattern sender.json --dir verify
