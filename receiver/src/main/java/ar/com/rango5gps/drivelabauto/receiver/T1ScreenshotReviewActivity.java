@@ -136,7 +136,7 @@ public final class T1ScreenshotReviewActivity extends Activity {
                 .show());
         label("SERVIDOR: el canal de QR existente solo admite CSV. "+
             "No hay un endpoint autenticado de imágenes verificado "+
-            "en promanager.computer. Por seguridad, no se "+
+            "en promanager.com.ar. Por seguridad, no se "+
             "suben capturas a otro servidor sin configurarlo.",12);
         setContentView(scroll);
     }
