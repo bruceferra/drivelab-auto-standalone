@@ -36,7 +36,7 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
         super.onCreate(state);
         SharedPreferences p=getSharedPreferences(PREFS,MODE_PRIVATE);
         mode=Math.max(0,Math.min(3,p.getInt("mode",0)));
-        percent=Math.max(30,Math.min(70,p.getInt("percent",50)));
+        percent=Math.max(1,Math.min(99,p.getInt("percent",50)));
         for(int i=0;i<3;i++){
             packages[i]=p.getString("pkg"+i,DEFAULTS[i]);
             names[i]=p.getString("name"+i,names[i]);
@@ -61,6 +61,8 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
     private void choose(int slot){
         PackageManager pm=getPackageManager();
         Map<String,String> apps=new TreeMap<>(String.CASE_INSENSITIVE_ORDER);
+        apps.put("DriveLab T1 · Cockpit (segunda ventana)",
+            getPackageName());
         Intent query=new Intent(Intent.ACTION_MAIN)
             .addCategory(Intent.CATEGORY_LAUNCHER);
         for(ResolveInfo info:pm.queryIntentActivities(query,0)){
@@ -317,15 +319,16 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
         java.util.HashSet<String> unique=new java.util.HashSet<>();
         for(int i=0;i<count;i++){
             String pkg=packages[i];
-            if(!T1CenterUserPackagePolicy.allowed(pkg)||!unique.add(pkg)){
+            if(!(pkg.equals(getPackageName())||
+                    T1CenterUserPackagePolicy.allowed(pkg))||
+                !unique.add(pkg)){
                 new AlertDialog.Builder(this)
                     .setTitle("ELEGIR APLICACIONES EXTERNAS")
-                    .setMessage("Elegí "+count+" aplicaciones instaladas, "+
-                        "diferentes entre sí, desde PANEL 1, 2"+
-                        (count==3?" y 3":"")+
-                        ". No se permiten DriveLab Auto, HOME ni apps "+
-                        "del sistema del vehículo. Los paneles existentes "+
-                        "no se modificaron.")
+                    .setMessage("Elegí "+count+" aplicaciones diferentes desde "+
+                        "PANEL 1, 2"+(count==3?" y 3":"")+
+                        ". Podés incluir DriveLab T1 · Cockpit: abrirá "+
+                        "una segunda ventana, sin cerrar la original. "+
+                        "HOME y apps OEM no se permiten.")
                     .setPositiveButton("ENTENDIDO",null).show();
                 return;
             }
@@ -345,14 +348,13 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
         String[] requested=packages.clone();
         new AlertDialog.Builder(this)
             .setTitle("APLICAR MOSAICO FREEFORM · DISPLAY 0")
-            .setMessage("Abrir "+count+" aplicaciones externas en la "+
-                "distribución "+MODES[mode]+" ("+percent+"%). "+
-                "Se iniciarán como Freeform 5 y luego se ajustará "+
-                "cada ventana. Si hay ventanas creadas por este mosaico, "+
-                "se reutilizarán al cambiar el tamaño; las tareas "+
-                "antiguas ajenas a DriveLab no se redimensionan. "+
-                "Dejá el vehículo detenido para configurar el mosaico. "+
-                "HOME, OEM y clúster quedan intactos. ¿Aplicar?")
+            .setMessage("Abrir "+count+" paneles en "+MODES[mode]+
+                " ("+percent+"% principal). También podés incluir "+
+                "una segunda ventana de DriveLab T1 (Cockpit) sin cerrar "+
+                "la original. Se calibrará el alto útil de Android y "+
+                "se ajustará cada ventana como Freeform 5. "+
+                "Las tareas antiguas ajenas a DriveLab no se modifican. "+
+                "Con el vehículo detenido: ¿aplicar?")
             .setNegativeButton("CANCELAR",null)
             .setPositiveButton("APLICAR",(dialog,which)->{
                 save();
@@ -412,9 +414,23 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
                 .setSingleChoiceItems(MODES,mode,(d,choice)->{
                     mode=choice;save();d.dismiss();draw();
                 }).setNegativeButton("CANCELAR",null).show());
-        text("Tamaño del panel principal · "+percent+"%",16);
-        SeekBar seek=new SeekBar(this);seek.setMin(30);seek.setMax(70);
+        text("Tamaño de la principal · "+percent+"% / "+(100-percent)+
+            "% · deslizar para ajustar libremente",16);
+        SeekBar seek=new SeekBar(this);seek.setMin(1);seek.setMax(99);
         seek.setProgress(percent);root.addView(seek);
+        LinearLayout presets=new LinearLayout(this);
+        presets.setOrientation(LinearLayout.HORIZONTAL);
+        root.addView(presets);
+        for(int value:new int[]{40,50,60,70,80}){
+            Button preset=new Button(this);
+            preset.setAllCaps(false);
+            preset.setText(value+"%");
+            preset.setOnClickListener(v->{percent=value;save();draw();});
+            presets.addView(preset,new LinearLayout.LayoutParams(0,
+                LinearLayout.LayoutParams.WRAP_CONTENT,1f));
+        }
+        text("Ajuste libre de 1 a 99%. Si una ventana queda demasiado "+
+            "angosta, Android puede rechazar ese tamaño.",12);
         seek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
             @Override public void onProgressChanged(SeekBar bar,int value,boolean fromUser){
                 if(fromUser)percent=value;
@@ -431,8 +447,8 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
                 .append(names[i]).append(" · ").append(tiles[i].bounds())
                 .append("\n");
         text(preview.toString(),14);
-        text("DISPLAY 0 · Elegí 2 o 3 aplicaciones externas. "+
-            "El mosaico Freeform funciona sin alterar Display 1 ni HOME.",13);
+        text("DISPLAY 0 · Incluye DriveLab T1 · Cockpit como ventana "+
+            "separada. Ajusta el alto útil sin tocar Display 1 ni HOME.",13);
         button("APLICAR MOSAICO GUARDADO · FREEFORM REAL",
             this::applySavedFreeformMosaic);
         button("VER RESULTADO · MOSAICO GUARDADO",()->
