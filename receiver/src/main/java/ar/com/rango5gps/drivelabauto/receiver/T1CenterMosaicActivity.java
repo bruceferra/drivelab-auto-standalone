@@ -97,12 +97,34 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
     }
     private void launchCenterTiles(){
         try{
-            MirrorAutomationOem oem=new MirrorAutomationOem(this);
+            // A failed OEM binder is NOT proof of zero speed. Keep the
+            // safety gate, but report a diagnostic instead of a raw exception.
             double speed;
-            try{speed=oem.speedKmh();}finally{oem.close();}
+            try{
+                MirrorAutomationOem oem=new MirrorAutomationOem(this);
+                try{speed=oem.speedKmh();}finally{oem.close();}
+            }catch(Exception oemFailure){
+                String message="BLOQUEADO: Vehicle Service no responde. "+
+                    "No se abrieron ventanas porque DriveLab no pudo "+
+                    "confirmar 0 km/h. Revisá VEHÍCULO · ESTADO Y AJUSTES "+
+                    "y volvé a probar cuando la lectura OEM funcione. "+
+                    "Detalle: "+oemFailure.getClass().getSimpleName()+
+                    " · "+String.valueOf(oemFailure.getMessage());
+                getSharedPreferences(PREFS,MODE_PRIVATE).edit()
+                    .putString("last_apply",message).apply();
+                new AlertDialog.Builder(this)
+                    .setTitle("MOSAICO · VELOCIDAD OEM NO DISPONIBLE")
+                    .setMessage(message)
+                    .setPositiveButton("ENTENDIDO",null).show();
+                return;
+            }
             if(!Double.isFinite(speed)||speed<0||speed>0.5){
-                Toast.makeText(this,"BLOQUEADO: velocidad 0 km/h no confirmada",
-                    Toast.LENGTH_LONG).show();return;
+                String message="BLOQUEADO: velocidad 0 km/h no confirmada "+
+                    "(lectura OEM "+speed+" km/h). No se abrieron ventanas.";
+                getSharedPreferences(PREFS,MODE_PRIVATE).edit()
+                    .putString("last_apply",message).apply();
+                Toast.makeText(this,message,Toast.LENGTH_LONG).show();
+                return;
             }
             android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
             getWindowManager().getDefaultDisplay().getRealMetrics(dm);
