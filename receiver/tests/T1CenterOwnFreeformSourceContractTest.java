@@ -40,6 +40,12 @@ public final class T1CenterOwnFreeformSourceContractTest {
         check(ui.contains("PROBAR FREEFORM AISLADO · DISPLAY 0")&&
             ui.contains("T1CenterOwnFreeformProbe.run(this,result->"),
             "Expose a separate, opt-in freeform test");
+        check(own.contains("shellTaskExcerpt(app,\"am stack list\",task)")&&
+            own.contains("shellTaskExcerpt(app,")&&
+            bridge.contains("T1AdbTaskExcerpt excerpt=taskId>0?")&&
+            bridge.contains("scannedBytes>8*1024*1024"),
+            "Never request unbounded Android 11 stack/dumpsys data for the "+
+            "isolated half-screen test");
         check(own.contains("T1AdbTaskParser.exactCenter(")&&
             own.contains("isOwnDisposableTask(")&&
             own.contains("T1CenterWindowModePolicy.isFreeform(")&&
