@@ -11,9 +11,9 @@ public final class T1ToolbarDragDropContractTest {
         check(s.contains("enableRowReorder(header,\"first\")")&&
             s.contains("enableRowReorder(actions,\"second\")"),
             "Both button rows must support reordering");
-        check(s.contains("startDragAndDrop(")&&
+        check(s.contains("T1DragCue.attach(")&&
             s.contains("DragEvent.ACTION_DROP")&&
-            s.contains("setOnLongClickListener("),
+            s.contains("DragEvent.ACTION_DRAG_ENTERED"),
             "Reorder must be long-press drag/drop");
         check(s.contains("getParent()==row")&&
             s.contains("source.getParent()!=row"),
@@ -25,7 +25,7 @@ public final class T1ToolbarDragDropContractTest {
             s.contains("int insert=firstIndex")&&
             s.contains("IdentityHashMap<Button,Integer>"),
             "Do not move clock/status text or rely on unstable button titles");
-        check(s.contains("b.setLongClickable(true)")&&
+        check(s.contains("T1DragCue.attach(b,key)")&&
             s.contains("b.setOnDragListener("),
             "Read-only OEM chips must be draggable without click actions");
         System.out.println("Toolbar same-row drag/drop contract: OK");
