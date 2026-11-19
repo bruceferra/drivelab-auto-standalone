@@ -136,6 +136,17 @@ public final class T1AppTaskManagerActivity extends T1ImmersiveActivity {
             });
         },"DriveLab-UserTaskInventory").start();
     }
+    private String availableMemory(){
+        ActivityManager am=(ActivityManager)getSystemService(
+            Context.ACTIVITY_SERVICE);
+        if(am==null)return "RAM: no disponible";
+        ActivityManager.MemoryInfo memory=new ActivityManager.MemoryInfo();
+        am.getMemoryInfo(memory);
+        long megabyte=1024L*1024L;
+        return "RAM disponible: "+memory.availMem/megabyte+
+            " MB de "+memory.totalMem/megabyte+
+            " MB · dato global de Android, no de cada aplicación";
+    }
     private void render(){
         if(body==null)return;
         body.removeAllViews();
@@ -144,6 +155,7 @@ public final class T1AppTaskManagerActivity extends T1ImmersiveActivity {
             "del vehículo, Android, navegación, HOME ni DriveLab principal. "+
             "Puede incluir tareas recientes sin un proceso activo.",13);
         info(status,14);
+        info(availableMemory(),13);
         action("ACTUALIZAR LISTA",this::refresh);
         action("REINICIAR MOSAICO · CERRAR SESIONES",this::confirmResetMosaic);
         int eligible=0;
