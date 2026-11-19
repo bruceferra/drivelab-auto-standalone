@@ -32,17 +32,22 @@ final class BootConfig {
      * or cluster. T1 Launcher HOME is never changed.
      */
     static void takeOver(Context context){
+        takeOver(context,true);
+    }
+    static void takeOver(Context context,boolean enabled){
         assertReceiver(context);
         Intent request=new Intent(
             "ar.com.rango5gps.drivelabauto.receiver.action.BOOT_MOSAIC_TAKEOVER");
         request.setComponent(new ComponentName(RECEIVER,BRIDGE));
-        // Unified opt-in: disable only the legacy independent cluster launch
-        // when Boot itself is configured to manage the same Display 1.
+        request.putExtra("boot_enabled",enabled);
         request.putExtra("cluster_enabled",
-            prefs(context).getBoolean("cluster_enabled",false));
+            enabled&&prefs(context).getBoolean("cluster_enabled",false));
         context.sendBroadcast(request);
     }
     static void send(Context context){
+        send(context,false);
+    }
+    static void send(Context context,boolean fromBoot){
         assertReceiver(context);
         SharedPreferences p=prefs(context);
         int mode=p.getInt("mode",3),percent=p.getInt("percent",50);
@@ -63,6 +68,9 @@ final class BootConfig {
         // shell executor. Disabled by default and never controls OEM dials.
         boolean cluster=p.getBoolean("cluster_enabled",false);
         request.putExtra("cluster_enabled",cluster);
+        request.putExtra("from_boot",fromBoot);
+        request.putExtra("cluster_confirmed",
+            p.getBoolean("cluster_confirmed",false));
         if(cluster){
             int panels=p.getInt("cluster_count",2);
             int ratio=p.getInt("cluster_percent",50);
