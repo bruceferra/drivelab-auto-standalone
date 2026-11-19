@@ -174,6 +174,8 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
         int count=mode==3?2:3;
         for(int i=0;i<count;i++){
             if(!T1CenterAdbResize.allowed(packages[i])){
+                getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString("last_apply",
+                    "NO APLICADO: aplicación no admitida en panel "+(i+1)+": "+packages[i]).apply();
                 new AlertDialog.Builder(this).setTitle("MOSAICO ADB")
                     .setMessage("La primera prueba ADB admite Waze, Google Maps "+
                         "y Spotify, sin repetir aplicaciones. El panel DriveLab "+
@@ -244,15 +246,12 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
                 .append(names[i]).append(" · ").append(tiles[i].bounds())
                 .append("\n");
         text(preview.toString(),14);
-        text("PRUEBA EXPERIMENTAL: APLICAR solicita ventanas reales en "+
-            "Display 0 mediante Android ActivityOptions. Jetour puede ignorar "+
-            "sus posiciones si freeform está deshabilitado. No usa ADB ni "+
-            "modifica el clúster. Verificá visualmente el resultado.",13);
+        text("DISPLAY 0 · Pantalla central. La prueba utiliza ADB y no modifica las tareas del clúster (Display 1).",13);
         text("ÚLTIMA PRUEBA · "+getSharedPreferences(PREFS,MODE_PRIVATE)
             .getString("last_apply","Nunca aplicado"),13);
         button("DIAGNOSTICAR VENTANAS DE ANDROID",this::diagnoseWindows);
         button("PROBAR MOSAICO REAL · ADB DISPLAY 0",this::applyAdbOnCenter);
-        button("PROBAR APLICAR EN PANTALLA CENTRAL",this::applyOnCenter);
+        // Old ActivityOptions-only trial intentionally hidden: OEM ignored bounds.
         button("GUARDAR CONFIGURACIÓN",()->{
             save();new AlertDialog.Builder(this).setMessage(
                 "Distribución guardada. No se modificaron las ventanas.")
