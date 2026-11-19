@@ -104,6 +104,13 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
                 MirrorAutomationOem oem=new MirrorAutomationOem(this);
                 try{speed=oem.speedKmh();}finally{oem.close();}
             }catch(Exception oemFailure){
+                // The cockpit already reads 2148/1089 via its independent,
+                // read-only trip telemetry connector. Retry that established
+                // path instead of treating mirror Binder failure as global.
+                double alternate=new T1TripTelemetry(this).speedOnly();
+                if(Double.isFinite(alternate)&&alternate>=0&&alternate<=220){
+                    speed=alternate;
+                }else{
                 String message="BLOQUEADO: Vehicle Service no responde. "+
                     "No se abrieron ventanas porque DriveLab no pudo "+
                     "confirmar 0 km/h. Revisá VEHÍCULO · ESTADO Y AJUSTES "+
@@ -117,6 +124,7 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
                     .setMessage(message)
                     .setPositiveButton("ENTENDIDO",null).show();
                 return;
+                }
             }
             if(!Double.isFinite(speed)||speed<0||speed>0.5){
                 String message="BLOQUEADO: velocidad 0 km/h no confirmada "+
