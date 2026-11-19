@@ -70,6 +70,24 @@ public final class T1AdbTaskParserTest {
             "Actual Jetour Maps stack must be uniquely resolved in Display 1");
         ok(fromCarMaps.bounds!=null&&fromCarMaps.bounds.left==960,
             "Actual Jetour Maps split occupies right half");
+        String ownPkg="ar.com.rango5gps.drivelabauto.receiver";
+        String twoOwnTasks="Stack id=100 bounds=[0,0][1920,1080] displayId=0 userId=0\\n"+
+            " taskId=100: "+ownPkg+"/.ReceiverActivity bounds=[0,0][1920,1080]\\n"+
+            "Stack id=2804 bounds=[0,0][1920,1080] displayId=0 userId=0\\n"+
+            " taskId=2804: "+ownPkg+"/.T1CenterFreeformTestActivity bounds=[0,0][1920,1080]";
+        ok(T1AdbTaskParser.uniqueCenter(twoOwnTasks,ownPkg)==null,
+            "Same package multiple tasks must be ambiguous globally");
+        T1AdbTaskParser.Task isolated=T1AdbTaskParser.exactCenter(
+            twoOwnTasks,2804,ownPkg);
+        ok(isolated!=null&&isolated.id==2804&&isolated.display==0&&
+            isolated.bounds!=null&&isolated.bounds.right==1920,
+            "Only the exact disposable task can be selected");
+        ok(T1AdbTaskParser.exactCenter(twoOwnTasks,100,ownPkg)!=null,
+            "Main receiver can be recognized separately without mutating it");
+        ok(T1AdbTaskParser.exactCenter(twoOwnTasks,2805,ownPkg)==null,
+            "Never accept unknown task ID");
+        ok(T1AdbTaskParser.exactCenter(twoOwnTasks,2804,"com.autolink.bluetooth")==null,
+            "Never confuse the temporary task with OEM Bluetooth");
         System.out.println("PASS ADB parse exact per-display tasks and 50/50 bounds");
     }
 }
