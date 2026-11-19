@@ -311,6 +311,34 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
                 }))
             .show();
     }
+    /** The original configuration task is a fullscreen window on Display 0.
+     * Showing an AlertDialog after Freeform setup leaves it on top of the
+     * tiles. Only this own original task goes to background, never an OEM
+     * activity, cluster task or user-selected tile.
+     */
+    private void showMosaicTiles(){
+        String last=getSharedPreferences(PREFS,MODE_PRIVATE)
+            .getString("last_saved_freeform","");
+        if(!last.contains("ESTADO: VENTANAS PREPARADAS.")){
+            new AlertDialog.Builder(this)
+                .setTitle("MOSAICO NO PREPARADO")
+                .setMessage("Primero aplicá un mosaico válido. "+
+                    "Podés ver el detalle del último diagnóstico "+
+                    "desde esta pantalla.")
+                .setPositiveButton("OK",null).show();
+            return;
+        }
+        android.widget.Toast.makeText(this,
+            "Mostrando paneles · volvé desde el icono DriveLab",
+            android.widget.Toast.LENGTH_LONG).show();
+        if(!moveTaskToBack(true)){
+            new AlertDialog.Builder(this)
+                .setTitle("CONFIGURACIÓN AÚN AL FRENTE")
+                .setMessage("Android no permitió ocultar esta tarea. "+
+                    "Las ventanas pueden estar preparadas pero tapadas.")
+                .setPositiveButton("OK",null).show();
+        }
+    }
     /** Driver-triggered, persistent layout. Uses verified Freeform mode 5
      * + exact task IDs, NOT the old fullscreen ActivityOptions trial.
      */
@@ -350,11 +378,11 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
             .setTitle("APLICAR MOSAICO FREEFORM · DISPLAY 0")
             .setMessage("Abrir "+count+" paneles en "+MODES[mode]+
                 " ("+percent+"% principal). También podés incluir "+
-                "una segunda ventana de DriveLab T1 (Cockpit) sin cerrar "+
-                "la original. Se calibrará el alto útil de Android y "+
-                "se ajustará cada ventana como Freeform 5. "+
-                "Las tareas antiguas ajenas a DriveLab no se modifican. "+
-                "Con el vehículo detenido: ¿aplicar?")
+                "una segunda ventana de DriveLab T1 (Cockpit). "+
+                "Al terminar de distribuirlos, la configuración "+
+                "de DriveLab se ocultará para no tapar las ventanas. "+
+                "Las tareas anteriores, HOME, controles OEM y clúster "+
+                "no se modificarán. Vehículo detenido: ¿aplicar?")
             .setNegativeButton("CANCELAR",null)
             .setPositiveButton("APLICAR",(dialog,which)->{
                 save();
@@ -363,10 +391,17 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
                         getSharedPreferences(PREFS,MODE_PRIVATE).edit()
                             .putString("last_saved_freeform",result).apply();
                         if(!isFinishing()&&!isDestroyed()){
-                            new AlertDialog.Builder(this)
-                                .setTitle("RESULTADO · MOSAICO CONFIGURABLE")
-                                .setMessage(result)
-                                .setPositiveButton("OK",null).show();
+                            if(result.contains(
+                                    "ESTADO: VENTANAS PREPARADAS.")){
+                                // Do not show a fullscreen dialog over the
+                                // app tiles: it defeats the entire mosaic.
+                                showMosaicTiles();
+                            }else{
+                                new AlertDialog.Builder(this)
+                                    .setTitle("MOSAICO NO CONFIRMADO")
+                                    .setMessage(result)
+                                    .setPositiveButton("OK",null).show();
+                            }
                         }
                     });
             }).show();
@@ -451,6 +486,8 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
             "separada. Ajusta el alto útil sin tocar Display 1 ni HOME.",13);
         button("APLICAR MOSAICO GUARDADO · FREEFORM REAL",
             this::applySavedFreeformMosaic);
+        button("MOSTRAR PANELES · OCULTAR CONFIGURACIÓN",
+            this::showMosaicTiles);
         button("VER RESULTADO · MOSAICO GUARDADO",()->
             new AlertDialog.Builder(this)
                 .setTitle("ÚLTIMO MOSAICO GUARDADO")
