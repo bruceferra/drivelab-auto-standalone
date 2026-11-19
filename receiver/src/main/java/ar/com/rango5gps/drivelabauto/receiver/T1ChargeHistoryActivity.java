@@ -32,6 +32,14 @@ public final class T1ChargeHistoryActivity extends T1ImmersiveActivity {
         FG=Color.WHITE,MUTED=0xFFB9C5CE,ACCENT=0xFF286276;
     private LinearLayout content,history;
     private TextView live;
+    private final android.os.Handler refreshHandler=new android.os.Handler(
+        android.os.Looper.getMainLooper());
+    private final Runnable refreshLoop=new Runnable(){
+        @Override public void run(){
+            refresh();
+            refreshHandler.postDelayed(this,5000L);
+        }
+    };
     @Override protected void onCreate(Bundle state){
         super.onCreate(state);
         ScrollView sc=new ScrollView(this);
@@ -108,8 +116,25 @@ public final class T1ChargeHistoryActivity extends T1ImmersiveActivity {
     private void refresh(){
         SharedPreferences p=getSharedPreferences(T1ChargeStore.PREFS,MODE_PRIVATE);
         boolean enabled=p.getBoolean(T1ChargeStore.ENABLED,false);
+        long sampleAt=p.getLong(T1ChargeStore.LAST_SAMPLE_AT,0);
+        boolean sampleOk=p.getBoolean(T1ChargeStore.LAST_SAMPLE_OK,false);
+        boolean recent=sampleAt>0&&
+            System.currentTimeMillis()-sampleAt>=0&&
+            System.currentTimeMillis()-sampleAt<30000L;
+        String raw=sampleAt==0?"Señales 1062/1063/1064: sin lectura todavía":
+            "SEÑALES OEM · última muestra "+
+            new SimpleDateFormat("HH:mm:ss",Locale.getDefault())
+                .format(new Date(sampleAt))+
+            (sampleOk&&recent?" · ACTUAL":" · NO ACTUAL")+
+            "\n1062 SOC: "+T1ChargeStore.fmt(
+                p.getFloat(T1ChargeStore.LAST_SOC,Float.NaN),1)+" %" +
+            " · 1063: "+T1ChargeStore.fmt(
+                p.getFloat(T1ChargeStore.LAST_VOLTS,Float.NaN),1)+" V" +
+            " · 1064: "+T1ChargeStore.fmt(
+                p.getFloat(T1ChargeStore.LAST_AMPS,Float.NaN),2)+" A";
         live.setText((enabled?"AUTO ACTIVADO":"AUTO DESACTIVADO")+
             " · Cable OEM 1060="+p.getInt(T1ChargeStore.LAST_CABLE,-1)+
+            "\n"+raw+
             "\n"+p.getString(T1ChargeStore.STATUS,"Sin lectura OEM reciente")+
             "\nÚltima lectura: "+
             (p.getLong(T1ChargeStore.LAST_READ,0)==0?"sin datos":
@@ -307,5 +332,17 @@ public final class T1ChargeHistoryActivity extends T1ImmersiveActivity {
             ex.getClass().getSimpleName());}
     }
     private void msg(String s){Toast.makeText(this,s,Toast.LENGTH_LONG).show();}
-    @Override protected void onResume(){super.onResume();if(live!=null)refresh();}
+    @Override protected void onResume(){
+        super.onResume();
+        // Android may stop the recorder during an APK replacement; the AUTO
+        // preference alone does not mean its foreground worker is running.
+        T1ChargeRecorderService.startIfEnabled(this);
+        if(live!=null)refresh();
+        refreshHandler.removeCallbacks(refreshLoop);
+        refreshHandler.postDelayed(refreshLoop,5000L);
+    }
+    @Override protected void onPause(){
+        refreshHandler.removeCallbacks(refreshLoop);
+        super.onPause();
+    }
 }
