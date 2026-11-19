@@ -25,7 +25,8 @@ import java.util.TreeMap;
 /** Standalone DriveLab Boot: one touchscreen config page, not an OEM HOME.
  * The receiver app stays installed, owns ADB and its OEM/control services.
  */
-public final class BootActivity extends Activity {
+public final class BootActivity extends Activity
+        implements SharedPreferences.OnSharedPreferenceChangeListener {
     private static final String[] MODES={
         "Principal izquierda + 2 a la derecha",
         "Principal arriba + 2 abajo",
@@ -34,6 +35,8 @@ public final class BootActivity extends Activity {
         "Una aplicación (100 % de la zona útil)"};
     private int mode,percent;
     private int activeDisplay=0;
+    private boolean revealPending=false;
+    private TextView statusLabel;
     private final String[] selected=new String[3];
     private boolean clusterEnabled,clusterConfirmed;
     private int clusterCount,clusterPercent,captionSafeDp;
@@ -63,7 +66,40 @@ public final class BootActivity extends Activity {
     }
     @Override protected void onResume(){
         super.onResume();
+        prefs().registerOnSharedPreferenceChangeListener(this);
         if(content!=null)draw();
+        onSharedPreferenceChanged(prefs(),"last_status");
+    }
+    @Override protected void onPause(){
+        prefs().unregisterOnSharedPreferenceChangeListener(this);
+        super.onPause();
+    }
+    @Override public void onSharedPreferenceChanged(SharedPreferences p,
+            String key){
+        if(!"last_status".equals(key))return;
+        String current=p.getString("last_status","Sin diagnóstico");
+        runOnUiThread(()->{
+            if(statusLabel!=null)statusLabel.setText(current);
+            if(!revealPending)return;
+            if(current.startsWith("MOSAICO_RECUPERADO_SOLICITADO:")){
+                revealPending=false;
+                Toast.makeText(this,
+                    "Ventanas existentes al frente · verificá el mosaico",
+                    Toast.LENGTH_LONG).show();
+                // Only after Receiver verifies and reorders the exact
+                // managed tasks. No Activity launch or forced termination.
+                moveTaskToBack(true);
+            }else if(current.startsWith("MOSAICO NO RECUPERADO:")||
+                     current.startsWith("MOSAICO OCUPADO:")||
+                     current.startsWith("NO SE ABRIÓ MOSAICO:")){
+                revealPending=false;
+                if(!isFinishing()&&!isDestroyed())
+                    new AlertDialog.Builder(this)
+                        .setTitle("NO SE MOSTRÓ EL MOSAICO")
+                        .setMessage(current)
+                        .setPositiveButton("ENTENDIDO",null).show();
+            }
+        });
     }
     private void persist(){
         SharedPreferences.Editor e=prefs().edit().putInt("mode",mode)
@@ -226,20 +262,28 @@ public final class BootActivity extends Activity {
                         "Display 0 · Panel "+(i+1)+": elegí apps distintas y válidas");
             }
             BootConfig.sendCenterOnly(this);
-            new AlertDialog.Builder(this)
-                .setTitle("DISPLAY 0 · MOSAICO SOLICITADO")
-                .setMessage("Se configuró solamente la pantalla central. "+
-                    "Si elegiste DriveLab Cockpit en un panel, esa ventana "+
-                    "ES Receiver, pero Boot sigue siendo tu configuración. "+
-                    "¿Querés ocultar este menú y ver el mosaico ahora?")
-                .setNegativeButton("SEGUIR CONFIGURANDO",null)
-                .setPositiveButton("MOSTRAR MOSAICO",
-                    (d,w)->moveTaskToBack(true)).show();
+            Toast.makeText(this,
+                "Preparación solicitada; comprobá el estado abajo. "+
+                "No se confirmó aún la visibilidad.",
+                Toast.LENGTH_LONG).show();
         }catch(Exception error){
             new AlertDialog.Builder(this)
                 .setTitle("DISPLAY 0 · NO ENVIADO")
                 .setMessage(error.getMessage())
                 .setPositiveButton("CERRAR",null).show();
+        }
+    }
+    /** Reveal ONLY already-created Freeform tasks; never a force-stop. */
+    private void showExistingMosaic(){
+        try{
+            revealPending=true;
+            BootConfig.revealCenter(this);
+        }catch(Exception failure){
+            revealPending=false;
+            new AlertDialog.Builder(this)
+                .setTitle("NO SE PUDO SOLICITAR EL MOSAICO")
+                .setMessage(failure.getMessage())
+                .setPositiveButton("ENTENDIDO",null).show();
         }
     }
     /** This does not open the Receiver menus or alter Display 0 tasks. */
@@ -349,9 +393,13 @@ public final class BootActivity extends Activity {
             content.addView(safeSeek);
             text("Este margen protege los botones propios de DriveLab. "+
                 "No elimina las barras de Android o Jetour.",12,QUIET);
-            button("▶ ABRIR / PROBAR MOSAICO CENTRAL",this::applyCenter);
-            button("VER VENTANAS YA ABIERTAS · OCULTAR BOOT",
-                ()->moveTaskToBack(true));
+            button("▶ MOSTRAR MOSAICO · RECUPERAR VENTANAS",
+                this::showExistingMosaic);
+            button("PREPARAR / CAMBIAR DISTRIBUCIÓN",this::applyCenter);
+            text("MOSTRAR: trae al frente las tareas existentes que "+
+                "DriveLab pueda verificar. PREPARAR: crea/redimensiona "+
+                "solamente cuando cambiás el diseño. Nunca hace "+
+                "Forzar detención ni borra datos.",12,QUIET);
         }else{
             text("DISPLAY 1 · CLÚSTER / MAPAS",20,WHITE);
             text("Elegí Waze y Google Maps ACÁ. No hace falta abrir "+
@@ -430,10 +478,13 @@ public final class BootActivity extends Activity {
         button(enabled?"AUTOINICIO: ACTIVADO · DESACTIVAR":
             "AUTOINICIO: DESACTIVADO · ACTIVAR",this::setAuto);
         text("ESTADO / ERRORES DEL ÚLTIMO PEDIDO",17,WHITE);
-        TextView status=text(prefs().getString("last_status",
+        statusLabel=text(prefs().getString("last_status",
             "Todavía no hay un diagnóstico"),13,QUIET);
-        status.setBackgroundColor(PANEL);
-        status.setTextIsSelectable(true);
+        statusLabel.setBackgroundColor(PANEL);
+        statusLabel.setTextIsSelectable(true);
+        text("CONEXIÓN CON EL CELULAR: no se diagnostica desde Boot. "+
+            "La conexión Sender/Receiver es independiente del mosaico; "+
+            "no se informa como conectada hasta verificarla.",12,QUIET);
         button("ACTUALIZAR DIAGNÓSTICO (SIN SALIR)",this::draw);
         setContentView(scroll);
         getWindow().getDecorView().setSystemUiVisibility(
