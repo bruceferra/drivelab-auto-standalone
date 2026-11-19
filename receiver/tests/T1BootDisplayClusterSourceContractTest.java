@@ -41,7 +41,7 @@ public final class T1BootDisplayClusterSourceContractTest {
             config.contains("request.putExtra(\"cluster_confirmed\"")&&
             config.contains("request.putExtra(\"from_boot\",fromBoot)")&&
             config.contains("request.putExtra(\"caption_safe_dp\"")&&
-            config.contains("receiverCode<195L")&&
+            config.contains("receiverCode<196L")&&
             auto.contains("BootConfig.send(this,true)"),
             "Only compatible signed Receiver can run guarded ignition request");
         check(service.contains("T1CenterSavedFreeformMosaic.apply(")&&
