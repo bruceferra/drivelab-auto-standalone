@@ -146,6 +146,26 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
             }));
         button(body,"MOSAICO · PANTALLA CENTRAL",()->
             startActivity(new Intent(this,T1CenterMosaicActivity.class)));
+        // Independent Boot launcher: install through Android, never WebADB or
+        // raw ADB. Direct entry in Inicio so an owner can recover from a
+        // USB/WebADB connection failure without entering technical menus.
+        if(T1BootInstaller.installed(this)){
+            label(body,"DriveLab Boot 0.1.0 · instalada · autoinicio opcional",13);
+            button(body,"ABRIR DRIVELAB BOOT · CONFIGURAR MOSAICO",
+                ()->T1BootInstaller.openBoot(this,this::report));
+        }else{
+            button(body,"INSTALAR DRIVELAB BOOT · SIN WEBADB",
+                ()->T1BootInstaller.prompt(this,this::report));
+            label(body,"Boot: "+T1BootInstaller.status(this),13);
+            if(T1BootInstaller.cached(this)){
+                button(body,"REINTENTAR INSTALACIÓN BOOT",
+                    ()->T1BootInstaller.retry(this,this::report));
+                button(body,"INSTALADOR ANDROID ALTERNATIVO · BOOT",
+                    ()->T1BootInstaller.alternate(this,this::report));
+                button(body,"PERMISO ANDROID PARA INSTALAR APPS",
+                    ()->T1BootInstaller.requestPermission(this,this::report));
+            }
+        }
         button(body,"APPS ABIERTAS · CERRAR / LIMPIAR MEMORIA",()->
             startActivity(new Intent(this,T1AppTaskManagerActivity.class)));
         button(body,"CAPTURA DE PANTALLA · TRES DEDOS / COMPARTIR",()->
