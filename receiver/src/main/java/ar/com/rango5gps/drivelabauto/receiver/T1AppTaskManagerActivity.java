@@ -80,12 +80,12 @@ public final class T1AppTaskManagerActivity extends T1ImmersiveActivity {
             if(launcher==null||launcher.getComponent()==null||
                 !pkg.equals(launcher.getComponent().getPackageName()))
                 return false;
-            ArrayList<ResolveInfo> homeCandidates=new ArrayList<>();
-            android.content.ComponentName home=
-                pm.getHomeActivities(homeCandidates);
-            if(home==null||pkg.equals(home.getPackageName()))
-                return false;
-            for(ResolveInfo h:homeCandidates)
+            Intent homeQuery=new Intent(Intent.ACTION_MAIN)
+                .addCategory(Intent.CATEGORY_HOME);
+            ResolveInfo home=pm.resolveActivity(homeQuery,0);
+            if(home==null||home.activityInfo==null||
+                pkg.equals(home.activityInfo.packageName))return false;
+            for(ResolveInfo h:pm.queryIntentActivities(homeQuery,0))
                 if(h.activityInfo!=null&&
                     pkg.equals(h.activityInfo.packageName))return false;
             return true;
