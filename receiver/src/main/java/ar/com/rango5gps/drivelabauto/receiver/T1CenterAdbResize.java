@@ -13,9 +13,9 @@ final class T1CenterAdbResize {
     private static final Handler MAIN=new Handler(Looper.getMainLooper());
     private T1CenterAdbResize(){}
     static boolean allowed(String pkg){
-        return "com.waze".equals(pkg)||
-            "com.google.android.apps.maps".equals(pkg)||
-            "com.spotify.music".equals(pkg);
+        return pkg!=null&&pkg.matches("[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)+")&&
+            !pkg.startsWith("com.android.")&&!pkg.startsWith("android.")&&
+            !pkg.startsWith("com.jetour.")&&!pkg.startsWith("com.chery.");
     }
     static void apply(Context context,String[] packages,
                       T1CenterMosaicGeometry.Tile[] tiles,int count,Done done){
@@ -28,7 +28,7 @@ final class T1CenterAdbResize {
                 for(int i=0;i<count;i++){
                     if(!allowed(packages[i])||!used.add(packages[i]))
                         throw new IllegalStateException(
-                            "Para ADB elegí Waze, Maps o Spotify, sin repetir aplicaciones");
+                            "Elegí tres aplicaciones distintas y válidas para Display 0");
                 }
                 // This is layout configuration, not normal climate/map use.
                 // Never resize unknown-speed moving tasks.
