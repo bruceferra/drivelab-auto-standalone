@@ -41,8 +41,13 @@ final class T1CockpitResponsive {
                 holder.setOrientation(LinearLayout.HORIZONTAL);
                 for(int i=0;i<items.size();i++){
                     View child=items.get(i);
-                    holder.addView(child,new LinearLayout.LayoutParams(
-                        params.get(i)));
+                    LinearLayout.LayoutParams old=params.get(i);
+                    LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(
+                        old.width,old.height,old.weight);
+                    lp.setMargins(old.leftMargin,old.topMargin,
+                        old.rightMargin,old.bottomMargin);
+                    lp.gravity=old.gravity;
+                    holder.addView(child,lp);
                 }
                 return;
             }
@@ -110,17 +115,11 @@ final class T1CockpitResponsive {
             float newSize=Math.max(min,base*scale);
             if(Math.abs(text.getTextSize()-newSize)>0.5f)
                 text.setTextSize(TypedValue.COMPLEX_UNIT_PX,newSize);
-            if(modeIsNarrow()){
-                text.setMaxLines(text instanceof android.widget.Button?3:6);
-            }
         }
         if(view instanceof ViewGroup){
             ViewGroup group=(ViewGroup)view;
             for(int i=0;i<group.getChildCount();i++)
                 scaleText(group.getChildAt(i),scale);
         }
-    }
-    private boolean modeIsNarrow(){
-        return lastMode>=T1CockpitResponsivePolicy.NARROW;
     }
 }
