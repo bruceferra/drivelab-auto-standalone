@@ -140,6 +140,23 @@ final class T1AdbTaskParser {
         }
         return found;
     }
+    /** Match one exact task ID on Display 0, never infer an ID from PID.
+     * Used for a DriveLab-owned disposable freeform task while Receiver may
+     * have another task with the same package name.
+     */
+    static Task exactCenter(String raw,int expectedId,String pkg){
+        if(expectedId<=0||pkg==null||
+            !pkg.matches("[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)+"))
+            return null;
+        Task found=null;
+        for(Task t:scan(raw,pkg)){
+            if(t.id!=expectedId||t.display!=0||!pkg.equals(t.app))
+                continue;
+            if(found!=null)return null;
+            found=t;
+        }
+        return found;
+    }
     static Task unique(String raw,int display,String pkg){
         if(display<=0||(!pkg.equals("com.waze")&&
             !pkg.equals("com.google.android.apps.maps")))return null;
