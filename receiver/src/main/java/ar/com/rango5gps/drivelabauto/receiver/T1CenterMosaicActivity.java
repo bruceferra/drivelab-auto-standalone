@@ -209,6 +209,18 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
                         }),1100L);
             }).show();
     }
+    private void diagnoseAdbOnCenter(){
+        int count=mode==3?2:3;
+        String[] selected=packages.clone();
+        T1CenterAdbResize.diagnose(this,selected,count,result->{
+            getSharedPreferences(PREFS,MODE_PRIVATE).edit()
+                .putString("last_diagnostic",result).apply();
+            new AlertDialog.Builder(this)
+                .setTitle("DIAGNÓSTICO ADB · DISPLAY 0")
+                .setMessage(result)
+                .setPositiveButton("OK",null).show();
+        });
+    }
     private void draw(){
         ScrollView scroll=new ScrollView(this);
         scroll.setBackgroundColor(0xFF101A23);
@@ -246,9 +258,15 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
                 .append("\n");
         text(preview.toString(),14);
         text("DISPLAY 0 · Pantalla central. La prueba utiliza ADB y no modifica las tareas del clúster (Display 1).",13);
-        text("ÚLTIMA PRUEBA · "+getSharedPreferences(PREFS,MODE_PRIVATE)
-            .getString("last_apply","Nunca aplicado"),13);
+        String last=getSharedPreferences(PREFS,MODE_PRIVATE)
+            .getString("last_apply","Nunca aplicado");
+        String brief=last.split("\n",2)[0];
+        text("ÚLTIMA PRUEBA · "+brief,13);
+        button("VER DETALLE DE LA ÚLTIMA PRUEBA ADB",()->
+            new AlertDialog.Builder(this).setTitle("ÚLTIMA PRUEBA ADB")
+                .setMessage(last).setPositiveButton("OK",null).show());
         button("DIAGNOSTICAR VENTANAS DE ANDROID",this::diagnoseWindows);
+        button("DIAGNOSTICAR TAREAS ADB · DISPLAY 0",this::diagnoseAdbOnCenter);
         button("PROBAR MOSAICO REAL · ADB DISPLAY 0",this::applyAdbOnCenter);
         // Old ActivityOptions-only trial intentionally hidden: OEM ignored bounds.
         button("GUARDAR CONFIGURACIÓN",()->{
