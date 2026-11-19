@@ -20,6 +20,7 @@ public final class T1CockpitResponsiveSourceContractTest {
             toolbar=read(root+"T1GlobalToolbar.java"),
             base=read(root+"T1ImmersiveActivity.java");
         ck(cockpit.contains("T1CockpitResponsive responsive=new T1CockpitResponsive(scroll)")&&
+            cockpit.contains("responsive.register(top,9,3,2)")&&
             cockpit.contains("responsive.register(controls,3,3,1)")&&
             cockpit.contains("responsive.register(overview,3,3,1)")&&
             cockpit.contains("responsive.register(metrics,6,3,2)")&&
