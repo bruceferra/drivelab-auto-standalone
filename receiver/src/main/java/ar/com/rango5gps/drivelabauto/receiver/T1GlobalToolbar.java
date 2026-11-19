@@ -178,7 +178,15 @@ final class T1GlobalToolbar {
         clockBox.addView(clockDate);
         clockBox.addView(clockTime);
         header.addView(clockBox,new LinearLayout.LayoutParams(dp(148),-1));
-        // Keep both actions fixed to the RIGHT of the clock. The repair
+        // Always visible, even after leaving DriveLab for the OEM launcher:
+        // reselect already-running Freeform tasks, never open duplicates.
+        Button recoverMosaic=button(header,"▦",T1JetourTheme.PANEL_HI,54,
+            this::recoverExistingMosaic);
+        recoverMosaic.setTextSize(25f);
+        recoverMosaic.setContentDescription(
+            "Volver al mosaico de dos o tres aplicaciones abiertas");
+        recoverMosaic.setTooltipText("Volver al mosaico guardado");
+        // Keep the remaining actions fixed to the RIGHT of the clock. The repair
         // button is narrower so the final small updater fits on Display 0.
         Button reload=button(header,"MAPAS",T1JetourTheme.PANEL_HI,90,
             this::confirmClusterReload);
@@ -318,6 +326,21 @@ final class T1GlobalToolbar {
                 }
             });
         }
+    }
+    /** User-triggered restore of existing Display 0 Freeform tasks.
+     * Can be called from any Receiver screen; never launches new apps.
+     */
+    private void recoverExistingMosaic(){
+        T1CenterMosaicRecovery.restore(owner,(requested,result)->{
+            if(requested||owner.isFinishing()||owner.isDestroyed())return;
+            new AlertDialog.Builder(owner)
+                .setTitle("MOSAICO NO RECUPERADO")
+                .setMessage(result)
+                .setNegativeButton("CERRAR",null)
+                .setPositiveButton("CONFIGURAR",(d,w)->
+                    owner.startActivity(new Intent(owner,
+                        T1CenterMosaicActivity.class))).show();
+        });
     }
     /** Fixed one-touch access to the existing Receiver OTA flow.
      * This button does not check Sender or bypass signed APK validation.
