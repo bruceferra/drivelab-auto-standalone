@@ -74,6 +74,11 @@ final class T1AdbTaskParser {
            line.contains(" com.google.android.apps.maps ")||
            line.endsWith("com.google.android.apps.maps"))
             return "com.google.android.apps.maps";
+        if(line.contains("com.spotify.music/")||
+            line.contains("A=com.spotify.music")||
+            line.contains(" com.spotify.music ")||
+            line.endsWith("com.spotify.music"))
+            return "com.spotify.music";
         return null;
     }
     static List<Task> scan(String output){
@@ -120,6 +125,19 @@ final class T1AdbTaskParser {
     /** The car may have multiple Waze tasks on several displays. Reject all
      * ambiguity instead of accidentally resizing a center-screen window.
      */
+    /** Explicit center-screen tasks only; never match cluster or OEM apps. */
+    static Task uniqueCenter(String raw,String pkg){
+        if(!pkg.equals("com.waze")&&
+           !pkg.equals("com.google.android.apps.maps")&&
+           !pkg.equals("com.spotify.music"))return null;
+        Task found=null;
+        for(Task t:scan(raw)){
+            if(t.display!=0||!t.app.equals(pkg))continue;
+            if(found!=null&&found.id!=t.id)return null;
+            found=t;
+        }
+        return found;
+    }
     static Task unique(String raw,int display,String pkg){
         if(display<=0||(!pkg.equals("com.waze")&&
             !pkg.equals("com.google.android.apps.maps")))return null;
