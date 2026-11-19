@@ -177,9 +177,8 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
                 getSharedPreferences(PREFS,MODE_PRIVATE).edit().putString("last_apply",
                     "NO APLICADO: aplicación no admitida en panel "+(i+1)+": "+packages[i]).apply();
                 new AlertDialog.Builder(this).setTitle("MOSAICO ADB")
-                    .setMessage("La primera prueba ADB admite Waze, Google Maps "+
-                        "y Spotify, sin repetir aplicaciones. El panel DriveLab "+
-                        "y otras apps necesitan integración adicional.")
+                    .setMessage("Elegí aplicaciones instaladas y distintas. No se permiten "+
+                        "procesos del sistema o del vehículo. Revisá la selección.")
                     .setPositiveButton("ENTENDIDO",null).show();
                 return;
             }
@@ -188,8 +187,8 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
             .setMessage("Usaremos el puente ADB local del clúster, pero en "+
                 "la pantalla central (Display 0). Primero se abrirán las "+
                 "aplicaciones y luego se buscarán sus tareas para aplicar "+
-                "los tamaños guardados. Requiere velocidad 0 km/h confirmada "+
-                "durante la configuración. ¿Probar?")
+                "los tamaños guardados. No toca tareas del clúster "+
+                "ni controles OEM. ¿Probar?")
             .setNegativeButton("CANCELAR",null)
             .setPositiveButton("PROBAR",(d,w)->{
                 launchCenterTiles();
