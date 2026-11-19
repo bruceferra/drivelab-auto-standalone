@@ -74,6 +74,76 @@ final class T1LocalAdbClient {
     }
     static int connectedPort(){return lastLocalPort;}
     static String shell(Context context,String command)throws Exception{
+        return shellInternal(context,command,-1);
+    }
+    /**
+     * Consume potentially megabyte-sized Android 11 task diagnostics but keep
+     * only the exact, bounded task/stack lines relevant to our disposable
+     * Display 0 experiment. No new shell commands, pipelines, or root access.
+     */
+    static String shellTaskExcerpt(Context context,String command,int taskId)
+            throws Exception{
+        if((!command.equals("am stack list")&&
+            !command.equals("dumpsys activity activities"))||
+            taskId<=0||taskId>9999999)
+            throw new SecurityException("Consulta ADB de tarea no permitida");
+        return shellInternal(context,command,taskId);
+    }
+    private static final class TaskLineFilter {
+        private final boolean stacks;
+        private final String exactTask,taskHeader;
+        private final StringBuilder line=new StringBuilder();
+        private final StringBuilder selected=new StringBuilder();
+        private String latestStack="";
+        private int captured=0;
+        TaskLineFilter(String command,int id){
+            stacks=command.equals("am stack list");
+            exactTask="taskId="+id+":";
+            taskHeader="#"+id;
+        }
+        void accept(byte[] payload){
+            // Structural Android task output is ASCII even if other dump lines
+            // contain non-ASCII user labels; only structural lines are retained.
+            String text=new String(payload,StandardCharsets.UTF_8);
+            for(int i=0;i<text.length();i++){
+                char ch=text.charAt(i);
+                if(ch=='\n'){
+                    takeLine(line.toString());
+                    line.setLength(0);
+                }else if(line.length()<3072){
+                    line.append(ch);
+                }
+            }
+        }
+        void finish(){if(line.length()>0)takeLine(line.toString());}
+        private void takeLine(String raw){
+            String trimmed=raw.trim();
+            if(stacks){
+                if(trimmed.startsWith("Stack id=")||trimmed.startsWith("Stack ")){
+                    latestStack=raw;
+                    return;
+                }
+                if(raw.contains(exactTask)){
+                    if(!latestStack.isEmpty())append(latestStack);
+                    append(raw);
+                }
+            }else if(raw.contains(taskHeader)){
+                // Guard numeric task boundaries; do not match #2810 inside #28101.
+                int pos=raw.indexOf(taskHeader);
+                if(pos>=0&&(pos+taskHeader.length()==raw.length()||
+                    !Character.isDigit(raw.charAt(pos+taskHeader.length()))))
+                    append(raw);
+            }
+        }
+        private void append(String text){
+            if(++captured>12||selected.length()+text.length()>16384)
+                throw new IllegalStateException("Demasiadas coincidencias de tarea ADB");
+            selected.append(text).append('\n');
+        }
+        String result(){return selected.toString();}
+    }
+    private static String shellInternal(Context context,String command,int taskId)
+            throws Exception{
         // STRICT command whitelist, no shell metacharacters or package names.
         // Only known Waze/Maps force-stop + process checks, task/geometry
         // management, and exact accessibility-list recovery are authorized.
@@ -143,20 +213,35 @@ final class T1LocalAdbClient {
             send(sock,"OPEN",1,0,ascii("shell:"+command+"\0"));
             int remote=0;
             ByteArrayOutputStream output=new ByteArrayOutputStream();
-            for(int i=0;i<150;i++){
+            TaskLineFilter excerpt=taskId>0?
+                new TaskLineFilter(command,taskId):null;
+            int scannedBytes=0;
+            for(int i=0;i<(excerpt==null?150:8192);i++){
                 Message msg=read(in);
                 if(msg.is("OKAY")){
                     if(remote==0)remote=msg.arg0;
                 }else if(msg.is("WRTE")){
                     if(remote==0)remote=msg.arg0;
-                    if(output.size()+msg.payload.length>96*1024)
-                        throw new IllegalStateException("Salida ADB excesiva");
-                    output.write(msg.payload);
+                    if(excerpt!=null){
+                        scannedBytes+=msg.payload.length;
+                        if(scannedBytes>8*1024*1024)
+                            throw new IllegalStateException(
+                                "Diagnóstico ADB supera límite de 8 MB");
+                        excerpt.accept(msg.payload);
+                    }else{
+                        if(output.size()+msg.payload.length>96*1024)
+                            throw new IllegalStateException("Salida ADB excesiva");
+                        output.write(msg.payload);
+                    }
                     send(sock,"OKAY",1,remote,new byte[0]);
                 }else if(msg.is("CLSE")){
                     send(sock,"CLSE",1,msg.arg0,new byte[0]);
                     // Android 11 lacks ByteArrayOutputStream.toString(Charset).
                     // Decode bytes with the API 1 String(byte[], Charset) instead.
+                    if(excerpt!=null){
+                        excerpt.finish();
+                        return excerpt.result();
+                    }
                     return new String(output.toByteArray(),StandardCharsets.UTF_8);
                 }else if(msg.is("AUTH"))
                     throw new SecurityException("ADB perdió autorización");
