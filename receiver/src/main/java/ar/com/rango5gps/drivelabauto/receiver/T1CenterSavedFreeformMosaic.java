@@ -265,13 +265,36 @@ final class T1CenterSavedFreeformMosaic {
             }
             boolean disjoint=T1CenterMosaicViewport.disjoint(actuals);
             out.append("Geometrías ").append(allSized?"SÍ":"NO")
-                .append(" · Todos visibles ")
+                .append(" · Android marcó visibles ")
                 .append(allVisible?"SÍ":"NO")
                 .append(" · Sin solapamiento ")
                 .append(disjoint?"SÍ":"NO").append('\n');
-            out.append(allSized&&allVisible&&disjoint?
-                "ÉXITO: mosaico completo dentro del alto útil Display 0.":
-                "PARCIAL: revisá tamaños, visibilidad y solapamiento.");
+            // In Android 11, ActivityRecord.visible=true does NOT prove the
+            // window is actually unobscured and rendered on screen. In
+            // particular the original fullscreen Receiver configuration task
+            // can still cover all freeform panels until it is backgrounded.
+            boolean prepared=allSized&&allVisible&&disjoint;
+            out.append(prepared?
+                "ESTADO: VENTANAS PREPARADAS. Se retirará la configuración "+
+                "del primer plano; comprobá que se vean los paneles.":
+                "PARCIAL: revisar geometría y tareas antes de mostrar.");
+            for(int i=0;i<count;i++){
+                // Opening Spotify (or another app) through its normal launcher
+                // can surface a pre-existing fullscreen task that hides tiles.
+                // List only; never resize or close any such previous task.
+                int fullCount=0;
+                for(T1AdbTaskParser.Task other:tasks(c,packages[i])){
+                    if(other.id==taskIds[i]||other.bounds==null)continue;
+                    int width=other.bounds.right-other.bounds.left;
+                    int height=other.bounds.bottom-other.bounds.top;
+                    if(width>=screenWidth-24&&height>=screenHeight-160)
+                        fullCount++;
+                }
+                if(fullCount>0)out.append("\nAVISO ").append(packages[i])
+                    .append(": hay ").append(fullCount)
+                    .append(" tarea(s) anteriores de pantalla completa. "+
+                        "Abrir esa app desde su ícono puede tapar el mosaico.");
+            }
         }catch(InterruptedException ex){
             Thread.currentThread().interrupt();
             out.append("Interrumpido.");
