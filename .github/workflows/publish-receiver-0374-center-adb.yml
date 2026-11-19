@@ -3,7 +3,7 @@ name: Signed Receiver 0.3.74 - center ADB mosaic
 on:
   push:
     branches: [main]
-    paths: ['.github/workflows/publish-receiver-0374-center-mosaic.yml']
+    paths: ['.github/workflows/publish-receiver-0374-center-adb.yml']
   workflow_dispatch:
 permissions:
   contents: write
