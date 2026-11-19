@@ -140,11 +140,11 @@ final class T1GlobalToolbar {
             ViewGroup.LayoutParams.MATCH_PARENT));
         header.addView(firstStrip,new LinearLayout.LayoutParams(0,-1,1f));
         TextView title=new TextView(owner);
-        title.setText("DRIVELAB / T1");
-        title.setTextSize(15);
+        title.setText("T1");
+        title.setTextSize(11);
         title.setTypeface(null,Typeface.BOLD);
         title.setTextColor(T1JetourTheme.WHITE);
-        title.setPadding(dp(9),0,dp(12),0);
+        title.setPadding(dp(4),0,dp(4),0);
         leading.addView(title);
         modes[0]=button(leading,"EV",T1JetourTheme.PANEL_HI,85,()->changeMode(1));
         modes[1]=button(leading,"HEV",T1JetourTheme.PANEL_HI,85,()->changeMode(2));
@@ -174,25 +174,29 @@ final class T1GlobalToolbar {
         info.setEllipsize(TextUtils.TruncateAt.END);
         info.setPadding(dp(12),0,dp(5),0);
         leading.addView(info,new LinearLayout.LayoutParams(dp(190),-2));
-        // Read-only clock stays at upper right, outside scrolling controls.
+        // Date and clock live at FAR LEFT by the driver's hand, always
+        // outside scrolling OEM controls and never above mosaic/maps/OTA.
         LinearLayout clockBox=new LinearLayout(owner);
         clockBox.setOrientation(LinearLayout.VERTICAL);
-        clockBox.setGravity(Gravity.CENTER_VERTICAL|Gravity.RIGHT);
-        clockBox.setPadding(dp(4),0,dp(8),0);
+        clockBox.setGravity(Gravity.CENTER_VERTICAL|Gravity.LEFT);
+        clockBox.setPadding(dp(6),0,dp(2),0);
         clockDate=new TextView(owner);
-        clockDate.setGravity(Gravity.RIGHT);
+        clockDate.setGravity(Gravity.LEFT);
         clockDate.setSingleLine(true);
         clockDate.setTextColor(T1JetourTheme.MUTED);
-        clockDate.setTextSize(14f);
+        clockDate.setTextSize(12f);
         clockTime=new TextView(owner);
-        clockTime.setGravity(Gravity.RIGHT);
+        clockTime.setGravity(Gravity.LEFT);
         clockTime.setSingleLine(true);
         clockTime.setTypeface(null,Typeface.BOLD);
         clockTime.setTextColor(T1JetourTheme.WHITE);
-        clockTime.setTextSize(19f);
+        clockTime.setTextSize(18f);
         clockBox.addView(clockDate);
         clockBox.addView(clockTime);
-        header.addView(clockBox,new LinearLayout.LayoutParams(dp(148),-1));
+        // First child in toolbar is always the clock. Reparenting it to
+        // index 0 guarantees the OEM scroll strip cannot overlap the time.
+        header.addView(clockBox,0,
+            new LinearLayout.LayoutParams(dp(105),-1));
         // Always visible, even after leaving DriveLab for the OEM launcher:
         // reselect already-running Freeform tasks, never open duplicates.
         Button recoverMosaic=button(header,"▦",T1JetourTheme.PANEL_HI,54,
@@ -224,15 +228,16 @@ final class T1GlobalToolbar {
             if(compact==compactHeader[0])return;
             compactHeader[0]=compact;
             ((LinearLayout.LayoutParams)clockBox.getLayoutParams())
-                .width=dp(compact?88:148);
+                .width=dp(compact?86:105);
+            title.setVisibility(compact?View.GONE:View.VISIBLE);
             ((LinearLayout.LayoutParams)recoverMosaic.getLayoutParams())
                 .width=dp(compact?44:54);
             ((LinearLayout.LayoutParams)reload.getLayoutParams())
                 .width=dp(compact?61:90);
             ((LinearLayout.LayoutParams)update.getLayoutParams())
                 .width=dp(compact?42:46);
-            clockDate.setTextSize(compact?10.5f:14f);
-            clockTime.setTextSize(compact?15f:19f);
+            clockDate.setTextSize(compact?11f:12f);
+            clockTime.setTextSize(compact?17f:18f);
             recoverMosaic.setTextSize(compact?20f:25f);
             reload.setText(compact?"MAP":"MAPAS");
             reload.setTextSize(compact?10f:12f);
