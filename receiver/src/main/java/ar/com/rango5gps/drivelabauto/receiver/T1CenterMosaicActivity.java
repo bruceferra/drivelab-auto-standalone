@@ -311,6 +311,24 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
                 }))
             .show();
     }
+    /** Reuse exactly the previously created app tasks after returning from
+     * OEM HOME or T1 Launcher. Missing tasks require explicit new setup.
+     */
+    private void reopenSavedMosaic(){
+        T1CenterMosaicRecovery.restore(this,(requested,result)->{
+            if(requested||isFinishing()||isDestroyed())return;
+            new AlertDialog.Builder(this)
+                .setTitle("MOSAICO NO RECUPERADO")
+                .setMessage(result)
+                .setPositiveButton("OK",null).show();
+        });
+    }
+    private void pinMosaicOnLauncher(){
+        new AlertDialog.Builder(this)
+            .setTitle("ACCESO DIRECTO · MOSAICO")
+            .setMessage(T1MosaicLauncherShortcut.request(this))
+            .setPositiveButton("OK",null).show();
+    }
     /** The original configuration task is a fullscreen window on Display 0.
      * Showing an AlertDialog after Freeform setup leaves it on top of the
      * tiles. Only this own original task goes to background, never an OEM
@@ -440,6 +458,17 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
         text("MOSAICO · PANTALLA CENTRAL",23);
         text("Configuración independiente de Display 1. El táctil sigue disponible. "+
             "No modifica el HOME original ni reinicia los mapas del clúster.",14);
+        button("▦ VOLVER A MIS VENTANAS · SIN REABRIR APPS",
+            this::reopenSavedMosaic);
+        button("CREAR ACCESO «MOSAICO» EN T1 LAUNCHER",
+            this::pinMosaicOnLauncher);
+        button("VER RESULTADO · RECUPERAR MOSAICO",()->
+            new AlertDialog.Builder(this)
+                .setTitle("ÚLTIMA REAPERTURA")
+                .setMessage(getSharedPreferences(PREFS,MODE_PRIVATE)
+                    .getString("last_mosaic_restore",
+                        "Todavía no intentaste volver al mosaico"))
+                .setPositiveButton("OK",null).show());
         for(int i=0;i<3;i++){
             final int slot=i;
             button("PANEL "+(i+1)+" · "+names[i],()->choose(slot));
@@ -488,8 +517,10 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
             startActivity(new Intent(this,T1AppTaskManagerActivity.class)));
         button("APLICAR MOSAICO GUARDADO · FREEFORM REAL",
             this::applySavedFreeformMosaic);
-        button("MOSTRAR PANELES · OCULTAR CONFIGURACIÓN",
-            this::showMosaicTiles);
+        // Restoration also raises background Freeform tasks, not only
+        // hiding the Receiver configuration fullscreen window.
+        button("VOLVER A LOS PANELES · RECUPERAR TAREAS",
+            this::reopenSavedMosaic);
         button("VER RESULTADO · MOSAICO GUARDADO",()->
             new AlertDialog.Builder(this)
                 .setTitle("ÚLTIMO MOSAICO GUARDADO")
