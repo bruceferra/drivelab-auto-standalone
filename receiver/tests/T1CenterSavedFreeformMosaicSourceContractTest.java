@@ -35,10 +35,20 @@ public final class T1CenterSavedFreeformMosaicSourceContractTest {
             apply.contains("managed(c,managed,pkg)")&&
             apply.contains("return exact(c,id,pkg)"),
             "Only tasks created by this mosaic can be reused for a later apply");
-        ck(apply.contains("T1CenterFreeformGeometry.tile(")&&
-            apply.contains("visible(c,t.id,packages[i])")&&
-            apply.contains("commonOffset"),
-            "Require actual tile geometry, consistent Y offset and simultaneous visibility");
+        ck(apply.contains("T1CenterMosaicViewport.calculate(")&&
+            apply.contains("T1CenterMosaicViewport.near(")&&
+            apply.contains("T1CenterMosaicViewport.disjoint(")&&
+            apply.contains("visible(c,t.id,packages[i])"),
+            "Calibrate actual usable height; verify tile positions, no overlaps and visibility");
+        ck(apply.contains("SELF.equals(pkg)")&&
+            apply.contains("shellStartOwnCockpitFreeform(c)")&&
+            apply.contains("T1PremiumCockpitActivity")&&
+            ui.contains("DriveLab T1 · Cockpit (segunda ventana)")&&
+            adb.contains("shellOwnReceiverTasks("),
+            "Own DriveLab Cockpit can only run in a separate verified task");
+        ck(ui.contains("seek.setMin(1);seek.setMax(99)")&&
+            ui.contains("new int[]{40,50,60,70,80}"),
+            "User can drag freely between 1 and 99 percent or choose presets");
         ck(adb.contains("verifyCenterUserApp(context,pkg)")&&
             adb.contains("shellStartCenterUserFreeform(")&&
             adb.contains("userAppLaunch&&command.matches(")&&
