@@ -1,6 +1,11 @@
 package ar.com.rango5gps.drivelabauto.receiver;
 
 import android.app.AlertDialog;
+import android.app.ActivityOptions;
+import android.graphics.Rect;
+import android.view.Display;
+import android.view.WindowManager;
+import android.widget.Toast;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -73,6 +78,73 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
                 save();draw();
             }).setNegativeButton("CANCELAR",null).show();
     }
+    /** Opt-in best-effort real multiwindow launch on the CENTER display only.
+     * Android may ignore launch bounds if OEM freeform is disabled.
+     * No ADB, root, shell, cluster, HOME replacement or OEM writes.
+     */
+    private void applyOnCenter(){
+        new AlertDialog.Builder(this)
+            .setTitle("PROBAR MOSAICO EN PANTALLA CENTRAL")
+            .setMessage("Se intentará abrir las apps elegidas en ventanas "+
+                "del Display 0 con los tamaños guardados. Android 11 puede "+
+                "ignorar los límites si Jetour deshabilitó freeform. "+
+                "No se toca el clúster ni el HOME original. "+
+                "Para volver, abrí DriveLab desde su icono. "+
+                "¿Aplicar ahora con el vehículo detenido?")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("APLICAR",(d,w)->launchCenterTiles())
+            .show();
+    }
+    private void launchCenterTiles(){
+        try{
+            MirrorAutomationOem oem=new MirrorAutomationOem(this);
+            double speed;
+            try{speed=oem.speedKmh();}finally{oem.close();}
+            if(!Double.isFinite(speed)||speed<0||speed>0.5){
+                Toast.makeText(this,"BLOQUEADO: velocidad 0 km/h no confirmada",
+                    Toast.LENGTH_LONG).show();return;
+            }
+            android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
+            getWindowManager().getDefaultDisplay().getRealMetrics(dm);
+            int w=dm.widthPixels,h=dm.heightPixels;
+            T1CenterMosaicGeometry.Tile[] tiles=
+                T1CenterMosaicGeometry.layout(w,h,mode,percent);
+            int count=mode==3?2:3,launched=0;
+            // Launch external apps first; never relaunch DriveLab itself
+            // from the same activity or accidentally start OEM HOME.
+            for(int i=count-1;i>=0;i--){
+                String pkg=packages[i];
+                if(pkg==null||pkg.isEmpty()||pkg.equals(getPackageName()))
+                    continue;
+                Intent intent=getPackageManager().getLaunchIntentForPackage(pkg);
+                if(intent==null)continue;
+                T1CenterMosaicGeometry.Tile tile=tiles[i];
+                ActivityOptions options=ActivityOptions.makeBasic();
+                options.setLaunchDisplayId(Display.DEFAULT_DISPLAY);
+                options.setLaunchBounds(new Rect(tile.left,tile.top,
+                    tile.right,tile.bottom));
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|
+                    Intent.FLAG_ACTIVITY_MULTIPLE_TASK);
+                startActivity(intent,options.toBundle());
+                launched++;
+            }
+            getSharedPreferences(PREFS,MODE_PRIVATE).edit()
+                .putString("last_apply",launched==0?
+                    "SIN APPS EXTERNAS: elegí Spotify/Maps/Waze":
+                    "SOLICITADO: "+launched+" apps. Confirmá visualmente "+
+                    "si Android respetó las ventanas; no está verificado.")
+                .apply();
+            Toast.makeText(this,launched==0?
+                "No hay aplicaciones externas seleccionadas":
+                "Ventanas solicitadas. Comprobá si se dividió la pantalla.",
+                Toast.LENGTH_LONG).show();
+        }catch(Exception ex){
+            new AlertDialog.Builder(this).setTitle("MOSAICO NO APLICADO")
+                .setMessage(ex.getClass().getSimpleName()+": "+
+                    String.valueOf(ex.getMessage()))
+                .setPositiveButton("OK",null).show();
+        }
+    }
     private void draw(){
         ScrollView scroll=new ScrollView(this);
         scroll.setBackgroundColor(0xFF101A23);
@@ -109,10 +181,13 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
                 .append(names[i]).append(" · ").append(tiles[i].bounds())
                 .append("\n");
         text(preview.toString(),14);
-        text("PREPARADO PARA PRUEBA EN VEHÍCULO DETENIDO. "+
-            "Este configurador guarda aplicaciones y distribución, pero todavía "+
-            "NO aplica ventanas reales: falta validar el modo freeform táctil "+
-            "de Android 11 en Display 0. No se ejecutan comandos ADB a ciegas.",13);
+        text("PRUEBA EXPERIMENTAL: APLICAR solicita ventanas reales en "+
+            "Display 0 mediante Android ActivityOptions. Jetour puede ignorar "+
+            "sus posiciones si freeform está deshabilitado. No usa ADB ni "+
+            "modifica el clúster. Verificá visualmente el resultado.",13);
+        text("ÚLTIMA PRUEBA · "+getSharedPreferences(PREFS,MODE_PRIVATE)
+            .getString("last_apply","Nunca aplicado"),13);
+        button("PROBAR APLICAR EN PANTALLA CENTRAL",this::applyOnCenter);
         button("GUARDAR CONFIGURACIÓN",()->{
             save();new AlertDialog.Builder(this).setMessage(
                 "Distribución guardada. No se modificaron las ventanas.")
