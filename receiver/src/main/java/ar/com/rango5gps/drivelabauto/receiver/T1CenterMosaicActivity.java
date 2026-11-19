@@ -82,7 +82,36 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
      * Android may ignore launch bounds if OEM freeform is disabled.
      * No ADB, root, shell, cluster, HOME replacement or OEM writes.
      */
+    private String windowCapabilities(){
+        PackageManager pm=getPackageManager();
+        boolean freeform=pm.hasSystemFeature("android.software.freeform_window_management");
+        boolean pip=pm.hasSystemFeature(PackageManager.FEATURE_PICTURE_IN_PICTURE);
+        boolean secondary=pm.hasSystemFeature("android.software.activities_on_secondary_displays");
+        boolean multi=isInMultiWindowMode();
+        return "Freeform declarado: "+(freeform?"SÍ":"NO")+
+            "\\nPicture-in-Picture: "+(pip?"SÍ":"NO")+
+            "\\nActividades en displays secundarios: "+(secondary?"SÍ":"NO")+
+            "\\nDriveLab está en multiwindow: "+(multi?"SÍ":"NO")+
+            "\\nAndroid "+android.os.Build.VERSION.RELEASE+
+            " · API "+android.os.Build.VERSION.SDK_INT+
+            "\\nNota: estas capacidades no garantizan ventanas de apps externas.";
+    }
+    private void diagnoseWindows(){
+        String result=windowCapabilities();
+        getSharedPreferences(PREFS,MODE_PRIVATE).edit()
+            .putString("window_capabilities",result).apply();
+        new AlertDialog.Builder(this).setTitle("CAPACIDADES DE VENTANAS")
+            .setMessage(result+"\\n\\nLa prueba anterior abrió tres apps a pantalla completa: "+
+                "no hay evidencia de que ActivityOptions permita mosaico en esta T1.")
+            .setPositiveButton("ENTENDIDO",null).show();
+    }
     private void applyOnCenter(){
+        if(!getPackageManager().hasSystemFeature("android.software.freeform_window_management")){
+            new AlertDialog.Builder(this).setTitle("MOSAICO NATIVO NO DISPONIBLE")
+                .setMessage("El sistema no declara soporte freeform. La prueba anterior abrió las tres aplicaciones a pantalla completa. No volveré a abrirlas como si fueran un mosaico. Revisá DIAGNOSTICAR VENTANAS para conocer las capacidades de Android.")
+                .setPositiveButton("ENTENDIDO",null).show();
+            return;
+        }
         new AlertDialog.Builder(this)
             .setTitle("PROBAR MOSAICO EN PANTALLA CENTRAL")
             .setMessage("Se intentará abrir las apps elegidas en ventanas "+
@@ -183,6 +212,7 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
             "modifica el clúster. Verificá visualmente el resultado.",13);
         text("ÚLTIMA PRUEBA · "+getSharedPreferences(PREFS,MODE_PRIVATE)
             .getString("last_apply","Nunca aplicado"),13);
+        button("DIAGNOSTICAR VENTANAS DE ANDROID",this::diagnoseWindows);
         button("PROBAR APLICAR EN PANTALLA CENTRAL",this::applyOnCenter);
         button("GUARDAR CONFIGURACIÓN",()->{
             save();new AlertDialog.Builder(this).setMessage(
