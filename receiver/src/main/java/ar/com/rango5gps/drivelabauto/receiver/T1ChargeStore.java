@@ -33,7 +33,9 @@ final class T1ChargeStore extends SQLiteOpenHelper {
             String basis=Double.isFinite(meterKwh)&&meterKwh>0?
                 "RED (medidor)":"BATERÍA (est.)";
             return fmt.format(new Date(end>0?end:start))+
-                " · "+(open==1?"CARGANDO":"FINALIZADA")+
+                " · "+(open==1?(kwh>0?"CARGANDO (HV estimado)":
+                    "ENCHUFADO · flujo HV por confirmar"):
+                    (kwh>0?"FINALIZADA":"FINALIZADA · sin HV verificado"))+
                 " · "+fmt(socStart,0)+"→"+fmt(socEnd,0)+" %"+
                 "\n"+fmt(kwh,2)+" kWh batería · "+
                 fmt(ah,1)+" Ah · "+samples+" muestras"+
@@ -111,7 +113,8 @@ final class T1ChargeStore extends SQLiteOpenHelper {
         if(T1ChargeMath.validSoc(soc))v.put("soc_start",soc);
         v.put("price_kwh",price);v.put("cable_raw",cable);
         v.put("source","OEM CABLE 1060");
-        v.put("note","Estimado por 1063 V / 1064 A, no medidor de red");
+        v.put("note","Cable 1060 confirmado. Solo contar energía HV "+
+            "con 1063 V / 1064 A válidos; nunca es medidor de red");
         return getWritableDatabase().insertOrThrow("sessions",null,v);
     }
     synchronized void sample(long id,T1ChargeOemReader.Reading reading){
