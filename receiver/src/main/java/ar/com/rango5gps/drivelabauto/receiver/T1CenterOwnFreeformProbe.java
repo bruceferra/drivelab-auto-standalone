@@ -5,8 +5,9 @@ import android.content.SharedPreferences;
 import android.os.Handler;
 import android.os.Looper;
 
-/** Isolated freeform test: starts only our own disposable activity on
- * Display 0 via ADB. No other task's resizeMode, geometry or HOME is changed.
+/** Explicitly initiated, isolated Android 11 freeform geometry experiment.
+ * No external tasks, settings, HOME, OEM components or Display 1 are modified.
+ * The sole modified task is our own temporary self-closing Activity.
  */
 final class T1CenterOwnFreeformProbe {
     interface Done {void completed(String outcome);}
@@ -20,71 +21,143 @@ final class T1CenterOwnFreeformProbe {
         new Thread(()->{
             String result=inspect(app);
             MAIN.post(()->done.completed(result));
-        },"DriveLab-Own-Freeform-Display0-Test").start();
+        },"DriveLab-Own-Freeform-Display0-Bounds").start();
     }
     private static String shortText(String value){
         if(value==null||value.trim().isEmpty())return "sin texto";
         String v=value.replace('\r',' ').replace('\n',' ').trim();
         return v.substring(0,Math.min(350,v.length()));
     }
+    private static boolean isOwnDisposableTask(String stack,int id,String pkg){
+        if(id<=0||stack==null)return false;
+        String needle="taskId="+id+":";
+        int matches=0;
+        for(String line:stack.split("\\r?\\n")){
+            if(line.contains(needle)){
+                matches++;
+                if(!line.contains(pkg+"/")||
+                    !line.contains("T1CenterFreeformTestActivity"))
+                    return false;
+            }
+        }
+        return matches==1;
+    }
     private static String inspect(Context app){
         StringBuilder report=new StringBuilder(
-            "FREEFORM AISLADO · DISPLAY 0\n"+
-            "Sólo una actividad temporal de DriveLab. "+
-            "No altera tareas de ProManager, Uber, clúster ni HOME.\n");
+            "FREEFORM · GEOMETRÍA DISPLAY 0\n"+
+            "Prueba de una sola ventana temporal propia de DriveLab.\n");
         SharedPreferences prefs=app.getSharedPreferences(
             T1CenterFreeformTestActivity.PREFS,Context.MODE_PRIVATE);
-        // Remove prior measurements so stale data cannot be reported.
         prefs.edit().remove(T1CenterFreeformTestActivity.KEY)
             .remove(T1CenterFreeformTestActivity.TASK)
             .remove(T1CenterFreeformTestActivity.TIME).commit();
+        long startAt=System.currentTimeMillis();
+        boolean launched=false;
         try{
-            String commandResult=T1LocalAdbClient.shell(app,START);
-            report.append("ADB inicio modo 5: ")
-                .append(shortText(commandResult)).append('\n');
-            if(T1CenterWindowModePolicy.shellRejected(commandResult)){
-                return report+"Android rechazó el inicio. "+
-                    "No se cambió ninguna tarea externa.";
-            }
-            Thread.sleep(1900L);
+            String result=T1LocalAdbClient.shell(app,START);
+            report.append("ADB modo 5: ").append(shortText(result)).append('\n');
+            if(T1CenterWindowModePolicy.shellRejected(result))
+                return report+"ADB rechazó el lanzamiento; sin cambios.";
+            launched=true;
+            Thread.sleep(1350L);
             int task=prefs.getInt(T1CenterFreeformTestActivity.TASK,-1);
             long updated=prefs.getLong(T1CenterFreeformTestActivity.TIME,0);
             String ui=prefs.getString(T1CenterFreeformTestActivity.KEY,null);
-            if(task<=0||updated<=0||ui==null)
-                return report+"La actividad temporal no confirmó su inicio. "+
-                    "Puede que la ROM no acepte modo 5 en Display 0.";
-            report.append("Actividad propia: task=").append(task)
+            if(task<=0||updated<=startAt||ui==null||
+                !ui.contains("Display=0"))
+                return report+"La actividad temporal propia no confirmó "+
+                    "Display 0; no se ejecutó resize.";
+            report.append("ANTES Activity: task=").append(task)
                 .append(" · ").append(ui).append('\n');
-            String dump=T1LocalAdbClient.shell(app,
-                "dumpsys activity activities");
             String pkg=app.getPackageName();
+            String stack=T1LocalAdbClient.shell(app,"am stack list");
+            String activities=T1LocalAdbClient.shell(app,
+                "dumpsys activity activities");
+            T1AdbTaskParser.Task before=T1AdbTaskParser.exactCenter(
+                stack,task,pkg);
+            boolean own=isOwnDisposableTask(stack,task,pkg);
             boolean freeform=T1CenterWindowModePolicy.isFreeform(
-                dump,task,pkg);
-            boolean multi=ui.contains("isInMultiWindowMode=true");
-            boolean onCenter=ui.contains("Display=0");
-            report.append("ADB modo freeform: ").append(freeform?"SÍ":"NO")
-                .append(" · Activity multiwindow: ").append(multi?"SÍ":"NO")
-                .append(" · Display 0: ").append(onCenter?"SÍ":"NO")
+                activities,task,pkg);
+            report.append("ANTES ADB: ").append(before==null?
+                "sin bounds":before.toString()).append('\n')
+                .append("Tarea temporal única: ").append(own?"SÍ":"NO")
+                .append(" · Freeform: ").append(freeform?"SÍ":"NO")
+                .append(" · Activity multiwindow: ")
+                .append(ui.contains("isInMultiWindowMode=true")?"SÍ":"NO")
                 .append('\n');
-            report.append(freeform&&multi&&onCenter?
-                "FREEFORM DISPONIBLE para una actividad propia. "+
-                "Falta verificar geometría y compatibilidad de apps externas.":
-                "FREEFORM NO CONFIRMADO: Android inició la actividad en "+
-                "otro modo, rechazó freeform o no expuso el estado exacto.");
+            // Guard on task ID, component, display and freeform immediately
+            // before the only geometry-changing ADB command.
+            if(!own||!freeform||before==null||
+                before.id!=task||before.display!=0||before.bounds==null||
+                !ui.contains("isInMultiWindowMode=true"))
+                return report+"NO SE CAMBIÓ NADA: identidad, modo o "+
+                    "geometría de tarea temporal no verificados.";
+            T1AdbTaskParser.Box bounds=before.bounds;
+            if(bounds.left!=0||bounds.top!=0||
+                bounds.right<1000||bounds.bottom<640)
+                return report+"NO SE CAMBIÓ NADA: pantalla inicial "+
+                    "inesperada: "+bounds;
+            int half=bounds.right/2;
+            T1AdbTaskParser.Box target=new T1AdbTaskParser.Box(
+                0,0,half,bounds.bottom);
+            // Reconfirm correct temporary component immediately before ADB.
+            String fresh=T1LocalAdbClient.shell(app,"am stack list");
+            T1AdbTaskParser.Task check=T1AdbTaskParser.exactCenter(
+                fresh,task,pkg);
+            if(check==null||check.id!=task||check.display!=0||
+                !isOwnDisposableTask(fresh,task,pkg)||
+                check.bounds==null||!check.bounds.near(bounds,0))
+                return report+"NO SE CAMBIÓ NADA: la tarea temporal cambió.";
+            report.append("RESIZE SOLICITADO: ").append(target).append('\n');
+            String resize=T1LocalAdbClient.shell(app,
+                "am task resize "+task+" "+target.geometry());
+            report.append("ADB resize: ").append(shortText(resize)).append('\n');
+            if(T1CenterWindowModePolicy.shellRejected(resize))
+                return report+"La ROM rechazó el resize de la "+
+                    "tarea Freeform propia.";
+            Thread.sleep(1400L);
+            String afterStack=T1LocalAdbClient.shell(app,"am stack list");
+            T1AdbTaskParser.Task after=T1AdbTaskParser.exactCenter(
+                afterStack,task,pkg);
+            String afterDump=T1LocalAdbClient.shell(app,
+                "dumpsys activity activities");
+            boolean afterFreeform=T1CenterWindowModePolicy.isFreeform(
+                afterDump,task,pkg);
+            boolean sized=after!=null&&
+                isOwnDisposableTask(afterStack,task,pkg)&&
+                after.bounds!=null&&after.bounds.near(target,20);
+            String afterUi=prefs.getString(
+                T1CenterFreeformTestActivity.KEY,"sin lectura");
+            report.append("DESPUÉS ADB: ").append(after==null?
+                "tarea ya cerrada o sin bounds":after.toString())
+                .append('\n');
+            report.append("DESPUÉS Activity: ").append(afterUi).append('\n');
+            report.append("Modo freeform: ").append(afterFreeform?"SÍ":"NO")
+                .append(" · Tamaño 50%: ").append(sized?"SÍ":"NO")
+                .append('\n');
+            report.append(afterFreeform&&sized?
+                "ÉXITO: UNA VENTANA PROPIA ACEPTÓ FREEFORM Y MEDIA "+
+                "PANTALLA. Queda por verificar dos apps externas.":
+                "NO CONFIRMADO: la ventana propia quedó a pantalla "+
+                "completa, no respetó los límites o se cerró antes "+
+                "de la verificación.");
         }catch(InterruptedException e){
             Thread.currentThread().interrupt();
-            report.append("Diagnóstico interrumpido.");
+            report.append("Prueba interrumpida.");
         }catch(Exception e){
-            report.append("Diagnóstico no completado: ")
-                .append(shortText(e.getClass().getSimpleName()+": "+
+            report.append("ERROR diagnóstico: ").append(
+                shortText(e.getClass().getSimpleName()+": "+
                     String.valueOf(e.getMessage())));
         }finally{
-            // The temporary activity closes itself by finishAndRemoveTask.
-            try{Thread.sleep(2400L);}catch(InterruptedException e){
-                Thread.currentThread().interrupt();
+            if(launched){
+                // Activity itself executes finishAndRemoveTask after 10.5 s.
+                // Wait for cleanup before showing the report over Receiver.
+                long remain=11200L-(System.currentTimeMillis()-startAt);
+                if(remain>0)try{Thread.sleep(remain);}
+                catch(InterruptedException e){Thread.currentThread().interrupt();}
+                report.append("\nVentana temporal programada para "+
+                    "cerrarse automáticamente; sin cambios a otras apps.");
             }
-            report.append("\nActividad de prueba configurada para "+
-                "cerrarse automáticamente a los 3,8 segundos.");
         }
         return report.toString();
     }
