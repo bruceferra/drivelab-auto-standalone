@@ -81,7 +81,8 @@ final class T1AdbTaskParser {
             return "com.spotify.music";
         return null;
     }
-    static List<Task> scan(String output){
+    static List<Task> scan(String output){return scan(output,null);}
+    private static List<Task> scan(String output,String centerPackage){
         LinkedHashMap<Integer,Task> found=new LinkedHashMap<>();
         if(output==null)return new ArrayList<>();
         int display=-1;
@@ -113,6 +114,9 @@ final class T1AdbTaskParser {
             }else if(current.task>0)linesAfterTask++;
             if(current.task<=0||linesAfterTask>9)continue;
             String app=knownApp(line);
+            if(centerPackage!=null && (line.contains(centerPackage+"/") ||
+                line.contains("A="+centerPackage+" ") || line.endsWith("A="+centerPackage) ||
+                line.contains(" "+centerPackage+" ")))app=centerPackage;
             if(app!=null)current.app=app;
             Box b=bounds(line);
             if(b!=null)current.bounds=b;
@@ -127,11 +131,9 @@ final class T1AdbTaskParser {
      */
     /** Explicit center-screen tasks only; never match cluster or OEM apps. */
     static Task uniqueCenter(String raw,String pkg){
-        if(!pkg.equals("com.waze")&&
-           !pkg.equals("com.google.android.apps.maps")&&
-           !pkg.equals("com.spotify.music"))return null;
+        if(pkg==null||!pkg.matches("[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)+"))return null;
         Task found=null;
-        for(Task t:scan(raw)){
+        for(Task t:scan(raw,pkg)){
             if(t.display!=0||!t.app.equals(pkg))continue;
             if(found!=null&&found.id!=t.id)return null;
             found=t;
