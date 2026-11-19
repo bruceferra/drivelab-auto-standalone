@@ -24,6 +24,15 @@ jobs:
           set -euo pipefail
           tool=$(command -v sdkmanager || find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)
           "$tool" 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Verify Jetour MODE layer comparison is READ-ONLY
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-mode-test
+          javac -encoding UTF-8 -d /tmp/bridge-mode-test \
+            boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeModeLayerDiff.java \
+            boot/tests/BridgeModeLayerDiffTest.java
+          java -cp /tmp/bridge-mode-test \
+            ar.com.rango5gps.drivelabauto.boot.BridgeModeLayerDiffTest
       - name: Protocol security regression (no Android runtime needed)
         run: |
           mkdir -p /tmp/bridge-test
