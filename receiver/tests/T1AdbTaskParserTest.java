@@ -71,9 +71,9 @@ public final class T1AdbTaskParserTest {
         ok(fromCarMaps.bounds!=null&&fromCarMaps.bounds.left==960,
             "Actual Jetour Maps split occupies right half");
         String ownPkg="ar.com.rango5gps.drivelabauto.receiver";
-        String twoOwnTasks="Stack id=100 bounds=[0,0][1920,1080] displayId=0 userId=0\\n"+
-            " taskId=100: "+ownPkg+"/.ReceiverActivity bounds=[0,0][1920,1080]\\n"+
-            "Stack id=2804 bounds=[0,0][1920,1080] displayId=0 userId=0\\n"+
+        String twoOwnTasks="Stack id=100 bounds=[0,0][1920,1080] displayId=0 userId=0\n"+
+            " taskId=100: "+ownPkg+"/.ReceiverActivity bounds=[0,0][1920,1080]\n"+
+            "Stack id=2804 bounds=[0,0][1920,1080] displayId=0 userId=0\n"+
             " taskId=2804: "+ownPkg+"/.T1CenterFreeformTestActivity bounds=[0,0][1920,1080]";
         ok(T1AdbTaskParser.uniqueCenter(twoOwnTasks,ownPkg)==null,
             "Same package multiple tasks must be ambiguous globally");
