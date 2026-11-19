@@ -48,10 +48,11 @@ public final class T1CenterFreeformTestActivity extends Activity {
         main.postDelayed(this::capture,3200L);
         main.postDelayed(this::capture,5200L);
         main.postDelayed(this::capture,7200L);
+        main.postDelayed(this::capture,12000L);
         main.postDelayed(()->{
             capture();
             finishAndRemoveTask();
-        },10500L);
+        },18000L);
     }
     private void capture(){
         if(isFinishing())return;
