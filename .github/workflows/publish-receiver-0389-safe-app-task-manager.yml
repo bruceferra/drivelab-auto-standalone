@@ -242,6 +242,13 @@ jobs:
             receiver/tests/T1CenterTaskInventoryTest.java
           java -cp /tmp/drivelab-taskmgr-0389 \
             ar.com.rango5gps.drivelabauto.receiver.T1CenterTaskInventoryTest
+      - name: Verify public Android SDK HOME query and fail-closed stop guards
+        run: |
+          set -euo pipefail
+          grep -Fq 'pm.resolveActivity(homeQuery,0)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1LocalAdbClient.java
+          grep -Fq 'pm.queryIntentActivities(homeQuery,0)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1LocalAdbClient.java
+          grep -Fq 'pm.queryIntentActivities(homeQuery,0)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1AppTaskManagerActivity.java
+          ! grep -Rq 'getHomeActivities(' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/
       - name: Verify explicit confirmation, fresh user app identity and mosaic ownership
         run: |
           set -euo pipefail
