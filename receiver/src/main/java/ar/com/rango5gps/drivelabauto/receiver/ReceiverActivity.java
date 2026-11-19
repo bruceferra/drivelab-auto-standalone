@@ -150,7 +150,7 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
         // raw ADB. Direct entry in Inicio so an owner can recover from a
         // USB/WebADB connection failure without entering technical menus.
         if(T1BootInstaller.installed(this)){
-            label(body,"DriveLab Boot 0.1.1 · instalada · Display 0/1 configurable",13);
+            label(body,"DriveLab Boot 0.1.2 · instalada · pestañas Display 0 / Display 1",13);
             button(body,"ABRIR DRIVELAB BOOT · CONFIGURAR MOSAICO",
                 ()->T1BootInstaller.openBoot(this,this::report));
         }else{
