@@ -11,7 +11,7 @@ public final class T1CockpitBlockDragDropContractTest {
                 row.equals("trip_controls")?"controls":row.equals("trip_overview")?
                 "overview":row.equals("temperatures")?"powertrain":"metrics")+
                 ",\""+row+"\")"),"Missing row "+row);
-        yes(s.contains("startDragAndDrop(")&&s.contains("ACTION_DROP")&&
+        yes(s.contains("T1DragCue.attach(")&&s.contains("ACTION_DROP")&&
             s.contains("source.getParent()!=row"),"Drag must remain within same row");
         yes(s.contains("drivelab_cockpit_blocks_order_v1")&&
             s.contains("java.util.Collections.sort(sorted")&&
