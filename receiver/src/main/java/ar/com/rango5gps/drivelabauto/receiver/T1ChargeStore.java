@@ -20,7 +20,10 @@ import java.util.Locale;
 final class T1ChargeStore extends SQLiteOpenHelper {
     static final String PREFS="t1_charge_auto",ENABLED="enabled",
         STATUS="status",LAST_CABLE="last_cable_raw",LAST_READ="last_read",
-        CURRENT_SESSION="current_session_id";
+        CURRENT_SESSION="current_session_id",
+        LAST_SOC="last_soc",LAST_VOLTS="last_volts",
+        LAST_AMPS="last_amps",LAST_SAMPLE_OK="last_sample_ok",
+        LAST_SAMPLE_AT="last_sample_at";
     static final String DB="t1_charge_sessions.db",CSV="grid_charges_auto.csv";
     static final class Record {
         long id,start,end,last,lastActive,chargeEnded;
