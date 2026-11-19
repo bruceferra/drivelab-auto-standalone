@@ -1,4 +1,5 @@
 name: Signed Receiver 0.3.73 - center mosaic apply
+# Retry after updating drag/drop contracts for shared visual cues
 on:
   push:
     branches: [main]
