@@ -170,6 +170,44 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
                 .setPositiveButton("OK",null).show();
         }
     }
+    private void applyAdbOnCenter(){
+        int count=mode==3?2:3;
+        for(int i=0;i<count;i++){
+            if(!T1CenterAdbResize.allowed(packages[i])){
+                new AlertDialog.Builder(this).setTitle("MOSAICO ADB")
+                    .setMessage("La primera prueba ADB admite Waze, Google Maps "+
+                        "y Spotify, sin repetir aplicaciones. El panel DriveLab "+
+                        "y otras apps necesitan integración adicional.")
+                    .setPositiveButton("ENTENDIDO",null).show();
+                return;
+            }
+        }
+        new AlertDialog.Builder(this).setTitle("REDIMENSIONAR DISPLAY 0")
+            .setMessage("Usaremos el puente ADB local del clúster, pero en "+
+                "la pantalla central (Display 0). Primero se abrirán las "+
+                "aplicaciones y luego se buscarán sus tareas para aplicar "+
+                "los tamaños guardados. Requiere velocidad 0 km/h confirmada "+
+                "durante la configuración. ¿Probar?")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("PROBAR",(d,w)->{
+                launchCenterTiles();
+                android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
+                getWindowManager().getDefaultDisplay().getRealMetrics(dm);
+                T1CenterMosaicGeometry.Tile[] tiles=T1CenterMosaicGeometry.layout(
+                    dm.widthPixels,dm.heightPixels,mode,percent);
+                String[] selected=packages.clone();
+                new android.os.Handler(android.os.Looper.getMainLooper())
+                    .postDelayed(()->T1CenterAdbResize.apply(this,selected,
+                        tiles,count,result->{
+                            getSharedPreferences(PREFS,MODE_PRIVATE).edit()
+                                .putString("last_apply",result).apply();
+                            new AlertDialog.Builder(this)
+                                .setTitle("RESULTADO MOSAICO ADB")
+                                .setMessage(result)
+                                .setPositiveButton("OK",null).show();
+                        }),1100L);
+            }).show();
+    }
     private void draw(){
         ScrollView scroll=new ScrollView(this);
         scroll.setBackgroundColor(0xFF101A23);
@@ -213,6 +251,7 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
         text("ÚLTIMA PRUEBA · "+getSharedPreferences(PREFS,MODE_PRIVATE)
             .getString("last_apply","Nunca aplicado"),13);
         button("DIAGNOSTICAR VENTANAS DE ANDROID",this::diagnoseWindows);
+        button("PROBAR MOSAICO REAL · ADB DISPLAY 0",this::applyAdbOnCenter);
         button("PROBAR APLICAR EN PANTALLA CENTRAL",this::applyOnCenter);
         button("GUARDAR CONFIGURACIÓN",()->{
             save();new AlertDialog.Builder(this).setMessage(
