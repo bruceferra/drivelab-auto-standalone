@@ -117,6 +117,13 @@ public final class T1AutoJourneyActivity extends T1ImmersiveActivity {
         action(process,"GENERAR DETALLE",this::generateRange);
         action(process,"EXPORTAR RESUMEN",()->exportRange(false));
         action(process,"EXPORTAR GPS FILTRADO",()->exportRange(true));
+        LinearLayout cutoffRow=row(root);
+        action(cutoffRow,"DESDE 19/11/2026 08:00 · SIN INVENTAR KM",()->{
+            dateFrom.setText("2026-11-19 08:00");
+            dateUntil.setText(new SimpleDateFormat("yyyy-MM-dd HH:mm",
+                Locale.getDefault()).format(new Date()));
+            generateRange();
+        });
         rangeStatus=label("Definí un intervalo y tocá GENERAR DETALLE.",14,WHITE);
         rangeStatus.setBackgroundColor(CARD);root.addView(rangeStatus);
         rangeDays=rowList(root,"ESTADÍSTICAS POR DÍA");
