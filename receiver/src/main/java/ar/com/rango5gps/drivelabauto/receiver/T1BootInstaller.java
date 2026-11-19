@@ -344,27 +344,34 @@ public final class T1BootInstaller {
             reporter.report("La APK descargada no pasó verificación: "+
                 failure.getClass().getSimpleName());return;
         }
-        Uri uri=FileProvider.getUriForFile(a,
-            a.getPackageName()+".bootfiles",apk(a));
-        Intent intent=new Intent(Intent.ACTION_INSTALL_PACKAGE);
-        intent.setDataAndType(uri,"application/vnd.android.package-archive");
-        intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-        intent.setClipData(ClipData.newRawUri("DriveLab Boot",uri));
         try{
-            a.startActivity(intent);
-            state(a,"Instalador Android alternativo abierto");
-            reporter.report("Confirmá la instalación de DriveLab Boot");
-        }catch(Exception first){
-            intent.setAction(Intent.ACTION_VIEW);
+            Uri uri=FileProvider.getUriForFile(a,
+                a.getPackageName()+".bootfiles",apk(a));
+            Intent intent=new Intent(Intent.ACTION_INSTALL_PACKAGE);
+            intent.setDataAndType(uri,"application/vnd.android.package-archive");
+            intent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            intent.setClipData(ClipData.newRawUri("DriveLab Boot",uri));
             try{
                 a.startActivity(intent);
-                state(a,"Instalador Android de archivos abierto");
+                state(a,"Instalador Android alternativo abierto");
                 reporter.report("Confirmá la instalación de DriveLab Boot");
-            }catch(Exception second){
-                state(a,"Android no abre el instalador: "+first.getClass().getSimpleName()+
-                    " / "+second.getClass().getSimpleName());
-                reporter.report(status(a));
+            }catch(Exception first){
+                intent.setAction(Intent.ACTION_VIEW);
+                try{
+                    a.startActivity(intent);
+                    state(a,"Instalador Android de archivos abierto");
+                    reporter.report("Confirmá la instalación de DriveLab Boot");
+                }catch(Exception second){
+                    state(a,"Android no abre el instalador: "+
+                        first.getClass().getSimpleName()+" / "+
+                        second.getClass().getSimpleName());
+                    reporter.report(status(a));
+                }
             }
+        }catch(Exception failure){
+            state(a,"Android no pudo acceder a la APK verificada: "+
+                failure.getClass().getSimpleName());
+            reporter.report(status(a));
         }
     }
     private static void notice(Activity a,Updater.Reporter r,String message){
