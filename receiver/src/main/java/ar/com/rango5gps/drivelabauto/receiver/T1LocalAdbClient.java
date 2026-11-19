@@ -118,19 +118,15 @@ final class T1LocalAdbClient {
         if(launcher==null||launcher.getComponent()==null||
             !pkg.equals(launcher.getComponent().getPackageName()))
             throw new SecurityException("Sin launcher explícito de usuario");
-        android.content.ComponentName home=pm.resolveActivity(
-            new android.content.Intent(android.content.Intent.ACTION_MAIN)
-                .addCategory(android.content.Intent.CATEGORY_HOME),0)
-                ==null?null:pm.resolveActivity(
-            new android.content.Intent(android.content.Intent.ACTION_MAIN)
-                .addCategory(android.content.Intent.CATEGORY_HOME),0)
-                .activityInfo==null?null:new android.content.ComponentName(
-            pm.resolveActivity(new android.content.Intent(
-                android.content.Intent.ACTION_MAIN).addCategory(
-                android.content.Intent.CATEGORY_HOME),0).activityInfo.packageName,
-            pm.resolveActivity(new android.content.Intent(
-                android.content.Intent.ACTION_MAIN).addCategory(
-                android.content.Intent.CATEGORY_HOME),0).activityInfo.name);
+        java.util.ArrayList<android.content.pm.ResolveInfo> homeCandidates=
+            new java.util.ArrayList<>();
+        android.content.ComponentName home=
+            pm.getHomeActivities(homeCandidates);
+        for(android.content.pm.ResolveInfo option:homeCandidates){
+            if(option.activityInfo!=null&&
+                pkg.equals(option.activityInfo.packageName))
+                throw new SecurityException("Launcher/HOME protegido");
+        }
         if(home==null)
             throw new SecurityException("HOME no identificado; detener cancelado");
         if(home.getPackageName().equals(pkg))
