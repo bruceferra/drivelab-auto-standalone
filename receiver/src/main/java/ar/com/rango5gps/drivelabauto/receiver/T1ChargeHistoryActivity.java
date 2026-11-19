@@ -135,6 +135,8 @@ public final class T1ChargeHistoryActivity extends T1ImmersiveActivity {
         live.setText((enabled?"AUTO ACTIVADO":"AUTO DESACTIVADO")+
             " · Cable OEM 1060="+p.getInt(T1ChargeStore.LAST_CABLE,-1)+
             "\n"+raw+
+            "\n"+p.getString(T1ChargeStore.LAST_VOLTAGE_PROBE,
+                "Diagnóstico voltaje: todavía sin lectura")+
             "\n"+p.getString(T1ChargeStore.STATUS,"Sin lectura OEM reciente")+
             "\nÚltima lectura: "+
             (p.getLong(T1ChargeStore.LAST_READ,0)==0?"sin datos":
