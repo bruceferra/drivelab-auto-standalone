@@ -484,6 +484,8 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
         text(preview.toString(),14);
         text("DISPLAY 0 · Incluye DriveLab T1 · Cockpit como ventana "+
             "separada. Ajusta el alto útil sin tocar Display 1 ni HOME.",13);
+        button("APPS ABIERTAS · REINICIAR MOSAICO / CERRAR TODAS",()->
+            startActivity(new Intent(this,T1AppTaskManagerActivity.class)));
         button("APLICAR MOSAICO GUARDADO · FREEFORM REAL",
             this::applySavedFreeformMosaic);
         button("MOSTRAR PANELES · OCULTAR CONFIGURACIÓN",
