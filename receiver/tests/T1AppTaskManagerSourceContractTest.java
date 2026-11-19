@@ -46,7 +46,8 @@ public final class T1AppTaskManagerSourceContractTest {
         ck(adb.contains("shellStopApprovedUserApp(Context context,String pkg)")&&
             adb.contains("verifyCenterUserApp(context,pkg)")&&
             adb.contains("T1AppStopPolicy.allowPackage(pkg)")&&
-            adb.contains("getHomeActivities(homeCandidates)")&&
+            adb.contains("pm.resolveActivity(homeQuery,0)")&&
+            adb.contains("pm.queryIntentActivities(homeQuery,0)")&&
             adb.contains("T1CenterTaskInventory.canStop(selected)")&&
             adb.contains("confirmedUserStop&&command.matches("),
             "Force-stop requires verified user launcher, OEM, HOME and all-display guards");
