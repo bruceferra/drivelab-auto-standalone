@@ -1,5 +1,6 @@
 name: Signed DriveLab Boot 0.1.0 and Receiver 0.3.92
 # Release request: signed Boot 0.1.0 + Receiver 0.3.92, preserving sender and OEM HOME.
+# Regression corrected: Freeform contract now accepts 1, 2 or 3 panel(s).
 # Revalidate both APK signatures and the receiver's existing updater before publication.
 # Read-only HAL 559940910/559940911, source test tracks full-ID battery probe
 on:
