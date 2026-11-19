@@ -135,6 +135,8 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
             startActivity(new Intent(this,T1PremiumCockpitActivity.class)));
         button(body,"MOSAICO · PANTALLA CENTRAL",()->
             startActivity(new Intent(this,T1CenterMosaicActivity.class)));
+        button(body,"APPS ABIERTAS · CERRAR / LIMPIAR MEMORIA",()->
+            startActivity(new Intent(this,T1AppTaskManagerActivity.class)));
         button(body,"CLÚSTER · PANELES A/B",()->
             startActivity(new Intent(this,T1ClusterLayoutSettingsActivity.class)));
         button(body,"VEHÍCULO · ESTADO Y AJUSTES",()->
