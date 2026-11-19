@@ -15,7 +15,8 @@ final class T1CenterAdbResize {
     static boolean allowed(String pkg){
         return pkg!=null&&pkg.matches("[a-zA-Z][a-zA-Z0-9_]*(\\.[a-zA-Z][a-zA-Z0-9_]*)+")&&
             !pkg.startsWith("com.android.")&&!pkg.startsWith("android.")&&
-            !pkg.startsWith("com.jetour.")&&!pkg.startsWith("com.chery.");
+            !pkg.startsWith("com.jetour.")&&!pkg.startsWith("com.chery.")&&
+            !pkg.startsWith("com.autolink.");
     }
     static void apply(Context context,String[] packages,
                       T1CenterMosaicGeometry.Tile[] tiles,int count,Done done){
