@@ -106,6 +106,15 @@ public final class BridgeLayersActivity extends Activity {
             catch(Exception ex){errors+="\nACT: "+ex.getClass().getSimpleName();}
             try{sf=BridgeAdbReadOnly.read(this,"dumpsys SurfaceFlinger");}
             catch(Exception ex){errors+="\nSF: "+ex.getClass().getSimpleName();}
+            if(windows==null||windows.trim().isEmpty()||
+               windows.startsWith("Permission Denial")||
+               windows.startsWith("Error:")){
+                final String failure="CAPTURA NO DISPONIBLE: WindowManager "+
+                    "no permitió leer Display 1. "+errors+
+                    "\nNo se guardó una captura falsa ni se cambió ninguna ventana.";
+                runOnUiThread(()->{busy=false;result.setText(failure);});
+                return;
+            }
             BridgeModeLayerDiff.Snapshot state=
                 BridgeModeLayerDiff.summarize(phase,windows,activities,sf);
             String message=state.report()+errors;
