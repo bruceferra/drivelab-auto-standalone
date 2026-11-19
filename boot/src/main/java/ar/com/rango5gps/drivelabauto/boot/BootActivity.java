@@ -35,7 +35,7 @@ public final class BootActivity extends Activity {
         "Una aplicación (100 % de la zona útil)"};
     private int mode,percent;
     private final String[] selected=new String[3];
-    private boolean clusterEnabled;
+    private boolean clusterEnabled,clusterConfirmed;
     private int clusterCount,clusterPercent,captionSafeDp;
     private final String[] clusterApps=new String[2];
     private LinearLayout content;
@@ -52,6 +52,7 @@ public final class BootActivity extends Activity {
             selected[i]=p.getString("pkg"+i,
                 i==0?BootConfig.RECEIVER:i==1?"com.spotify.music":"");
         clusterEnabled=p.getBoolean("cluster_enabled",false);
+        clusterConfirmed=p.getBoolean("cluster_confirmed",false);
         clusterCount=Math.min(2,Math.max(1,p.getInt("cluster_count",2)));
         clusterPercent=Math.min(70,Math.max(30,p.getInt("cluster_percent",50)));
         captionSafeDp=Math.min(88,Math.max(0,p.getInt("caption_safe_dp",44)));
@@ -68,6 +69,7 @@ public final class BootActivity extends Activity {
         SharedPreferences.Editor e=prefs().edit().putInt("mode",mode)
             .putInt("percent",percent)
             .putBoolean("cluster_enabled",clusterEnabled)
+            .putBoolean("cluster_confirmed",clusterConfirmed)
             .putInt("cluster_count",clusterCount)
             .putInt("cluster_percent",clusterPercent)
             .putInt("caption_safe_dp",captionSafeDp);
@@ -166,7 +168,17 @@ public final class BootActivity extends Activity {
         boolean current=BootConfig.enabled(this);
         if(current){
             prefs().edit().putBoolean("enabled",false).apply();
+            try{BootConfig.takeOver(this,false);}catch(Exception ignored){}
             draw();return;
+        }
+        if(clusterEnabled&&!clusterConfirmed){
+            new AlertDialog.Builder(this)
+                .setTitle("PRIMERO PROBAR DISPLAY 1")
+                .setMessage("Aplicá el diseño con el vehículo detenido y "+
+                    "confirmá visualmente Waze/Maps en Display 1 antes de "+
+                    "habilitar el autoinicio de ambas pantallas.")
+                .setPositiveButton("ENTENDIDO",null).show();
+            return;
         }
         new AlertDialog.Builder(this)
             .setTitle("ACTIVAR AL ENCENDER EL T1")
@@ -182,8 +194,8 @@ public final class BootActivity extends Activity {
             .setNegativeButton("CANCELAR",null)
             .setPositiveButton("ACTIVAR",(d,w)->{
                 try{
-                    BootConfig.takeOver(this);
                     persist();
+                    BootConfig.takeOver(this);
                     prefs().edit().putBoolean("enabled",true).apply();
                     draw();
                     Toast.makeText(this,"DriveLab Boot configurado. "+
@@ -215,6 +227,12 @@ public final class BootActivity extends Activity {
                     throw new IllegalStateException(
                         "Elegí aplicaciones distintas en cada panel");
             }
+            if(clusterEnabled&&clusterCount==2&&
+                clusterApps[0].equals(clusterApps[1]))
+                throw new IllegalStateException(
+                    "Display 1: elegí Waze y Google Maps, no dos iguales");
+            if(BootConfig.enabled(this)&&clusterEnabled)
+                BootConfig.takeOver(this,true);
             BootConfig.send(this);
             Toast.makeText(this,
                 "Mosaico solicitado · Receiver usa el ADB existente",
@@ -251,8 +269,9 @@ public final class BootActivity extends Activity {
         content.setPadding(16,10,16,30);
         scroll.addView(content);
         text("DRIVELAB BOOT",26,WHITE);
-        text("Lanzador independiente · pantalla central Display 0. "+
-            "El HOME y clúster de T1 Launcher no se modifican.",13,QUIET);
+        text("Administrador de pantallas: Display 0 y navegación opcional "+
+            "en Display 1. Sin reemplazar HOME, clúster OEM ni avisos "+
+            "del vehículo.",13,QUIET);
         text("DISPLAY 0 · PANTALLA CENTRAL",19,WHITE);
         button("DISTRIBUCIÓN · "+MODES[mode],this::chooseMode);
         for(int i=0;i<count();i++){
@@ -309,7 +328,8 @@ public final class BootActivity extends Activity {
         button(clusterEnabled?
             "INCLUIR DISPLAY 1 EN AUTOBOOT: SÍ · DESACTIVAR":
             "INCLUIR DISPLAY 1 EN AUTOBOOT: NO · ACTIVAR",
-            ()->{clusterEnabled=!clusterEnabled;persist();draw();});
+            ()->{clusterEnabled=!clusterEnabled;clusterConfirmed=false;
+                persist();draw();});
         if(clusterEnabled){
             text("Se reutiliza el Display 1 ya seleccionado y habilitado "+
                 "en Receiver. Primero elegilo en CLÚSTER y probalo "+
@@ -318,7 +338,8 @@ public final class BootActivity extends Activity {
             button(clusterCount==1?
                 "CLÚSTER: UNA APP 100 % · CAMBIAR A DOS":
                 "CLÚSTER: DOS APPS DIVIDIDAS · CAMBIAR A UNA",
-                ()->{clusterCount=clusterCount==1?2:1;persist();draw();});
+                ()->{clusterCount=clusterCount==1?2:1;
+                    clusterConfirmed=false;persist();draw();});
             for(int i=0;i<clusterCount;i++){
                 final int slot=i;
                 button("CLÚSTER PANEL "+(i+1)+" · "+
@@ -329,7 +350,7 @@ public final class BootActivity extends Activity {
                             (d,which)->{
                                 clusterApps[slot]=which==0?
                                     "com.waze":"com.google.android.apps.maps";
-                                persist();draw();
+                                clusterConfirmed=false;persist();draw();
                             })
                         .setNegativeButton("CANCELAR",null).show());
             }
@@ -343,6 +364,7 @@ public final class BootActivity extends Activity {
                     @Override public void onProgressChanged(SeekBar bar,int v,
                             boolean fromUser){
                         clusterPercent=v;
+                        if(fromUser)clusterConfirmed=false;
                         clusterLabel.setText("Clúster: "+v+" % / "+(100-v)+" %");
                         if(fromUser)persist();
                     }
@@ -351,6 +373,25 @@ public final class BootActivity extends Activity {
                 });
                 content.addView(cs);
             }
+            button(clusterConfirmed?
+                "DISPLAY 1 · VISUALIZACIÓN CONFIRMADA · VOLVER A PROBAR":
+                "CONFIRMAR VISUALMENTE DISPLAY 1 · TRAS PRUEBA",
+                ()->new AlertDialog.Builder(this)
+                    .setTitle("CONFIRMACIÓN FÍSICA DEL CLÚSTER")
+                    .setMessage("Solo confirmá si, estando estacionado, "+
+                        "ya aplicaste este diseño y verificaste que Waze/Maps "+
+                        "están visibles en el Display 1 correcto, sin tapar "+
+                        "alertas ni instrumentos OEM. "+
+                        "¿Habilitar este diseño para el próximo encendido?")
+                    .setNegativeButton("CANCELAR",null)
+                    .setPositiveButton("SÍ, SE VE BIEN",(d,w)->{
+                        clusterConfirmed=true;persist();draw();
+                    }).show());
+            text(clusterConfirmed?
+                "Diseño confirmado por el usuario. Queda pendiente "+
+                "verificar cómo reaparece después de encender el Jetour.":
+                "PENDIENTE: prueba física y confirmación para autoinicio "+
+                "de Display 1.",12,QUIET);
         }
         button("▶ APLICAR PANTALLAS CONFIGURADAS",this::apply);
         button("▦ RECUPERAR VENTANAS ABIERTAS",this::reopen);
