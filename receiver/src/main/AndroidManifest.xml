@@ -4,6 +4,7 @@
          Only an APK with the same certificate can request launch. -->
     <permission android:name="ar.com.rango5gps.drivelabauto.receiver.permission.BOOT_MOSAIC"
         android:protectionLevel="signature" />
+    <uses-permission android:name="ar.com.rango5gps.drivelabauto.receiver.permission.BOOT_MOSAIC" />
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Foreground, one-shot speech only after user enters voice screen. -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
@@ -63,6 +64,7 @@
             android:permission="ar.com.rango5gps.drivelabauto.receiver.permission.BOOT_MOSAIC">
             <intent-filter>
                 <action android:name="ar.com.rango5gps.drivelabauto.receiver.action.APPLY_BOOT_MOSAIC" />
+                <action android:name="ar.com.rango5gps.drivelabauto.receiver.action.BOOT_MOSAIC_TAKEOVER" />
             </intent-filter>
         </receiver>
         <service android:name=".T1BootMosaicBridgeService"
