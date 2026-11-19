@@ -16,11 +16,11 @@ public final class T1DrivingMode2053Test {
         String header=Files.readString(Path.of(root,"T1GlobalToolbar.java"));
         String cockpit=Files.readString(Path.of(root,"T1PremiumCockpitActivity.java"));
         String telemetry=Files.readString(Path.of(root,"T1TripTelemetry.java"));
-        int ev=header.indexOf("modes[2]=button(header,\"EV MAX\"");
+        int ev=header.indexOf("modes[2]=button(leading,\"EV MAX\"");
         int driving=header.indexOf("drivingModeIndicator=readOnlyIndicator(");
         int road=header.indexOf("roadModeButton=button(");
         ck(ev>=0&&driving>ev&&road>driving,"one read-only control after EV MAX");
-        ck(header.contains("drivingModeIndicator=readOnlyIndicator(header,\"SIN DATO\",85)"),
+        ck(header.contains("drivingModeIndicator=readOnlyIndicator(leading,\"SIN DATO\",85)"),
            "same width as HEV");
         ck(header.contains("refreshDrivingMode(snapshot.driveMode2053)")&&
            telemetry.contains("s.driveMode2053=diagnosticInt(()->intValue(b,2053))"),
