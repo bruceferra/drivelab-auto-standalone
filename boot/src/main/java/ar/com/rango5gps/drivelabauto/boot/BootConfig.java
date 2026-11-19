@@ -30,13 +30,13 @@ final class BootConfig {
             context.getPackageName(),RECEIVER)!=
                 android.content.pm.PackageManager.SIGNATURE_MATCH)
             throw new SecurityException(
-                "Instalá Receiver 0.3.95 o posterior para configurar ambas pantallas");
+                "Instalá Receiver 0.3.97 o posterior para configurar ambas pantallas");
         try{
             long receiverCode=context.getPackageManager()
                 .getPackageInfo(RECEIVER,0).getLongVersionCode();
-            if(receiverCode<196L)
+            if(receiverCode<198L)
                 throw new SecurityException(
-                    "Actualizá primero Receiver 0.3.95 (build 196)");
+                    "Actualizá primero Receiver 0.3.97 (build 198)");
         }catch(android.content.pm.PackageManager.NameNotFoundException ex){
             throw new SecurityException("DriveLab Receiver no está instalado");
         }
