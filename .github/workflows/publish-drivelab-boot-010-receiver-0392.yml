@@ -1,5 +1,6 @@
 name: Signed DriveLab Boot 0.1.0 and Receiver 0.3.92
-# Java source-contract placeholder fixed; run full signing checks.
+# Release request: signed Boot 0.1.0 + Receiver 0.3.92, preserving sender and OEM HOME.
+# Revalidate both APK signatures and the receiver's existing updater before publication.
 # Read-only HAL 559940910/559940911, source test tracks full-ID battery probe
 on:
   push:
