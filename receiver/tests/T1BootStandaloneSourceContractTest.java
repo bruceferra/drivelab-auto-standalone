@@ -53,7 +53,8 @@ public final class T1BootStandaloneSourceContractTest {
             ui.contains("Dos columnas")&&
             ui.contains("slider.setMin(1);slider.setMax(99)")&&
             ui.contains("chooseApp(")&&
-            ui.contains("▶ ABRIR / PROBAR MOSAICO CENTRAL")&&
+            ui.contains("MOSTRAR MOSAICO · RECUPERAR VENTANAS")&&
+            ui.contains("PREPARAR / CAMBIAR DISTRIBUCIÓN")&&
             ui.contains("▶ PROBAR SOLO DISPLAY 1 · SIN SALIR DE BOOT")&&
             !ui.contains("T1MosaicShortcutActivity"),
             "Boot must expose 1/2/3 panels and never hand off its configuration to Receiver");
