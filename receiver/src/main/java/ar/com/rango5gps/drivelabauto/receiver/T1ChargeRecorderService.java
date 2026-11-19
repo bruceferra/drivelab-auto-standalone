@@ -97,6 +97,15 @@ public final class T1ChargeRecorderService extends Service {
                     T1ChargeOemReader.Reading data=oem.poll();
                     raw=data.cable;
                     errors=0;
+                    // Persist raw OEM readings even before a charge session
+                    // exists. This lets the owner diagnose current polarity.
+                    prefs().edit()
+                        .putFloat(T1ChargeStore.LAST_SOC,(float)data.soc)
+                        .putFloat(T1ChargeStore.LAST_VOLTS,(float)data.volts)
+                        .putFloat(T1ChargeStore.LAST_AMPS,(float)data.amps)
+                        .putLong(T1ChargeStore.LAST_SAMPLE_AT,data.timeMs)
+                        .putBoolean(T1ChargeStore.LAST_SAMPLE_OK,true)
+                        .apply();
                     if(T1ChargeMath.plugged(raw)){
                         cableConnected++;
                         cableRemoved=0;
@@ -158,6 +167,8 @@ public final class T1ChargeRecorderService extends Service {
                     }
                 }catch(Exception ex){
                     errors++;
+                    prefs().edit().putBoolean(
+                        T1ChargeStore.LAST_SAMPLE_OK,false).apply();
                     status("Lectura OEM no disponible ("+errors+"): "+
                         ex.getClass().getSimpleName()+
                         " · sesión conservada, sin inventar kWh",
