@@ -47,6 +47,12 @@ public final class T1AdbPackageTaskExcerptTest {
         String uberList=read(uber,dump.toString());
         yes(T1AdbTaskParser.tasksOnCenter(uberList,uber).size()==1,
             "Only one new Uber Beta task should be reported");
+        String music="com.spotify.music";
+        String spotifyStack="Stack id=2822 bounds=[0,101][960,1181] "+
+            "displayId=0 userId=0\\n"+
+            " taskId=2822: "+music+"/.MainActivity bounds=[0,101][960,1181]\\n";
+        yes(T1AdbTaskParser.tasksOnCenter(read(music,spotifyStack),music).size()==1,
+            "Saved chooser must support arbitrary external user-installed Spotify");
         boolean rejected=false;
         try{new T1AdbPackageTaskExcerpt("com.autolink.bluetooth");}
         catch(SecurityException e){rejected=true;}
