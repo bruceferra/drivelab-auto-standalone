@@ -36,10 +36,9 @@ final class T1CenterWindowModePolicy {
             if(!match)continue;
             // Check matching package on the task header, not on an activity
             // line in an adjacent task's dump.
-            if(!header.contains("A="+pkg)&&!header.contains(pkg+"/")&&
-                !header.contains("pkg="+pkg)&&!header.contains(" "+pkg+" "))
+            if(!header.contains(pkg))
                 continue;
-            for(int j=i;j<Math.min(lines.length,i+24);j++){
+            for(int j=i;j<Math.min(lines.length,i+80);j++){
                 String line=lines[j];
                 if(j>i&&(HEADER.matcher(line).find()||
                     line.trim().startsWith("Display #")||
@@ -71,8 +70,7 @@ final class T1CenterWindowModePolicy {
             Matcher m=HEADER.matcher(line);
             while(m.find()){
                 if(Integer.parseInt(m.group(1))==id&&
-                    (line.contains("A="+pkg)||line.contains(pkg+"/")||
-                        line.contains("pkg="+pkg))&&
+                    line.contains(pkg)&&
                     FULLSCREEN.matcher(line).find())return true;
             }
         }
