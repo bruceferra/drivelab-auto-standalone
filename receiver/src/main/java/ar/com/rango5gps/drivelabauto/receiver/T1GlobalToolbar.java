@@ -268,18 +268,20 @@ final class T1GlobalToolbar {
         int insert=firstIndex;
         for(Button b:ordered)row.addView(b,insert++);
         for(Button b:buttons){
-            b.setLongClickable(true); // OEM read-only chips remain non-clickable but draggable.
-            b.setOnLongClickListener(v->{
-                ClipData clip=ClipData.newPlainText("drivelab-toolbar",key);
-                return v.startDragAndDrop(clip,new View.DragShadowBuilder(v),
-                    v,0);
-            });
+            T1DragCue.attach(b,key);
             b.setOnDragListener((target,event)->{
                 switch(event.getAction()){
                     case DragEvent.ACTION_DRAG_STARTED:
                         return event.getLocalState() instanceof Button &&
                             ((Button)event.getLocalState()).getParent()==row;
+                    case DragEvent.ACTION_DRAG_ENTERED:
+                        T1DragCue.target(target,true);return true;
+                    case DragEvent.ACTION_DRAG_EXITED:
+                        T1DragCue.target(target,false);return true;
+                    case DragEvent.ACTION_DRAG_ENDED:
+                        T1DragCue.reset(target);return true;
                     case DragEvent.ACTION_DROP:{
+                        T1DragCue.reset(target);
                         Button source=(Button)event.getLocalState();
                         if(source==target||source.getParent()!=row)return true;
                         int dest=row.indexOfChild(target);
