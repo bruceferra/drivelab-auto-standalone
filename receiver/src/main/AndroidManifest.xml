@@ -119,6 +119,12 @@
         </activity>
         <activity android:name=".T1ClusterWazeSettingsActivity" android:exported="false" />
         <activity android:name=".T1CenterMosaicActivity" android:exported="false" />
+        <!-- Explicit pin-shortcut target, not a second MAIN/LAUNCHER
+             entry; never replaces the vehicle HOME. -->
+        <activity android:name=".T1MosaicShortcutActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:taskAffinity="${applicationId}.restoremosaic" />
         <!-- User-confirmed Android 11 task inventory and safe app closing. -->
         <activity android:name=".T1AppTaskManagerActivity" android:exported="false" />
         <!-- Explicit shell-only, disposable app-owned window test; never HOME.
