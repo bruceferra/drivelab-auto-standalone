@@ -97,20 +97,25 @@ public final class T1ChargeRecorderService extends Service {
                     T1ChargeOemReader.Reading data=oem.poll();
                     raw=data.cable;
                     errors=0;
-                    boolean hvValid=Double.isFinite(data.volts)&&
-                        data.volts>=100&&data.volts<=1000;
-                    String hvDetail=hvValid?
-                        "1063 float validado "+T1ChargeStore.fmt(data.volts,1)+" V":
-                        "SIN VOLTAJE HV VERIFICADO · candidatos NO calibrados: "+
-                        "VEHICLE 1063/int="+
-                        (data.volts1063Int==Integer.MIN_VALUE?"—":
-                            Integer.toString(data.volts1063Int))+
+                    String hvDetail="FUENTE: "+data.voltageSource+
+                        " · Vehicle 1063="+
+                            T1ChargeStore.fmt(data.vehicleVolts,1)+" V"+
+                        " · HAL 559940910="+
+                            T1ChargeStore.fmt(data.halVolts,1)+" V"+
+                        " · HAL 559940911="+
+                            T1ChargeStore.fmt(data.halAmps,2)+" A"+
+                        " · HAL 557843808 potencia="+
+                            (data.halPower==Integer.MIN_VALUE?"—":
+                                Integer.toString(data.halPower))+
+                        " · HAL 559940899 carga individual="+
+                            T1ChargeStore.fmt(
+                                data.halSingleChargeEnergy,2)+
+                        " · Diagnóstico alternativo 1063/int="+
+                            (data.volts1063Int==Integer.MIN_VALUE?"—":
+                                Integer.toString(data.volts1063Int))+
                         " · 1090/float="+T1ChargeStore.fmt(
                             data.volts1090Float,2)+
-                        " · 1090/int="+
-                        (data.volts1090Int==Integer.MIN_VALUE?"—":
-                            Integer.toString(data.volts1090Int))+
-                        " · ALCAR 1063/float="+T1ChargeStore.fmt(
+                        " · ALCAR 1063="+T1ChargeStore.fmt(
                             data.volts1063AlcarFloat,2);
                     // Persist raw OEM readings even before a charge session
                     // exists. This lets the owner diagnose current polarity.
@@ -148,7 +153,8 @@ public final class T1ChargeRecorderService extends Service {
                                     currentFlow?"corriente de carga detectada; "+
                                         "falta voltaje para kWh":
                                     "cable conectado; flujo HV no validado")+
-                                " · 1063="+T1ChargeStore.fmt(data.volts,1)+" V"+
+                                " · HV "+data.voltageSource+" ="+
+                                T1ChargeStore.fmt(data.volts,1)+" V"+
                                 " · 1064="+T1ChargeStore.fmt(data.amps,2)+" A"+
                                 " · batería +"+(latest==null?"—":
                                     T1ChargeStore.fmt(latest.kwh,3))+
