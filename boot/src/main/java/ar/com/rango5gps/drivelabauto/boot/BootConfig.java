@@ -13,6 +13,8 @@ final class BootConfig {
         "ar.com.rango5gps.drivelabauto.receiver.action.APPLY_BOOT_CLUSTER_ONLY";
     static final String ACTION_REVEAL=
         "ar.com.rango5gps.drivelabauto.receiver.action.REVEAL_BOOT_CENTER";
+    static final String ACTION_CLUSTER_STATE=
+        "ar.com.rango5gps.drivelabauto.receiver.action.READ_BOOT_CLUSTER_STATE";
     static final String BRIDGE=
         "ar.com.rango5gps.drivelabauto.receiver.T1BootMosaicBridgeReceiver";
     static SharedPreferences prefs(Context context){
@@ -153,6 +155,13 @@ final class BootConfig {
     /** Manual Display 1 test only: never launches, resizes, or hides the
      * center-display mosaic. Does not navigate away from Boot's own screen.
      */
+    static void readClusterState(Context context){
+        assertReceiver(context);
+        Intent request=new Intent(ACTION_CLUSTER_STATE);
+        request.setComponent(new ComponentName(RECEIVER,BRIDGE));
+        context.sendBroadcast(request);
+    }
+
     static void sendClusterOnly(Context context){
         assertReceiver(context);
         SharedPreferences p=prefs(context);
