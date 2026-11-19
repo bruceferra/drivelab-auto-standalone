@@ -9,6 +9,8 @@ final class BootConfig {
     static final String PREFS="drivelab_boot_mosaic_config_v1";
     static final String RECEIVER="ar.com.rango5gps.drivelabauto.receiver";
     static final String ACTION="ar.com.rango5gps.drivelabauto.receiver.action.APPLY_BOOT_MOSAIC";
+    static final String ACTION_CLUSTER=
+        "ar.com.rango5gps.drivelabauto.receiver.action.APPLY_BOOT_CLUSTER_ONLY";
     static final String BRIDGE=
         "ar.com.rango5gps.drivelabauto.receiver.T1BootMosaicBridgeReceiver";
     static SharedPreferences prefs(Context context){
@@ -55,9 +57,16 @@ final class BootConfig {
         context.sendBroadcast(request);
     }
     static void send(Context context){
-        send(context,false);
+        send(context,false,true);
     }
     static void send(Context context,boolean fromBoot){
+        send(context,fromBoot,true);
+    }
+    static void sendCenterOnly(Context context){
+        send(context,false,false);
+    }
+    private static void send(Context context,boolean fromBoot,
+                             boolean includeCluster){
         assertReceiver(context);
         SharedPreferences p=prefs(context);
         int mode=p.getInt("mode",3),percent=p.getInt("percent",50);
@@ -76,7 +85,7 @@ final class BootConfig {
         }
         // Display 1 uses existing Receiver layout/routing, not a new
         // shell executor. Disabled by default and never controls OEM dials.
-        boolean cluster=p.getBoolean("cluster_enabled",false);
+        boolean cluster=includeCluster&&p.getBoolean("cluster_enabled",false);
         request.putExtra("cluster_enabled",cluster);
         request.putExtra("from_boot",fromBoot);
         request.putExtra("cluster_confirmed",
@@ -107,7 +116,39 @@ final class BootConfig {
         request.putExtra("caption_safe_dp",caption);
         context.sendBroadcast(request);
         p.edit().putString("last_status",
-            "Solicitud enviada al Receiver · esperando ADB y Freeform")
+            "Solicitud Display 0 enviada · esperando ADB y Freeform")
+            .putLong("last_request",System.currentTimeMillis()).apply();
+    }
+    /** Manual Display 1 test only: never launches, resizes, or hides the
+     * center-display mosaic. Does not navigate away from Boot's own screen.
+     */
+    static void sendClusterOnly(Context context){
+        assertReceiver(context);
+        SharedPreferences p=prefs(context);
+        int count=p.getInt("cluster_count",2);
+        int percent=p.getInt("cluster_percent",50);
+        if(count<1||count>2||percent<30||percent>70)
+            throw new IllegalArgumentException("Configuración Display 1 inválida");
+        Intent request=new Intent(ACTION_CLUSTER);
+        request.setComponent(new ComponentName(RECEIVER,BRIDGE));
+        request.putExtra("cluster_only",true);
+        request.putExtra("cluster_count",count);
+        request.putExtra("cluster_percent",percent);
+        request.putExtra("from_boot",false);
+        request.putExtra("cluster_confirmed",false);
+        for(int i=0;i<count;i++){
+            String pkg=p.getString("cluster_pkg"+i,
+                i==0?"com.waze":"com.google.android.apps.maps");
+            if(!"com.waze".equals(pkg)&&
+                !"com.google.android.apps.maps".equals(pkg))
+                throw new SecurityException("Sólo Waze y Google Maps en Display 1");
+            if(i>0&&pkg.equals(p.getString("cluster_pkg0","com.waze")))
+                throw new IllegalArgumentException("Elegí mapas diferentes");
+            request.putExtra("cluster_pkg"+i,pkg);
+        }
+        context.sendBroadcast(request);
+        p.edit().putString("last_status",
+            "PRUEBA DISPLAY 1 enviada · Boot permanece abierto")
             .putLong("last_request",System.currentTimeMillis()).apply();
     }
 }
