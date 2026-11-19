@@ -2,6 +2,10 @@ package ar.com.rango5gps.drivelabauto.receiver;
 
 import android.content.ClipData;
 import android.graphics.Color;
+import android.graphics.Canvas;
+import android.graphics.Paint;
+import android.graphics.PixelFormat;
+import android.graphics.drawable.Drawable;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Handler;
 import android.os.Looper;
@@ -48,13 +52,30 @@ final class T1DragCue {
 
     static void target(View v,boolean active){
         if(active){
-            v.setForeground(outline(TARGET,7));
+            v.setForeground(dropLine());
             v.setAlpha(0.88f);
         }else reset(v);
     }
     static void reset(View v){
         v.setForeground(null);
         v.setAlpha(1f);
+    }
+    private static Drawable dropLine(){
+        return new Drawable(){
+            final Paint paint=new Paint(Paint.ANTI_ALIAS_FLAG);
+            @Override public void draw(Canvas c){
+                paint.setColor(TARGET);
+                paint.setStrokeWidth(8f);
+                c.drawLine(4f,4f,4f,getBounds().height()-4f,paint);
+                paint.setStrokeWidth(3f);
+                c.drawLine(4f,4f,getBounds().width()-4f,4f,paint);
+            }
+            @Override public void setAlpha(int a){paint.setAlpha(a);}
+            @Override public void setColorFilter(android.graphics.ColorFilter f){
+                paint.setColorFilter(f);
+            }
+            @Override public int getOpacity(){return PixelFormat.TRANSLUCENT;}
+        };
     }
     private static GradientDrawable outline(int color,int width){
         GradientDrawable d=new GradientDrawable();
