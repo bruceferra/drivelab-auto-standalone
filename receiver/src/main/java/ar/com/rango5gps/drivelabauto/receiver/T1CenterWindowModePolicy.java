@@ -76,6 +76,19 @@ final class T1CenterWindowModePolicy {
         }
         return false;
     }
+    static boolean isFreeform(String dump,int id,String pkg){
+        if(dump==null||id<=0||isSystemPackage(pkg))return false;
+        for(String line:dump.split("\\r?\\n")){
+            Matcher m=HEADER.matcher(line);
+            while(m.find()){
+                if(Integer.parseInt(m.group(1))==id&&
+                    line.contains(pkg)&&
+                    (line.contains("mode=freeform")||
+                    line.contains("mWindowingMode=freeform")))return true;
+            }
+        }
+        return false;
+    }
     static boolean shellRejected(String output){
         if(output==null)return true;
         String s=output.toLowerCase(java.util.Locale.ROOT);
