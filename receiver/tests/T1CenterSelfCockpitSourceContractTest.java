@@ -20,7 +20,8 @@ public final class T1CenterSelfCockpitSourceContractTest {
         String filter=read(dir+"T1AdbPackageTaskExcerpt.java");
         check(adb.contains("shellStartOwnCockpitFreeform(Context context)")&&
             adb.contains("am start --display 0 --windowingMode 5 -f 0x18000000")&&
-            adb.contains(".ReceiverActivity --ez drivelab_center_cockpit_tile true"),
+            adb.contains("receiver/.ReceiverActivity ")&&
+            adb.contains("--ez drivelab_center_cockpit_tile true"),
             "Only an explicitly new Freeform task may launch own Receiver");
         check(receiver.contains("getBooleanExtra(")&&
             receiver.contains("drivelab_center_cockpit_tile")&&
