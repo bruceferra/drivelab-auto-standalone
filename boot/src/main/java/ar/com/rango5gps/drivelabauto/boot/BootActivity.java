@@ -163,8 +163,21 @@ public final class BootActivity extends Activity {
                 "manualmente. ¿Activar?")
             .setNegativeButton("CANCELAR",null)
             .setPositiveButton("ACTIVAR",(d,w)->{
-                persist();prefs().edit().putBoolean("enabled",true).apply();
-                draw();
+                try{
+                    BootConfig.takeOver(this);
+                    persist();
+                    prefs().edit().putBoolean("enabled",true).apply();
+                    draw();
+                    Toast.makeText(this,"DriveLab Boot configurado. "+
+                        "El arranque anterior de Cockpit queda desactivado; "+
+                        "los servicios Receiver siguen encendidos.",
+                        Toast.LENGTH_LONG).show();
+                }catch(Exception ex){
+                    new AlertDialog.Builder(this)
+                        .setTitle("NO SE ACTIVÓ AUTOINICIO")
+                        .setMessage(ex.getMessage())
+                        .setPositiveButton("OK",null).show();
+                }
             }).show();
     }
     private void apply(){
