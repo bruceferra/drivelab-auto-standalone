@@ -5,6 +5,8 @@ import java.security.MessageDigest;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -26,7 +28,7 @@ final class BridgeModeLayerDiff {
     private static final Pattern WINDOW_TYPE=Pattern.compile(
         "\\b(?:type|ty)\\s*[=:]\\s*([A-Za-z_0-9-]+)");
     private static final Pattern SF_NAME=Pattern.compile(
-        "(?:name\\s*=\\s*|\\+\\s*Layer\\s+)([^\\n\\r]{1,200})");
+        "(?:name\\s*=\\s*|\\+\\s*Layer\\s+|Layer\\s+0x[0-9a-fA-F]+\\s*\\()([^\\n\\r]{1,200})");
     private static final Pattern SF_Z=Pattern.compile(
         "(?:\\bz\\s*=\\s*|\\bz-order\\s*=\\s*)(-?\\d+)");
     private BridgeModeLayerDiff(){}
@@ -81,6 +83,7 @@ final class BridgeModeLayerDiff {
     static final class Snapshot{
         final String name;
         final List<String> lines=new ArrayList<>();
+        final Map<String,String> windowState=new LinkedHashMap<>();
         int waze,maps,spotify,mode,unknownDisplay;
         Snapshot(String n){name=n;}
         String report(){
@@ -115,6 +118,7 @@ final class BridgeModeLayerDiff {
                     continue;
                 }
                 count(result,w.kind);
+                result.windowState.put(w.signature,w.row());
                 if(result.lines.size()<38)result.lines.add("WM: "+w.row());
             }
             if(windows.isEmpty())
@@ -153,7 +157,11 @@ final class BridgeModeLayerDiff {
             if(header.find()){
                 current=new Win();
                 current.kind=category(header.group(1));
-                current.signature=digest(header.group(1));
+                current.signature=digest(
+                    header.group(1).replaceAll("(?i)\\b[0-9a-f]{7,}\\b",
+                        "WINDOW_ID"));
+                Integer headerDisplay=number(DISPLAY,line);
+                if(headerDisplay!=null)current.display=headerDisplay;
                 result.add(current);
             }else if(current!=null){
                 Integer display=number(DISPLAY,line);
@@ -212,6 +220,32 @@ final class BridgeModeLayerDiff {
                 "investigar foco, capa z o SurfaceFlinger.");
         else out.append("\nNo hay capa MODE identificable en WindowManager. "+
             "Comparar SurfaceFlinger y tareas; puede ser superficie OEM.");
+        int absent=0,changed=0;
+        for(Map.Entry<String,String> earlier:hidden.windowState.entrySet()){
+            String after=shown.windowState.get(earlier.getKey());
+            if(after==null){
+                absent++;
+                if(absent<=8)
+                    out.append("\nVENTANA RETIRADA DEL DISPLAY 1: "+
+                        earlier.getValue());
+            }else if(!earlier.getValue().equals(after)){
+                changed++;
+                if(changed<=8)
+                    out.append("\nVENTANA CON CAMBIO DE CAPA/ESTADO: "+
+                        earlier.getValue()+" => "+after);
+            }
+        }
+        for(Map.Entry<String,String> later:shown.windowState.entrySet()){
+            if(!hidden.windowState.containsKey(later.getKey())){
+                if(absent++<8)
+                    out.append("\nVENTANA NUEVA EN DISPLAY 1: "+
+                        later.getValue());
+            }
+        }
+        if(absent==0&&changed==0)
+            out.append("\nWindowManager conserva las mismas ventanas "+
+                "y capas parseables: probablemente hubo cambios en "+
+                "SurfaceFlinger o una superficie del firmware.");
         if(shown.waze+shown.maps<2)
             out.append("\nNO CONFIRMADO: WindowManager no muestra ambos "+
                 "mapas a la vez en Display 1.");
