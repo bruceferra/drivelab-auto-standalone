@@ -1,0 +1,384 @@
+name: Signed DriveLab Boot 0.1.1 and Receiver 0.3.94
+# Release request: signed Boot 0.1.1 + Receiver 0.3.94, preserving sender and OEM HOME.
+# Regression corrected: Freeform contract now accepts 1, 2 or 3 panel(s).
+# Revalidate both APK signatures and the receiver's existing updater before publication.
+# Read-only HAL 559940910/559940911, source test tracks full-ID battery probe
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-drivelab-011-receiver-0394.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: signed-drivelabauto-publication
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    env:
+      RECEIVER_STORE_PASSWORD: ${{ secrets.RECEIVER_STORE_PASSWORD }}
+      RECEIVER_KEY_ALIAS: ${{ secrets.RECEIVER_KEY_ALIAS }}
+      RECEIVER_KEY_PASSWORD: ${{ secrets.RECEIVER_KEY_PASSWORD }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Prepare Android SDK and existing signing identity
+        env:
+          RECEIVER_KEYSTORE_B64: ${{ secrets.RECEIVER_KEYSTORE_B64 }}
+        run: |
+          set -euo pipefail
+          tool=$(command -v sdkmanager || find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)
+          "$tool" 'platforms;android-35' 'build-tools;35.0.0'
+          test -n "$RECEIVER_KEYSTORE_B64" && test -n "$RECEIVER_STORE_PASSWORD"
+          test -n "$RECEIVER_KEY_ALIAS" && test -n "$RECEIVER_KEY_PASSWORD"
+          printf %s "$RECEIVER_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/receiver.p12"
+          chmod 600 "$RUNNER_TEMP/receiver.p12"
+          echo "RECEIVER_KEYSTORE=$RUNNER_TEMP/receiver.p12" >> "$GITHUB_ENV"
+      - name: Verify trip actions, toolbar and cockpit drag ordering
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/drivelab-0394
+          javac -encoding UTF-8 -d /tmp/drivelab-0394 \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1TripActionPolicy.java \
+            receiver/tests/T1TripActionPolicyTest.java \
+            receiver/tests/T1TripButtonAndMapRepairContractTest.java \
+            receiver/tests/T1ToolbarDragDropContractTest.java \
+            receiver/tests/T1CockpitBlockDragDropContractTest.java
+          for test in T1TripActionPolicyTest T1TripButtonAndMapRepairContractTest T1ToolbarDragDropContractTest T1CockpitBlockDragDropContractTest; do
+            java -cp /tmp/drivelab-0394 ar.com.rango5gps.drivelabauto.receiver.$test
+          done
+      - name: Verify configurable center Freeform layout and legacy ADB diagnostics
+        run: |
+          set -euo pipefail
+          source=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CenterMosaicActivity.java
+          grep -Fq 'APLICAR MOSAICO GUARDADO · FREEFORM REAL' "$source"
+          grep -Fq 'setTitle("REDIMENSIONAR DISPLAY 0")' "$source"
+          grep -Fq 'T1CenterAdbResize.allowed(packages[i])' "$source"
+          grep -Fq 'T1CenterAdbResize.apply(this,selected,' "$source"
+          adb_source=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CenterAdbResize.java
+          grep -Fq 'findTask(before,beforeDump,packages[i])' "$adb_source"
+          grep -Fq 'am task resize ' "$adb_source"
+          grep -Fq '!pkg.startsWith("com.jetour.")' "$adb_source"
+          grep -Fq 'DIAGNOSTICAR TAREAS ADB · DISPLAY 0' "$source"
+          grep -Fq 'VER DETALLE DE LA ÚLTIMA PRUEBA ADB' "$source"
+          grep -Fq 'am supports-split-screen-multi-window' "$adb_source"
+          grep -Fq 'DIAGNÓSTICO DISPLAY 0 · SOLO LECTURA' "$adb_source"
+          grep -Fq 'geometría diferente' "$adb_source"
+      - name: Verify stable cable starts charge session independent of HV sign
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/drivelab-charge-0394
+          javac -encoding UTF-8 -d /tmp/drivelab-charge-0394 \
+            receiver/tests/T1ChargeAutoModuleSourceContractTest.java
+          java -cp /tmp/drivelab-charge-0394 \
+            ar.com.rango5gps.drivelabauto.receiver.T1ChargeAutoModuleSourceContractTest
+      - name: Verify pure-JVM signed-current charge integration
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/drivelab-charge-math-0394
+          javac -encoding UTF-8 -d /tmp/drivelab-charge-math-0394 \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1ChargeMath.java \
+            receiver/tests/T1ChargeMathTest.java
+          java -cp /tmp/drivelab-charge-math-0394 \
+            ar.com.rango5gps.drivelabauto.receiver.T1ChargeMathTest
+      - name: Verify reversible Display 0 window mode policy
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/drivelab-mode-0394
+          javac -encoding UTF-8 -d /tmp/drivelab-mode-0394 \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CenterWindowModePolicy.java \
+            receiver/tests/T1CenterWindowModePolicyTest.java
+          java -cp /tmp/drivelab-mode-0394 \
+            ar.com.rango5gps.drivelabauto.receiver.T1CenterWindowModePolicyTest
+          source=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CenterMosaicActivity.java
+          probe=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CenterWindowModeProbe.java
+          bridge=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1LocalAdbClient.java
+          center=receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CenterAdbResize.java
+          grep -Fq 'PROBAR MODO DE VENTANA · DISPLAY 0' "$source"
+          grep -Fq 'T1CenterWindowModeProbe.test(this,pkg' "$source"
+          grep -Fq 'originalResizeMode(' "$probe"
+          grep -Fq 'isFullscreen(' "$probe"
+          grep -Fq 'am task resizeable ' "$probe"
+          grep -Fq 'RESTAURACIÓN' "$probe"
+          grep -Fq 'dumpsys activity recents' "$bridge"
+          grep -Fq 'com.autolink.' "$center"
+      - name: Verify disposable own freeform mode 5 test on Display 0
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/drivelab-freeform-0394
+          javac -encoding UTF-8 -d /tmp/drivelab-freeform-0394 \
+            receiver/tests/T1CenterOwnFreeformSourceContractTest.java
+          java -cp /tmp/drivelab-freeform-0394 \
+            ar.com.rango5gps.drivelabauto.receiver.T1CenterOwnFreeformSourceContractTest
+      - name: Verify exact task ID and physical bounds parsing
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/drivelab-bounds-0394
+          javac -encoding UTF-8 -d /tmp/drivelab-bounds-0394 \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1AdbTaskParser.java \
+            receiver/tests/T1AdbTaskParserTest.java
+          java -cp /tmp/drivelab-bounds-0394 \
+            ar.com.rango5gps.drivelabauto.receiver.T1AdbTaskParserTest
+          grep -Fq 'T1AdbTaskParser.exactCenter(' \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CenterOwnFreeformProbe.java
+          grep -Fq 'isOwnDisposableTask(' \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CenterOwnFreeformProbe.java
+      - name: Verify oversized ADB task output is filtered by exact ID
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/drivelab-adb-0394
+          javac -encoding UTF-8 -d /tmp/drivelab-adb-0394 \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1AdbTaskExcerpt.java \
+            receiver/tests/T1AdbTaskExcerptTest.java
+          java -cp /tmp/drivelab-adb-0394 \
+            ar.com.rango5gps.drivelabauto.receiver.T1AdbTaskExcerptTest
+          grep -Fq 'shellTaskExcerpt(app,"am stack list",task)' \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CenterOwnFreeformProbe.java
+          grep -Fq 'scannedBytes>8*1024*1024' \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1LocalAdbClient.java
+      - name: Verify real half-width geometry with Android 101px Y-offset
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/drivelab-geom-0394
+          javac -encoding UTF-8 -d /tmp/drivelab-geom-0394 \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1AdbTaskParser.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CenterFreeformGeometry.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CenterMosaicGeometry.java \
+            receiver/tests/T1CenterFreeformGeometryTest.java
+          java -cp /tmp/drivelab-geom-0394 \
+            ar.com.rango5gps.drivelabauto.receiver.T1CenterFreeformGeometryTest
+      - name: Verify two own-task Freeform panes and no OEM task mutations
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/drivelab-dual-0394
+          javac -encoding UTF-8 -d /tmp/drivelab-dual-0394 \
+            receiver/tests/T1CenterDualFreeformSourceContractTest.java
+          java -cp /tmp/drivelab-dual-0394 \
+            ar.com.rango5gps.drivelabauto.receiver.T1CenterDualFreeformSourceContractTest
+      - name: Verify streaming only chosen external app tasks and new IDs
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/drivelab-external-0394
+          javac -encoding UTF-8 -d /tmp/drivelab-external-0394 \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1AdbTaskParser.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1AdbPackageTaskExcerpt.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CenterUserPackagePolicy.java \
+            receiver/tests/T1AdbPackageTaskExcerptTest.java
+          java -cp /tmp/drivelab-external-0394 \
+            ar.com.rango5gps.drivelabauto.receiver.T1AdbPackageTaskExcerptTest
+      - name: Verify safe external Freeform app launch policy
+        run: |
+          set -euo pipefail
+          javac -encoding UTF-8 -d /tmp/drivelab-external-0394 \
+            receiver/tests/T1CenterExternalFreeformSourceContractTest.java
+          java -cp /tmp/drivelab-external-0394 \
+            ar.com.rango5gps.drivelabauto.receiver.T1CenterExternalFreeformSourceContractTest
+      - name: Verify permanent one-tap toolbar updater and native signer checks
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/drivelab-toolbar-0394
+          javac -encoding UTF-8 -d /tmp/drivelab-toolbar-0394 \
+            receiver/tests/T1ToolbarUpdateShortcutContractTest.java
+          java -cp /tmp/drivelab-toolbar-0394 \
+            ar.com.rango5gps.drivelabauto.receiver.T1ToolbarUpdateShortcutContractTest
+      - name: Verify safe dynamic launcher package names and OEM exclusions
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/drivelab-policy-0394
+          javac -encoding UTF-8 -d /tmp/drivelab-policy-0394 \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CenterUserPackagePolicy.java \
+            receiver/tests/T1CenterUserPackagePolicyTest.java
+          java -cp /tmp/drivelab-policy-0394 \
+            ar.com.rango5gps.drivelabauto.receiver.T1CenterUserPackagePolicyTest
+      - name: Verify configurable two/three-app Freeform and reusable provenance
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/drivelab-mosaic-0394
+          javac -encoding UTF-8 -d /tmp/drivelab-mosaic-0394 \
+            receiver/tests/T1CenterSavedFreeformMosaicSourceContractTest.java
+          java -cp /tmp/drivelab-mosaic-0394 \
+            ar.com.rango5gps.drivelabauto.receiver.T1CenterSavedFreeformMosaicSourceContractTest
+      - name: Verify real Jetour +101px inset uses full visible height without overlap
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/drivelab-viewport-0394
+          javac -encoding UTF-8 -d /tmp/drivelab-viewport-0394 \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1AdbTaskParser.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CenterMosaicGeometry.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CenterMosaicViewport.java \
+            receiver/tests/T1CenterMosaicViewportTest.java
+          java -cp /tmp/drivelab-viewport-0394 \
+            ar.com.rango5gps.drivelabauto.receiver.T1CenterMosaicViewportTest
+      - name: Verify second Cockpit in own task, original Receiver unchanged
+        run: |
+          set -euo pipefail
+          javac -encoding UTF-8 -d /tmp/drivelab-viewport-0394 \
+            receiver/tests/T1CenterSelfCockpitSourceContractTest.java
+          java -cp /tmp/drivelab-viewport-0394 \
+            ar.com.rango5gps.drivelabauto.receiver.T1CenterSelfCockpitSourceContractTest
+      - name: Verify success hands off fullscreen Receiver config instead of covering tiles
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/drivelab-handoff-0394
+          javac -encoding UTF-8 -d /tmp/drivelab-handoff-0394 \
+            receiver/tests/T1CenterMosaicForegroundHandoffContractTest.java
+          java -cp /tmp/drivelab-handoff-0394 \
+            ar.com.rango5gps.drivelabauto.receiver.T1CenterMosaicForegroundHandoffContractTest
+      - name: Verify safe 96KB+ task inventory and no OEM/cluster force stop
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/drivelab-taskmgr-0394
+          javac -encoding UTF-8 -d /tmp/drivelab-taskmgr-0394 \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CenterUserPackagePolicy.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CenterTaskListExcerpt.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CenterTaskInventory.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1AppStopPolicy.java \
+            receiver/tests/T1CenterTaskInventoryTest.java
+          java -cp /tmp/drivelab-taskmgr-0394 \
+            ar.com.rango5gps.drivelabauto.receiver.T1CenterTaskInventoryTest
+      - name: Verify public Android SDK HOME query and fail-closed stop guards
+        run: |
+          set -euo pipefail
+          grep -Fq 'pm.resolveActivity(homeQuery,0)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1LocalAdbClient.java
+          grep -Fq 'pm.queryIntentActivities(homeQuery,0)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1LocalAdbClient.java
+          grep -Fq 'pm.queryIntentActivities(homeQuery,0)' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1AppTaskManagerActivity.java
+          ! grep -Rq 'getHomeActivities(' receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/
+      - name: Verify explicit confirmation, fresh user app identity and mosaic ownership
+        run: |
+          set -euo pipefail
+          javac -encoding UTF-8 -d /tmp/drivelab-taskmgr-0394 \
+            receiver/tests/T1AppTaskManagerSourceContractTest.java
+          java -cp /tmp/drivelab-taskmgr-0394 \
+            ar.com.rango5gps.drivelabauto.receiver.T1AppTaskManagerSourceContractTest
+      - name: Verify stored mosaic tasks can be raised without re-launching apps
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/drivelab-return-0394
+          javac -encoding UTF-8 -d /tmp/drivelab-return-0394 \
+            receiver/tests/T1CenterMosaicRestoreSourceContractTest.java
+          java -cp /tmp/drivelab-return-0394 \
+            ar.com.rango5gps.drivelabauto.receiver.T1CenterMosaicRestoreSourceContractTest
+      - name: Verify responsive Cockpit across 100, 70, 60 and 33 percent
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/drivelab-responsive-0394
+          javac -encoding UTF-8 -d /tmp/drivelab-responsive-0394 \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CockpitResponsivePolicy.java \
+            receiver/tests/T1CockpitResponsivePolicyTest.java
+          java -cp /tmp/drivelab-responsive-0394 \
+            ar.com.rango5gps.drivelabauto.receiver.T1CockpitResponsivePolicyTest
+          javac -encoding UTF-8 -d /tmp/drivelab-responsive-0394 \
+            receiver/tests/T1CockpitResponsiveSourceContractTest.java
+          java -cp /tmp/drivelab-responsive-0394 \
+            ar.com.rango5gps.drivelabauto.receiver.T1CockpitResponsiveSourceContractTest
+      - name: Verify manual-charge-only deletion and observed 19 November 08 cutoff
+        run: |
+          set -euo pipefail
+          javac -encoding UTF-8 -d /tmp/drivelab-responsive-0394 \
+            receiver/tests/T1ChargeManualCleanupAndCutoffSourceContractTest.java
+          java -cp /tmp/drivelab-responsive-0394 \
+            ar.com.rango5gps.drivelabauto.receiver.T1ChargeManualCleanupAndCutoffSourceContractTest
+      - name: Verify standalone Boot opt-in, same-signer IPC, and OEM HOME isolation
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/drivelab-boot-0394
+          javac -encoding UTF-8 -d /tmp/drivelab-boot-0394 \
+            receiver/tests/T1BootStandaloneSourceContractTest.java
+          java -cp /tmp/drivelab-boot-0394 \
+            ar.com.rango5gps.drivelabauto.receiver.T1BootStandaloneSourceContractTest
+      - name: Verify standalone 100 percent one-panel +101px safe viewport
+        run: |
+          set -euo pipefail
+          javac -encoding UTF-8 -d /tmp/drivelab-boot-0394 \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1AdbTaskParser.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CenterMosaicGeometry.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1CenterMosaicViewport.java \
+            receiver/tests/T1BootSinglePaneViewportTest.java
+          java -cp /tmp/drivelab-boot-0394 \
+            ar.com.rango5gps.drivelabauto.receiver.T1BootSinglePaneViewportTest
+      - name: Verify native standalone Boot installer security and manual consent
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/drivelab-bootinstaller-0394
+          javac -encoding UTF-8 -d /tmp/drivelab-bootinstaller-0394 \
+            receiver/tests/T1BootInstallerSourceContractTest.java
+          java -cp /tmp/drivelab-bootinstaller-0394 \
+            ar.com.rango5gps.drivelabauto.receiver.T1BootInstallerSourceContractTest
+      - name: Verify safe unified Display 0/1 and Jetour Freeform caption handling
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/drivelab-unified-0394
+          javac -encoding UTF-8 -d /tmp/drivelab-unified-0394 \
+            receiver/tests/T1BootDisplayClusterSourceContractTest.java
+          java -cp /tmp/drivelab-unified-0394 \
+            ar.com.rango5gps.drivelabauto.receiver.T1BootDisplayClusterSourceContractTest
+      - name: Compile signed Receiver 0.3.94 and verify package and certificate
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'bruceferra/drivelab-auto-standalone'
+          ! gh release view v0.3.94 >/dev/null 2>&1
+          gradle --no-daemon :receiver:assembleRelease :boot:assembleRelease
+          apk=receiver/build/outputs/apk/release/receiver-release.apk
+          test -s "$apk"
+          sig="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          "$sig" verify --print-certs "$apk"
+          bootapk=boot/build/outputs/apk/release/boot-release.apk
+          test -s "$bootapk"
+          "$sig" verify --print-certs "$bootapk"
+          bootbadge=$("$aapt" dump badging "$bootapk" | head -1)
+          echo "$bootbadge" | grep -F "package: name='ar.com.rango5gps.drivelabauto.boot'"
+          echo "$bootbadge" | grep -F "versionCode='2'"
+          echo "$bootbadge" | grep -F "versionName='0.1.1'"
+          badge=$("$aapt" dump badging "$apk" | head -1)
+          echo "$badge" | grep -F "package: name='ar.com.rango5gps.drivelabauto.receiver'"
+          echo "$badge" | grep -F "versionCode='195'"
+          echo "$badge" | grep -F "versionName='0.3.94'"
+          mkdir -p old output
+          gh release download v0.3.71 --pattern 'DriveLab-Auto-Receiver-v0.3.71.apk' --dir old
+          gh release download v0.3.71 --pattern 'sender.json' --dir output
+          before=$("$sig" verify --print-certs old/DriveLab-Auto-Receiver-v0.3.71.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          after=$("$sig" verify --print-certs "$apk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          test -n "$before" && test "$before" = "$after"
+          bootsig=$("$sig" verify --print-certs "$bootapk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          test -n "$bootsig" && test "$bootsig" = "$after"
+          cp "$apk" output/DriveLab-Auto-Receiver-v0.3.94.apk
+          cp "$bootapk" output/DriveLab-Boot-v0.1.1.apk
+          sha256sum output/DriveLab-Boot-v0.1.1.apk > output/boot.sha256
+          export RECEIVER_SHA=$(sha256sum output/DriveLab-Auto-Receiver-v0.3.94.apk | awk '{print $1}')
+          python3 - <<'PY'
+          import json,os
+          manifest={'packageName':'ar.com.rango5gps.drivelabauto.receiver',
+                    'versionName':'0.3.94','versionCode':195,
+                    'sha256':os.environ['RECEIVER_SHA'],
+                    'apkUrl':'https://github.com/bruceferra/drivelab-auto-standalone/releases/download/v0.3.94/DriveLab-Auto-Receiver-v0.3.94.apk'}
+          with open('output/receiver.json','w') as f:json.dump(manifest,f,indent=2)
+          with open('output/sender.json') as f:sender=json.load(f)
+          assert sender['versionCode']==23 and sender['versionName']=='0.2.22'
+          PY
+          sha256sum output/DriveLab-Auto-Receiver-v0.3.94.apk > output/receiver.sha256
+      - name: Publish signed Receiver and preserve Sender updater
+        run: |
+          set -euo pipefail
+          ! gh release view v0.3.94 >/dev/null 2>&1
+          gh release create v0.3.94 \
+            output/DriveLab-Auto-Receiver-v0.3.94.apk \
+            output/DriveLab-Boot-v0.1.1.apk output/boot.sha256 \
+            output/receiver.json output/sender.json output/receiver.sha256 \
+            --target "$GITHUB_SHA" --latest \
+            --title 'DriveLab Boot 0.1.1 · lanzador independiente + Receiver 0.3.94' \
+            --notes 'Receiver v0.3.94 (build 195) y DriveLab Boot v0.1.1 (build 2): configuración conjunta Display 0 y Display 1 desde Boot. Display 0 mantiene Freeform 1–3 apps, tareas verificadas por ADB local y calibración de la franja superior de Jetour. Receiver incorpora margen seguro ajustable 0–88 dp en sus propias ventanas Freeform para que el encabezado gris del sistema no tape botones; no oculta ni modifica barras OEM, barra inferior ni capa de SystemUI. Display 1 opt-in: Waze/Google Maps una o dos ventanas, 30–70 %, sólo display físico ID 1 ya seleccionado, validación de velocidad OEM 0 km/h y confirmación visual manual antes del siguiente autoinicio. Un único arranque coordinado tras 15 s: al activar Boot se desactiva únicamente el autoinicio separado de mapas si Display 1 está incluido, evitando carreras entre tareas; no elimina capas Jetour, no cierra procesos ni altera la instrumentación OEM. Diagnóstico informa estado, falta de permiso, app no visible y desvanecido propio de DriveLab si existe. Receiver incluye actualización de Boot 0.1.1 sin WebADB: asset de release oficial v0.3.94 con SHA-256, tamaño, paquete y certificado Android del Receiver verificados; instalación con confirmación nativa. Orden: primero Receiver 0.3.94, después Boot 0.1.1. Requiere pruebas reales de barras, foco, pantallas y autoinicio en vehículo detenido. Sender y HOME Jetour sin cambios.'
+          mkdir -p verify
+          gh release download v0.3.94 --pattern receiver.json --dir verify
+          gh release download v0.3.94 --pattern sender.json --dir verify
+          cmp output/receiver.json verify/receiver.json
+          cmp output/sender.json verify/sender.json
