@@ -37,6 +37,16 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
     private SharedPreferences prefs(){return getSharedPreferences(ReceiverService.PREFS,MODE_PRIVATE);}
     @Override public void onCreate(Bundle state){
         super.onCreate(state);
+        // A second, explicitly requested DriveLab cockpit panel on Display 0.
+        // The shell starts a new Freeform Receiver task WITHOUT LAUNCHER
+        // category, then opens Cockpit inside this new task. Never finishes
+        // or relaunches the original Driver/Cockpit task.
+        if(getIntent()!=null&&getIntent().getBooleanExtra(
+                "drivelab_center_cockpit_tile",false)){
+            startActivity(new Intent(this,T1PremiumCockpitActivity.class));
+            finish();
+            return;
+        }
         // Fresh app launch: user requested cabin-air recirculation to become
         // the DEFAULT without touching its button. The existing foreground
         // guard continues while other screens/Maps are in front and survives
