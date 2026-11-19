@@ -298,6 +298,32 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
                 }))
             .show();
     }
+    private void testExternalFreeformOnCenter(){
+        new AlertDialog.Builder(this)
+            .setTitle("PROBAR PROMANAGER + UBER · DISPLAY 0")
+            .setMessage("Prueba experimental sólo con ProManager y "+
+                "DriveLab Uber Beta, instaladas por el usuario. "+
+                "Se intentarán abrir tareas NUEVAS en modo Freeform 5 "+
+                "y ubicarlas en mitades izquierda y derecha. "+
+                "Si Android reutiliza tareas existentes, no se "+
+                "redimensionarán. Las nuevas tareas externas NO se "+
+                "eliminan ni cierran automáticamente: vas a poder "+
+                "cerrarlas normalmente después. HOME, clúster y apps OEM "+
+                "permanecen intactos. Con el vehículo detenido, ¿probar?")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("PROBAR",(dialog,which)->
+                T1CenterExternalFreeformProbe.run(this,result->{
+                    getSharedPreferences(PREFS,MODE_PRIVATE).edit()
+                        .putString("last_external_freeform_probe",result).apply();
+                    if(!isFinishing()){
+                        new AlertDialog.Builder(this)
+                            .setTitle("RESULTADO · APPS EXTERNAS DISPLAY 0")
+                            .setMessage(result)
+                            .setPositiveButton("OK",null).show();
+                    }
+                }))
+            .show();
+    }
     private void draw(){
         ScrollView scroll=new ScrollView(this);
         scroll.setBackgroundColor(0xFF101A23);
@@ -368,6 +394,15 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
                 .setMessage(getSharedPreferences(PREFS,MODE_PRIVATE)
                     .getString("last_dual_freeform_probe",
                         "Aún no probaste las dos ventanas"))
+                .setPositiveButton("OK",null).show());
+        button("PROBAR PROMANAGER + UBER BETA · FREEFORM DISPLAY 0",
+            this::testExternalFreeformOnCenter);
+        button("VER RESULTADO · APPS EXTERNAS",()->
+            new AlertDialog.Builder(this)
+                .setTitle("ÚLTIMO RESULTADO · APPS EXTERNAS")
+                .setMessage(getSharedPreferences(PREFS,MODE_PRIVATE)
+                    .getString("last_external_freeform_probe",
+                        "Aún no probaste ProManager y Uber Beta"))
                 .setPositiveButton("OK",null).show());
         button("PROBAR MOSAICO REAL · ADB DISPLAY 0",this::applyAdbOnCenter);
         // Old ActivityOptions-only trial intentionally hidden: OEM ignored bounds.
