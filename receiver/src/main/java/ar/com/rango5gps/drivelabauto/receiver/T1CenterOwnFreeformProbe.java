@@ -125,7 +125,7 @@ final class T1CenterOwnFreeformProbe {
                 afterDump,task,pkg);
             boolean sized=after!=null&&
                 isOwnDisposableTask(afterStack,task,pkg)&&
-                after.bounds!=null&&after.bounds.near(target,20);
+                T1CenterFreeformGeometry.half(after.bounds,target);
             String afterUi=prefs.getString(
                 T1CenterFreeformTestActivity.KEY,"sin lectura");
             report.append("DESPUÉS ADB: ").append(after==null?
@@ -134,6 +134,9 @@ final class T1CenterOwnFreeformProbe {
             report.append("DESPUÉS Activity: ").append(afterUi).append('\n');
             report.append("Modo freeform: ").append(afterFreeform?"SÍ":"NO")
                 .append(" · Tamaño 50%: ").append(sized?"SÍ":"NO")
+                .append(" · Offset vertical Android: ")
+                .append(after!=null&&after.bounds!=null?
+                    after.bounds.top-target.top:-1).append(" px")
                 .append('\n');
             report.append(afterFreeform&&sized?
                 "ÉXITO: UNA VENTANA PROPIA ACEPTÓ FREEFORM Y MEDIA "+
