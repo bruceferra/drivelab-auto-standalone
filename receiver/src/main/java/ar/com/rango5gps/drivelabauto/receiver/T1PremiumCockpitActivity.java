@@ -1600,6 +1600,16 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         // This page has no second fixed local row: instruments scroll freely.
         roadTransitionPopup=null;
         setContentView(scroll);
+        // Adapt the live Cockpit window (not the 1920px physical screen).
+        // Freeform 70/60/50/33% gets readable, reflowed cards and smaller
+        // text, without restarting the activity, trip or OEM services.
+        T1CockpitResponsive responsive=new T1CockpitResponsive(scroll);
+        responsive.register(controls,3,3,1);
+        responsive.register(powertrain,2,2,1);
+        responsive.register(overview,3,3,1);
+        responsive.register(metrics,6,3,2);
+        responsive.register(commentaryColumns,2,1,1);
+        responsive.attach();
         // Open the existing diagnostic panel directly when launched from
         // the wizard; retain its original actions and user-triggered probes.
         if(getIntent()!=null&&
