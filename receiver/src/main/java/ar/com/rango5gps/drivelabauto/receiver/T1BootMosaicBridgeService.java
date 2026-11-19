@@ -63,6 +63,34 @@ public final class T1BootMosaicBridgeService extends Service {
         }
         try{
             if(incoming==null)throw new IllegalArgumentException("Sin pedido");
+            if(incoming.getBooleanExtra("reveal_only",false)){
+                // Only identify and move the tasks that DriveLab already
+                // created on Display 0. Never force-stop a running app or
+                // start duplicates to make the layout visible.
+                int count=incoming.getIntExtra("reveal_count",-1);
+                if(count<1||count>3)
+                    throw new IllegalArgumentException(
+                        "Cantidad de ventanas para recuperar inválida");
+                String[] packages=new String[count];
+                HashSet<String> different=new HashSet<>();
+                for(int i=0;i<count;i++){
+                    String pkg=incoming.getStringExtra("pkg"+i);
+                    if(pkg==null||!different.add(pkg)||
+                       !(pkg.equals(getPackageName())||
+                         T1CenterUserPackagePolicy.allowed(pkg)))
+                        throw new SecurityException(
+                            "Paquete no autorizado en panel "+(i+1));
+                    packages[i]=pkg;
+                }
+                T1CenterBootReveal.request(this,packages,result->{
+                    try{report(this,result);}
+                    finally{
+                        BUSY.set(false);
+                        stopSelf(startId);
+                    }
+                });
+                return START_NOT_STICKY;
+            }
             if(incoming.getBooleanExtra("cluster_only",false)){
                 // The standalone Boot "PROBAR DISPLAY 1" button intentionally
                 // does NOT launch another Receiver Activity, Freeform task or
