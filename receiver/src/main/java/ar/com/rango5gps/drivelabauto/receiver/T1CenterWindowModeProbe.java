@@ -151,11 +151,18 @@ final class T1CenterWindowModeProbe {
                     restored=!T1CenterWindowModePolicy.shellRejected(rect)&&
                         !T1CenterWindowModePolicy.shellRejected(mode);
                     T1AdbTaskParser.Task end=find(app,pkg);
+                    String restoredActivities=read(app,
+                        "dumpsys activity activities");
+                    String restoredRecents=read(app,
+                        "dumpsys activity recents");
+                    int restoredMode=T1CenterWindowModePolicy.originalResizeMode(
+                        restoredActivities+"\n"+restoredRecents,taskId,pkg);
                     restored=restored&&end!=null&&end.id==taskId&&
                         end.bounds!=null&&
                         end.bounds.near(originalBounds,20)&&
                         T1CenterWindowModePolicy.isFullscreen(
-                            read(app,"dumpsys activity activities"),taskId,pkg);
+                            restoredActivities,taskId,pkg)&&
+                        restoredMode==originalMode;
                     result.append("\nRESTAURACIÓN: ")
                         .append(restored?"fullscreen y bounds originales":
                             "NO VERIFICADA; comprobá la app antes de usarla");
