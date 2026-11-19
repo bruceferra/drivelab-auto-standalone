@@ -97,6 +97,53 @@ final class T1LocalAdbClient {
         verifyCenterUserApp(context,pkg);
         return shellInternal(context,"am stack list",-1,pkg,false);
     }
+    /** Read all task HEADERS in a bounded stream; no processes are killed.
+     * A task may be recent but its process not resident in RAM.
+     */
+    static String shellTaskInventory(Context context)throws Exception{
+        return shellInternal(context,"am stack list",-1,
+            null,false,false,true,false);
+    }
+    /** User-confirmed force stop of ONE external user application.
+     * Only after fresh Display-0-only task check, installed app and OEM
+     * protections. Never permits shell force-stop of Receiver or vehicle.
+     */
+    static String shellStopApprovedUserApp(Context context,String pkg)
+            throws Exception{
+        verifyCenterUserApp(context,pkg);
+        if(!T1AppStopPolicy.allowPackage(pkg))
+            throw new SecurityException("App protegida: "+pkg);
+        android.content.pm.PackageManager pm=context.getPackageManager();
+        android.content.Intent launcher=pm.getLaunchIntentForPackage(pkg);
+        if(launcher==null||launcher.getComponent()==null||
+            !pkg.equals(launcher.getComponent().getPackageName()))
+            throw new SecurityException("Sin launcher explícito de usuario");
+        android.content.ComponentName home=pm.resolveActivity(
+            new android.content.Intent(android.content.Intent.ACTION_MAIN)
+                .addCategory(android.content.Intent.CATEGORY_HOME),0)
+                ==null?null:pm.resolveActivity(
+            new android.content.Intent(android.content.Intent.ACTION_MAIN)
+                .addCategory(android.content.Intent.CATEGORY_HOME),0)
+                .activityInfo==null?null:new android.content.ComponentName(
+            pm.resolveActivity(new android.content.Intent(
+                android.content.Intent.ACTION_MAIN).addCategory(
+                android.content.Intent.CATEGORY_HOME),0).activityInfo.packageName,
+            pm.resolveActivity(new android.content.Intent(
+                android.content.Intent.ACTION_MAIN).addCategory(
+                android.content.Intent.CATEGORY_HOME),0).activityInfo.name);
+        if(home==null)
+            throw new SecurityException("HOME no identificado; detener cancelado");
+        if(home.getPackageName().equals(pkg))
+            throw new SecurityException("Nunca detener HOME");
+        T1CenterTaskInventory.Entry selected=null;
+        for(T1CenterTaskInventory.Entry e:T1CenterTaskInventory.parse(
+                shellTaskInventory(context)))
+            if(e.pkg.equals(pkg))selected=e;
+        if(!T1CenterTaskInventory.canStop(selected))
+            throw new SecurityException("Sin tarea exclusiva en Display 0");
+        return shellInternal(context,"am force-stop "+pkg,-1,
+            null,false,false,false,true);
+    }
     /** Read only own Receiver task lines; old/fullscreen tasks are
      * compared by exact ID before any new mosaic pane is resized.
      */
@@ -156,6 +203,13 @@ final class T1LocalAdbClient {
     private static String shellInternal(Context context,String command,
             int taskId,String approvedPackage,boolean userAppLaunch,
             boolean ownReceiverScan)throws Exception{
+        return shellInternal(context,command,taskId,approvedPackage,
+            userAppLaunch,ownReceiverScan,false,false);
+    }
+    private static String shellInternal(Context context,String command,
+            int taskId,String approvedPackage,boolean userAppLaunch,
+            boolean ownReceiverScan,boolean taskInventory,
+            boolean confirmedUserStop)throws Exception{
         // STRICT command whitelist, no shell metacharacters or package names.
         // Only known Waze/Maps force-stop + process checks, task/geometry
         // management, and exact accessibility-list recovery are authorized.
@@ -178,6 +232,8 @@ final class T1LocalAdbClient {
            !command.equals("pm clear --cache-only com.google.android.apps.maps")&&
            !command.equals("am force-stop com.waze")&&
            !command.equals("am force-stop com.google.android.apps.maps")&&
+           !(confirmedUserStop&&command.matches(
+               "am force-stop [A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+"))&&
            !command.equals("pidof com.waze")&&
            !command.equals("pidof com.google.android.apps.maps")&&
            !command.equals("am stack list")&&
@@ -237,20 +293,23 @@ final class T1LocalAdbClient {
                 new T1AdbTaskExcerpt(command,taskId):null;
             T1AdbPackageTaskExcerpt approvedExcerpt=approvedPackage!=null?
                 new T1AdbPackageTaskExcerpt(approvedPackage,ownReceiverScan):null;
+            T1CenterTaskListExcerpt inventory=taskInventory?
+                new T1CenterTaskListExcerpt():null;
             int scannedBytes=0;
-            for(int i=0;i<(excerpt==null&&approvedExcerpt==null?150:8192);i++){
+            for(int i=0;i<(excerpt==null&&approvedExcerpt==null&&inventory==null?150:8192);i++){
                 Message msg=read(in);
                 if(msg.is("OKAY")){
                     if(remote==0)remote=msg.arg0;
                 }else if(msg.is("WRTE")){
                     if(remote==0)remote=msg.arg0;
-                    if(excerpt!=null||approvedExcerpt!=null){
+                    if(excerpt!=null||approvedExcerpt!=null||inventory!=null){
                         scannedBytes+=msg.payload.length;
                         if(scannedBytes>8*1024*1024)
                             throw new IllegalStateException(
                                 "Diagnóstico ADB supera límite de 8 MB");
                         if(excerpt!=null)excerpt.accept(msg.payload);
-                        else approvedExcerpt.accept(msg.payload);
+                        else if(approvedExcerpt!=null)approvedExcerpt.accept(msg.payload);
+                        else inventory.accept(msg.payload);
                     }else{
                         if(output.size()+msg.payload.length>96*1024)
                             throw new IllegalStateException("Salida ADB excesiva");
@@ -268,6 +327,10 @@ final class T1LocalAdbClient {
                     if(approvedExcerpt!=null){
                         approvedExcerpt.finish();
                         return approvedExcerpt.result();
+                    }
+                    if(inventory!=null){
+                        inventory.finish();
+                        return inventory.result();
                     }
                     return new String(output.toByteArray(),StandardCharsets.UTF_8);
                 }else if(msg.is("AUTH"))
