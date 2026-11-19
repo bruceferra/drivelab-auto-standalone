@@ -12,16 +12,21 @@ final class T1ChargeMath {
         return Double.isFinite(soc)&&soc>=0&&soc<=100;
     }
     static double[] integrate(int cable,double volts,double amps,long dtMs){
-        if(!plugged(cable)||!Double.isFinite(volts)||
-           !Double.isFinite(amps)||volts<100||volts>1000||
-           amps>=-0.5||amps< -1000||dtMs<=0||dtMs>12000)
+        // Charging current can integrate Ah without pack voltage.
+        // Never infer kWh from a missing or uncalibrated OEM voltage.
+        if(!currentCharging(cable,amps)||dtMs<=0||dtMs>12000)
             return new double[]{0,0};
         double ah=-amps*dtMs/3600000d;
-        return new double[]{ah,ah*volts/1000d};
+        double kwh=Double.isFinite(volts)&&volts>=100&&volts<=1000?
+            ah*volts/1000d:0d;
+        return new double[]{ah,kwh};
+    }
+    static boolean currentCharging(int cable,double amps){
+        return plugged(cable)&&Double.isFinite(amps)&&
+            amps< -0.5&&amps>= -1000;
     }
     static boolean charging(int cable,double volts,double amps){
-        return plugged(cable)&&Double.isFinite(volts)&&
-            Double.isFinite(amps)&&volts>=100&&volts<=1000&&
-            amps< -0.5&&amps>= -1000;
+        return currentCharging(cable,amps)&&Double.isFinite(volts)&&
+            volts>=100&&volts<=1000;
     }
 }
