@@ -97,6 +97,24 @@ final class T1LocalAdbClient {
         verifyCenterUserApp(context,pkg);
         return shellInternal(context,"am stack list",-1,pkg,false);
     }
+    /** Read only own Receiver task lines; old/fullscreen tasks are
+     * compared by exact ID before any new mosaic pane is resized.
+     */
+    static String shellOwnReceiverTasks(Context context)throws Exception{
+        return shellInternal(context,"am stack list",-1,
+            "ar.com.rango5gps.drivelabauto.receiver",false,true);
+    }
+    /** Start a SECOND Receiver task directly in Freeform mode 5.
+     * The target routes to the Cockpit inside that same new task. Neither
+     * the original Receiver nor the cluster is modified.
+     */
+    static String shellStartOwnCockpitFreeform(Context context)throws Exception{
+        return shell(context,
+            "am start --display 0 --windowingMode 5 -f 0x18000000 "+
+            "-n ar.com.rango5gps.drivelabauto.receiver/.ReceiverActivity "+
+            "--ez drivelab_center_cockpit_tile true");
+    }
+
     static String shellStartCenterUserFreeform(Context context,
             android.content.ComponentName component)throws Exception{
         if(component==null)
@@ -132,6 +150,12 @@ final class T1LocalAdbClient {
     private static String shellInternal(Context context,String command,
             int taskId,String approvedPackage,boolean userAppLaunch)
             throws Exception{
+        return shellInternal(context,command,taskId,approvedPackage,
+            userAppLaunch,false);
+    }
+    private static String shellInternal(Context context,String command,
+            int taskId,String approvedPackage,boolean userAppLaunch,
+            boolean ownReceiverScan)throws Exception{
         // STRICT command whitelist, no shell metacharacters or package names.
         // Only known Waze/Maps force-stop + process checks, task/geometry
         // management, and exact accessibility-list recovery are authorized.
@@ -142,6 +166,7 @@ final class T1LocalAdbClient {
            !command.equals("am start --display 0 --windowingMode 5 -n ar.com.rango5gps.drivelabauto.receiver/.T1CenterFreeformTestActivity")&&
            !command.equals("am start --display 0 --windowingMode 5 -n ar.com.rango5gps.drivelabauto.receiver/.T1CenterDualLeftActivity")&&
            !command.equals("am start --display 0 --windowingMode 5 -n ar.com.rango5gps.drivelabauto.receiver/.T1CenterDualRightActivity")&&
+           !command.equals("am start --display 0 --windowingMode 5 -f 0x18000000 -n ar.com.rango5gps.drivelabauto.receiver/.ReceiverActivity --ez drivelab_center_cockpit_tile true")&&
            !command.matches("am start --display 0 --windowingMode 5 -f 0x18000000 -n ar\\.com\\.promanager\\.nativeapp/[A-Za-z0-9_.$/]{1,220}")&&
            !command.matches("am start --display 0 --windowingMode 5 -f 0x18000000 -n ar\\.com\\.rango5gps\\.uberbeta/[A-Za-z0-9_.$/]{1,220}")&&
            !(userAppLaunch&&command.matches(
@@ -211,7 +236,7 @@ final class T1LocalAdbClient {
             T1AdbTaskExcerpt excerpt=taskId>0?
                 new T1AdbTaskExcerpt(command,taskId):null;
             T1AdbPackageTaskExcerpt approvedExcerpt=approvedPackage!=null?
-                new T1AdbPackageTaskExcerpt(approvedPackage):null;
+                new T1AdbPackageTaskExcerpt(approvedPackage,ownReceiverScan):null;
             int scannedBytes=0;
             for(int i=0;i<(excerpt==null&&approvedExcerpt==null?150:8192);i++){
                 Message msg=read(in);
