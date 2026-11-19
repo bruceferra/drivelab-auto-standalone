@@ -221,6 +221,39 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
                 .setPositiveButton("OK",null).show();
         });
     }
+    private void testWindowModeOnCenter(){
+        String pkg=packages[0];
+        if(pkg==null||!T1CenterAdbResize.allowed(pkg)||
+            pkg.equals(getPackageName())){
+            new AlertDialog.Builder(this)
+                .setTitle("PRUEBA DE MODO · DISPLAY 0")
+                .setMessage("Seleccioná en Panel 1 una aplicación externa "+
+                    "instalada por vos, por ejemplo ProManager. "+
+                    "No se permiten DriveLab ni aplicaciones OEM.")
+                .setPositiveButton("OK",null).show();
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("PRUEBA REVERSIBLE · UNA APLICACIÓN")
+            .setMessage("Con el vehículo detenido, abrí antes "+names[0]+
+                " y volvé a DriveLab. Se comprobará su tarea única en "+
+                "Display 0. Sólo si Android informa su resizeMode original "+
+                "se probará temporalmente 'am task resizeable <ID> 2' "+
+                "y un 50% de ancho; inmediatamente intentaremos restaurar "+
+                "modo y tamaño originales. No cambia ajustes globales, "+
+                "HOME, Display 1 ni tareas OEM. ¿Ejecutar la prueba?")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("PROBAR",(dialog,which)->
+                T1CenterWindowModeProbe.test(this,pkg,result->{
+                    getSharedPreferences(PREFS,MODE_PRIVATE).edit()
+                        .putString("last_window_mode_probe",result).apply();
+                    new AlertDialog.Builder(this)
+                        .setTitle("RESULTADO · MODO DISPLAY 0")
+                        .setMessage(result)
+                        .setPositiveButton("OK",null).show();
+                }))
+            .show();
+    }
     private void draw(){
         ScrollView scroll=new ScrollView(this);
         scroll.setBackgroundColor(0xFF101A23);
@@ -267,6 +300,14 @@ public final class T1CenterMosaicActivity extends T1ImmersiveActivity {
                 .setMessage(last).setPositiveButton("OK",null).show());
         button("DIAGNOSTICAR VENTANAS DE ANDROID",this::diagnoseWindows);
         button("DIAGNOSTICAR TAREAS ADB · DISPLAY 0",this::diagnoseAdbOnCenter);
+        button("PROBAR MODO DE VENTANA · DISPLAY 0",
+            this::testWindowModeOnCenter);
+        button("VER RESULTADO DE ÚLTIMA PRUEBA DE MODO",()->
+            new AlertDialog.Builder(this).setTitle("ÚLTIMA PRUEBA · MODO")
+                .setMessage(getSharedPreferences(PREFS,MODE_PRIVATE)
+                    .getString("last_window_mode_probe",
+                        "Aún no probaste el modo de ventana"))
+                .setPositiveButton("OK",null).show());
         button("PROBAR MOSAICO REAL · ADB DISPLAY 0",this::applyAdbOnCenter);
         // Old ActivityOptions-only trial intentionally hidden: OEM ignored bounds.
         button("GUARDAR CONFIGURACIÓN",()->{
