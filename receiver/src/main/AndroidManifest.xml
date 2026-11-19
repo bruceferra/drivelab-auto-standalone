@@ -127,6 +127,21 @@
             android:resizeableActivity="true"
             android:excludeFromRecents="true"
             android:taskAffinity="${applicationId}.windowmodeprobe" />
+        <!-- Experimental Display 0 dual-pane check. These two app-owned
+             activities have separate task affinities, never replace HOME,
+             and self-remove after 30 seconds. Shell-only: no intent filters. -->
+        <activity android:name=".T1CenterDualLeftActivity"
+            android:exported="true"
+            android:resizeableActivity="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="${applicationId}.dualprobe.left" />
+        <activity android:name=".T1CenterDualRightActivity"
+            android:exported="true"
+            android:resizeableActivity="true"
+            android:excludeFromRecents="true"
+            android:launchMode="singleTask"
+            android:taskAffinity="${applicationId}.dualprobe.right" />
         <activity android:name=".T1ClusterLayoutSettingsActivity"
             android:exported="false" />
         <activity android:name=".ReceiverVehicleActivity" android:exported="false" />
