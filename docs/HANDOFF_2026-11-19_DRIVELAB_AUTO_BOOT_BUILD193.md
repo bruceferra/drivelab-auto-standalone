@@ -4,9 +4,9 @@
 - Repo independiente: https://github.com/bruceferra/drivelab-auto-standalone (rama main).
 - Última release confirmada al iniciar recuperación: Receiver **v0.3.91, versionCode 192**: https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.3.91.
 - Versión preparada en el código: **Receiver v0.3.92, versionCode 193** y **DriveLab Boot v0.1.0, versionCode 1**; publicación por workflow `.github/workflows/publish-drivelab-boot-010-receiver-0392.yml`.
-- Corrida de publicación lanzada en esta recuperación: https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/44602045870.
+- **RELEASE PUBLICADA Y VERIFICADA:** https://github.com/bruceferra/drivelab-auto-standalone/releases/tag/v0.3.92 (19/11/2026, ejecución de firma exitosa https://github.com/bruceferra/drivelab-auto-standalone/actions/runs/44602045870). Assets: `DriveLab-Auto-Receiver-v0.3.92.apk` (6.240.433 bytes), `DriveLab-Boot-v0.1.0.apk` (28.688 bytes), `boot.sha256`, `receiver.sha256`, `receiver.json`, `sender.json`.
 - Se corrigió test de mosaico desactualizado: esperaba 2–3 paneles pese a que la implementación ya soportaba 1–3. Primera corrida 44601721790 falló por esa aserción; segunda corrida indicada arriba es la que debe considerarse para el release.
-- No confundir **éxito de QA** con **release firmado publicada**; comprobar assets y manifiestos antes de instalar. Conservar certificado original y Sender.
+- **QA y release firmadas confirmadas en GitHub Actions**. Todavía no hay validación física de Boot en el T1. Conservar certificado original y Sender.
 
 ## Objetivo del usuario
 Un único DriveLab Auto Receiver en Jetour T1 (Android 11) para Cockpit, navegación, datos OEM, viajes, carga y funciones de asistencia; DriveLab Boot independiente para un mosaico de **Display 0**. Preservar **T1Launcher HOME**, **Display 1/clúster**, Waze, servicios que ya funcionan, apps anteriores y garantía. Sin root ni comandos que cierren tareas OEM.
