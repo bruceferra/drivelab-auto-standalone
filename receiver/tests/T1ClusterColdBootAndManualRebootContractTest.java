@@ -41,7 +41,7 @@ public final class T1ClusterColdBootAndManualRebootContractTest {
         yes(boot.contains("boolean clusterBoot=T1ClusterWazeRouter.autoBoot(context)")&&
             boot.contains("if(receiverBoot||clusterBoot)")&&
             boot.contains("BOOT_COMPLETED recibido")&&
-            toolbar.contains("REPARAR MAPAS")&&
+            toolbar.contains("MAPAS · REPARACIÓN DESACTIVADA")&&
             toolbar.contains("this::confirmClusterReload"),
             "Cluster auto-start must not depend on unrelated Receiver auto_boot, and repair is discoverable");
         int bootMethod=router.indexOf("static String onReceiverBoot(Context c)");
@@ -67,29 +67,13 @@ public final class T1ClusterColdBootAndManualRebootContractTest {
             settings.contains("T1ClusterManualReboot.run(this)")&&
             settings.contains("setNegativeButton(\"CANCELAR\",null)"),
             "REBOOT must stay small, hidden in technical submenu and confirmed");
-        yes(reboot.contains("static final long OFF_VISIBLE_MS=10000L")&&
-            reboot.contains("MAIN.postDelayed(()->performOn(owner,update,confirmed),")&&
-            reboot.contains("MAIN.postDelayed(()->performOn(owner,update,false),")&&
-            reboot.contains("putBoolean(T1ClusterWazeRouter.RELOAD_HOLD,true)")&&
-            reboot.contains("putBoolean(T1ClusterWazeRouter.RELOAD_HOLD,false)")&&
-            reboot.contains("OFF_VISIBLE_MS=10000L")&&
-            reboot.contains("T1ClusterFreshStart.prepare(owner)")&&
-            reboot.contains("reopenSavedPanelsStopped(owner)")&&
-            reboot.contains("T1ClusterAdbResize.closeClusterApps(owner,")&&
-            reboot.contains("putBoolean(T1ClusterWazeRouter.ENABLED,false)")&&
-            reboot.contains("putBoolean(T1ClusterWazeRouter.ENABLED,true)")&&
-            reboot.contains("T1LastRoute.restore(owner)")&&
-            !reboot.contains("new Intent(owner,ReceiverActivity.class)")&&
-            !reboot.contains("Intent.FLAG_ACTIVITY_CLEAR_TASK")&&
-            reboot.contains("T1ClusterAdbResize.closeClusterApps(owner,")&&
-            reboot.contains("putBoolean(T1ClusterWazeRouter.ENABLED,false)")&&
-            reboot.contains("putBoolean(T1ClusterWazeRouter.ENABLED,true)")&&
-            reboot.contains("ReceiverService.ACTION_START")&&
-            reboot.contains("speedKmh()")&&
-            reboot.contains("gear!=1||!Double.isFinite(speed)")&&
-            reboot.contains("attempt<2")&&
-            !reboot.contains("am force-stop ar.com.rango5gps.drivelabauto.receiver"),
-            "Manual R is P/0 gated and leaves DriveLab UI intact");
+        yes(reboot.contains("REPARAR MAPAS DESACTIVADO POR SEGURIDAD")&&
+            !reboot.contains("T1ClusterFreshStart.prepare(owner)")&&
+            !reboot.contains("T1LocalAdbClient.shell(")&&
+            !reboot.contains("T1ClusterAdbResize.closeClusterApps(owner,")&&
+            !reboot.contains("pm clear --cache-only "+'"'+'+pkg')&&
+            !reboot.contains("performOff("),
+            "Android 11 destructive manual REBOOT must remain fully disabled");
         System.out.println("PASS: boot and parked-only REBOOT refresh maps without touching OEM UI");
     }
 }
