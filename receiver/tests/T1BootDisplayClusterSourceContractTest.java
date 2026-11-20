@@ -42,8 +42,9 @@ public final class T1BootDisplayClusterSourceContractTest {
             config.contains("request.putExtra(\"from_boot\",fromBoot)")&&
             config.contains("request.putExtra(\"caption_safe_dp\"")&&
             config.contains("receiverCode<198L")&&
-            auto.contains("BootConfig.send(this,true)"),
-            "Only compatible signed Receiver can run guarded ignition request");
+            auto.contains("BootLinkService.START")&&
+            !auto.contains("BootConfig.send(this,true)"),
+            "Legacy cluster remains manual only; ignition invokes independent Bridge, not Receiver");
         check(service.contains("T1CenterSavedFreeformMosaic.apply(")&&
             service.contains("T1BootClusterLayout.apply(")&&
             service.contains("new Thread(")&&
