@@ -168,6 +168,8 @@ public final class BootActivity extends Activity
             "\nSolicitudes confirmadas por protocolo: "+p.getInt("received",0)+
             "\nAUTOARRANQUE BRIDGE: "+(BootConfig.enabled(this)?
                 "ACTIVO, solo enlace Xiaomi":"APAGADO")+
+            "\nSEGUNDO PLANO: "+(BridgeBackgroundAccess.authorized(this)?
+                "AUTORIZADO POR ANDROID":"SIN PERMISO ANDROID")+
             "\nVENTANAS MANUALES: Bridge propio; visibilidad requiere prueba. "+
             "No se abre DriveLab Auto.";
     }
@@ -259,14 +261,10 @@ public final class BootActivity extends Activity
             }).show();
     }
     private void requestOverlay(){
-        try{
-            startActivity(new Intent(
-                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                Uri.parse("package:"+getPackageName())));
-        }catch(Exception ex){
-            Toast.makeText(this,"Android no abrió el permiso: "+
-                ex.getClass().getSimpleName(),Toast.LENGTH_LONG).show();
-        }
+        // Jetour does NOT expose the normal Android overlay settings page.
+        // Bridge's own local ADB path requires explicit owner confirmation,
+        // is restricted to its own package, and verifies the actual appop.
+        BridgeBackgroundAccess.ask(this);
     }
     /** Explicitly opt in to option navigation, never zoom. This can
      * compete with T1Launcher's OEM hard-key callback, so owner approval
@@ -506,12 +504,10 @@ public final class BootActivity extends Activity
         button("VINCULAR POR QR · MOSTRAR CÓDIGO",this::showQr);
         button("CERRAR BRIDGE · APAGAR ENLACE Y SALIR",
             this::stopBridge);
-        text("Para recibir destinos con Bridge oculto, Android "+
-            "puede requerir autorización de ventanas superpuestas. "+
-            "El permiso no garantiza que Jetour muestre mapas.",12,QUIET);
-        button(Settings.canDrawOverlays(this)?
-            "PERMISO VENTANAS CONCEDIDO · REVISAR":
-            "AUTORIZAR VENTANAS EN SEGUNDO PLANO",this::requestOverlay);
+        button(BridgeBackgroundAccess.authorized(this)?
+            "SEGUNDO PLANO: AUTORIZADO · REVISAR":
+            "HABILITAR SEGUNDO PLANO · ADB LOCAL",this::requestOverlay);
+        text(BridgeBackgroundAccess.describe(this),12,QUIET);
         text("PANTALLA CENTRAL · DISPLAY 0 · BRIDGE",18,WHITE);
         text("Panel izquierdo ancho + panel derecho vertical "+
             "(Spotify tipo celular). Para pruebas también podés "+
