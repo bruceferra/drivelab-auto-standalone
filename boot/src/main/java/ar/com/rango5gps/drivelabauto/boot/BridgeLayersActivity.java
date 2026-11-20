@@ -58,7 +58,7 @@ public final class BridgeLayersActivity extends Activity {
     }
     private static TextView addText(LinearLayout parent,String text,
                                     int size,int color){
-        TextView t=new TextView(parent);
+        TextView t=new TextView(parent.getContext());
         t.setText(text);
         t.setTextSize(size);
         t.setTextColor(color);
