@@ -18,6 +18,15 @@ public final class T1AutoDrivePolicyTest {
         near(x[2],36*4/3600d);
         x=T1AutoDrivePolicy.integrate(320,-20,36,4000);
         near(x[0],0);near(x[1],320*20*4/3600000d);
+        // Regression: unknown HV volts must not zero out known OEM km.
+        x=T1AutoDrivePolicy.integrate(Double.NaN,-14,72,4000);
+        near(x[0],0);near(x[1],0);
+        near(x[2],72*4/3600d);
+        x=T1AutoDrivePolicy.integrate(319,Double.NaN,45,4000);
+        near(x[0],0);near(x[1],0);
+        near(x[2],45*4/3600d);
+        yes(!T1AutoDrivePolicy.validHv(Double.NaN,-10));
+        yes(T1AutoDrivePolicy.validHv(309.7,-10.8));
         yes(T1AutoDrivePolicy.integrate(320,20,36,90000)[0]==0);
         System.out.println("PASS auto OEM ignition, cable isolation, no gap energy");
     }
