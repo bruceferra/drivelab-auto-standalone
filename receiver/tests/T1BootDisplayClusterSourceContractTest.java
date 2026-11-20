@@ -29,7 +29,8 @@ public final class T1BootDisplayClusterSourceContractTest {
             windows.contains("static Result center(")&&
             windows.contains("static Result tablero(")&&
             windows.contains("BridgeWindowMath.center(")&&
-            windows.contains("Display 1 BLOQUEADO"),
+            windows.contains("options.setLaunchDisplayId(1)")&&
+            ui.contains("ACTIVAR DISPLAY 1 · PANTALLA COMPLETA 100%"),
             "Bridge owns manual center and instrument requests and user confirmation");
         ok(config.contains("getBoolean(\"enabled\",false)")&&
             !config.contains("receiverCode<")&&
@@ -38,11 +39,11 @@ public final class T1BootDisplayClusterSourceContractTest {
             !manifest.contains("BootResultReceiver")&&
             auto.contains("BootLinkService.START")&&
             !auto.contains("BootConfig.send(")&&
-            link.contains("BridgeStandaloneWindows.routeOnTablero(this,pkg)"),
+            link.contains("BridgeDualRoutePolicy.plan("),
             "Receiver uninstall cannot invalidate Bridge's screen or Xiaomi paths");
         ok(windows.contains("Display.FLAG_PRIVATE")&&
             windows.contains("getState()==Display.STATE_OFF")&&
-            windows.contains("BridgeClusterRecovery.disableNewCluster(activity)")&&
+            windows.contains("static boolean routeOnTablero(Context c,String pkg)")&&
             !windows.contains("pm clear")&&
             !windows.contains("am force-stop"),
             "Fail closed on private/off displays or invalid map packages; no OEM changes");
