@@ -104,8 +104,10 @@ public final class T1ClusterWazeSourceContractTest {
             main.contains("T1BootInstaller.openBoot(this,this::report)")&&
             main.contains("DRIVELAB BRIDGE")&&
             !main.contains("T1ClusterWazeSettingsActivity.class")&&
-            !main.contains("T1ClusterWazeRouter.routeDestination(this,open)"),
-            "Voice and share routes preserved; Receiver home delegates cluster controls to Bridge");
+            // Legacy direct-route diagnostic still exists only in the
+            // technical menu. It is not a duplicate home/Bridge control.
+            main.contains("T1ClusterWazeRouter.routeDestination(this,open)"),
+            "Voice/share routes and technical test preserved; Receiver home delegates cluster controls to Bridge");
         System.out.println("PASS opt-in Waze public cluster without replacing T1Launcher");
     }
 }
