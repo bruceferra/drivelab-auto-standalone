@@ -40,8 +40,8 @@ public final class BridgeLayersActivity extends Activity {
             "ninguna app ni tocar el firmware.",15,WHITE);
         addText(body,
             "Uso sólo con el vehículo estacionado. "+
-            "Para la segunda captura, cambiá vos el MODE como siempre "+
-            "hasta que los mapas queden visibles. "+
+            "Para la segunda captura, enviá de nuevo un mapa o destino "+
+            "desde el control que antes conseguía mostrarlo. "+
             "El diagnóstico no pulsa MODE ni altera controles OEM.",13,0xFFBFD1DA);
         button(body,"1 · CAPTURAR CUANDO JETOUR TAPA MAPAS",()->
             confirm("TAPADO"));
