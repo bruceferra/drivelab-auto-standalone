@@ -25,6 +25,7 @@ public final class BridgeLayersActivity extends Activity {
     private boolean busy;
     @Override protected void onCreate(Bundle state){
         super.onCreate(state);
+        BridgeImmersive.apply(this);
         setTitle("DriveLab Bridge · Capas de Display 1");
         ScrollView scroll=new ScrollView(this);
         scroll.setBackgroundColor(BG);
@@ -127,6 +128,10 @@ public final class BridgeLayersActivity extends Activity {
                     "\n\nNo se ejecutaron acciones sobre ninguna ventana.");
             });
         },"Bridge-Jetour-MODE-Read-Only").start();
+    }
+    @Override public void onWindowFocusChanged(boolean hasFocus){
+        super.onWindowFocusChanged(hasFocus);
+        if(hasFocus)BridgeImmersive.apply(this);
     }
     private void compare(){
         if(busy)return;
