@@ -29,6 +29,9 @@ on:
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWheelAccessibilityService.java'
       - 'boot/tests/BridgeWheelPolicyTest.java'
       - 'boot/tests/BridgeWheelAccessibilityContractTest.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeMapsStartPolicy.java'
+      - 'boot/tests/BridgeMapsStartPolicyTest.java'
+      - 'boot/tests/BridgeWheelReceiverParitySourceTest.java'
       - 'boot/src/main/res/xml/bridge_wheel_accessibility.xml'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeImmersive.java'
       - 'boot/tests/BridgeImmersiveSourceContractTest.java'
@@ -131,6 +134,18 @@ jobs:
             ar.com.rango5gps.drivelabauto.boot.BridgeWheelPolicyTest
           java -cp /tmp/jetour-wheel \
             ar.com.rango5gps.drivelabauto.boot.BridgeWheelAccessibilityContractTest
+      - name: Reuse Receiver wheel recapture, verified map and navigation start without zoom
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-wheel-parity
+          javac -encoding UTF-8 -d /tmp/bridge-wheel-parity \
+            boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeMapsStartPolicy.java \
+            boot/tests/BridgeMapsStartPolicyTest.java \
+            boot/tests/BridgeWheelReceiverParitySourceTest.java
+          java -cp /tmp/bridge-wheel-parity \
+            ar.com.rango5gps.drivelabauto.boot.BridgeMapsStartPolicyTest
+          java -cp /tmp/bridge-wheel-parity \
+            ar.com.rango5gps.drivelabauto.boot.BridgeWheelReceiverParitySourceTest
       - name: Validate one-shot, same-stack Waze ADB foreground probe, never OEM
         run: |
           set -euo pipefail
