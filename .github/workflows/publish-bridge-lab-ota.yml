@@ -1,5 +1,6 @@
 name: Publish signed Bridge LAB independent OTA v19
 # One-off, reviewed publication from the owner-maintained Bridge branch.
+# LAB 0.1.22 source-only MediaProjection QA passed; Android APK and signer verified at publication.
 # LAB 0.1.22 requires an owner-only private Display Activity source contract.
 # All Android Lint fatal checks remain active except the narrowly guarded
 # OEM private-API reflection in the parked-only Freeform experiment.
