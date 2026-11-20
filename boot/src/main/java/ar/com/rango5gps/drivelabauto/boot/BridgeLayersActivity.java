@@ -4,6 +4,9 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.graphics.Color;
 import android.os.Bundle;
+import java.text.DateFormat;
+import java.util.Date;
+import java.util.Locale;
 import android.view.View;
 import android.widget.Button;
 import android.widget.LinearLayout;
@@ -21,7 +24,7 @@ public final class BridgeLayersActivity extends Activity {
     private static final int BG=0xFF0B1D2B,ACCENT=0xFF00A3B8,
         PANEL=0xFF142F40,WHITE=Color.WHITE;
     private BridgeModeLayerDiff.Snapshot covered,visible;
-    private TextView result;
+    private TextView result,savedStatus;
     private boolean busy;
     @Override protected void onCreate(Bundle state){
         super.onCreate(state);
@@ -40,15 +43,19 @@ public final class BridgeLayersActivity extends Activity {
             "Vamos a comparar dos estados del compositor sin abrir/cerrar "+
             "ninguna app ni tocar el firmware.",15,WHITE);
         addText(body,
-            "Uso sólo con el vehículo estacionado. "+
-            "Para la segunda captura, enviá de nuevo un mapa o destino "+
-            "desde el control que antes conseguía mostrarlo. "+
-            "El diagnóstico no pulsa MODE ni altera controles OEM.",13,0xFFBFD1DA);
+            "CAMINO CORRECTO: con el vehículo estacionado, capturá "+
+            "TABLERO ORIGINAL (1). Volvé a Bridge, mostrale Waze al "+
+            "tablero, reabrí este diagnóstico y capturá MAPA VISIBLE "+
+            "(2). AMBAS CAPTURAS SE GUARDAN aunque salgas de esta "+
+            "pantalla o reinicies Bridge. Después tocá COMPARAR.",13,0xFFBFD1DA);
+        savedStatus=addText(body,"CARGANDO CAPTURAS GUARDADAS…",
+            15,0xFF54DCD5);
         button(body,"1 · CAPTURAR CUANDO JETOUR TAPA MAPAS",()->
             confirm("TAPADO"));
         button(body,"2 · CAPTURAR TRAS EL ENVÍO QUE MOSTRÓ MAPAS",()->
             confirm("VISIBLE"));
         button(body,"COMPARAR AMBAS CAPTURAS",this::compare);
+        button(body,"BORRAR CAPTURAS GUARDADAS",this::askClear);
         result=addText(body,"Sin lecturas. La clave ADB de Bridge "+
             "se autoriza por separado, sólo si Android lo solicita.",
             14,WHITE);
@@ -56,7 +63,54 @@ public final class BridgeLayersActivity extends Activity {
         result.setBackgroundColor(PANEL);
         button(body,"VOLVER A BRIDGE",this::finish);
         setContentView(scroll);
+        restoreCaptures();
     }
+    @Override protected void onResume(){
+        super.onResume();
+        if(savedStatus!=null)restoreCaptures();
+    }
+    private static String stamp(long at){
+        if(at<=0)return "sin hora";
+        return DateFormat.getDateTimeInstance(
+            DateFormat.SHORT,DateFormat.SHORT,
+            new Locale("es","AR")).format(new Date(at));
+    }
+    private void restoreCaptures(){
+        covered=BridgeLayerCaptureStore.load(this,"TAPADO");
+        visible=BridgeLayerCaptureStore.load(this,"VISIBLE");
+        showSavedStatus();
+    }
+    private void showSavedStatus(){
+        if(savedStatus==null)return;
+        String first=covered==null?"FALTA":
+            "GUARDADA · "+stamp(BridgeLayerCaptureStore.timestamp(this,"TAPADO"));
+        String second=visible==null?"FALTA":
+            "GUARDADA · "+stamp(BridgeLayerCaptureStore.timestamp(this,"VISIBLE"));
+        savedStatus.setText("1 · TABLERO ORIGINAL: "+first+
+            "\\n2 · MAPA VISIBLE: "+second+
+            "\\n"+(covered!=null&&visible!=null?
+                "LISTO PARA COMPARAR. Tocá COMPARAR AMBAS CAPTURAS.":
+                "Podés salir y volver; las capturas se conservan."));
+    }
+    private void askClear(){
+        if(busy)return;
+        new AlertDialog.Builder(this)
+            .setTitle("BORRAR SÓLO LAS DOS CAPTURAS")
+            .setMessage("Se borrarán únicamente estos diagnósticos "+
+                "locales de capas. NO se modifica el mapa, QR, "+
+                "rutas, volante ni configuraciones del vehículo.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("BORRAR",(d,w)->{
+                if(!BridgeLayerCaptureStore.clear(this)){
+                    result.setText("Android no permitió borrar las capturas.");
+                    return;
+                }
+                restoreCaptures();
+                result.setText("Capturas locales borradas; "+
+                    "Bridge y los mapas no se modificaron.");
+            }).show();
+    }
+
     private static TextView addText(LinearLayout parent,String text,
                                     int size,int color){
         TextView t=new TextView(parent.getContext());
@@ -119,13 +173,23 @@ public final class BridgeLayersActivity extends Activity {
             }
             BridgeModeLayerDiff.Snapshot state=
                 BridgeModeLayerDiff.summarize(phase,windows,activities,sf);
+            // Commit the sanitized capture to disk BEFORE leaving Activity.
+            boolean saved=BridgeLayerCaptureStore.save(
+                getApplicationContext(),state);
             String message=state.report()+errors;
             runOnUiThread(()->{
                 busy=false;
-                if("TAPADO".equals(phase))covered=state;
-                else visible=state;
-                result.setText(message+
-                    "\n\nNo se ejecutaron acciones sobre ninguna ventana.");
+                restoreCaptures();
+                if(!saved){
+                    result.setText("CAPTURA LEÍDA PERO NO GUARDADA. "+
+                        "Android rechazó persistir el diagnóstico. "+
+                        "No sigas con la segunda captura.\\n\\n"+message);
+                    return;
+                }
+                result.setText("CAPTURA "+phase+" GUARDADA. "+
+                    "Podés salir y volver sin perderla.\\n\\n"+
+                    message+
+                    "\\n\\nNo se ejecutaron acciones sobre ninguna ventana.");
             });
         },"Bridge-Jetour-MODE-Read-Only").start();
     }
@@ -135,6 +199,8 @@ public final class BridgeLayersActivity extends Activity {
     }
     private void compare(){
         if(busy)return;
+        // The user MUST leave the panel to show Waze on Display 1.
+        restoreCaptures();
         result.setText(BridgeModeLayerDiff.compare(covered,visible)+
             "\n\n"+(covered==null?"":covered.report())+
             "\n\n"+(visible==null?"":visible.report()));
