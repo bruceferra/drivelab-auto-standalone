@@ -60,11 +60,13 @@ public final class T1BootStandaloneSourceContractTest {
             "Boot must expose 1/2/3 panels and never hand off its configuration to Receiver");
         ck(auto.contains("Thread.sleep(15000L)")&&
             auto.contains("BootConfig.enabled(this)")&&
-            auto.contains("BootConfig.send(this,true)")&&
+            auto.contains("BootLinkService.START")&&
+            !auto.contains("BootConfig.send(this,true)")&&
+            !auto.contains("T1BootMosaicBridgeService")&&
             bootReceiver.contains("Intent.ACTION_BOOT_COMPLETED")&&
             bootReceiver.contains("BootConfig.enabled(context)")&&
             config.contains("getBoolean(\"enabled\",false)"),
-            "Ignition auto-start must be opt-in, one-shot and not open Boot UI");
+            "Ignition auto-start must be opt-in, and ONLY start Bridge's independent Xiaomi listener");
         ck(config.contains("BOOT_MOSAIC_TAKEOVER")&&
             policy.contains("launch_app_on_boot\",false")&&
             oldService.contains("launch_app_on_boot")&&
