@@ -20,8 +20,9 @@ final class BridgeAccessPolicy {
         List<String> names=new ArrayList<>();
         if(input.isEmpty())return names;
         for(String p:input.split(":",-1)){
-            if(p.isEmpty()||!p.contains("/")||
-               p.indexOf('/')!=p.lastIndexOf('/'))return null;
+            int slash=p.indexOf('/');
+            if(p.isEmpty()||slash<1||slash==p.length()-1||
+               slash!=p.lastIndexOf('/'))return null;
             names.add(p);
         }
         return names;
