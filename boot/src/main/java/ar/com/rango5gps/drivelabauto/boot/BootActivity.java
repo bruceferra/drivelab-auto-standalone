@@ -653,6 +653,73 @@ public final class BootActivity extends Activity
                     .show();
             }).show();
     }
+    /**
+     * Launches the REAL two selected apps using the Android 11 native
+     * split-screen modes, not Bridge's private test-pattern VirtualDisplay.
+     * This is explicitly separate from the proven Freeform mosaic so the
+     * owner can compare no-Freeform-caption behavior without data loss.
+     */
+    private void askNativeSplitMosaic(){
+        int ratio=BridgeStandaloneWindows.ratio(this);
+        new AlertDialog.Builder(this)
+            .setTitle("MOSAICO CENTRAL · ANDROID SPLIT SIN MARCOS FREEFORM")
+            .setMessage("SÓLO CON LA JETOUR ESTACIONADA. Se solicitará "+
+                "abrir las DOS apps elegidas en la división NATIVA de "+
+                "Android 11, sin las cabeceras de ventanas Freeform. "+
+                "Reparto solicitado: "+ratio+"/"+(100-ratio)+
+                ". Android Jetour puede imponer 50/50 o dejar barras "+
+                "del sistema; el resultado no está comprobado. "+
+                "A diferencia de la prueba VIRTUAL, esto abre apps "+
+                "reales e interactivas. Nunca modifica Jetour, "+
+                "ADB, clúster, rutas ni datos. ¿Probar?")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("PROBAR SPLIT NATIVO",(d,w)->{
+                BridgeStandaloneWindows.Result result=
+                    BridgeStandaloneWindows.centerSplitNoFreeform(this);
+                new AlertDialog.Builder(this)
+                    .setTitle(result.submitted?
+                        "DIVISIÓN SOLICITADA · VERIFICAR":
+                        "DIVISIÓN NATIVA RECHAZADA")
+                    .setMessage(result.message)
+                    .setPositiveButton("ENTENDIDO",(dialog,which)->draw())
+                    .show();
+            }).show();
+    }
+    private void chooseSpotifyPhoneRatio(){
+        if(!BridgeWindowsPolicy.SPOTIFY.equals(
+                BridgeStandaloneWindows.second(this))){
+            new AlertDialog.Builder(this)
+                .setTitle("SPOTIFY · PANEL DERECHO")
+                .setMessage("Elegí Spotify como APP DERECHA primero. "+
+                    "No se cambia ninguna ventana ni aplicación.")
+                .setPositiveButton("ENTENDIDO",null).show();
+            return;
+        }
+        android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
+        getWindowManager().getDefaultDisplay().getRealMetrics(dm);
+        int width=dm.widthPixels;
+        if(width<=0||dm.density<=0f)return;
+        // Keep the right pane close to a portrait-phone content width
+        // so a responsive Spotify version may choose mobile controls.
+        int maxPhonePx=Math.round(390f*dm.density);
+        int suggested=Math.max(40,Math.min(80,
+            (int)Math.ceil(100f*(width-maxPhonePx)/(float)width)));
+        new AlertDialog.Builder(this)
+            .setTitle("SPOTIFY · ANCHO TIPO CELULAR")
+            .setMessage("Panel derecho objetivo: alrededor de 390 dp "+
+                "en esta pantalla. Reparto sugerido: "+
+                suggested+"/"+(100-suggested)+
+                ". Android/Spotify pueden seguir usando su interfaz "+
+                "de tablet; Bridge no puede forzar su diseño interno. "+
+                "El cambio se aplica sólo a la próxima apertura "+
+                "manual del mosaico, sin mover ventanas activas.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("GUARDAR REPARTO",(d,w)->{
+                BridgeStandaloneWindows.prefs(this).edit()
+                    .putInt(BridgeStandaloneWindows.RATIO,suggested).apply();
+                draw();
+            }).show();
+    }
     private void askBridgeVirtualProbe(){
         new AlertDialog.Builder(this)
             .setTitle("PRUEBA AISLADA · PANTALLA VIRTUAL")
@@ -742,6 +809,8 @@ public final class BootActivity extends Activity
                 @Override public void onStopTrackingTouch(SeekBar bar){}
             });
         content.addView(bridgeRatio);
+        button("MOSAICO · SPOTIFY TIPO CELULAR · PANEL ANGOSTO",
+            this::chooseSpotifyPhoneRatio);
         button("MOSAICO · PRESET 67% MAPA / 33% SEGUNDA APP",()->{
             // Manual layout preference only; intentionally NO app launch.
             BridgeStandaloneWindows.prefs(this).edit()
@@ -753,6 +822,13 @@ public final class BootActivity extends Activity
             "de APP 2 de T1Launcher; no redimensiona tareas activas.",12,QUIET);
         button("PROBAR DOS VENTANAS · SÓLO BRIDGE · ESTACIONADO",
             ()->askBridgeWindows(false));
+        button("PROBAR MOSAICO SIN CABECERAS · SPLIT NATIVO",
+            this::askNativeSplitMosaic);
+        text("Este segundo modo solicita pantalla dividida Android 11 "+
+            "en vez de Freeform. Puede quitar las cabeceras de cada app, "+
+            "pero Jetour decide si respeta la proporción y las barras. "+
+            "La prueba virtual de Bridge NO puede alojar aplicaciones "+
+            "externas; sólo mostraba contenido propio.",12,QUIET);
         button("LAB · PROBAR PANTALLA VIRTUAL · SOLO CENTRAL",
             this::askBridgeVirtualProbe);
         text("Prueba de arquitectura T1N145: pantalla virtual privada, "+
