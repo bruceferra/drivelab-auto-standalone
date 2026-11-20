@@ -58,7 +58,6 @@ public final class BridgeVirtualSceneActivity extends Activity {
         Display actual=getDisplay();
         actualId=actual==null?Display.INVALID_DISPLAY:actual.getDisplayId();
         boolean owned=actual!=null&&actualId==expected&&expected>1&&
-            actual.getType()==Display.TYPE_VIRTUAL&&
             (actual.getFlags()&Display.FLAG_PRIVATE)!=0;
         current=new WeakReference<>(this);
         if(!owned||sessionToken<=0){

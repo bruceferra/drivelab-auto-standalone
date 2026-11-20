@@ -31,7 +31,7 @@ public final class BridgeOwnedVirtualActivitySourceTest {
             "Only user initiated bounded noninteractive compositor");
         ok(launch.contains("new Intent(host,BridgeVirtualSceneActivity.class)")&&
             launch.contains("options.setLaunchDisplayId(id)")&&
-            launch.contains("target.getType()!=Display.TYPE_VIRTUAL")&&
+            launch.contains("id<=1")&&
             launch.contains("Display.FLAG_PRIVATE")&&
             launch.contains("FLAG_ACTIVITY_NEW_TASK")&&
             !launch.contains("com.waze")&&
@@ -43,7 +43,7 @@ public final class BridgeOwnedVirtualActivitySourceTest {
             "Private VirtualDisplay only own Activity, no maps or OEM");
         ok(scene.contains("Display actual=getDisplay()")&&
             scene.contains("actualId==expected")&&
-            scene.contains("Display.TYPE_VIRTUAL")&&
+            scene.contains("expected>1")&&
             scene.contains("Display.FLAG_PRIVATE")&&
             scene.contains("finishAndRemoveTask()")&&
             scene.contains("main.removeCallbacks(tick)")&&

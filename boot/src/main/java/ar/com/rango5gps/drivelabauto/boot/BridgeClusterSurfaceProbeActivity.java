@@ -47,6 +47,7 @@ public final class BridgeClusterSurfaceProbeActivity extends Activity
         DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY|
         DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION;
     private final Handler main=new Handler(Looper.getMainLooper());
+    private boolean activityProbe,sceneVerified;
     private final Runnable timeout=()->stop(activityProbe?
         "PRUEBA DE ACTIVITY FINALIZADA tras 20 segundos. "+
             "Actividad, superficie y capa liberadas.":
@@ -60,7 +61,6 @@ public final class BridgeClusterSurfaceProbeActivity extends Activity
     private Surface surface;
     private TextView status;
     private boolean closed,frame;
-    private boolean activityProbe,sceneVerified;
     private long sceneToken;
     private BridgeVirtualSceneActivity.Listener sceneListener;
 

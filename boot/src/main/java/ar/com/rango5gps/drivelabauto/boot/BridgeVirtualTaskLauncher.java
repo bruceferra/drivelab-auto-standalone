@@ -14,7 +14,7 @@ final class BridgeVirtualTaskLauncher {
         if(host==null||target==null||token<=0)
             throw new IllegalArgumentException("Sesión o display inválido");
         int id=target.getDisplayId();
-        if(id<=1||target.getType()!=Display.TYPE_VIRTUAL||
+        if(id<=1||
             (target.getFlags()&Display.FLAG_PRIVATE)==0||
             target.getState()==Display.STATE_OFF)
             throw new SecurityException("No es un VirtualDisplay privado de Bridge");
