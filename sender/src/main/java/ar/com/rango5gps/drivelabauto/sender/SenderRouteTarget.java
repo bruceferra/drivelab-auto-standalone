@@ -18,6 +18,8 @@ final class SenderRouteTarget {
     static String label(String mode){
         if(BridgeRouteTarget.MAPS.equals(mode))return "Google Maps";
         if(BridgeRouteTarget.BOTH.equals(mode))return "Waze + Google Maps";
+        if(BridgeRouteTarget.T1_LAUNCHER.equals(mode))
+            return "Google Maps dentro de T1Launcher (experimental)";
         return "Waze";
     }
 }

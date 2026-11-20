@@ -87,8 +87,17 @@ public final class SenderActivity extends Activity {
         String navMode=SenderRouteTarget.selected(this);
         title(body,"Al tocar NAVEGAR: "+SenderRouteTarget.label(navMode)+
             "\nSe guarda la elección. No pregunta en cada viaje.",14);
-        button(body,"ELEGIR DESTINO · WAZE / GOOGLE / AMBOS",
+        button(body,"ELEGIR DESTINO · WAZE / GOOGLE / AMBOS / T1LAUNCHER",
             this::chooseNavigationTarget);
+        button(body,"PROBAR · ENVIAR RUTA DE UBER AL CLÚSTER T1LAUNCHER",
+            this::chooseT1LauncherRouteTrial);
+        title(body,"Prueba T1Launcher: primero dejá Google Maps abierto "+
+            "dentro de CLUSTER de T1Launcher (como en tu foto). "+
+            "Seleccioná aquí el modo experimental y después compartí "+
+            "un destino REAL desde Uber. No abre mapas adicionales si "+
+            "Bridge no encuentra UNA tarea Maps en pantalla virtual; "+
+            "Android debe confirmar entrega a la tarea ya abierta. "+
+            "No modifica la rueda del volante.",13);
         boolean paired=SenderClient.configured(this);
         title(body,paired?"T1 VINCULADA":"T1 SIN VINCULAR",18);
         if(paired)title(body,"IP receptor: "+SenderClient.prefs(this).getString("receiver_ip",""),14);
@@ -173,18 +182,43 @@ public final class SenderActivity extends Activity {
     }
     private void chooseNavigationTarget(){
         String current=SenderRouteTarget.selected(this);
-        final String[] choices={"Waze","Google Maps","Ambos simultáneamente"};
+        final String[] choices={"Waze","Google Maps","Ambos simultáneamente",
+            "Google Maps en T1Launcher · tarea virtual existente (LAB)"};
         int selected=BridgeRouteTarget.MAPS.equals(current)?1:
-            BridgeRouteTarget.BOTH.equals(current)?2:0;
+            BridgeRouteTarget.BOTH.equals(current)?2:
+            BridgeRouteTarget.T1_LAUNCHER.equals(current)?3:0;
         new AlertDialog.Builder(this)
             .setTitle("NAVEGACIÓN DE UBER EN LA T1")
             .setSingleChoiceItems(choices,selected,(dialog,which)->{
                 SenderRouteTarget.choose(this,which==1?
                     BridgeRouteTarget.MAPS:which==2?
-                    BridgeRouteTarget.BOTH:BridgeRouteTarget.WAZE);
+                    BridgeRouteTarget.BOTH:which==3?
+                    BridgeRouteTarget.T1_LAUNCHER:BridgeRouteTarget.WAZE);
                 dialog.dismiss();render();
             })
             .setNegativeButton("CANCELAR",null).show();
+    }
+    private void chooseT1LauncherRouteTrial(){
+        new AlertDialog.Builder(this)
+            .setTitle("T1LAUNCHER · NO DUPLICAR GOOGLE MAPS")
+            .setMessage("Sólo con la T1 estacionada. Dejá Google Maps "+
+                "abierto DENTRO del Cluster de T1Launcher, como en la foto. "+
+                "Este botón selecciona la ruta experimental para los "+
+                "PRÓXIMOS destinos compartidos desde Uber. "+
+                "Bridge buscará una única tarea Google Maps en un "+
+                "Display VIRTUAL (nunca el Display 1 físico), y "+
+                "solicitará al Android entregar la dirección "+
+                "explícitamente a ese ID de tarea. "+
+                "Si la tarea no es única o cambió, FALLA sin abrir "+
+                "otra ventana. No modifica el controlador del volante "+
+                "de T1Launcher ni su mosaico. "+
+                "Se puede volver a Waze/Maps/Ambos desde ELEGIR DESTINO.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("ACTIVAR PARA PRÓXIMO UBER",(d,w)->{
+                SenderRouteTarget.choose(this,BridgeRouteTarget.T1_LAUNCHER);
+                info("MODO T1LAUNCHER LISTO · compartí un destino "+
+                    "de Uber desde tu Xiaomi. No se manda una ruta ficticia.");
+            }).show();
     }
     private void acceptQrIntent(Intent intent){
         if(intent==null||intent.getData()==null)return;
