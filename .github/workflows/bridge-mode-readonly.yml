@@ -11,6 +11,8 @@ on:
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BootAutoService.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BootLinkService.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BootUpdater.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeNativeInstaller.java'
+      - 'boot/tests/BridgeUpdateInstallerSourceContractTest.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeAccessPolicy.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeLocalAdb.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWheelAccessRecovery.java'
@@ -53,6 +55,12 @@ jobs:
         with:
           distribution: temurin
           java-version: '17'
+      - name: Verify Bridge native installer matches proven Receiver implementation
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-proven-installer
+          javac -encoding UTF-8 -d /tmp/bridge-proven-installer boot/tests/BridgeUpdateInstallerSourceContractTest.java
+          java -cp /tmp/bridge-proven-installer ar.com.rango5gps.drivelabauto.boot.BridgeUpdateInstallerSourceContractTest
       - name: Assert independent QR/boot/updater, no Receiver autolaunch
         run: |
           set -euo pipefail
