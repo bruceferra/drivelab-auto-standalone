@@ -45,6 +45,9 @@ on:
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWindowMath.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeVirtualProbeActivity.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeClusterSurfaceProbeActivity.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeProjectionLabActivity.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeProjectionLabService.java'
+      - 'boot/tests/BridgeMediaProjectionLabContractTest.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeVirtualSceneActivity.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeVirtualTaskLauncher.java'
       - 'boot/tests/BridgeOwnedVirtualActivitySourceTest.java'
@@ -183,6 +186,14 @@ jobs:
             boot/tests/BridgeClusterSurfaceProbeSourceTest.java
           java -cp /tmp/bridge-display1-proof \
             ar.com.rango5gps.drivelabauto.boot.BridgeClusterSurfaceProbeSourceTest
+      - name: Validate explicit consent screen mirroring 20s only
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-projection-contract
+          javac -encoding UTF-8 -d /tmp/bridge-projection-contract \
+            boot/tests/BridgeMediaProjectionLabContractTest.java
+          java -cp /tmp/bridge-projection-contract \
+            ar.com.rango5gps.drivelabauto.boot.BridgeMediaProjectionLabContractTest
       - name: Verify real owned Activity on private virtual display, not Waze
         run: |
           set -euo pipefail

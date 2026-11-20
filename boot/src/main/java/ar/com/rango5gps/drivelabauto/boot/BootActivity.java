@@ -398,6 +398,25 @@ public final class BootActivity extends Activity
             })
             .setNegativeButton("CANCELAR",null).show();
     }
+    private void askProjectionLab(){
+        new AlertDialog.Builder(this)
+            .setTitle("LAB · COPIAR PANTALLA CENTRAL 20 SEGUNDOS")
+            .setMessage("SÓLO CON LA JETOUR ESTACIONADA. "+
+                "Esta prueba NO pone Waze en otra tarea. "+
+                "Le pedirá a Android permiso para CAPTURAR TODO lo "+
+                "que se ve en la pantalla central, incluyendo "+
+                "notificaciones y otros datos que aparezcan. "+
+                "La copia se muestra únicamente sobre el 65 % "+
+                "inferior del tablero durante un máximo de 20 segundos. "+
+                "No se graba, no se transmite por red ni se almacenan "+
+                "imágenes. Android puede rechazar la solicitud. "+
+                "Después de autorizar, abrí Waze en la central. "+
+                "No uses la prueba conduciendo.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("CONTINUAR A PERMISOS",(d,w)->
+                startActivity(new Intent(this,BridgeProjectionLabActivity.class)))
+            .show();
+    }
     private void askPublicVirtualActivityProbe(){
         new AlertDialog.Builder(this)
             .setTitle("LAB · DISPLAY VIRTUAL PÚBLICO")
@@ -645,6 +664,10 @@ public final class BootActivity extends Activity
             this::askRealVirtualActivityProbe);
         button("LAB · DISPLAY VIRTUAL PÚBLICO · APP PROPIA · 20 S",
             this::askPublicVirtualActivityProbe);
+        button("LAB · COPIAR CENTRAL A TABLERO · PERMISO · 20 S",
+            this::askProjectionLab);
+        text("ÚLTIMA CAPTURA: "+BridgeProjectionLabService.lastResult(this),
+            12,QUIET);
         text("RESULTADO CAPA / APP: "+
             BridgeClusterSurfaceProbeActivity.lastResult(this),12,QUIET);
         text("DIAGNÓSTICO PERSISTENTE: "+

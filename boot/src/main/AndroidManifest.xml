@@ -7,6 +7,9 @@
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Each consented screen copy is a 20-second foreground service.
+         Android 14+ also checks this permission, but LAB targets API 32. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <queries>
         <package android:name="com.waze" />
@@ -35,6 +38,14 @@
             android:excludeFromRecents="true"
             android:resizeableActivity="true"
             android:taskAffinity="${applicationId}.virtualprobe" />
+        <!-- Standalone, never-exported, parked-only explicit Android consent. -->
+        <activity android:name=".BridgeProjectionLabActivity"
+            android:exported="false"
+            android:resizeableActivity="true" />
+        <service android:name=".BridgeProjectionLabService"
+            android:exported="false"
+            android:stopWithTask="false"
+            android:foregroundServiceType="mediaProjection" />
         <activity android:name=".BridgeLayersActivity"
             android:exported="false"
             android:resizeableActivity="true" />
