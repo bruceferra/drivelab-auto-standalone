@@ -148,7 +148,7 @@ final class T1AutoRangeTimeline {
             boolean overlap=charge.start<from||end>until;
             if(charge.open!=0)result.activeCharges++;
             else if(overlap)result.partialCharges++;
-            else result.finishedCharges++;
+            else if(!duplicateManual)result.finishedCharges++;
             Event e=new Event(charge.open==0?"CARGA":"CARGA_EN_CURSO",
                 Math.max(from,charge.start),Math.min(until,end),
                 "Enchufe #"+charge.id+" · "+
