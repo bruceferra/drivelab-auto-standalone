@@ -29,7 +29,8 @@ import java.util.List;
 final class BridgeStandaloneWindows {
     static final String PREFS="drivelab_bridge_windows_v1";
     static final String FIRST="center_first",SECOND="center_second",
-        RATIO="center_ratio",TAB_MAP="tab_map",LAST="window_request_result";
+        RATIO="center_ratio",TAB_MAP="tab_map",LAST="window_request_result",
+        TAB_CONFIRMED="tab_confirmed",TAB_ROUTE="tab_route";
     private static final int FREEFORM=5;
     private BridgeStandaloneWindows(){}
     static SharedPreferences prefs(Context c){
@@ -46,6 +47,13 @@ final class BridgeStandaloneWindows {
     }
     static String tabMap(Context c){
         return prefs(c).getString(TAB_MAP,BridgeWindowsPolicy.MAPS);
+    }
+    static boolean routeOnTablero(Context c,String pkg){
+        SharedPreferences p=prefs(c);
+        return BridgeWindowsPolicy.validMap(pkg)&&
+            pkg.equals(tabMap(c))&&
+            p.getBoolean(TAB_CONFIRMED,false)&&
+            p.getBoolean(TAB_ROUTE,false);
     }
     static final class Result{
         final boolean submitted;
