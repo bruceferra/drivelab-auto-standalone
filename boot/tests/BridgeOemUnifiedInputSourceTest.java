@@ -29,7 +29,11 @@ public final class BridgeOemUnifiedInputSourceTest {
             binder.contains("monitorPrefs(Context c)"),
             "Must copy Receiver callback compatibility, one unified OEM subscription "+
             "and show actual registration/key counters");
-        yes(service.contains("MIC_ENABLED")&&
+        yes(service.contains("targetFor(Context c)")&&
+            service.contains("BridgeStandaloneWindows.tableroEnabled(c)")&&
+            service.contains("BridgeStandaloneWindows.tabMap(c)")&&
+            activity.contains("BridgeWheelAccessibilityService.targetFor(this)")&&
+            service.contains("MIC_ENABLED")&&
             service.contains("setMicrophoneArmed(boolean value)")&&
             service.contains("microphoneArmed=false")&&
             service.contains("if(!capture&&!optIn&&!mic)")&&

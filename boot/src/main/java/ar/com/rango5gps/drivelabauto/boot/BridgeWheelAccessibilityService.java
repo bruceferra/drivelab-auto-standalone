@@ -186,10 +186,19 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
             WINDOW_DISPLAY.equals(key))
             requestRefresh();
     }
-    private String target(){
-        String result=prefs(this).getString(TARGET,WAZE);
-        return MAPS.equals(result)?MAPS:WAZE;
+    static String targetFor(Context c){
+        // Match the current confirmed cluster map, as Receiver does.
+        // Never silently redirect to Waze when Maps is the only
+        // selected/confirmed cluster app. BOTH retains manual selection.
+        if(BridgeStandaloneWindows.tableroEnabled(c)){
+            String selected=BridgeStandaloneWindows.tabMap(c);
+            if(MAPS.equals(selected)||WAZE.equals(selected))
+                return selected;
+        }
+        String configured=prefs(c).getString(TARGET,WAZE);
+        return MAPS.equals(configured)?MAPS:WAZE;
     }
+    private String target(){return targetFor(this);}
     private static String normalized(String input){
         String s=Normalizer.normalize(input,Normalizer.Form.NFD)
             .replaceAll("\\p{M}","").toLowerCase(Locale.ROOT);

@@ -413,7 +413,7 @@ public final class BootActivity extends Activity
         String current=p.getString(BridgeWheelAccessibilityService.TARGET,
             BridgeWheelAccessibilityService.WAZE);
         new AlertDialog.Builder(this)
-            .setTitle("VOLANTE · APP EN DISPLAY 1")
+            .setTitle("VOLANTE · MAPA ACTIVO DEL TABLERO")
             .setSingleChoiceItems(new String[]{"Google Maps","Waze"},
                 BridgeWheelAccessibilityService.WAZE.equals(current)?1:0,
                 (d,which)->{
@@ -782,12 +782,14 @@ public final class BootActivity extends Activity
         SharedPreferences wheel=BridgeWheelAccessibilityService.prefs(this);
         boolean wheelOn=wheel.getBoolean(
             BridgeWheelAccessibilityService.ENABLED,false);
-        String wheelTarget=wheel.getString(
-            BridgeWheelAccessibilityService.TARGET,
-            BridgeWheelAccessibilityService.WAZE);
+        String wheelTarget=BridgeWheelAccessibilityService.targetFor(this);
         button("MAPA DEL VOLANTE: "+
             (BridgeWheelAccessibilityService.WAZE.equals(wheelTarget)?
-                "WAZE":"GOOGLE MAPS")+" · CAMBIAR",this::chooseWheelMap);
+                "WAZE":"GOOGLE MAPS")+
+            (BridgeStandaloneWindows.tableroEnabled(this)&&
+                !BridgeDualRoutePolicy.BOTH.equals(
+                    BridgeStandaloneWindows.tabMap(this))?
+                " · SIGUE MAPA TABLERO":" · CAMBIAR"),this::chooseWheelMap);
         int actualDisplay=wheel.getInt(
             BridgeWheelAccessibilityService.WINDOW_DISPLAY,1);
         button("PANTALLA DE CONTROLES: DISPLAY "+actualDisplay+" · CAMBIAR",
