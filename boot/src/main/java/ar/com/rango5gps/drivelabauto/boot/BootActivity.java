@@ -781,7 +781,9 @@ public final class BootActivity extends Activity
             wheel.getString(BridgeWheelAccessibilityService.STATUS,
                 "Sin prueba física"),12,QUIET);
         text("ACTUALIZADOR DE BRIDGE",18,WHITE);
-        button("BUSCAR ACTUALIZACIÓN FIRMADA",()->
+        button(getPackageName().endsWith(".lab")?
+            "BUSCAR ACTUALIZACIÓN FIRMADA · LAB OTA":
+            "BUSCAR ACTUALIZACIÓN FIRMADA · BOOT ESTABLE",()->
             BootUpdater.check(this,s->prefs().edit()
                 .putString("last_status",s).apply()));
         text("VENTANAS DISPLAY 0 Y DISPLAY 1",18,WHITE);
