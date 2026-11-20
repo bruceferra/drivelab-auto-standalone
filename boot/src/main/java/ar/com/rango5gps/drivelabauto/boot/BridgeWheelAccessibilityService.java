@@ -22,7 +22,7 @@ import java.util.Locale;
 
 /**
  * Exclusive wheel owner for Bridge. This class is independent from
- * T1WazeWheelService, Receiver, T1Launcher and the map window launcher.
+ * all legacy Receiver controls, T1Launcher and the map window launcher.
  *
  * STRICT SAFETY CONTRACT:
  * - Manual Android Accessibility authorization and Bridge opt-in BOTH needed.
