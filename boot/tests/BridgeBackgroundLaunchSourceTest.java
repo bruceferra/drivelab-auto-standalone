@@ -51,7 +51,7 @@ public final class BridgeBackgroundLaunchSourceTest {
         check(receiver.contains("if(!BridgeBackgroundAccess.authorized(this)&&")&&
             receiver.contains("!BootActivity.isVisible()")&&
             receiver.contains("DESTINO RECIBIDO, PERO NO ABIERTO")&&
-            receiver.contains("ANDROID RECHAZÓ ABRIR")&&
+            receiver.contains("ERROR \"+app+\" → Display ")&&
             receiver.contains("return BootConfig.enabled(this)?START_STICKY:START_NOT_STICKY;")&&
             auto.contains("startForegroundService(new Intent(this,BootLinkService.class)")&&
             manifest.contains("android.permission.SYSTEM_ALERT_WINDOW")&&
