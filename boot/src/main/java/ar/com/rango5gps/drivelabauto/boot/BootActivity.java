@@ -722,6 +722,12 @@ public final class BootActivity extends Activity
         content.addView(bridgeRatio);
         button("PROBAR DOS VENTANAS · SÓLO BRIDGE · ESTACIONADO",
             ()->askBridgeWindows(false));
+        button("LAB · PROBAR PANTALLA VIRTUAL · SOLO CENTRAL",
+            this::askBridgeVirtualProbe);
+        text("Prueba de arquitectura T1N145: pantalla virtual privada, "+
+            "SurfaceTexture y Presentation propias. Sólo patrón de "+
+            "diagnóstico; todavía NO migra ni muestra aplicaciones "+
+            "en el tablero.",12,QUIET);
         text("PANTALLA DEL TABLERO · DISPLAY 1",18,WHITE);
         button("MAPA DEL TABLERO · "+
             labelFor(BridgeStandaloneWindows.tabMap(this))+
