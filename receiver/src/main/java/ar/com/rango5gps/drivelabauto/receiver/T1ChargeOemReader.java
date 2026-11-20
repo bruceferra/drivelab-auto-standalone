@@ -11,7 +11,9 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
 /** OEM-only, read-only charging measurements.
- * VehicleService 1060/1062/1063/1064 are kept independent of the VHAL ids.
+ * VehicleService 1060/1042/1062/1063/1064 are kept independent of VHAL ids.
+ * 1042 is the internal (real) SOC, and 1062 is the dashboard SOC.
+ * Only 1062 remains the charge-session SOC for continuity with old records.
  * T1 Launcher's CODE tab displays the VHAL decimal property ID over two
  * lines: 55994 + 0910 = 559940910 (FLOAT, EXT.BATT VOLT).
  * The HAL fallback is used for energy only when voltage and BOTH independent
@@ -25,16 +27,17 @@ final class T1ChargeOemReader {
     static final class Reading {
         final long timeMs;
         final int cable;
-        final double soc,volts,amps,vehicleVolts;
+        final double soc,socInternal,volts,amps,vehicleVolts;
         final double halVolts,halAmps,halSingleChargeEnergy;
         final int halPower;
         final String voltageSource;
         final int volts1063Int,volts1090Int;
         final double volts1090Float,volts1063AlcarFloat;
-        Reading(long t,int c,double s,double v,double a,double vehicleV,
+        Reading(long t,int c,double s,double internal,double v,double a,double vehicleV,
                 double halV,double halA,int power,double singleEnergy,
                 String source,int vi,int ai,double vf,double av){
-            timeMs=t;cable=c;soc=s;volts=v;amps=a;vehicleVolts=vehicleV;
+            timeMs=t;cable=c;soc=s;socInternal=internal;
+            volts=v;amps=a;vehicleVolts=vehicleV;
             halVolts=halV;halAmps=halA;halPower=power;
             halSingleChargeEnergy=singleEnergy;voltageSource=source;
             volts1063Int=vi;volts1090Int=ai;
@@ -79,6 +82,7 @@ final class T1ChargeOemReader {
                 throw new SecurityException("Interfaz OEM no válida");
             int cable=getInt(b,1060);
             double soc=getFloatOrUnknown(b,1062);
+            double socInternal=getFloatOrUnknown(b,1042);
             double vehicleVoltage=getFloatOrUnknown(b,1063);
             double amps=getFloatOrUnknown(b,1064);
             boolean vehicleVoltageValid=validVoltage(vehicleVoltage);
@@ -107,7 +111,7 @@ final class T1ChargeOemReader {
             String source=vehicleVoltageValid?"VEHICLE 1063 float":
                 halVoltageValid?"HAL 559940910 confirmado con 559940911":
                 "SIN VOLTAJE HV VALIDADO";
-            return new Reading(System.currentTimeMillis(),cable,soc,
+            return new Reading(System.currentTimeMillis(),cable,soc,socInternal,
                 validatedVolts,amps,vehicleVoltage,hal.voltage,hal.current,
                 hal.power,hal.singleEnergy,source,raw1063,raw1090Int,
                 raw1090,hal.legacy1063);
