@@ -144,7 +144,22 @@ public final class SenderClient {
             String ip=p.getString("receiver_ip","");
             byte[] key=BridgeCrypto.unpackKey(p.getString("receiver_key",""));
             if(!localIpv4(ip))throw new IOException("IP no configurada");
-            long offset=remoteClockOffset(ip,key);
+            long offset;
+            try{
+                // Fast path: keep the prior QR session and its address
+                // when they still answer authenticated encrypted ping.
+                offset=remoteClockOffset(ip,key);
+            }catch(Exception stale){
+                // QR is an identity pairing, NOT a permanently fixed IP.
+                // A new DHCP address only needs authenticated discovery.
+                String found=SenderBridgeDiscovery.locate(key,ip);
+                offset=remoteClockOffset(found,key); // authenticate BEFORE saving
+                if(!p.edit().putString("receiver_ip",found).commit())
+                    throw new IOException("No se pudo conservar la IP nueva");
+                ip=found;
+                p.edit().putString("last_status",
+                    "BRIDGE RECONECTADO · clave QR anterior conservada").apply();
+            }
             byte[] packet=BridgeCrypto.encryptWithClockOffset(key,kind,value,offset);
             try(Socket socket=connect(ip,BridgeCrypto.NAV_PORT)){
                 DataOutputStream out=new DataOutputStream(socket.getOutputStream());
@@ -164,7 +179,11 @@ public final class SenderClient {
                 edit.apply();return new Delivery(accepted,status);
             }
         }catch(Exception e){
-            String status="SIN CONEXIÓN T1 · "+e.getClass().getSimpleName();
+            String detail=String.valueOf(e.getMessage());
+            if(detail.length()>160)detail=detail.substring(0,160);
+            String status="SIN CONEXIÓN BRIDGE · "+e.getClass().getSimpleName()+
+                " · "+detail+
+                " · vínculo QR conservado, no hace falta desvincular";
             prefs(c).edit().putString("last_status",status).apply();
             return new Delivery(false,status);
         }
