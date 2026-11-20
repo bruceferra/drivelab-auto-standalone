@@ -47,6 +47,16 @@ jobs:
             common/src/main/java/ar/com/rango5gps/drivelabauto/common/MapLinks.java \
             common/tests/MapLinksTest.java
           java -cp /tmp/bridge-test MapLinksTest
+      - name: Persist paired Xiaomi QR and rediscover Bridge IP using authenticated LAN broadcast
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-qr-persist
+          javac -encoding UTF-8 -d /tmp/bridge-qr-persist \
+            common/src/main/java/ar/com/rango5gps/drivelabauto/common/BridgeDiscoveryProof.java \
+            common/tests/BridgeDiscoveryProofTest.java \
+            sender/tests/SenderQrPersistenceSourceTest.java
+          java -cp /tmp/bridge-qr-persist ar.com.rango5gps.drivelabauto.common.BridgeDiscoveryProofTest
+          java -cp /tmp/bridge-qr-persist ar.com.rango5gps.drivelabauto.sender.SenderQrPersistenceSourceTest
       - name: Unified physical voice and Waze wheel no-Google-popup regression
         shell: bash
         run: |
