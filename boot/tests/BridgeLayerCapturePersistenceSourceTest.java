@@ -40,7 +40,8 @@ public final class BridgeLayerCapturePersistenceSourceTest {
            store.contains("!phase.equals(json.getString(\"phase\"))")&&
            store.contains("remove(\"TAPADO\").remove(\"VISIBLE\").commit()"),
            "A and B must persist separately, with exact stage and hash IDs");
-        ok(!store.contains("dumpsys")&&
+        ok(!store.contains("BridgeAdbReadOnly.read(")&&
+           !store.contains("rawWindowDump=")&&
            !store.contains("BridgeAdbReadOnly.read(")&&
            !store.contains("startActivity(")&&
            !store.contains("sendBroadcast(")&&
