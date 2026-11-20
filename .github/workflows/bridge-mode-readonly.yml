@@ -11,6 +11,12 @@ on:
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BootAutoService.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BootLinkService.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BootUpdater.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWheelPolicy.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWheelOemBinder.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWheelAccessibilityService.java'
+      - 'boot/tests/BridgeWheelPolicyTest.java'
+      - 'boot/tests/BridgeWheelAccessibilityContractTest.java'
+      - 'boot/src/main/res/xml/bridge_wheel_accessibility.xml'
       - 'boot/src/main/AndroidManifest.xml'
       - '.github/workflows/bridge-mode-readonly.yml'
   workflow_dispatch:
@@ -42,6 +48,18 @@ jobs:
             boot/tests/BridgeModeLayerDiffTest.java
           java -cp /tmp/jetour-mode-layer-test \
             ar.com.rango5gps.drivelabauto.boot.BridgeModeLayerDiffTest
+      - name: Test wheel option navigation (NO ZOOM)
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/jetour-wheel
+          javac -encoding UTF-8 -d /tmp/jetour-wheel \
+            boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWheelPolicy.java \
+            boot/tests/BridgeWheelPolicyTest.java \
+            boot/tests/BridgeWheelAccessibilityContractTest.java
+          java -cp /tmp/jetour-wheel \
+            ar.com.rango5gps.drivelabauto.boot.BridgeWheelPolicyTest
+          java -cp /tmp/jetour-wheel \
+            ar.com.rango5gps.drivelabauto.boot.BridgeWheelAccessibilityContractTest
       - name: No map data wipe or OEM window mutation in diagnostic
         run: |
           set -euo pipefail
