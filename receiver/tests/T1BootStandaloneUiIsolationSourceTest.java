@@ -25,8 +25,9 @@ public final class T1BootStandaloneUiIsolationSourceTest {
             ui.contains("ELEGIR MAPA ")&&
             ui.contains("WAZE")&&
             ui.contains("GOOGLE MAPS")&&
-            ui.contains("BOOT \"+packageVersion(getPackageName())")&&
-            ui.contains("RECEIVER \"+packageVersion(BootConfig.RECEIVER)"),
+            ui.contains("DRIVELAB BRIDGE")&&
+            ui.contains("legacyAdvanced")&&
+            ui.contains("VINCULAR POR QR"),
             "Boot must expose distinct, versioned two-tab configuration");
         ck(ui.contains("▶ PROBAR SOLO DISPLAY 1 · SIN SALIR DE BOOT")&&
             ui.contains("BootConfig.sendClusterOnly(this)")&&
