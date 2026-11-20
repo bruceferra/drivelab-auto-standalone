@@ -24,6 +24,15 @@ jobs:
           set -euo pipefail
           tool=$(command -v sdkmanager || find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)
           "$tool" 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Verify Jetour MODE layer comparison is READ-ONLY
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-mode-test
+          javac -encoding UTF-8 -d /tmp/bridge-mode-test \
+            boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeModeLayerDiff.java \
+            boot/tests/BridgeModeLayerDiffTest.java
+          java -cp /tmp/bridge-mode-test \
+            ar.com.rango5gps.drivelabauto.boot.BridgeModeLayerDiffTest
       - name: Protocol security regression (no Android runtime needed)
         run: |
           mkdir -p /tmp/bridge-test
@@ -38,6 +47,18 @@ jobs:
             common/src/main/java/ar/com/rango5gps/drivelabauto/common/MapLinks.java \
             common/tests/MapLinksTest.java
           java -cp /tmp/bridge-test MapLinksTest
+      - name: Persist paired Xiaomi QR and rediscover Bridge IP using authenticated LAN broadcast
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-qr-persist
+          javac -encoding UTF-8 -d /tmp/bridge-qr-persist \
+            common/src/main/java/ar/com/rango5gps/drivelabauto/common/BridgeDiscoveryProof.java \
+            common/tests/BridgeDiscoveryProofTest.java \
+            sender/tests/SenderQrPersistenceSourceTest.java \
+            sender/tests/SenderT1LauncherTrialSourceTest.java
+          java -cp /tmp/bridge-qr-persist ar.com.rango5gps.drivelabauto.common.BridgeDiscoveryProofTest
+          java -cp /tmp/bridge-qr-persist ar.com.rango5gps.drivelabauto.sender.SenderQrPersistenceSourceTest
+          java -cp /tmp/bridge-qr-persist ar.com.rango5gps.drivelabauto.sender.SenderT1LauncherTrialSourceTest
       - name: Unified physical voice and Waze wheel no-Google-popup regression
         shell: bash
         run: |
@@ -935,7 +956,7 @@ jobs:
           grep -q 'this::finishClient' "$ui"
           ! grep -q 'T1JourneyStore.finish(this)' "$svc" "$boot"
       - name: Separate apps and Android APK builds
-        run: gradle --no-daemon :sender:assembleDebug :receiver:assembleDebug
+        run: gradle --no-daemon :sender:assembleDebug :receiver:assembleDebug :boot:assembleDebug
       - name: Verify independent identities, permissions and no telemetry
         shell: bash
         run: |
@@ -1004,5 +1025,23 @@ jobs:
         with:
           name: Receiver-Debug-QA-Not-Install-Update
           path: receiver/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 7
+      # The owner can install this QA build without replacing the stable
+      # Boot signature or clearing Jetour/Maps data. It is a separate LAB app.
+      - name: Check Bridge LAB APK package before publishing test artifact
+        run: |
+          set -euo pipefail
+          apk=boot/build/outputs/apk/debug/boot-debug.apk
+          test -s "$apk"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" | grep "package: name='ar.com.rango5gps.drivelabauto.boot.lab'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" | grep "versionName='0.1.27-lab-20261120'"
+          sha256sum "$apk" > boot/build/outputs/apk/debug/boot-debug.apk.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DriveLab-Bridge-LAB-20261120-ADB-install
+          path: |
+            boot/build/outputs/apk/debug/boot-debug.apk
+            boot/build/outputs/apk/debug/boot-debug.apk.sha256
           if-no-files-found: error
           retention-days: 7

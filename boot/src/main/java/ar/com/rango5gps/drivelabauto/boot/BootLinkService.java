@@ -1,0 +1,513 @@
+package ar.com.rango5gps.drivelabauto.boot;
+
+import android.app.Notification;
+import android.app.NotificationChannel;
+import android.app.NotificationManager;
+import android.app.PendingIntent;
+import android.app.Service;
+import android.app.ActivityOptions;
+import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
+import android.graphics.Rect;
+import android.net.Uri;
+import android.os.IBinder;
+import android.provider.Settings;
+import ar.com.rango5gps.drivelabauto.common.BridgeCrypto;
+import ar.com.rango5gps.drivelabauto.common.BridgeDiscoveryProof;
+import ar.com.rango5gps.drivelabauto.common.BridgeRouteTarget;
+import java.io.DataInputStream;
+import java.io.DataOutputStream;
+import java.net.Inet4Address;
+import java.net.InetAddress;
+import java.net.DatagramSocket;
+import java.net.DatagramPacket;
+import java.net.NetworkInterface;
+import java.net.ServerSocket;
+import java.net.Socket;
+import java.net.SocketTimeoutException;
+import java.security.GeneralSecurityException;
+import java.security.KeyPair;
+import java.security.MessageDigest;
+import java.security.SecureRandom;
+import java.util.Enumeration;
+import java.util.LinkedHashSet;
+import java.util.Locale;
+
+/**
+ * Independent LAN/QR Receiver owned BY Boot, NOT the legacy Receiver app.
+ * Uses the exact existing Sender ECDH/AES-GCM protocol and 48391/48392
+ * ports. Never imports the legacy Receiver's private key, app database,
+ * shell, maps cache or vehicle interfaces.
+ *
+ * On a conflict, fails with PORT OCUPADO instead of stopping other apps.
+ * Users can disable the old Receiver's auto-start separately.
+ */
+public final class BootLinkService extends Service {
+    static final String PREFS="boot_receiver_lan_v1";
+    static final String START="boot.receiver.START";
+    static final String PAIR_QR="boot.receiver.PAIR_QR";
+    static final String STOP="boot.receiver.STOP";
+    private static final String CHANNEL="boot_receiver_lan";
+    private volatile boolean running;
+    private ServerSocket navServer,pairServer;
+    private DatagramSocket discoverySocket;
+    private volatile Pending pairing;
+    private final LinkedHashSet<String> recent=new LinkedHashSet<>();
+    private static final class Pending {
+        final byte[] secret;
+        final long id,expiry;
+        Pending(byte[] k,long i,long e){secret=k;id=i;expiry=e;}
+    }
+    static SharedPreferences prefs(Context c){
+        return c.getSharedPreferences(PREFS,MODE_PRIVATE);
+    }
+    static String localIp(){
+        String alternate="";
+        try{
+            Enumeration<NetworkInterface> items=NetworkInterface.getNetworkInterfaces();
+            while(items.hasMoreElements()){
+                NetworkInterface iface=items.nextElement();
+                if(!iface.isUp()||iface.isLoopback())continue;
+                Enumeration<InetAddress> addrs=iface.getInetAddresses();
+                while(addrs.hasMoreElements()){
+                    InetAddress addr=addrs.nextElement();
+                    if(!(addr instanceof Inet4Address)||!addr.isSiteLocalAddress())
+                        continue;
+                    String name=iface.getName().toLowerCase(Locale.ROOT);
+                    if(name.startsWith("wlan")||name.startsWith("ap")||
+                       name.startsWith("eth"))return addr.getHostAddress();
+                    if(alternate.isEmpty())alternate=addr.getHostAddress();
+                }
+            }
+        }catch(Exception ignored){}
+        return alternate;
+    }
+    static String qr(Context c){
+        SharedPreferences p=prefs(c);
+        String ip=localIp();
+        String ticket=p.getString("qr_ticket","");
+        // Never offer a QR if the old Receiver is still occupying one
+        // of the ports. A valid ticket without live sockets would produce
+        // a pairing failure that looked like a broken Xiaomi Sender.
+        if(!ip.matches("[0-9.]{7,15}")||
+           !ticket.matches("[0-9a-f]{48}")||
+           p.getLong("qr_until",0)<System.currentTimeMillis()||
+           !p.getString("status","").startsWith("ESCUCHANDO ")||
+           !p.getString("pair_port_status","").equals("PUERTO 48392 · LISTO"))
+            return "";
+        return "drivelabauto://pair?ip="+ip+"&ticket="+ticket;
+    }
+    private void update(String key,String value){
+        prefs(this).edit().putString(key,value).apply();
+    }
+    @Override public void onCreate(){
+        super.onCreate();
+        NotificationManager n=getSystemService(NotificationManager.class);
+        if(n!=null)n.createNotificationChannel(new NotificationChannel(
+            CHANNEL,"DriveLab Bridge · Xiaomi",
+            NotificationManager.IMPORTANCE_LOW));
+    }
+    @Override public IBinder onBind(Intent i){return null;}
+    @Override public int onStartCommand(Intent intent,int flags,int id){
+        // Android may restart a START_STICKY service with null Intent.
+        // Never restart the listener if the owner has disabled Bridge AUTO.
+        if(intent==null&&!BootConfig.enabled(this)){
+            shutdown();stopSelf(id);return START_NOT_STICKY;
+        }
+        String action=intent==null?START:intent.getAction();
+        if(STOP.equals(action)){
+            prefs(this).edit().putBoolean("auto_receive",false).apply();
+            shutdown();stopForeground(STOP_FOREGROUND_REMOVE);stopSelf();
+            return START_NOT_STICKY;
+        }
+        if(!PAIR_QR.equals(action)&&!START.equals(action))
+            return START_NOT_STICKY;
+        try{
+            PendingIntent open=PendingIntent.getActivity(this,701,
+                new Intent(this,BootActivity.class),
+                PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
+            startForeground(7701,new Notification.Builder(this,CHANNEL)
+                .setSmallIcon(android.R.drawable.ic_menu_directions)
+                .setContentTitle("DriveLab Bridge · receptor Xiaomi activo")
+                .setContentText("Receptor Xiaomi cifrado · independiente")
+                .setContentIntent(open).setOngoing(true).build());
+        }catch(Exception ex){
+            update("status","Android bloqueó iniciar receptor: "+
+                ex.getClass().getSimpleName());
+            stopSelf(id);return START_NOT_STICKY;
+        }
+        if(!running){
+            running=true;
+            update("status","Iniciando puertos 48391/48392…");
+            new Thread(this::listenNav,"BootReceiver-Nav").start();
+            new Thread(this::listenPair,"BootReceiver-QR").start();
+            new Thread(this::listenDiscovery,"Bridge-Paired-Discovery").start();
+        }
+        if(PAIR_QR.equals(action)){
+            pairing=null;
+            SharedPreferences.Editor e=prefs(this).edit()
+                .putLong("qr_until",System.currentTimeMillis()+120000L)
+                .remove("pair_id").remove("approved_id")
+                .remove("pair_code");
+            if(localIp().isEmpty()){
+                e.remove("qr_ticket").putString("pair_status",
+                    "SIN RED: conectá T1 y Xiaomi al mismo Wi-Fi");
+            }else{
+                byte[] token=new byte[24];
+                new SecureRandom().nextBytes(token);
+                StringBuilder hex=new StringBuilder(48);
+                for(byte b:token)hex.append(String.format(Locale.ROOT,"%02x",b&255));
+                e.putString("qr_ticket",hex.toString())
+                    .putString("pair_status",
+                        "QR ACTIVO POR 2 MINUTOS · leelo desde Sender Xiaomi");
+            }
+            e.apply();
+        }
+        // A manually started QR/listener is NEVER persistent unless the
+        // owner explicitly opted into Bridge's independent auto-start.
+        return BootConfig.enabled(this)?START_STICKY:START_NOT_STICKY;
+    }
+    private static boolean privatePeer(InetAddress a){
+        return a!=null&&(a.isSiteLocalAddress()||a.isLinkLocalAddress());
+    }
+    private void listenNav(){
+        try(ServerSocket server=new ServerSocket(BridgeCrypto.NAV_PORT,5)){
+            navServer=server;server.setSoTimeout(1000);
+            update("status","ESCUCHANDO "+localIp()+":48391");
+            while(running){
+                try(Socket client=server.accept()){
+                    if(!privatePeer(client.getInetAddress()))continue;
+                    client.setSoTimeout(4000);
+                    DataInputStream in=new DataInputStream(client.getInputStream());
+                    DataOutputStream out=new DataOutputStream(client.getOutputStream());
+                    byte[] raw=BridgeCrypto.read(in);
+                    String nonce=BridgeCrypto.nonce(raw);
+                    if(recent.contains(nonce))continue;
+                    byte[] key=BridgeCrypto.unpackKey(
+                        prefs(this).getString("secret",""));
+                    BridgeCrypto.Packet message;
+                    try{message=BridgeCrypto.decrypt(key,raw);}
+                    catch(GeneralSecurityException time){
+                        message=BridgeCrypto.decryptPairing(key,raw);
+                        if(!"ping".equals(message.kind))throw time;
+                    }
+                    recent.add(nonce);
+                    if(recent.size()>64)recent.remove(recent.iterator().next());
+                    boolean accepted="ping".equals(message.kind)||
+                        dispatch(message);
+                    BridgeCrypto.write(out,BridgeCrypto.encrypt(key,
+                        accepted?"ack":"not_ready",nonce));
+                }catch(SocketTimeoutException ignored){}
+                catch(Exception ignored){
+                    // Route data/secrets/tickets are never written to logs.
+                }
+            }
+        }catch(Exception problem){
+            update("status","ERROR PUERTO 48391 · "+
+                problem.getClass().getSimpleName()+
+                ". Puede estar ocupado por el Receiver anterior.");
+        }finally{
+            navServer=null;shutdown();
+            stopForeground(STOP_FOREGROUND_REMOVE);
+            stopSelf();
+        }
+    }
+    /** Only an owner-paired Xiaomi that already knows the saved key can
+     * find Bridge after DHCP changes its IP. Broadcast is LAN only and
+     * never advertises keys, QR tickets, OEM state, or app activities.
+     * A failed/missing discovery port cannot interrupt navigation/QR.
+     */
+    private void listenDiscovery(){
+        try(DatagramSocket socket=new DatagramSocket(BridgeDiscoveryProof.PORT)){
+            discoverySocket=socket;
+            socket.setSoTimeout(1000);
+            update("discover_status","DESCUBRIMIENTO CIFRADO · PUERTO 48393 LISTO");
+            byte[] raw=new byte[BridgeDiscoveryProof.SIZE+1];
+            while(running){
+                DatagramPacket ask=new DatagramPacket(raw,raw.length);
+                try{
+                    socket.receive(ask);
+                    if(!privatePeer(ask.getAddress())||
+                        ask.getLength()!=BridgeDiscoveryProof.SIZE)
+                        continue;
+                    byte[] key;
+                    try{
+                        key=BridgeCrypto.unpackKey(
+                            prefs(this).getString("secret",""));
+                    }catch(Exception noPair){continue;}
+                    if(!BridgeDiscoveryProof.acceptsRequest(
+                        key,ask.getData(),ask.getLength()))continue;
+                    byte[] response=BridgeDiscoveryProof.response(key,
+                        java.util.Arrays.copyOf(ask.getData(),ask.getLength()));
+                    socket.send(new DatagramPacket(
+                        response,response.length,
+                        ask.getAddress(),ask.getPort()));
+                }catch(SocketTimeoutException ignored){}
+                catch(Exception ignored){
+                    // Do not disclose pairing/addresses and do not stop NAV.
+                }
+            }
+        }catch(Exception blocked){
+            update("discover_status","DESCUBRIMIENTO NO DISPONIBLE: "+
+                blocked.getClass().getSimpleName()+
+                ". QR/clave guardados sin cambios.");
+        }finally{discoverySocket=null;}
+    }
+    private boolean dispatch(BridgeCrypto.Packet packet){
+        String kind=BridgeRouteTarget.baseKind(packet.kind);
+        String target=BridgeRouteTarget.target(packet.kind);
+        if(kind==null||target==null)return false;
+        if(!BridgeBackgroundAccess.authorized(this)&&
+            !BootActivity.isVisible()){
+            update("last_route","DESTINO RECIBIDO, PERO NO ABIERTO: "+
+                "Android Jetour no autorizó SYSTEM_ALERT_WINDOW a Bridge. "+
+                "En Bridge tocá HABILITAR SEGUNDO PLANO · ADB LOCAL "+
+                "una sola vez; el QR se conserva.");
+            return false;
+        }
+        if(BridgeRouteTarget.T1_LAUNCHER.equals(target)){
+            // Experimental existing-task handoff: use exactly the Waze/Maps
+            // virtual task T1Launcher already owns, NEVER launch another
+            // physical Display 1 Maps window as the standard route does.
+            // The current trial targets Google Maps only.
+            String result;
+            boolean acknowledged=false;
+            try{
+                String uri="google.navigation:q="+
+                    Uri.encode(packet.value,"coord".equals(kind)?",":"")+
+                    "&mode=d";
+                result=BridgeLocalAdb.deliverToExistingT1Maps(this,uri);
+                acknowledged=result.startsWith("ENTREGADO AL GOOGLE MAPS");
+            }catch(Exception denied){
+                result="T1LAUNCHER: NO SE ENVIÓ · "+
+                    denied.getClass().getSimpleName()+": "+
+                    String.valueOf(denied.getMessage())+
+                    ". T1Launcher y Maps permanecen abiertos.";
+            }
+            prefs(this).edit().putString("last_route",result)
+                .putInt("received",prefs(this).getInt("received",0)+
+                    (acknowledged?1:0)).apply();
+            // A strict ACK only means Android reported onNewIntent to
+            // the existing top Activity. Physical routing needs the owner.
+            return acknowledged;
+        }
+        // Sender's target is INDEPENDENT from where each app lives.
+        // BOTH means TWO separate route intents every time, including
+        // when one map was closed, backgrounded, or placed on Display 1.
+        BridgeDualRoutePolicy.Target[] plan=BridgeDualRoutePolicy.plan(
+            target,BridgeStandaloneWindows.tabMap(this),
+            BridgeStandaloneWindows.tableroEnabled(this));
+        if(plan.length==0)return false;
+        int accepted=0;
+        StringBuilder attempts=new StringBuilder();
+        for(int i=0;i<plan.length;i++){
+            BridgeDualRoutePolicy.Target selected=plan[i];
+            String result=openMap(selected.pkg,kind,packet.value,
+                selected.displayId);
+            if(i>0)attempts.append(" | ");
+            attempts.append(result);
+            if(result.startsWith("SOLICITUD "))accepted++;
+            // Without a short handoff Waze can be backgrounded by Maps
+            // before Android's onNewIntent has run. Still stay within
+            // the existing Sender's 4-second NAV response timeout.
+            if(i+1<plan.length){
+                try{Thread.sleep(350L);}
+                catch(InterruptedException interrupted){
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }
+        boolean all=accepted==plan.length;
+        String status=(all?"ENVÍOS SOLICITADOS: ":"ENVÍO PARCIAL: ")+
+            accepted+"/"+plan.length+" · "+attempts+
+            ". Android recibió intents; inicio efectivo de rutas NO verificado.";
+        prefs(this).edit().putString("last_route",status)
+            .putInt("received",prefs(this).getInt("received",0)+(all?1:0))
+            .apply();
+        // The encrypted ACK confirms that Android accepted every request,
+        // not that Waze/Google have drawn or begun navigation.
+        return all;
+    }
+    private String openMap(String pkg,String base,String destination,
+                           int displayId){
+        String app="com.waze".equals(pkg)?"Waze":"Google Maps";
+        try{
+            Intent map;
+            Uri uri;
+            if("com.waze".equals(pkg)){
+                uri=Uri.parse("waze://?"+("coord".equals(base)?"ll=":"q=")+
+                    Uri.encode(destination,"coord".equals(base)?",":"")+
+                    "&navigate=yes");
+                map=new Intent(Intent.ACTION_VIEW,uri).setPackage(pkg);
+            }else if("com.google.android.apps.maps".equals(pkg)){
+                uri=Uri.parse("google.navigation:q="+
+                    Uri.encode(destination,"coord".equals(base)?",":"")+
+                    "&mode=d");
+                map=new Intent(Intent.ACTION_VIEW,uri).setPackage(pkg);
+            }else return "RECHAZADO: paquete no es mapa permitido";
+            if(getPackageManager().resolveActivity(map,0)==null)
+                return "NO INSTALADO/ENLACE NO DISPONIBLE: "+app;
+            if(displayId!=0&&displayId!=1)
+                return "RECHAZADO: pantalla inválida para "+app;
+            if(displayId==1&&
+               !BridgeStandaloneWindows.display1Available(this))
+                return "DISPLAY 1 NO DISPONIBLE: "+app+
+                    " (no se redirigió silenciosamente al central)";
+            // EXACT parity with Receiver T1NavigationTargets.send:
+            // ONLY a new authenticated destination to Maps arms a 12s
+            // replace-old-route / start-turn-by-turn one-shot transaction.
+            // Opening the map manually or switching visible tasks never
+            // arms it; no generic OK, no automation without a destination.
+            boolean requestedMaps="com.google.android.apps.maps".equals(pkg);
+            if(requestedMaps)
+                BridgeGoogleMapsReplacement.arm(this,displayId);
+            map.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|
+                Intent.FLAG_ACTIVITY_SINGLE_TOP);
+            // Android's public launchDisplayId API, with no Freeform
+            // bounds or hidden OEM hooks. A closed map can be launched;
+            // an existing task receives an Android deep-link request.
+            ActivityOptions options=ActivityOptions.makeBasic();
+            options.setLaunchDisplayId(displayId);
+            try{
+                startActivity(map,options.toBundle());
+            }catch(Exception denied){
+                if(requestedMaps)BridgeGoogleMapsReplacement.cancel(this);
+                return "ERROR "+app+" → Display "+displayId+
+                    " ("+denied.getClass().getSimpleName()+")";
+            }
+            if(requestedMaps)
+                BridgeWheelAccessibilityService.navigationIntentArrived(this);
+            return "SOLICITUD "+app+" → Display "+displayId;
+        }catch(Exception denied){
+            if("com.google.android.apps.maps".equals(pkg))
+                BridgeGoogleMapsReplacement.cancel(this);
+            return "ERROR "+app+" → Display "+displayId+
+                " ("+denied.getClass().getSimpleName()+")";
+        }
+    }
+    private void listenPair(){
+        try(ServerSocket server=new ServerSocket(BridgeCrypto.PAIR_PORT,3)){
+            pairServer=server;server.setSoTimeout(1000);
+            update("pair_port_status","PUERTO 48392 · LISTO");
+            while(running){
+                try(Socket socket=server.accept()){
+                    socket.setSoTimeout(4500);
+                    if(!privatePeer(socket.getInetAddress()))continue;
+                    DataInputStream in=new DataInputStream(socket.getInputStream());
+                    DataOutputStream out=new DataOutputStream(socket.getOutputStream());
+                    if(in.readInt()!=BridgeCrypto.PAIR_MAGIC)continue;
+                    int action=in.readUnsignedByte();
+                    if(action==3)begin(in,out,true);
+                    else if(action==1)begin(in,out,false);
+                    else if(action==2)finish(in,out);
+                }catch(SocketTimeoutException ignored){}
+                catch(Exception ex){
+                    update("pair_status","VINCULACIÓN NO CONFIRMADA: "+
+                        ex.getClass().getSimpleName());
+                }
+            }
+        }catch(Exception error){
+            update("pair_port_status","ERROR PUERTO 48392 · "+
+                error.getClass().getSimpleName()+
+                " (comprobá que DriveLab T1 esté apagado)");
+        }finally{
+            pairServer=null;
+        }
+    }
+    private static void deny(DataOutputStream out)throws Exception{
+        out.writeInt(BridgeCrypto.PAIR_MAGIC);
+        out.writeByte(13);
+        out.flush();
+    }
+    private void begin(DataInputStream in,DataOutputStream out,
+                       boolean qr)throws Exception{
+        SharedPreferences p=prefs(this);
+        long now=System.currentTimeMillis();
+        if(now>p.getLong("qr_until",0)||pairing!=null){
+            deny(out);return;
+        }
+        int len=in.readUnsignedShort();
+        if(len<70||len>200){deny(out);return;}
+        byte[] remote=new byte[len];
+        in.readFully(remote);
+        if(qr){
+            String ticket=p.getString("qr_ticket","");
+            if(!ticket.matches("[0-9a-f]{48}")){deny(out);return;}
+            byte[] proof=new byte[32];in.readFully(proof);
+            if(!MessageDigest.isEqual(proof,
+                BridgeCrypto.qrPairProof(ticket,remote))){
+                deny(out);return;
+            }
+        }
+        KeyPair key=BridgeCrypto.newKeyPair();
+        byte[] secret=BridgeCrypto.derive(key.getPrivate(),remote);
+        long id=new SecureRandom().nextLong();
+        pairing=new Pending(secret,id,
+            Math.min(now+120000L,p.getLong("qr_until",0)));
+        SharedPreferences.Editor editor=p.edit().putLong("pair_id",id)
+            .putString("pair_code",BridgeCrypto.sas(secret));
+        if(qr){
+            editor.putLong("approved_id",id)
+                .putString("pair_status","QR VALIDADO · cifrado Xiaomi pendiente");
+        }else{
+            editor.putString("pair_status",
+                "COMPARÁ CÓDIGO Y CONFIRMÁ EN BOOT")
+                .remove("approved_id");
+        }
+        editor.apply();
+        byte[] publicKey=BridgeCrypto.publicBytes(key);
+        out.writeInt(BridgeCrypto.PAIR_MAGIC);out.writeByte(11);
+        out.writeLong(id);out.writeShort(publicKey.length);
+        out.write(publicKey);out.flush();
+    }
+    private void finish(DataInputStream in,DataOutputStream out)throws Exception{
+        long id=in.readLong();
+        byte[] proof=BridgeCrypto.read(in);
+        Pending p=pairing;
+        if(p==null||id!=p.id||System.currentTimeMillis()>p.expiry){
+            update("pair_status","SESIÓN CADUCADA · escaneá otro QR");
+            deny(out);return;
+        }
+        if(prefs(this).getLong("approved_id",0)!=id){
+            update("pair_status","FALTA AUTORIZAR EN BOOT");
+            deny(out);return;
+        }
+        BridgeCrypto.Packet message=BridgeCrypto.decryptPairing(p.secret,proof);
+        if(!"ping".equals(message.kind)||!"".equals(message.value)){
+            deny(out);return;
+        }
+        if(!prefs(this).edit()
+                .putString("secret",BridgeCrypto.packKey(p.secret))
+                .putString("pair_status","XIAOMI VINCULADO A BRIDGE · AES-GCM")
+                .remove("qr_ticket").remove("qr_until")
+                .remove("pair_code").remove("pair_id").remove("approved_id")
+                .commit()){
+            deny(out);return;
+        }
+        pairing=null;
+        // A successful, physically owner-authorized QR pairing is an
+        // explicit request to keep the independent Xiaomi listener ready
+        // at future ignitions. Never start maps, OEM or Receiver.
+        if(!BootConfig.prefs(this).edit()
+                .putBoolean("enabled",true).commit()){
+            update("pair_status","VÍNCULO GUARDADO, pero no se pudo activar "+
+                "autoinicio de Bridge; revisá el interruptor AUTOINICIO");
+        }
+        out.writeInt(BridgeCrypto.PAIR_MAGIC);out.writeByte(12);
+        BridgeCrypto.write(out,BridgeCrypto.encrypt(
+            p.secret,"ack",BridgeCrypto.nonce(proof)));
+    }
+    private void shutdown(){
+        running=false;
+        try{if(navServer!=null)navServer.close();}catch(Exception ignored){}
+        try{if(pairServer!=null)pairServer.close();}catch(Exception ignored){}
+        try{if(discoverySocket!=null)discoverySocket.close();}
+        catch(Exception ignored){}
+        update("status","RECEPTOR BRIDGE DETENIDO · vínculo conservado");
+    }
+    @Override public void onDestroy(){
+        shutdown();
+        super.onDestroy();
+    }
+}

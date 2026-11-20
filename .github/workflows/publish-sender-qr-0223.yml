@@ -1,0 +1,129 @@
+name: Publish Sender 0.2.23 signed · persistent Bridge QR
+on:
+  push:
+    branches: [refactor/boot-receiver-unificado-seguro]
+    paths: ['.github/workflows/publish-sender-qr-0223.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: signed-drivelabauto-sender-qr-0223
+  cancel-in-progress: false
+jobs:
+  sender-qr:
+    if: github.repository == 'bruceferra/drivelab-auto-standalone' && github.ref == 'refs/heads/refactor/boot-receiver-unificado-seguro'
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      SENDER_STORE_PASSWORD: ${{ secrets.SENDER_STORE_PASSWORD }}
+      SENDER_KEY_ALIAS: ${{ secrets.SENDER_KEY_ALIAS }}
+      SENDER_KEY_PASSWORD: ${{ secrets.SENDER_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Verify Sender permanent signing identity exists
+        env:
+          SENDER_KEYSTORE_B64: ${{ secrets.SENDER_KEYSTORE_B64 }}
+        run: |
+          set -euo pipefail
+          tool=$(command -v sdkmanager || find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)
+          "$tool" 'platforms;android-35' 'build-tools;35.0.0'
+          test -n "$SENDER_KEYSTORE_B64" && test -n "$SENDER_STORE_PASSWORD"
+          test -n "$SENDER_KEY_ALIAS" && test -n "$SENDER_KEY_PASSWORD"
+          printf %s "$SENDER_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/sender.p12"
+          chmod 600 "$RUNNER_TEMP/sender.p12"
+          echo "SENDER_KEYSTORE=$RUNNER_TEMP/sender.p12" >> "$GITHUB_ENV"
+      - name: Verify one-time QR cryptography, IP rediscovery and old Sender functions
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/sender-qr-ci
+          javac -encoding UTF-8 -d /tmp/sender-qr-ci \
+            common/src/main/java/ar/com/rango5gps/drivelabauto/common/BridgeDiscoveryProof.java \
+            common/tests/BridgeDiscoveryProofTest.java \
+            sender/tests/SenderQrPersistenceSourceTest.java \
+            sender/tests/SenderShareHeadlessSourceContractTest.java \
+            sender/tests/SenderBluetoothPickerSourceContractTest.java \
+            sender/tests/SenderAudioBootstrapSourceContractTest.java \
+            common/src/main/java/ar/com/rango5gps/drivelabauto/common/UpdaterManifestUrlPolicy.java \
+            common/tests/UpdaterManifestUrlPolicyTest.java
+          java -cp /tmp/sender-qr-ci ar.com.rango5gps.drivelabauto.common.BridgeDiscoveryProofTest
+          java -cp /tmp/sender-qr-ci ar.com.rango5gps.drivelabauto.sender.SenderQrPersistenceSourceTest
+          java -cp /tmp/sender-qr-ci ar.com.rango5gps.drivelabauto.sender.SenderShareHeadlessSourceContractTest
+          java -cp /tmp/sender-qr-ci ar.com.rango5gps.drivelabauto.sender.SenderBluetoothPickerSourceContractTest
+          java -cp /tmp/sender-qr-ci ar.com.rango5gps.drivelabauto.sender.SenderAudioBootstrapSourceContractTest
+          java -cp /tmp/sender-qr-ci ar.com.rango5gps.drivelabauto.common.UpdaterManifestUrlPolicyTest
+      - name: Build signed Sender 0.2.23 and prove matching existing signing certificate
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = bruceferra/drivelab-auto-standalone
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.97
+          ! gh release view sender-v0.2.23 >/dev/null 2>&1
+          mkdir -p /tmp/sender-previous dist
+          gh release download sender-v0.2.22 --pattern 'DriveLab-Auto-Sender-v0.2.22.apk' --dir /tmp/sender-previous
+          gradle --no-daemon :sender:assembleRelease
+          apk=sender/build/outputs/apk/release/sender-release.apk
+          test -s "$apk"
+          apksigner="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          "$apksigner" verify --print-certs "$apk"
+          "$apksigner" verify --print-certs /tmp/sender-previous/DriveLab-Auto-Sender-v0.2.22.apk
+          oldcert=$("$apksigner" verify --print-certs /tmp/sender-previous/DriveLab-Auto-Sender-v0.2.22.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          newcert=$("$apksigner" verify --print-certs "$apk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          test -n "$oldcert" && test "$oldcert" = "$newcert"
+          "$aapt" dump badging "$apk" | grep -F "package: name='ar.com.rango5gps.drivelabauto.sender'"
+          "$aapt" dump badging "$apk" | grep -F "versionCode='24'"
+          "$aapt" dump badging "$apk" | grep -F "versionName='0.2.23'"
+          cp "$apk" dist/DriveLab-Auto-Sender-v0.2.23.apk
+          sha256sum dist/DriveLab-Auto-Sender-v0.2.23.apk > dist/sender.sha256
+          python3 - <<'PY'
+          import hashlib,json,pathlib
+          apk=pathlib.Path("dist/DriveLab-Auto-Sender-v0.2.23.apk")
+          manifest={
+              "packageName":"ar.com.rango5gps.drivelabauto.sender",
+              "versionName":"0.2.23",
+              "versionCode":24,
+              "sha256":hashlib.sha256(apk.read_bytes()).hexdigest(),
+              "apkUrl":"https://github.com/bruceferra/drivelab-auto-standalone/releases/download/sender-v0.2.23/DriveLab-Auto-Sender-v0.2.23.apk"
+          }
+          pathlib.Path("dist/sender.json").write_text(json.dumps(manifest,indent=2)+"\n")
+          PY
+      - name: Publish isolated Sender prerelease and only Sender update pointer
+        run: |
+          set -euo pipefail
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.97
+          mkdir -p previous verify
+          gh release download v0.3.97 --pattern 'receiver.json' --dir previous
+          gh release download v0.3.97 --pattern 'receiver.sha256' --dir previous
+          gh release download v0.3.97 --pattern 'sender.json' --dir previous
+          gh release create sender-v0.2.23 \
+            dist/DriveLab-Auto-Sender-v0.2.23.apk dist/sender.sha256 \
+            --target "$GITHUB_SHA" --prerelease \
+            --title 'DriveLab Sender 0.2.23 · QR persistente + IP dinámica' \
+            --notes 'Conserva la clave QR AES de Xiaomi. Primero verifica la IP anterior; si cambió, descubre Bridge por UDP local con HMAC-SHA256 y nonce fresco, verifica ping AES y guarda sólo la IP autenticada. Reconexión automática en Sender al abrir y al enviar desde Uber; botón manual RECONECTAR SIN QR. Compatible con Bridge LAB 0.1.8+ (descubrimiento UDP 48393). No repite QR, no toca el auto ni Receiver. Sujeto a prueba de Wi-Fi/hotspot en la Jetour real.'
+          gh release download sender-v0.2.23 \
+            --pattern 'DriveLab-Auto-Sender-v0.2.23.apk' --dir verify
+          cmp dist/DriveLab-Auto-Sender-v0.2.23.apk verify/DriveLab-Auto-Sender-v0.2.23.apk
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.97
+          gh release upload v0.3.97 dist/sender.json --clobber
+          gh release download v0.3.97 --pattern 'sender.json' --dir verify
+          cmp dist/sender.json verify/sender.json
+          gh release download v0.3.97 --pattern 'receiver.json' --dir verify
+          gh release download v0.3.97 --pattern 'receiver.sha256' --dir verify
+          cmp previous/receiver.json verify/receiver.json
+          cmp previous/receiver.sha256 verify/receiver.sha256
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.97
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DriveLab-Sender-v0.2.23-SIGNED-QR-PERSISTENCE
+          path: |
+            dist/DriveLab-Auto-Sender-v0.2.23.apk
+            dist/sender.sha256
+            dist/sender.json
+          if-no-files-found: error
+          retention-days: 21

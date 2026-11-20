@@ -1,0 +1,291 @@
+name: DriveLab Bridge · Jetour MODE read-only forensic tests
+on:
+  pull_request:
+    paths:
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeModeLayerDiff.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeAdbReadOnly.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeLayersActivity.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeLayerCaptureStore.java'
+      - 'boot/tests/BridgeLayerCapturePersistenceSourceTest.java'
+      - 'boot/tests/BridgeModeLayerDiffTest.java'
+      - 'boot/tests/BridgeIndependentBootContractTest.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BootActivity.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BootAutoService.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BootLinkService.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BootUpdater.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeNativeInstaller.java'
+      - 'boot/tests/BridgeUpdateInstallerSourceContractTest.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeAccessPolicy.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeLocalAdb.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeBackgroundAccess.java'
+      - 'boot/tests/BridgeBackgroundLaunchSourceTest.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWheelAccessRecovery.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeAdbRsaSpec.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BootConfig.java'
+      - 'boot/tests/BridgeAccessPolicyTest.java'
+      - 'boot/tests/BridgeAccessRecoverySourceTest.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWheelPolicy.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWheelOemBinder.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWheelAccessibilityService.java'
+      - 'boot/tests/BridgeWheelPolicyTest.java'
+      - 'boot/tests/BridgeWheelAccessibilityContractTest.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeMapsStartPolicy.java'
+      - 'boot/tests/BridgeMapsStartPolicyTest.java'
+      - 'boot/tests/BridgeWheelReceiverParitySourceTest.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeOtaLayerTrial.java'
+      - 'boot/tests/BridgeOtaLayerTrialSourceTest.java'
+      - 'boot/tests/BridgeNativeSplitMosaicSourceTest.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeT1LauncherRoutePolicy.java'
+      - 'boot/tests/BridgeT1LauncherRoutePolicyTest.java'
+      - 'sender/tests/SenderT1LauncherTrialSourceTest.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeOemVoiceLauncher.java'
+      - 'boot/tests/BridgeOemUnifiedInputSourceTest.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeGoogleMapsReplacement.java'
+      - 'boot/tests/BridgeMapsReceiverAutoRouteSourceTest.java'
+      - 'boot/src/main/res/xml/bridge_wheel_accessibility.xml'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeImmersive.java'
+      - 'boot/tests/BridgeImmersiveSourceContractTest.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeClusterRecovery.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeClusterRecoveryPolicy.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWazeForegroundPolicy.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWazeForegroundProbe.java'
+      - 'boot/tests/BridgeWazeForegroundProbeTest.java'
+      - 'boot/tests/BridgeClusterRecoveryPolicyTest.java'
+      - 'boot/tests/BridgeClusterSafetySourceTest.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeDualRoutePolicy.java'
+      - 'boot/tests/BridgeDualRoutePolicyTest.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeStandaloneWindows.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWindowMath.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeVirtualProbeActivity.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeClusterSurfaceProbeActivity.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeProjectionLabActivity.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeProjectionLabService.java'
+      - 'boot/tests/BridgeMediaProjectionLabContractTest.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeVirtualSceneActivity.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeVirtualTaskLauncher.java'
+      - 'boot/tests/BridgeOwnedVirtualActivitySourceTest.java'
+      - 'boot/tests/BridgeClusterSurfaceProbeSourceTest.java'
+      - 'boot/tests/BridgeVirtualProbeContractTest.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWindowsPolicy.java'
+      - 'boot/tests/BridgeWindowMathTest.java'
+      - 'boot/tests/BridgeWindowsPolicyTest.java'
+      - 'boot/tests/BridgeStandaloneWindowContractTest.java'
+      - 'boot/tests/BridgeSenderDisplayRoutingTest.java'
+      - 'boot/src/main/AndroidManifest.xml'
+      - '.github/workflows/bridge-mode-readonly.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  layers:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Verify Bridge native installer matches proven Receiver implementation
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-proven-installer
+          javac -encoding UTF-8 -d /tmp/bridge-proven-installer boot/tests/BridgeUpdateInstallerSourceContractTest.java
+          java -cp /tmp/bridge-proven-installer ar.com.rango5gps.drivelabauto.boot.BridgeUpdateInstallerSourceContractTest
+      - name: Assert background receipt independent from visible Bridge and restricted owner ADB
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-bg
+          javac -encoding UTF-8 -d /tmp/bridge-bg boot/tests/BridgeBackgroundLaunchSourceTest.java
+          java -cp /tmp/bridge-bg ar.com.rango5gps.drivelabauto.boot.BridgeBackgroundLaunchSourceTest
+      - name: Assert independent QR/boot/updater, no Receiver autolaunch
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/jetour-bridge-contract
+          javac -encoding UTF-8 -d /tmp/jetour-bridge-contract \
+            boot/tests/BridgeIndependentBootContractTest.java
+          java -cp /tmp/jetour-bridge-contract \
+            ar.com.rango5gps.drivelabauto.boot.BridgeIndependentBootContractTest
+      - name: Persist A/B Jetour layer snapshots across Activity closure and app restart
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-capture-persist
+          javac -encoding UTF-8 -d /tmp/bridge-capture-persist \
+            boot/tests/BridgeLayerCapturePersistenceSourceTest.java
+          java -cp /tmp/bridge-capture-persist \
+            ar.com.rango5gps.drivelabauto.boot.BridgeLayerCapturePersistenceSourceTest
+      - name: Test A/B Jetour MODE overlay parser with fixture
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/jetour-mode-layer-test
+          javac -encoding UTF-8 -d /tmp/jetour-mode-layer-test \
+            boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeModeLayerDiff.java \
+            boot/tests/BridgeModeLayerDiffTest.java
+          java -cp /tmp/jetour-mode-layer-test \
+            ar.com.rango5gps.drivelabauto.boot.BridgeModeLayerDiffTest
+      - name: Verify independent owner-approved LAB ADB accessibility and OEM preservation
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-access
+          javac -encoding UTF-8 -d /tmp/bridge-access \
+            boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeAccessPolicy.java \
+            boot/tests/BridgeAccessPolicyTest.java \
+            boot/tests/BridgeAccessRecoverySourceTest.java
+          java -cp /tmp/bridge-access ar.com.rango5gps.drivelabauto.boot.BridgeAccessPolicyTest
+          java -cp /tmp/bridge-access ar.com.rango5gps.drivelabauto.boot.BridgeAccessRecoverySourceTest
+      - name: Test wheel option navigation (NO ZOOM)
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/jetour-wheel
+          javac -encoding UTF-8 -d /tmp/jetour-wheel \
+            boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWheelPolicy.java \
+            boot/tests/BridgeWheelPolicyTest.java \
+            boot/tests/BridgeWheelAccessibilityContractTest.java
+          java -cp /tmp/jetour-wheel \
+            ar.com.rango5gps.drivelabauto.boot.BridgeWheelPolicyTest
+          java -cp /tmp/jetour-wheel \
+            ar.com.rango5gps.drivelabauto.boot.BridgeWheelAccessibilityContractTest
+      - name: Reuse Receiver wheel recapture, verified map and navigation start without zoom
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-wheel-parity
+          javac -encoding UTF-8 -d /tmp/bridge-wheel-parity \
+            boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeMapsStartPolicy.java \
+            boot/tests/BridgeMapsStartPolicyTest.java \
+            boot/tests/BridgeWheelReceiverParitySourceTest.java \
+            boot/tests/BridgeMapsReceiverAutoRouteSourceTest.java
+          java -cp /tmp/bridge-wheel-parity \
+            ar.com.rango5gps.drivelabauto.boot.BridgeMapsStartPolicyTest
+          java -cp /tmp/bridge-wheel-parity \
+            ar.com.rango5gps.drivelabauto.boot.BridgeWheelReceiverParitySourceTest
+          java -cp /tmp/bridge-wheel-parity \
+            ar.com.rango5gps.drivelabauto.boot.BridgeMapsReceiverAutoRouteSourceTest
+      - name: Enforce ONE shared OEM microphone 1010 and wheel receiver with live counters
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-oem-shared
+          javac -encoding UTF-8 -d /tmp/bridge-oem-shared \
+            boot/tests/BridgeOemUnifiedInputSourceTest.java
+          java -cp /tmp/bridge-oem-shared \
+            ar.com.rango5gps.drivelabauto.boot.BridgeOemUnifiedInputSourceTest
+      - name: Verify harmless install-only layer trial and 67/33 manual layout preset
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-ota-layer-probe
+          javac -encoding UTF-8 -d /tmp/bridge-ota-layer-probe \
+            boot/tests/BridgeOtaLayerTrialSourceTest.java
+          java -cp /tmp/bridge-ota-layer-probe \
+            ar.com.rango5gps.drivelabauto.boot.BridgeOtaLayerTrialSourceTest
+      - name: Verify Android 11 T1Launcher virtual task-only handoff
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-t1-handoff
+          javac -encoding UTF-8 -d /tmp/bridge-t1-handoff \
+            boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeT1LauncherRoutePolicy.java \
+            boot/tests/BridgeT1LauncherRoutePolicyTest.java \
+            sender/tests/SenderT1LauncherTrialSourceTest.java
+          java -cp /tmp/bridge-t1-handoff \
+            ar.com.rango5gps.drivelabauto.boot.BridgeT1LauncherRoutePolicyTest
+          java -cp /tmp/bridge-t1-handoff \
+            ar.com.rango5gps.drivelabauto.sender.SenderT1LauncherTrialSourceTest
+      - name: Verify optional Android 11 split mosaic without Freeform captions
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-mosaic-native
+          javac -encoding UTF-8 -d /tmp/bridge-mosaic-native \
+            boot/tests/BridgeNativeSplitMosaicSourceTest.java
+          java -cp /tmp/bridge-mosaic-native \
+            ar.com.rango5gps.drivelabauto.boot.BridgeNativeSplitMosaicSourceTest
+      - name: Validate one-shot, same-stack Waze ADB foreground probe, never OEM
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-waze-foreground
+          javac -encoding UTF-8 -d /tmp/bridge-waze-foreground \
+            boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeClusterRecoveryPolicy.java \
+            boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWazeForegroundPolicy.java \
+            boot/tests/BridgeWazeForegroundProbeTest.java
+          java -cp /tmp/bridge-waze-foreground \
+            ar.com.rango5gps.drivelabauto.boot.BridgeWazeForegroundProbeTest
+      - name: Safety rollback and parked-only Waze/Maps stack recovery
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-cluster-recovery
+          javac -encoding UTF-8 -d /tmp/bridge-cluster-recovery \
+            boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeClusterRecoveryPolicy.java \
+            boot/tests/BridgeClusterRecoveryPolicyTest.java \
+            boot/tests/BridgeClusterSafetySourceTest.java
+          java -cp /tmp/bridge-cluster-recovery ar.com.rango5gps.drivelabauto.boot.BridgeClusterRecoveryPolicyTest
+          java -cp /tmp/bridge-cluster-recovery ar.com.rango5gps.drivelabauto.boot.BridgeClusterSafetySourceTest
+      - name: Verify Waze/Maps/BOTH destinations independent of 0/1 display and foreground
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-dual-route
+          javac -encoding UTF-8 -d /tmp/bridge-dual-route \
+            boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeDualRoutePolicy.java \
+            boot/tests/BridgeDualRoutePolicyTest.java
+          java -cp /tmp/bridge-dual-route ar.com.rango5gps.drivelabauto.boot.BridgeDualRoutePolicyTest
+      - name: Verify standalone Bridge Freeform two-screen ownership and geometry
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/jetour-bridge-windows
+          javac -encoding UTF-8 -d /tmp/jetour-bridge-windows \
+            boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWindowMath.java \
+            boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWindowsPolicy.java \
+            boot/tests/BridgeWindowMathTest.java \
+            boot/tests/BridgeWindowsPolicyTest.java \
+            boot/tests/BridgeStandaloneWindowContractTest.java \
+            boot/tests/BridgeSenderDisplayRoutingTest.java
+          java -cp /tmp/jetour-bridge-windows \
+            ar.com.rango5gps.drivelabauto.boot.BridgeWindowMathTest
+          java -cp /tmp/jetour-bridge-windows \
+            ar.com.rango5gps.drivelabauto.boot.BridgeWindowsPolicyTest
+          java -cp /tmp/jetour-bridge-windows \
+            ar.com.rango5gps.drivelabauto.boot.BridgeStandaloneWindowContractTest
+          java -cp /tmp/jetour-bridge-windows \
+            ar.com.rango5gps.drivelabauto.boot.BridgeSenderDisplayRoutingTest
+      - name: Verify safe owner-confirmed physical Display1 compositor proof
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-display1-proof
+          javac -encoding UTF-8 -d /tmp/bridge-display1-proof \
+            boot/tests/BridgeClusterSurfaceProbeSourceTest.java
+          java -cp /tmp/bridge-display1-proof \
+            ar.com.rango5gps.drivelabauto.boot.BridgeClusterSurfaceProbeSourceTest
+      - name: Validate explicit consent screen mirroring 20s only
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-projection-contract
+          javac -encoding UTF-8 -d /tmp/bridge-projection-contract \
+            boot/tests/BridgeMediaProjectionLabContractTest.java
+          java -cp /tmp/bridge-projection-contract \
+            ar.com.rango5gps.drivelabauto.boot.BridgeMediaProjectionLabContractTest
+      - name: Verify real owned Activity on private virtual display, not Waze
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-owned-scene
+          javac -encoding UTF-8 -d /tmp/bridge-owned-scene \
+            boot/tests/BridgeOwnedVirtualActivitySourceTest.java
+          java -cp /tmp/bridge-owned-scene \
+            ar.com.rango5gps.drivelabauto.boot.BridgeOwnedVirtualActivitySourceTest
+      - name: Verify isolated private VirtualDisplay to TextureView proof (no maps or OEM)
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/jetour-bridge-virtual
+          javac -encoding UTF-8 -d /tmp/jetour-bridge-virtual \
+            boot/tests/BridgeVirtualProbeContractTest.java
+          java -cp /tmp/jetour-bridge-virtual \
+            ar.com.rango5gps.drivelabauto.boot.BridgeVirtualProbeContractTest
+      - name: Verify Android immersive only in Bridge Activity windows
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-immersive
+          javac -encoding UTF-8 -d /tmp/bridge-immersive boot/tests/BridgeImmersiveSourceContractTest.java
+          java -cp /tmp/bridge-immersive ar.com.rango5gps.drivelabauto.boot.BridgeImmersiveSourceContractTest
+      - name: No map data wipe or OEM window mutation in diagnostic
+        run: |
+          set -euo pipefail
+          if grep -nE 'pm clear|am force-stop|settings put|am task resize|input keyevent' \
+            boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeAdbReadOnly.java; then
+            echo 'Destructive command in read-only diagnostic' >&2
+            exit 1
+          fi
+          echo 'PASS: no mutating ADB command in Bridge diagnostic'

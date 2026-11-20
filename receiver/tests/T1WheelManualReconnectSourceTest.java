@@ -42,10 +42,15 @@ public final class T1WheelManualReconnectSourceTest {
             settings.contains("openAccessibilitySettings()")&&
             settings.contains("Settings.ACTION_ACCESSIBILITY_SETTINGS"),
             "Wheel settings must offer explicit reconnect and Settings route");
-        must(home.contains("RUEDITA · RECONECTAR ACCESIBILIDAD")&&
-            home.contains("T1WheelAccessibilityRecovery.requestManual(this)")&&
-            home.contains("T1WheelOwnerAdbDialog.show(this)"),
-            "One-tap daily home recovery with explicit ADB or Settings choice");
+        // Receiver's home now delegates wheel ownership to Bridge. Its
+        // legacy wheel settings retain explicit Android-granted recovery
+        // solely as a migration/diagnostic tool, never on the daily home.
+        must(home.contains("ABRIR DRIVELAB BRIDGE")&&
+            home.contains("T1BootInstaller.openBoot(this,this::report)")&&
+            !home.contains("RUEDITA · RECONECTAR ACCESIBILIDAD")&&
+            !home.contains("T1WheelAccessibilityRecovery.requestManual(this)")&&
+            settings.contains("T1WheelAccessibilityRecovery.requestManual(this)"),
+            "Wheel legacy recovery stays in settings; daily home delegates to Bridge");
         must(adb.contains("private static final String LOOPBACK=\"127.0.0.1\"")&&
             adb.contains("settings put secure enabled_accessibility_services")&&
             !adb.contains("input keyevent 4")&&

@@ -8,6 +8,11 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Color;
+import android.graphics.Bitmap;
+import android.content.res.ColorStateList;
+import android.net.Uri;
+import android.provider.Settings;
+import android.widget.ImageView;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
@@ -22,98 +27,127 @@ import java.util.ArrayList;
 import java.util.Map;
 import java.util.TreeMap;
 
-/** Standalone DriveLab Boot: one touchscreen config page, not an OEM HOME.
- * The receiver app stays installed, owns ADB and its OEM/control services.
+/** Independent DriveLab Bridge: two-display requests, QR, encrypted
+ * Xiaomi navigation, wheel Accessibility and OTA are self-owned.
+ * Receiver may be uninstalled: no runtime IPC or signature dependency.
  */
 public final class BootActivity extends Activity
         implements SharedPreferences.OnSharedPreferenceChangeListener {
-    private static final String[] MODES={
-        "Principal izquierda + 2 a la derecha",
-        "Principal arriba + 2 abajo",
-        "Tres columnas",
-        "Dos columnas",
-        "Una aplicación (100 % de la zona útil)"};
-    private int mode,percent;
-    private int activeDisplay=0;
-    private boolean revealPending=false;
+    private static volatile boolean bridgeUiVisible=false;
+    static boolean isVisible(){return bridgeUiVisible;}
+    private ImageView qrImage;
+    private TextView qrCaption;
     private TextView statusLabel;
-    private final String[] selected=new String[3];
-    private boolean clusterEnabled,clusterConfirmed;
-    private int clusterCount,clusterPercent,captionSafeDp;
-    private final String[] clusterApps=new String[2];
+    private TextView wheelRecoveryLabel;
+    private TextView wheelCaptureLabel;
+    private TextView oemRegistrationLabel;
+    private TextView micButtonLabel;
+    private TextView backgroundStatusLabel;
     private LinearLayout content;
     private TextView percentLabel;
     private static final int BG=0xFF101B25,PANEL=0xFF23313C,
         WHITE=Color.WHITE,QUIET=0xFFBDCED8;
     private SharedPreferences prefs(){return BootConfig.prefs(this);}
+    private SharedPreferences linkPrefs(){return BootLinkService.prefs(this);}
     @Override protected void onCreate(Bundle state){
         super.onCreate(state);
-        SharedPreferences p=prefs();
-        mode=Math.min(4,Math.max(0,p.getInt("mode",3)));
-        percent=Math.min(99,Math.max(1,p.getInt("percent",50)));
-        for(int i=0;i<3;i++)
-            selected[i]=p.getString("pkg"+i,
-                i==0?BootConfig.RECEIVER:i==1?"com.spotify.music":"");
-        clusterEnabled=p.getBoolean("cluster_enabled",false);
-        clusterConfirmed=p.getBoolean("cluster_confirmed",false);
-        clusterCount=Math.min(2,Math.max(1,p.getInt("cluster_count",2)));
-        clusterPercent=Math.min(70,Math.max(30,p.getInt("cluster_percent",50)));
-        captionSafeDp=Math.min(88,Math.max(0,p.getInt("caption_safe_dp",44)));
-        for(int i=0;i<2;i++)
-            clusterApps[i]=p.getString("cluster_pkg"+i,
-                i==0?"com.waze":"com.google.android.apps.maps");
+        BridgeImmersive.apply(this);
+        // Never auto-launch a map on ignition and NEVER capture OEM wheel.
+        // Do not erase an owner's confirmed Display1 routing merely because
+        // Bridge's configuration Activity is opened/resumed.
+        if(!BridgeWheelAccessibilityService.isManuallyArmed()){
+            BridgeWheelAccessibilityService.prefs(this).edit()
+                .putBoolean(BridgeWheelAccessibilityService.ENABLED,false).apply();
+        }
+        if(!BridgeWheelAccessibilityService.isMicrophoneArmed()){
+            BridgeWheelAccessibilityService.prefs(this).edit()
+                .putBoolean(BridgeWheelAccessibilityService.MIC_ENABLED,false).apply();
+        }
         draw();
     }
     @Override protected void onResume(){
         super.onResume();
+        bridgeUiVisible=true;
+        // Jetour may suspend Android without BOOT_COMPLETED on ignition.
+        // When the owner opens Bridge after wake, restore ONLY the paired
+        // LAN listener; never re-pair or change cluster/OEM state.
+        if(BootConfig.enabled(this)){
+            try{
+                startForegroundService(new Intent(this,BootLinkService.class)
+                    .setAction(BootLinkService.START));
+            }catch(Exception failed){
+                prefs().edit().putString("last_status",
+                    "No se pudo reanudar receptor Xiaomi: "+
+                    failed.getClass().getSimpleName()).apply();
+            }
+        }
         prefs().registerOnSharedPreferenceChangeListener(this);
+        linkPrefs().registerOnSharedPreferenceChangeListener(this);
+        BridgeWheelAccessRecovery.prefs(this).registerOnSharedPreferenceChangeListener(this);
+        BridgeWheelAccessibilityService.prefs(this).registerOnSharedPreferenceChangeListener(this);
+        BridgeWheelOemBinder.monitorPrefs(this).registerOnSharedPreferenceChangeListener(this);
         if(content!=null)draw();
         onSharedPreferenceChanged(prefs(),"last_status");
     }
+    @Override public void onWindowFocusChanged(boolean hasFocus){
+        super.onWindowFocusChanged(hasFocus);
+        if(hasFocus)BridgeImmersive.apply(this);
+    }
     @Override protected void onPause(){
+        bridgeUiVisible=false;
         prefs().unregisterOnSharedPreferenceChangeListener(this);
+        linkPrefs().unregisterOnSharedPreferenceChangeListener(this);
+        BridgeWheelAccessRecovery.prefs(this).unregisterOnSharedPreferenceChangeListener(this);
+        BridgeWheelAccessibilityService.prefs(this).unregisterOnSharedPreferenceChangeListener(this);
+        BridgeWheelOemBinder.monitorPrefs(this).unregisterOnSharedPreferenceChangeListener(this);
         super.onPause();
     }
     @Override public void onSharedPreferenceChanged(SharedPreferences p,
             String key){
-        if(!"last_status".equals(key))return;
-        String current=p.getString("last_status","Sin diagnóstico");
+        if(p==BridgeWheelAccessibilityService.prefs(this)||
+           p==BridgeWheelOemBinder.monitorPrefs(this)){
+            runOnUiThread(()->{
+                if(wheelCaptureLabel!=null)
+                    wheelCaptureLabel.setText("CAPTURA VOLANTE · EN VIVO: "+
+                        BridgeWheelAccessibilityService.captureState(this));
+                if(oemRegistrationLabel!=null)
+                    oemRegistrationLabel.setText("BINDER OEM REAL: "+
+                        BridgeWheelAccessibilityService.oemState(this));
+                if(micButtonLabel!=null)
+                    micButtonLabel.setText("MICRÓFONO 1010 / VOZ: "+
+                        BridgeOemVoiceLauncher.state(this));
+            });
+            return;
+        }
+        if(p==BridgeWheelAccessRecovery.prefs(this)){
+            runOnUiThread(()->{
+                if(wheelRecoveryLabel!=null)
+                    wheelRecoveryLabel.setText(
+                        BridgeWheelAccessRecovery.describe(this));
+            });
+            return;
+        }
+        if(p==linkPrefs()){
+            if("qr_ticket".equals(key)||"qr_until".equals(key)||
+               "pair_status".equals(key)||"pair_port_status".equals(key)||
+               "status".equals(key)||
+               "received".equals(key)||"last_route".equals(key))
+                runOnUiThread(()->{
+                    if(qrImage!=null)renderQr();
+                    if(statusLabel!=null)statusLabel.setText(bridgeStatus());
+                });
+            return;
+        }
+        if(!"last_status".equals(key)&&
+           !BridgeBackgroundAccess.STATUS.equals(key))return;
         runOnUiThread(()->{
-            if(statusLabel!=null)statusLabel.setText(current);
-            if(!revealPending)return;
-            if(current.startsWith("MOSAICO_RECUPERADO_SOLICITADO:")){
-                revealPending=false;
-                Toast.makeText(this,
-                    "Ventanas existentes al frente · verificá el mosaico",
-                    Toast.LENGTH_LONG).show();
-                // Only after Receiver verifies and reorders the exact
-                // managed tasks. No Activity launch or forced termination.
-                moveTaskToBack(true);
-            }else if(current.startsWith("MOSAICO NO RECUPERADO:")||
-                     current.startsWith("MOSAICO OCUPADO:")||
-                     current.startsWith("NO SE ABRIÓ MOSAICO:")){
-                revealPending=false;
-                if(!isFinishing()&&!isDestroyed())
-                    new AlertDialog.Builder(this)
-                        .setTitle("NO SE MOSTRÓ EL MOSAICO")
-                        .setMessage(current)
-                        .setPositiveButton("ENTENDIDO",null).show();
-            }
+            if(backgroundStatusLabel!=null)
+                backgroundStatusLabel.setText(
+                    BridgeBackgroundAccess.describe(this));
+            if(statusLabel!=null)statusLabel.setText(bridgeStatus()+
+                "\\n\\nÚLTIMA ACCIÓN:\\n"+prefs().getString("last_status",""));
         });
     }
-    private void persist(){
-        SharedPreferences.Editor e=prefs().edit().putInt("mode",mode)
-            .putInt("percent",percent)
-            .putBoolean("cluster_enabled",clusterEnabled)
-            .putBoolean("cluster_confirmed",clusterConfirmed)
-            .putInt("cluster_count",clusterCount)
-            .putInt("cluster_percent",clusterPercent)
-            .putInt("caption_safe_dp",captionSafeDp);
-        for(int i=0;i<3;i++)e.putString("pkg"+i,selected[i]);
-        for(int i=0;i<2;i++)e.putString("cluster_pkg"+i,clusterApps[i]);
-        e.apply();
-    }
-    private int count(){return mode==4?1:mode==3?2:3;}
     private TextView text(String value,int sp,int color){
         TextView v=new TextView(this);
         v.setText(value);v.setTextSize(sp);v.setTextColor(color);
@@ -124,6 +158,11 @@ public final class BootActivity extends Activity
     private void button(String title,Runnable action){
         Button b=new Button(this);
         b.setAllCaps(false);b.setText(title);b.setTextSize(15);
+        boolean primary=title.contains("QR")||
+            title.contains("INICIAR RECEPTOR");
+        b.setBackgroundTintList(ColorStateList.valueOf(
+            primary?0xFF18C7D6:0xFF16465B));
+        b.setTextColor(primary?0xFF08242C:Color.WHITE);
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT);
@@ -133,206 +172,571 @@ public final class BootActivity extends Activity
     }
     private String labelFor(String pkg){
         if(pkg==null||pkg.isEmpty())return "SIN ELEGIR";
-        if(pkg.equals(BootConfig.RECEIVER))return "DriveLab T1 · Cockpit";
         try{
             PackageManager pm=getPackageManager();
             return pm.getApplicationLabel(pm.getApplicationInfo(pkg,0))
                 .toString()+" · "+pkg;
         }catch(Exception e){return pkg;}
     }
-    private static boolean safe(String pkg){
-        if(pkg==null||!pkg.matches(
-            "[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+"))
-            return false;
-        String p=pkg.toLowerCase(java.util.Locale.ROOT);
-        return !p.startsWith("android.")&&
-            !p.startsWith("com.android.")&&
-            !p.startsWith("com.autolink.")&&
-            !p.startsWith("com.jetour.")&&
-            !p.startsWith("com.chery.")&&
-            !p.startsWith("com.t1.")&&
-            !p.contains("launcher")&&
-            !p.contains("cluster")&&
-            !p.contains("vehicle")&&
-            !p.contains("systemui");
+    private void startLink(String action){
+        try{
+            Intent request=new Intent(this,BootLinkService.class)
+                .setAction(action);
+            if(BootLinkService.STOP.equals(action))
+                startService(request);
+            else startForegroundService(request);
+            prefs().edit().putString("last_status",
+                "Solicitud local: "+action+" · esperando confirmación").apply();
+        }catch(Exception ex){
+            new AlertDialog.Builder(this).setTitle("BRIDGE NO INICIADO")
+                .setMessage("Android rechazó el servicio: "+
+                    ex.getClass().getSimpleName()+": "+ex.getMessage())
+                .setPositiveButton("ENTENDIDO",null).show();
+        }
     }
-    private void chooseApp(int slot){
-        PackageManager pm=getPackageManager();
-        TreeMap<String,String> apps=new TreeMap<>(
-            String.CASE_INSENSITIVE_ORDER);
-        try{pm.getPackageInfo(BootConfig.RECEIVER,0);
-            apps.put("DriveLab T1 · Cockpit",BootConfig.RECEIVER);
-        }catch(Exception ignored){}
-        Intent query=new Intent(Intent.ACTION_MAIN)
-            .addCategory(Intent.CATEGORY_LAUNCHER);
-        for(ResolveInfo info:pm.queryIntentActivities(query,0)){
-            if(info.activityInfo==null)continue;
-            String pkg=info.activityInfo.packageName;
-            if(!safe(pkg))continue;
-            try{
-                ApplicationInfo app=pm.getApplicationInfo(pkg,0);
-                if((app.flags&(ApplicationInfo.FLAG_SYSTEM|
-                    ApplicationInfo.FLAG_UPDATED_SYSTEM_APP))!=0)
-                    continue;
-                apps.put(info.loadLabel(pm)+" · "+pkg,pkg);
-            }catch(Exception ignored){}
+    private String bridgeStatus(){
+        SharedPreferences p=linkPrefs();
+        return "RECEPTOR XIAOMI INDEPENDIENTE\n"+
+            p.getString("status","Receptor no iniciado")+
+            "\nQR: "+p.getString("pair_status","Sin vínculo verificado")+
+            "\n"+p.getString("last_route","Todavía no recibió destinos")+
+            "\nSolicitudes confirmadas por protocolo: "+p.getInt("received",0)+
+            "\nAUTOARRANQUE BRIDGE: "+(BootConfig.enabled(this)?
+                "ACTIVO, solo enlace Xiaomi":"APAGADO")+
+            "\nSEGUNDO PLANO: "+(BridgeBackgroundAccess.authorized(this)?
+                "AUTORIZADO POR ANDROID":"SIN PERMISO ANDROID")+
+            "\nVENTANAS MANUALES: Bridge propio; visibilidad requiere prueba. "+
+            "No se abre DriveLab Auto.";
+    }
+    private void renderQr(){
+        if(qrImage==null||qrCaption==null)return;
+        String payload=BootLinkService.qr(this);
+        if(payload.isEmpty()){
+            qrImage.setVisibility(View.GONE);
+            qrCaption.setText(
+                "El QR aparecerá cuando ambos puertos estén LISTOS. "+
+                "Navegación: "+linkPrefs().getString("status",
+                    "iniciando")+
+                " · QR: "+linkPrefs().getString("pair_port_status",
+                    "iniciando")+
+                " · "+linkPrefs().getString("pair_status",
+                    "Conectá Jetour y Xiaomi a la misma red."));
+            return;
         }
-        String[] labels=apps.keySet().toArray(new String[0]);
-        String[] ids=apps.values().toArray(new String[0]);
-        if(ids.length==0){
-            new AlertDialog.Builder(this)
-                .setMessage("No encontré aplicaciones instaladas para "+
-                    "el mosaico. Instalá Receiver primero.")
-                .setPositiveButton("OK",null).show();return;
+        try{
+            qrImage.setImageBitmap(BootQr.draw(payload));
+            qrImage.setVisibility(View.VISIBLE);
+            qrCaption.setText("Leelo desde Sender Xiaomi. "+
+                "Expira en 2 minutos. La clave no se muestra en texto.");
+        }catch(Exception ex){
+            qrImage.setVisibility(View.GONE);
+            qrCaption.setText("QR inválido: "+ex.getClass().getSimpleName());
         }
+    }
+    private void showQr(){
+        startLink(BootLinkService.PAIR_QR);
+        LinearLayout layout=new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(16,12,16,10);
+        qrCaption=new TextView(this);
+        qrCaption.setTextColor(Color.WHITE);
+        qrCaption.setTextSize(16);
+        layout.addView(qrCaption,new LinearLayout.LayoutParams(-1,-2));
+        qrImage=new ImageView(this);
+        qrImage.setBackgroundColor(Color.WHITE);
+        qrImage.setAdjustViewBounds(true);
+        layout.addView(qrImage,new LinearLayout.LayoutParams(-1,420));
+        renderQr();
         new AlertDialog.Builder(this)
-            .setTitle("APLICACIÓN · PANEL "+(slot+1))
-            .setItems(labels,(d,which)->{
-                selected[slot]=ids[which];
-                persist();draw();
-            })
-            .setNegativeButton("CANCELAR",null).show();
-    }
-    private void chooseMode(){
-        new AlertDialog.Builder(this).setTitle("DISTRIBUCIÓN")
-            .setSingleChoiceItems(MODES,mode,(d,which)->{
-                mode=which;persist();d.dismiss();draw();
-            })
-            .setNegativeButton("CANCELAR",null).show();
+            .setTitle("VINCULAR XIAOMI · DRIVE LAB BRIDGE")
+            .setView(layout)
+            .setPositiveButton("CERRAR",null)
+            .setOnDismissListener(d->{qrImage=null;qrCaption=null;})
+            .show();
     }
     private void setAuto(){
-        boolean current=BootConfig.enabled(this);
-        if(current){
-            prefs().edit().putBoolean("enabled",false).apply();
-            try{BootConfig.takeOver(this,false);}catch(Exception ignored){}
-            draw();return;
-        }
-        if(clusterEnabled&&!clusterConfirmed){
-            new AlertDialog.Builder(this)
-                .setTitle("PRIMERO PROBAR DISPLAY 1")
-                .setMessage("Aplicá el diseño con el vehículo detenido y "+
-                    "confirmá visualmente Waze/Maps en Display 1 antes de "+
-                    "habilitar el autoinicio de ambas pantallas.")
-                .setPositiveButton("ENTENDIDO",null).show();
+        if(BootConfig.enabled(this)){
+            prefs().edit().putBoolean("enabled",false)
+                .putString("last_status",
+                    "Autoinicio Bridge APAGADO sin tocar otras aplicaciones.")
+                .apply();
+            draw();
             return;
         }
         new AlertDialog.Builder(this)
-            .setTitle("ACTIVAR AL ENCENDER EL T1")
-            .setMessage("DriveLab Boot intentará abrir Display 0 y, si "+
-                "lo habilitaste, el diseño de navegación de Display 1 "+
-                "después de que Android termine de arrancar. "+
-                "El autoinicio independiente anterior del clúster se "+
-                "desactivará para evitar tareas duplicadas. No reemplaza "+
-                "T1 Launcher ni los indicadores OEM. "+
-                "Receiver debe estar instalado con ADB autorizado. "+
-                "Si Jetour bloquea el autoinicio, podrás aplicarlo "+
-                "manualmente. ¿Activar?")
+            .setTitle("AUTOINICIO INDEPENDIENTE")
+            .setMessage("Activará SOLAMENTE el receptor Xiaomi cifrado de "+
+                "DriveLab Bridge al encender. No arrancará la pantalla "+
+                "de DriveLab Auto, ni mapas, ni el firmware del tablero. "+
+                "La multiventana automática todavía está pendiente de "+
+                "validación. ¿Activar?")
             .setNegativeButton("CANCELAR",null)
             .setPositiveButton("ACTIVAR",(d,w)->{
-                try{
-                    persist();
-                    BootConfig.takeOver(this);
-                    prefs().edit().putBoolean("enabled",true).apply();
-                    draw();
-                    Toast.makeText(this,"DriveLab Boot configurado. "+
-                        "El arranque anterior de Cockpit queda desactivado; "+
-                        "los servicios Receiver siguen encendidos.",
-                        Toast.LENGTH_LONG).show();
-                }catch(Exception ex){
-                    new AlertDialog.Builder(this)
-                        .setTitle("NO SE ACTIVÓ AUTOINICIO")
-                        .setMessage(ex.getMessage())
-                        .setPositiveButton("OK",null).show();
-                }
+                prefs().edit().putBoolean("enabled",true)
+                    .putString("last_status",
+                        "Autoinicio Bridge: enlace Xiaomi opt-in; "+
+                        "no se abrirán mapas ni Cockpit").apply();
+                draw();
             }).show();
     }
-    /** Opening Display 0 is a separate, explicit action. If Cockpit is a
-     * chosen tile, seeing Receiver in that tile is expected, not a Boot menu.
+    private void stopBridge(){
+        new AlertDialog.Builder(this)
+            .setTitle("DETENER BRIDGE")
+            .setMessage("Detiene el receptor Xiaomi de Bridge y su "+
+                "próximo autoinicio. No fuerza detener mapas ni borra "+
+                "datos; no toca DriveLab Auto ni el firmware Jetour.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("DETENER",(d,w)->{
+                prefs().edit().putBoolean("enabled",false).apply();
+                startLink(BootLinkService.STOP);
+                // User requested complete shutdown of the standalone
+                // Bridge interface and listener; only this app's own task
+                // is removed. No force-stop or third-party task changes.
+                finishAndRemoveTask();
+            }).show();
+    }
+    private void requestOverlay(){
+        // Jetour does NOT expose the normal Android overlay settings page.
+        // Bridge's own local ADB path requires explicit owner confirmation,
+        // is restricted to its own package, and verifies the actual appop.
+        BridgeBackgroundAccess.ask(this);
+    }
+    /** Explicitly opt in to option navigation, never zoom. This can
+     * compete with T1Launcher's OEM hard-key callback, so owner approval
+     * is required and Bridge never enables it during auto-start.
      */
-    private void applyCenter(){
-        persist();
-        try{
-            BootConfig.assertReceiver(this);
-            java.util.HashSet<String> unique=new java.util.HashSet<>();
-            for(int i=0;i<count();i++){
-                if((!safe(selected[i])&&
-                    !BootConfig.RECEIVER.equals(selected[i]))||
-                    !unique.add(selected[i]))
-                    throw new IllegalStateException(
-                        "Display 0 · Panel "+(i+1)+": elegí apps distintas y válidas");
-            }
-            BootConfig.sendCenterOnly(this);
-            Toast.makeText(this,
-                "Preparación solicitada; comprobá el estado abajo. "+
-                "No se confirmó aún la visibilidad.",
-                Toast.LENGTH_LONG).show();
-        }catch(Exception error){
-            new AlertDialog.Builder(this)
-                .setTitle("DISPLAY 0 · NO ENVIADO")
-                .setMessage(error.getMessage())
-                .setPositiveButton("CERRAR",null).show();
+    private void toggleWheel(){
+        SharedPreferences p=BridgeWheelAccessibilityService.prefs(this);
+        if(p.getBoolean(BridgeWheelAccessibilityService.ENABLED,false)&&
+                BridgeWheelAccessibilityService.isManuallyArmed()){
+            BridgeWheelAccessibilityService.setManuallyArmed(false);
+            p.edit().putBoolean(BridgeWheelAccessibilityService.ENABLED,false)
+                .putString(BridgeWheelAccessibilityService.STATUS,
+                    "Volante Bridge desactivado por el propietario").apply();
+            draw();
+            return;
         }
+        new AlertDialog.Builder(this)
+            .setTitle("VOLANTE · RECIBIR TECLAS Y OPCIONES")
+            .setMessage("La rueda avanza o retrocede entre opciones "+
+                "visibles de Waze/Google Maps en el Display seleccionado. "+
+                "OK confirma y ATRÁS cancela. NO hace zoom.\n\n"+
+                "Antes de activarlo, desactivá VOLANTE → MAPA "+
+                "en T1Launcher: el Binder OEM puede permitir "+
+                "un solo controlador. Bridge no se activará "+
+                "automáticamente al encender ni tocará el sistema Jetour.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("ACTIVAR",(d,w)->{
+                BridgeWheelAccessibilityService.setManuallyArmed(true);
+                p.edit().putString(BridgeWheelAccessibilityService.TARGET,
+                    p.getString(BridgeWheelAccessibilityService.TARGET,
+                        BridgeWheelAccessibilityService.WAZE))
+                    .putBoolean(BridgeWheelAccessibilityService.ENABLED,true).apply();
+                draw();
+            }).show();
     }
-    /** Reveal ONLY already-created Freeform tasks; never a force-stop. */
-    private void showExistingMosaic(){
+    private void toggleOemMicrophone(){
+        SharedPreferences p=BridgeWheelAccessibilityService.prefs(this);
+        boolean enabled=BridgeWheelAccessibilityService.isMicrophoneArmed()&&
+            p.getBoolean(BridgeWheelAccessibilityService.MIC_ENABLED,false);
+        if(enabled){
+            BridgeWheelAccessibilityService.setMicrophoneArmed(false);
+            p.edit().putBoolean(BridgeWheelAccessibilityService.MIC_ENABLED,false)
+                .apply();
+            draw();
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("MICRÓFONO OEM 1010 · MISMO BINDER")
+            .setMessage("Con la Jetour estacionada: habilitá explícitamente "+
+                "que el botón físico 1010 abra el ASISTENTE DE VOZ "+
+                "PREDETERMINADO de Android mediante VOICE_COMMAND. "+
+                "Este acceso NO es el reconocimiento interno completo "+
+                "de DriveLab Auto y depende de que la ROM tenga un "+
+                "asistente configurado. Rueda 1000–1003 y micrófono 1010 "+
+                "comparten UN SOLO receptor Binder en Bridge. "+
+                "Desactivá antes los controles de volante de "+
+                "T1Launcher/DriveLab Auto para evitar conflicto; "+
+                "Bridge nunca los apaga por su cuenta. "+
+                "No se habilita automáticamente al encender.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("HABILITAR MIC 1010",(d,w)->{
+                BridgeWheelAccessibilityService.setMicrophoneArmed(true);
+                p.edit().putBoolean(BridgeWheelAccessibilityService.MIC_ENABLED,true)
+                    .apply();
+                draw();
+            }).show();
+    }
+    private void askRecaptureKeys(){
+        new AlertDialog.Builder(this)
+            .setTitle("RECAPTURAR VOLANTE · 20 SEGUNDOS")
+            .setMessage("Con la Jetour ESTACIONADA y el control de volante "+
+                "de T1Launcher DESACTIVADO para evitar dos receptores OEM. "+
+                "Bridge LIBERARÁ Y REINSCRIBIRÁ UNA VEZ su propio Binder "+
+                "para registrar 1000–1003 (rueda, OK y Atrás) y 1010 "+
+                "(micrófono). Si otra app mantiene el único callback, "+
+                "habrá un conflicto de registro; Bridge no la detiene. "+
+                "Durante estos 20 segundos NO ejecuta opciones, zoom, "+
+                "gestos ni acciones sobre Google Maps, Waze o Jetour. "+
+                "Se desconecta al terminar si el volante no estaba "+
+                "habilitado manualmente. No necesita ADB si Accesibilidad "+
+                "Bridge ya está conectada. Si está desconectada, "+
+                "usá el botón ADB local 5556/5555.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("CAPTURAR 20 S",(dialog,which)->{
+                BridgeWheelAccessibilityService.beginKeyCapture(this);
+                draw();
+            }).show();
+    }
+    private void chooseWheelDisplay(){
+        SharedPreferences p=BridgeWheelAccessibilityService.prefs(this);
+        int selected=p.getInt(BridgeWheelAccessibilityService.WINDOW_DISPLAY,1);
+        new AlertDialog.Builder(this)
+            .setTitle("VOLANTE · PANTALLA ANDROID REAL")
+            .setMessage("Elegí dónde está la ventana real y accesible de "+
+                "Google Maps/Waze, no dónde está una copia de imagen. "+
+                "La selección NO mueve tareas. Si el mapa queda detrás "+
+                "de una capa OEM, las teclas se registran pero NO se "+
+                "envían acciones.")
+            .setSingleChoiceItems(new String[]{
+                "DISPLAY 1 · tablero físico",
+                "DISPLAY 0 · pantalla central"
+            },selected==0?1:0,(dialog,which)->{
+                p.edit().putInt(BridgeWheelAccessibilityService.WINDOW_DISPLAY,
+                    which==1?0:1).apply();
+                dialog.dismiss();draw();
+            })
+            .setNegativeButton("CANCELAR",null).show();
+    }
+    private void chooseWheelMap(){
+        SharedPreferences p=BridgeWheelAccessibilityService.prefs(this);
+        String current=p.getString(BridgeWheelAccessibilityService.TARGET,
+            BridgeWheelAccessibilityService.WAZE);
+        new AlertDialog.Builder(this)
+            .setTitle("VOLANTE · MAPA ACTIVO DEL TABLERO")
+            .setSingleChoiceItems(new String[]{"Google Maps","Waze"},
+                BridgeWheelAccessibilityService.WAZE.equals(current)?1:0,
+                (d,which)->{
+                    p.edit().putString(BridgeWheelAccessibilityService.TARGET,
+                        which==0?BridgeWheelAccessibilityService.MAPS:
+                            BridgeWheelAccessibilityService.WAZE).apply();
+                    d.dismiss();draw();
+                })
+            .setNegativeButton("CANCELAR",null).show();
+    }
+    private void openWheelPermission(){
         try{
-            revealPending=true;
-            BootConfig.revealCenter(this);
-        }catch(Exception failure){
-            revealPending=false;
+            startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+        }catch(Exception ex){
             new AlertDialog.Builder(this)
-                .setTitle("NO SE PUDO SOLICITAR EL MOSAICO")
-                .setMessage(failure.getMessage())
+                .setTitle("ACCESIBILIDAD NO DISPONIBLE")
+                .setMessage("No pude abrir permisos de Android: "+
+                    ex.getClass().getSimpleName())
                 .setPositiveButton("ENTENDIDO",null).show();
         }
     }
-    /** This does not open the Receiver menus or alter Display 0 tasks. */
-    private void applyCluster(){
-        persist();
-        try{
-            if(clusterCount==2&&clusterApps[0].equals(clusterApps[1]))
-                throw new IllegalStateException(
-                    "Display 1 · Elegí Waze y Google Maps, no dos iguales");
-            BootConfig.sendClusterOnly(this);
-            new AlertDialog.Builder(this)
-                .setTitle("DISPLAY 1 · PRUEBA ENVIADA")
-                .setMessage("Sólo se solicitó el clúster, sin cambiar "+
-                    "las ventanas de la pantalla central ni salir de "+
-                    "DriveLab Boot. Comprobá visualmente Waze/Maps "+
-                    "en el tablero con el vehículo detenido. "+
-                    "Después tocá ACTUALIZAR DIAGNÓSTICO.")
-                .setPositiveButton("ENTENDIDO",null).show();
-        }catch(Exception error){
-            new AlertDialog.Builder(this)
-                .setTitle("DISPLAY 1 · NO ENVIADO")
-                .setMessage(error.getMessage())
-                .setPositiveButton("CERRAR",null).show();
+    private void chooseBridgeApp(boolean first){
+        TreeMap<String,String> choices=new TreeMap<>(
+            String.CASE_INSENSITIVE_ORDER);
+        PackageManager pm=getPackageManager();
+        Intent query=new Intent(Intent.ACTION_MAIN)
+            .addCategory(Intent.CATEGORY_LAUNCHER);
+        for(ResolveInfo found:pm.queryIntentActivities(query,0)){
+            if(found.activityInfo==null)continue;
+            String pkg=found.activityInfo.packageName;
+            if(!BridgeWindowsPolicy.allowed(pkg))continue;
+            choices.put(found.loadLabel(pm)+" · "+pkg,pkg);
         }
+        // Maps can be a preinstalled Android application. Keep named
+        // eligible choices even if Jetour filters system packages.
+        for(String pkg:new String[]{BridgeWindowsPolicy.MAPS,
+                BridgeWindowsPolicy.WAZE,BridgeWindowsPolicy.SPOTIFY}){
+            try{
+                if(pm.getLaunchIntentForPackage(pkg)==null)continue;
+                choices.put(pm.getApplicationLabel(
+                    pm.getApplicationInfo(pkg,0))+" · "+pkg,pkg);
+            }catch(Exception ignored){}
+        }
+        if(choices.isEmpty()){
+            new AlertDialog.Builder(this)
+                .setTitle("APLICACIONES DE BRIDGE")
+                .setMessage("No encontré aplicaciones instaladas para "+
+                    "estas ventanas. No se abrirá DriveLab Auto.")
+                .setPositiveButton("OK",null).show();
+            return;
+        }
+        String[] labels=choices.keySet().toArray(new String[0]);
+        String[] pkgs=choices.values().toArray(new String[0]);
+        new AlertDialog.Builder(this)
+            .setTitle(first?"PANTALLA CENTRAL · APP IZQUIERDA":
+                "PANTALLA CENTRAL · APP DERECHA")
+            .setItems(labels,(d,which)->{
+                BridgeStandaloneWindows.prefs(this).edit()
+                    .putString(first?BridgeStandaloneWindows.FIRST:
+                        BridgeStandaloneWindows.SECOND,pkgs[which]).apply();
+                draw();
+            })
+            .setNegativeButton("CANCELAR",null).show();
+    }
+    private void chooseBridgeMap(){
+        String current=BridgeStandaloneWindows.tabMap(this);
+        final String[] labels={"Waze","Google Maps","Waze + Google Maps"};
+        final String[] pkgs={BridgeWindowsPolicy.WAZE,
+            BridgeWindowsPolicy.MAPS,BridgeDualRoutePolicy.BOTH};
+        int checked=BridgeWindowsPolicy.MAPS.equals(current)?1:
+            BridgeDualRoutePolicy.BOTH.equals(current)?2:0;
+        new AlertDialog.Builder(this)
+            .setTitle("DISPLAY 1 · QUÉ MAPAS QUERÉS ABRIR")
+            .setSingleChoiceItems(labels,checked,(d,choice)->{
+                BridgeStandaloneWindows.prefs(this).edit()
+                    .putString(BridgeStandaloneWindows.TAB_MAP,pkgs[choice])
+                    .putBoolean(BridgeStandaloneWindows.TAB_CONFIRMED,false)
+                    .putBoolean(BridgeStandaloneWindows.TAB_ROUTE,false)
+                    .apply();
+                d.dismiss();draw();
+            })
+            .setNegativeButton("CANCELAR",null).show();
+    }
+    private void askProjectionLab(){
+        new AlertDialog.Builder(this)
+            .setTitle("LAB · COPIAR PANTALLA CENTRAL 20 SEGUNDOS")
+            .setMessage("SÓLO CON LA JETOUR ESTACIONADA. "+
+                "Esta prueba NO pone Waze en otra tarea. "+
+                "Le pedirá a Android permiso para CAPTURAR TODO lo "+
+                "que se ve en la pantalla central, incluyendo "+
+                "notificaciones y otros datos que aparezcan. "+
+                "La copia se muestra únicamente sobre el 65 % "+
+                "inferior del tablero durante un máximo de 20 segundos. "+
+                "No se graba, no se transmite por red ni se almacenan "+
+                "imágenes. Android puede rechazar la solicitud. "+
+                "Después de autorizar, abrí Waze en la central. "+
+                "No uses la prueba conduciendo.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("CONTINUAR A PERMISOS",(d,w)->
+                startActivity(new Intent(this,BridgeProjectionLabActivity.class)))
+            .show();
+    }
+    private void askPublicVirtualActivityProbe(){
+        new AlertDialog.Builder(this)
+            .setTitle("LAB · DISPLAY VIRTUAL PÚBLICO")
+            .setMessage("Sólo con la Jetour ESTACIONADA. Esta prueba de "+
+                "20 segundos crea un display virtual PÚBLICO y limitado "+
+                "a contenido propio, por lo que otras aplicaciones "+
+                "podrían verlo durante la sesión. Intentará abrir "+
+                "ÚNICAMENTE una actividad propia de Bridge; jamás "+
+                "Waze ni Maps. No duplica pantalla central, "+
+                "no modifica tareas ni funciones Jetour. "+
+                "Si Android deniega la actividad, lo informará "+
+                "y mostrará la animación de respaldo.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("PROBAR PÚBLICO 20 S",(d,w)->
+                startActivity(new Intent(this,
+                    BridgeClusterSurfaceProbeActivity.class)
+                    .putExtra(BridgeClusterSurfaceProbeActivity.EXTRA_ACTIVITY_PROBE,true)
+                    .putExtra(BridgeClusterSurfaceProbeActivity.EXTRA_PUBLIC_PROBE,true)))
+            .show();
+    }
+    private void askRealVirtualActivityProbe(){
+        new AlertDialog.Builder(this)
+            .setTitle("LAB · APP REAL EN DISPLAY VIRTUAL")
+            .setMessage("SÓLO CON EL VEHÍCULO ESTACIONADO. Durante 20 segundos "+
+                "Bridge intentará abrir una actividad Android PROPIA "+
+                "en la pantalla virtual y mostrar un contador animado "+
+                "sobre Radio/Bluetooth. No es Waze. No toca tareas "+
+                "ajenas, mapas, volante ni controles Jetour. "+
+                "El 35 % superior del tablero no dibuja Bridge.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("PROBAR APP 20 S",(d,w)->
+                startActivity(new Intent(this,
+                    BridgeClusterSurfaceProbeActivity.class)
+                    .putExtra(BridgeClusterSurfaceProbeActivity.EXTRA_ACTIVITY_PROBE,
+                        true)))
+            .show();
+    }
+    private void askRealClusterSurfaceProbe(){
+        new AlertDialog.Builder(this)
+            .setTitle("PRUEBA REAL DE SUPERFICIE · DISPLAY 1")
+            .setMessage("Sólo con la Jetour COMPLETAMENTE ESTACIONADA. "+
+                "Durante 12 segundos Bridge dibujará una banda de prueba "+
+                "en TODO EL ANCHO de la zona inferior del tablero, "+
+                "incluido Radio/Bluetooth. La zona superior de avisos "+
+                "quedará transparente. No es un mapa. "+
+                "Usará Presentation y VirtualDisplay "+
+                "propios sin ADB, ni tocar el firmware, ni modificar "+
+                "el orden de las superficies OEM. "+
+                "Se borrará al salir o automáticamente. "+
+                "NO uses esta prueba conduciendo. "+
+                "Si la banda cubre Radio/Bluetooth, la capa quedó delante; "+
+                "si Bluetooth sigue visible encima, el OEM domina. Android "+
+                "Jetour no deja superponer esta Presentation.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("COMPROBAR 12 SEGUNDOS",(d,w)->
+                startActivity(new Intent(this,
+                    BridgeClusterSurfaceProbeActivity.class)))
+            .show();
+    }
+    private void toggleDisplay1(){
+        if(BridgeStandaloneWindows.tableroEnabled(this)){
+            BridgeStandaloneWindows.disableTablero(this);
+            draw();
+            return;
+        }
+        String selection=BridgeStandaloneWindows.tabMap(this);
+        String name=BridgeDualRoutePolicy.BOTH.equals(selection)?
+            "Waze y Google Maps":BridgeWindowsPolicy.WAZE.equals(selection)?
+            "Waze":"Google Maps";
+        new AlertDialog.Builder(this)
+            .setTitle("ACTIVAR DISPLAY 1 · 100%")
+            .setMessage("Sólo con la Jetour ESTACIONADA. Bridge solicitará "+
+                name+" en Display 1, a pantalla completa, sin Freeform. "+
+                "La pantalla puede cubrir indicadores o avisos del auto: "+
+                "si ocurre, NO uses el mapa en marcha.\n\n"+
+                "Un pedido aceptado por Android no garantiza que el mapa "+
+                "sea visible ni que permanezca en Display 1. "+
+                "Para activar el envío de rutas tendrás que confirmar "+
+                "visualmente el resultado.\n\n"+
+                "El volante queda desactivado y el receptor Xiaomi "+
+                "no se modifica.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("ABRIR MAPA(S)",(d,w)->{
+                BridgeStandaloneWindows.Result result=
+                    BridgeStandaloneWindows.tablero(this);
+                if(!result.submitted){
+                    new AlertDialog.Builder(this)
+                        .setTitle("NO SE ABRIÓ DISPLAY 1")
+                        .setMessage(result.message)
+                        .setPositiveButton("ENTENDIDO",(dialog,x)->draw())
+                        .show();
+                    return;
+                }
+                new AlertDialog.Builder(this)
+                    .setTitle("CONFIRMAR DISPLAY 1")
+                    .setMessage(result.message+"\n\n"+
+                        "¿Comprobaste que el mapa aparece en el tablero "+
+                        "sin tapar indicadores o alertas esenciales? "+
+                        "Si pediste ambos, Android puede dejar sólo "+
+                        "uno visible encima del otro; los dos pueden "+
+                        "recibir destinos de forma independiente.")
+                    .setNegativeButton("NO ACTIVAR RUTAS",(dialog,x)->draw())
+                    .setPositiveButton("SÍ, ACTIVAR ENVÍOS",(dialog,x)->{
+                        BridgeStandaloneWindows.prefs(this).edit()
+                            .putBoolean(BridgeStandaloneWindows.TAB_CONFIRMED,true)
+                            .putBoolean(BridgeStandaloneWindows.TAB_ROUTE,true)
+                            .apply();
+                        draw();
+                    }).show();
+            }).show();
+    }
+    private void askBridgeWindows(boolean tablero){
+        new AlertDialog.Builder(this)
+            .setTitle(tablero?
+                "PRUEBA DISPLAY 1 · TABLERO JETOUR":
+                "PRUEBA DISPLAY 0 · DOS VENTANAS")
+            .setMessage("Realizar SOLAMENTE con la camioneta estacionada. "+
+                "Bridge solicitará ventanas Freeform por API Android. "+
+                "No detendrá apps ni borrará rutas o datos. "+
+                "Si Android bloquea el modo, no abrirá nada en "+
+                "pantalla completa. Los avisos Jetour tienen prioridad "+
+                "y la visibilidad final debe comprobarse físicamente. "+
+                "¿Enviar solicitud?")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("PROBAR",(d,w)->{
+                BridgeStandaloneWindows.Result result=tablero?
+                    BridgeStandaloneWindows.tablero(this):
+                    BridgeStandaloneWindows.center(this);
+                new AlertDialog.Builder(this)
+                    .setTitle(result.submitted?
+                        "SOLICITUD ENVIADA · NO VERIFICADA":
+                        "NO SE ABRIERON VENTANAS")
+                    .setMessage(result.message)
+                    .setPositiveButton("ENTENDIDO",(dialog,which)->draw())
+                    .show();
+            }).show();
+    }
+    /**
+     * Launches the REAL two selected apps using the Android 11 native
+     * split-screen modes, not Bridge's private test-pattern VirtualDisplay.
+     * This is explicitly separate from the proven Freeform mosaic so the
+     * owner can compare no-Freeform-caption behavior without data loss.
+     */
+    private void askNativeSplitMosaic(){
+        int ratio=BridgeStandaloneWindows.ratio(this);
+        new AlertDialog.Builder(this)
+            .setTitle("MOSAICO CENTRAL · ANDROID SPLIT SIN MARCOS FREEFORM")
+            .setMessage("SÓLO CON LA JETOUR ESTACIONADA. Se solicitará "+
+                "abrir las DOS apps elegidas en la división NATIVA de "+
+                "Android 11, sin las cabeceras de ventanas Freeform. "+
+                "Reparto solicitado: "+ratio+"/"+(100-ratio)+
+                ". Android Jetour puede imponer 50/50 o dejar barras "+
+                "del sistema; el resultado no está comprobado. "+
+                "A diferencia de la prueba VIRTUAL, esto abre apps "+
+                "reales e interactivas. Nunca modifica Jetour, "+
+                "ADB, clúster, rutas ni datos. ¿Probar?")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("PROBAR SPLIT NATIVO",(d,w)->{
+                BridgeStandaloneWindows.Result result=
+                    BridgeStandaloneWindows.centerSplitNoFreeform(this);
+                new AlertDialog.Builder(this)
+                    .setTitle(result.submitted?
+                        "DIVISIÓN SOLICITADA · VERIFICAR":
+                        "DIVISIÓN NATIVA RECHAZADA")
+                    .setMessage(result.message)
+                    .setPositiveButton("ENTENDIDO",(dialog,which)->draw())
+                    .show();
+            }).show();
+    }
+    private void chooseSpotifyPhoneRatio(){
+        if(!BridgeWindowsPolicy.SPOTIFY.equals(
+                BridgeStandaloneWindows.second(this))){
+            new AlertDialog.Builder(this)
+                .setTitle("SPOTIFY · PANEL DERECHO")
+                .setMessage("Elegí Spotify como APP DERECHA primero. "+
+                    "No se cambia ninguna ventana ni aplicación.")
+                .setPositiveButton("ENTENDIDO",null).show();
+            return;
+        }
+        android.util.DisplayMetrics dm=new android.util.DisplayMetrics();
+        getWindowManager().getDefaultDisplay().getRealMetrics(dm);
+        int width=dm.widthPixels;
+        if(width<=0||dm.density<=0f)return;
+        // Keep the right pane close to a portrait-phone content width
+        // so a responsive Spotify version may choose mobile controls.
+        int maxPhonePx=Math.round(390f*dm.density);
+        int suggested=Math.max(40,Math.min(80,
+            (int)Math.ceil(100f*(width-maxPhonePx)/(float)width)));
+        new AlertDialog.Builder(this)
+            .setTitle("SPOTIFY · ANCHO TIPO CELULAR")
+            .setMessage("Panel derecho objetivo: alrededor de 390 dp "+
+                "en esta pantalla. Reparto sugerido: "+
+                suggested+"/"+(100-suggested)+
+                ". Android/Spotify pueden seguir usando su interfaz "+
+                "de tablet; Bridge no puede forzar su diseño interno. "+
+                "El cambio se aplica sólo a la próxima apertura "+
+                "manual del mosaico, sin mover ventanas activas.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("GUARDAR REPARTO",(d,w)->{
+                BridgeStandaloneWindows.prefs(this).edit()
+                    .putInt(BridgeStandaloneWindows.RATIO,suggested).apply();
+                draw();
+            }).show();
+    }
+    private void askBridgeVirtualProbe(){
+        new AlertDialog.Builder(this)
+            .setTitle("PRUEBA AISLADA · PANTALLA VIRTUAL")
+            .setMessage("Sólo con la Jetour detenida. Se creará una pantalla "+
+                "virtual PRIVADA y se dibujará un patrón propio dentro de "+
+                "Bridge, en la pantalla central. NO se abrirá Waze, Spotify "+
+                "ni Display 1. La prueba se libera al salir o tras 2 minutos. "+
+                "¿Ejecutar?")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("PROBAR",(dialog,which)->
+                startActivity(new Intent(this,BridgeVirtualProbeActivity.class)))
+            .show();
     }
     private String packageVersion(String pkg){
         try{
             return getPackageManager().getPackageInfo(pkg,0).versionName;
         }catch(Exception ignored){return "NO INSTALADO";}
-    }
-    private void navigation(){
-        LinearLayout tabs=new LinearLayout(this);
-        tabs.setOrientation(LinearLayout.HORIZONTAL);
-        content.addView(tabs,new LinearLayout.LayoutParams(-1,-2));
-        for(int i=0;i<2;i++){
-            final int tab=i;
-            Button b=new Button(this);
-            b.setAllCaps(false);
-            b.setText(tab==0?"CENTRAL · 0":"CLÚSTER · 1");
-            b.setTextSize(17);
-            b.setTextColor(WHITE);
-            b.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
-                activeDisplay==tab?0xFF096D82:0xFF293D4A));
-            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(0,
-                ViewGroup.LayoutParams.WRAP_CONTENT,1f);
-            lp.setMargins(3,3,3,6);
-            tabs.addView(b,lp);
-            b.setOnClickListener(v->{activeDisplay=tab;draw();});
-        }
     }
     private void draw(){
         ScrollView scroll=new ScrollView(this);
@@ -343,149 +747,227 @@ public final class BootActivity extends Activity
         content.setPadding(14,8,14,24);
         scroll.addView(content);
 
-        text("DRIVELAB BOOT · CONFIGURACIÓN",24,WHITE);
-        text("BOOT "+packageVersion(getPackageName())+
-            "   |   RECEIVER "+packageVersion(BootConfig.RECEIVER),14,QUIET);
-        text("Son DOS apps distintas. Esta pantalla es Boot; Receiver "+
-            "se usa sólo como motor de las ventanas.",13,QUIET);
-        navigation();
-
-        if(activeDisplay==0){
-            text("DISPLAY 0 · PANTALLA CENTRAL",20,WHITE);
-            text("Elegí las apps que aparecerán juntas. "+
-                "No hace falta entrar al menú Mosaico del Receiver.",13,QUIET);
-            button("DISEÑO · "+MODES[mode],this::chooseMode);
-            for(int i=0;i<count();i++){
-                final int slot=i;
-                button("PANEL "+(slot+1)+" · "+labelFor(selected[slot]),
-                    ()->chooseApp(slot));
-            }
-            if(mode!=4){
-                TextView ratio=text("Reparto principal: "+percent+
-                    " % / "+(100-percent)+" %",15,WHITE);
-                SeekBar slider=new SeekBar(this);
-                slider.setMin(1);slider.setMax(99);slider.setProgress(percent);
-                slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
-                    @Override public void onProgressChanged(SeekBar b,int v,boolean user){
-                        percent=v;
-                        ratio.setText("Reparto principal: "+v+
-                            " % / "+(100-v)+" %");
-                        if(user)persist();
-                    }
-                    @Override public void onStartTrackingTouch(SeekBar b){}
-                    @Override public void onStopTrackingTouch(SeekBar b){persist();}
-                });
-                content.addView(slider);
-            }
-            TextView caption=text("BARRA GRIS · MARGEN INTERIOR: "+
-                captionSafeDp+" dp",15,WHITE);
-            SeekBar safeSeek=new SeekBar(this);
-            safeSeek.setMax(88);safeSeek.setProgress(captionSafeDp);
-            safeSeek.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
-                @Override public void onProgressChanged(SeekBar b,int v,boolean user){
-                    captionSafeDp=v;
-                    caption.setText("BARRA GRIS · MARGEN INTERIOR: "+v+" dp");
-                    if(user)persist();
+        text("DRIVELAB BRIDGE",24,0xFF32DBD5);
+        text("Versión "+packageVersion(getPackageName())+
+            " · Enlace Xiaomi + actualizador independientes",14,QUIET);
+        // Principal y único acceso a OTA, siempre arriba, sin desplazamiento.
+        button("BUSCAR ACTUALIZACIÓN · LAB OTA",()->
+            BootUpdater.check(this,s->prefs().edit()
+                .putString("last_status",s).apply()));
+        text("PRUEBA DE ENCENDIDO / ACTUALIZACIÓN · CAPA JETOUR",17,WHITE);
+        text("Esta versión NO cambia el orden de ventanas al instalarse. "+
+            "Después de actualizar y comprobar físicamente el tablero "+
+            "con la Jetour ESTACIONADA, marcá sólo lo que ves. "+
+            "Así distinguimos si la actualización por sí misma "+
+            "hizo visible Google Maps o Bluetooth sigue adelante. "+
+            "No modifica mapas, rutas, ventanas ni controles.",12,QUIET);
+        text(BridgeOtaLayerTrial.describe(this),13,WHITE);
+        button("RESULTADO OTA · AHORA SE VE GOOGLE MAPS",
+            ()->{BridgeOtaLayerTrial.record(this,true);draw();});
+        button("RESULTADO OTA · SIGUE BLUETOOTH / JETOUR ENCIMA",
+            ()->{BridgeOtaLayerTrial.record(this,false);draw();});
+        text("No abre la pantalla DriveLab Auto. No reemplaza "+
+            "el firmware ni los avisos del Jetour.",13,QUIET);
+        text("XIAOMI · CONEXIÓN DIRECTA",18,WHITE);
+        button("INICIAR RECEPTOR XIAOMI",()->
+            startLink(BootLinkService.START));
+        button("VINCULAR POR QR · MOSTRAR CÓDIGO",this::showQr);
+        button("CERRAR BRIDGE · APAGAR ENLACE Y SALIR",
+            this::stopBridge);
+        button(BridgeBackgroundAccess.authorized(this)?
+            "SEGUNDO PLANO: AUTORIZADO · REVISAR":
+            "HABILITAR SEGUNDO PLANO · ADB LOCAL",this::requestOverlay);
+        backgroundStatusLabel=text(
+            BridgeBackgroundAccess.describe(this),12,QUIET);
+        text("PANTALLA CENTRAL · DISPLAY 0 · BRIDGE",18,WHITE);
+        text("Panel izquierdo ancho + panel derecho vertical "+
+            "(Spotify tipo celular). Para pruebas también podés "+
+            "elegir Spotify y ProManager; DriveLab Auto está excluido.",12,QUIET);
+        button("APP IZQUIERDA · "+
+            labelFor(BridgeStandaloneWindows.first(this)),
+            ()->chooseBridgeApp(true));
+        button("APP DERECHA · "+
+            labelFor(BridgeStandaloneWindows.second(this)),
+            ()->chooseBridgeApp(false));
+        int centerRatio=BridgeStandaloneWindows.ratio(this);
+        TextView ratioInfo=text("REPARTO CENTRAL: "+
+            centerRatio+"% / "+(100-centerRatio)+"%",14,WHITE);
+        SeekBar bridgeRatio=new SeekBar(this);
+        bridgeRatio.setMin(40);bridgeRatio.setMax(80);
+        bridgeRatio.setProgress(centerRatio);
+        bridgeRatio.setOnSeekBarChangeListener(
+            new SeekBar.OnSeekBarChangeListener(){
+                @Override public void onProgressChanged(
+                    SeekBar bar,int value,boolean user){
+                    ratioInfo.setText("REPARTO CENTRAL: "+
+                        value+"% / "+(100-value)+"%");
+                    if(user)BridgeStandaloneWindows.prefs(BootActivity.this)
+                        .edit().putInt(BridgeStandaloneWindows.RATIO,value)
+                        .apply();
                 }
-                @Override public void onStartTrackingTouch(SeekBar b){}
-                @Override public void onStopTrackingTouch(SeekBar b){persist();}
+                @Override public void onStartTrackingTouch(SeekBar bar){}
+                @Override public void onStopTrackingTouch(SeekBar bar){}
             });
-            content.addView(safeSeek);
-            text("Este margen protege los botones propios de DriveLab. "+
-                "No elimina las barras de Android o Jetour.",12,QUIET);
-            button("▶ MOSTRAR MOSAICO · RECUPERAR VENTANAS",
-                this::showExistingMosaic);
-            button("PREPARAR / CAMBIAR DISTRIBUCIÓN",this::applyCenter);
-            text("MOSTRAR: trae al frente las tareas existentes que "+
-                "DriveLab pueda verificar. PREPARAR: crea/redimensiona "+
-                "solamente cuando cambiás el diseño. Nunca hace "+
-                "Forzar detención ni borra datos.",12,QUIET);
-        }else{
-            text("DISPLAY 1 · CLÚSTER / MAPAS",20,WHITE);
-            text("Elegí Waze y Google Maps ACÁ. No hace falta abrir "+
-                "la pantalla «PROBAR» del Receiver.",13,QUIET);
-            button(clusterCount==1?
-                "DISEÑO: 1 MAPA PANTALLA COMPLETA · CAMBIAR":
-                "DISEÑO: 2 MAPAS DIVIDIDOS · CAMBIAR",
-                ()->{clusterCount=clusterCount==1?2:1;
-                    clusterConfirmed=false;persist();draw();});
-            for(int i=0;i<clusterCount;i++){
-                final int slot=i;
-                String choice="com.waze".equals(clusterApps[i])?
-                    "WAZE":"GOOGLE MAPS";
-                button("ELEGIR MAPA "+(slot+1)+" · "+choice,
-                    ()->new AlertDialog.Builder(this)
-                        .setTitle("DISPLAY 1 · MAPA "+(slot+1))
-                        .setItems(new String[]{"WAZE","GOOGLE MAPS"},
-                            (d,which)->{
-                                clusterApps[slot]=which==0?
-                                    "com.waze":"com.google.android.apps.maps";
-                                clusterConfirmed=false;persist();draw();
-                            })
-                        .setNegativeButton("CANCELAR",null).show());
-            }
-            if(clusterCount==2){
-                TextView split=text("DIVISIÓN: "+clusterPercent+" % / "+
-                    (100-clusterPercent)+" %",15,WHITE);
-                SeekBar slider=new SeekBar(this);
-                slider.setMin(30);slider.setMax(70);
-                slider.setProgress(clusterPercent);
-                slider.setOnSeekBarChangeListener(new SeekBar.OnSeekBarChangeListener(){
-                    @Override public void onProgressChanged(SeekBar b,int v,boolean user){
-                        clusterPercent=v;
-                        if(user)clusterConfirmed=false;
-                        split.setText("DIVISIÓN: "+v+" % / "+(100-v)+" %");
-                        if(user)persist();
-                    }
-                    @Override public void onStartTrackingTouch(SeekBar b){}
-                    @Override public void onStopTrackingTouch(SeekBar b){persist();}
-                });
-                content.addView(slider);
-            }
-            button("▶ PROBAR SOLO DISPLAY 1 · SIN SALIR DE BOOT",
-                this::applyCluster);
-            text("La prueba requiere que Receiver ya tenga identificado "+
-                "el Display 1 y detecte 0 km/h. Si no, no moverá "+
-                "ventanas y lo indicará el diagnóstico.",12,QUIET);
-            button(clusterConfirmed?
-                "CONFIGURACIÓN COMPROBADA · RECONFIRMAR":
-                "CONFIRMAR DISEÑO DEL CLÚSTER TRAS VERLO",
-                ()->new AlertDialog.Builder(this)
-                    .setTitle("CONFIRMACIÓN VISUAL")
-                    .setMessage("¿Viste físicamente Waze y/o Google Maps "+
-                        "en Display 1, con el vehículo estacionado "+
-                        "y sin tapar alertas ni instrumentos?")
-                    .setNegativeButton("TODAVÍA NO",null)
-                    .setPositiveButton("SÍ, CONFIRMADO",(d,w)->{
-                        clusterConfirmed=true;persist();draw();
-                    }).show());
-            button(clusterEnabled?
-                "AUTOBOOT INCLUYE CLÚSTER: SÍ · CAMBIAR":
-                "AUTOBOOT INCLUYE CLÚSTER: NO · CAMBIAR",
-                ()->{
-                    clusterEnabled=!clusterEnabled;
-                    if(!clusterEnabled)clusterConfirmed=false;
-                    persist();draw();
-                });
-            text(clusterEnabled?
-                "Display 1 se incluirá en el próximo encendido SOLO "+
-                    "si su diseño fue confirmado.":
-                "Display 1 puede probarse manualmente, pero no "+
-                    "se abrirá con Boot al encender.",12,QUIET);
-        }
-        text("INICIO AUTOMÁTICO DE BOOT",17,WHITE);
+        content.addView(bridgeRatio);
+        button("MOSAICO · SPOTIFY TIPO CELULAR · PANEL ANGOSTO",
+            this::chooseSpotifyPhoneRatio);
+        button("MOSAICO · PRESET 67% MAPA / 33% SEGUNDA APP",()->{
+            // Manual layout preference only; intentionally NO app launch.
+            BridgeStandaloneWindows.prefs(this).edit()
+                .putInt(BridgeStandaloneWindows.RATIO,67).apply();
+            draw();
+        });
+        text("Preset sólo para la PRÓXIMA apertura manual de dos "+
+            "ventanas. No crea todavía bordes redondeados ni el motor "+
+            "de APP 2 de T1Launcher; no redimensiona tareas activas.",12,QUIET);
+        button("PROBAR DOS VENTANAS · SÓLO BRIDGE · ESTACIONADO",
+            ()->askBridgeWindows(false));
+        button("PROBAR MOSAICO SIN CABECERAS · SPLIT NATIVO",
+            this::askNativeSplitMosaic);
+        text("Este segundo modo solicita pantalla dividida Android 11 "+
+            "en vez de Freeform. Puede quitar las cabeceras de cada app, "+
+            "pero Jetour decide si respeta la proporción y las barras. "+
+            "La prueba virtual de Bridge NO puede alojar aplicaciones "+
+            "externas; sólo mostraba contenido propio.",12,QUIET);
+        button("LAB · PROBAR PANTALLA VIRTUAL · SOLO CENTRAL",
+            this::askBridgeVirtualProbe);
+        text("Prueba de arquitectura T1N145: pantalla virtual privada, "+
+            "SurfaceTexture y Presentation propias. Sólo patrón de "+
+            "diagnóstico; todavía NO migra ni muestra aplicaciones "+
+            "en el tablero.",12,QUIET);
+        text("PANTALLA DEL TABLERO · DISPLAY 1",18,WHITE);
+        String tabChoice=BridgeStandaloneWindows.tabMap(this);
+        String tabName=BridgeDualRoutePolicy.BOTH.equals(tabChoice)?
+            "WAZE + GOOGLE MAPS":BridgeWindowsPolicy.WAZE.equals(tabChoice)?
+            "WAZE":"GOOGLE MAPS";
+        button("MAPA(S) DEL TABLERO: "+tabName+" · CAMBIAR",
+            this::chooseBridgeMap);
+        boolean tabActive=BridgeStandaloneWindows.tableroEnabled(this);
+        button(tabActive?
+            "DESACTIVAR DISPLAY 1 · ENVIAR A CENTRAL":
+            "ACTIVAR DISPLAY 1 · PANTALLA COMPLETA 100%",
+            this::toggleDisplay1);
+        text(tabActive?
+            "DISPLAY 1 ACTIVADO PARA RUTAS: "+tabName+
+            ". El destino Waze/Google Maps/Ambos se selecciona "+
+            "desde Sender y no depende de la app visible.":
+            "DISPLAY 1 SIN RUTAS. Los destinos se envían a Display 0. "+
+            "Desactivar no cierra ni borra aplicaciones ya abiertas "+
+            "por Android.",12,QUIET);
+        button("COMPROBAR CAPA INFERIOR COMPLETA · DISPLAY 1 · 12 S",
+            this::askRealClusterSurfaceProbe);
+        button("LAB · PROBAR APP REAL EN CAPA VIRTUAL · 20 S",
+            this::askRealVirtualActivityProbe);
+        button("LAB · DISPLAY VIRTUAL PÚBLICO · APP PROPIA · 20 S",
+            this::askPublicVirtualActivityProbe);
+        button("LAB · COPIAR CENTRAL A TABLERO · PERMISO · 20 S",
+            this::askProjectionLab);
+        text("ÚLTIMA CAPTURA: "+BridgeProjectionLabService.lastResult(this),
+            12,QUIET);
+        text("RESULTADO CAPA / APP: "+
+            BridgeClusterSurfaceProbeActivity.lastResult(this),12,QUIET);
+        text("DIAGNÓSTICO PERSISTENTE: "+
+            BridgeClusterSurfaceProbeActivity.lastDiagnostic(this),12,QUIET);
+        button("LIBERAR CLÚSTER · SÓLO MAPAS VERIFICADOS",
+            ()->BridgeClusterRecovery.ask(this));
+        text("RECUPERACIÓN: "+BridgeClusterRecovery.status(this),12,QUIET);
+        text("ESTADO DE VENTANAS: "+
+            BridgeStandaloneWindows.prefs(this).getString(
+                BridgeStandaloneWindows.LAST,"SIN SOLICITUD DESDE BRIDGE"),
+            12,QUIET);
+        text("VOLANTE · SELECCIÓN DE OPCIONES · SIN ZOOM",18,WHITE);
+        SharedPreferences wheel=BridgeWheelAccessibilityService.prefs(this);
+        boolean wheelOn=wheel.getBoolean(
+            BridgeWheelAccessibilityService.ENABLED,false);
+        String wheelTarget=BridgeWheelAccessibilityService.targetFor(this);
+        boolean followsTablero=BridgeStandaloneWindows.tableroEnabled(this)&&
+            !BridgeDualRoutePolicy.BOTH.equals(
+                BridgeStandaloneWindows.tabMap(this));
+        String wheelMapName=BridgeWheelAccessibilityService.WAZE.equals(wheelTarget)?
+            "WAZE":"GOOGLE MAPS";
+        if(followsTablero)
+            text("MAPA DEL VOLANTE: "+wheelMapName+
+                " · AUTOMÁTICO SEGÚN MAPA DEL TABLERO",13,WHITE);
+        else
+            button("MAPA DEL VOLANTE: "+wheelMapName+" · CAMBIAR",
+                this::chooseWheelMap);
+        int actualDisplay=wheel.getInt(
+            BridgeWheelAccessibilityService.WINDOW_DISPLAY,1);
+        button("PANTALLA DE CONTROLES: DISPLAY "+actualDisplay+" · CAMBIAR",
+            this::chooseWheelDisplay);
+        button("RECAPTURAR TECLAS OEM · 20 S · SIN ZOOM",
+            this::askRecaptureKeys);
+        text("GOOGLE MAPS · NAVEGACIÓN AUTOMÁTICA: "+
+            BridgeGoogleMapsReplacement.status(this),12,QUIET);
+        text("DriveLab Auto: destino recibido de Sender → google.navigation "+
+            "→ completar automáticamente Iniciar / reemplazo si Android "+
+            "lo muestra durante 12 segundos. Sin botón manual, sin zoom.",
+            12,QUIET);
+        wheelCaptureLabel=text("CAPTURA VOLANTE · EN VIVO: "+
+            BridgeWheelAccessibilityService.captureState(this),12,QUIET);
+        oemRegistrationLabel=text("BINDER OEM REAL: "+
+            BridgeWheelAccessibilityService.oemState(this),12,QUIET);
+        boolean micOn=BridgeWheelAccessibilityService.isMicrophoneArmed()&&
+            wheel.getBoolean(BridgeWheelAccessibilityService.MIC_ENABLED,false);
+        button(micOn?"MICRÓFONO OEM 1010: ACTIVADO · DESACTIVAR":
+            "MICRÓFONO OEM 1010: DESACTIVADO · ACTIVAR",
+            this::toggleOemMicrophone);
+        micButtonLabel=text("MICRÓFONO 1010 / VOZ: "+
+            BridgeOemVoiceLauncher.state(this),12,QUIET);
+        text("ACCESIBILIDAD REAL: "+
+            (BridgeWheelAccessibilityService.isConnected()?
+                "CONECTADA":"DESCONECTADA · revisar ADB LOCAL 5556/5555"),
+            12,QUIET);
+        button(wheelOn&&BridgeWheelAccessibilityService.isManuallyArmed()?
+            "VOLANTE BRIDGE: ACTIVADO · DESACTIVAR":
+            "VOLANTE BRIDGE: DESACTIVADO · ACTIVAR",this::toggleWheel);
+        text(wheelOn&&BridgeWheelAccessibilityService.isManuallyArmed()?
+            "VOLANTE HABILITADO MANUALMENTE. Binder OEM puede recibir "+
+            "teclas sin ventana de mapa visible, igual que DriveLab Auto. "+
+            "Sólo ejecuta opciones, OK y Atrás si verifica el mapa en "+
+            "el Display seleccionado. Sin zoom.":
+            "VOLANTE APAGADO: no se registra la rueda OEM. "+
+            "Para probarlo, desactivá VOLANTE → MAPA en T1Launcher, "+
+            "elegí Waze y pulsá ACTIVAR. No se inicia solo.",13,WHITE);
+        button("RECONECTAR ACCESIBILIDAD · ADB LOCAL · SIN TERMUX",
+            ()->BridgeWheelAccessRecovery.ask(this));
+        wheelRecoveryLabel=text(
+            BridgeWheelAccessRecovery.describe(this),13,WHITE);
+        text("La ROM Jetour puede bloquear Ajustes de accesibilidad. "+
+            "No necesitás abrirlos otra vez: el permiso ya se obtuvo "+
+            "por ADB local.",12,QUIET);
+        text("ADB es local 127.0.0.1:5555/5556, no requiere Termux "+
+            "si Android autorizó la clave de Bridge LAB. El volante "+
+            "NO se activa con este botón; se controla por separado.",12,QUIET);
+        text("RUEDA: siguiente/anterior opción. OK: confirmar. "+
+            "ATRÁS: cancelar dentro del mapa. Nunca zoom. "+
+            "El Binder debe declarar REGISTRADO y contar eventos reales. "+
+            "Android debe autorizar accesibilidad. Desactivá primero "+
+            "el volante de T1Launcher: ambos no deben competir.",12,QUIET);
+        text("ÚLTIMO ESTADO VOLANTE: "+
+            wheel.getString(BridgeWheelAccessibilityService.STATUS,
+                "Sin prueba física"),12,QUIET);
+        text("VENTANAS DISPLAY 0 Y DISPLAY 1",18,WHITE);
+        text("El motor Freeform de Bridge está separado de Receiver. "+
+            "Su disponibilidad real depende de Android Jetour. "+
+            "No abre DriveLab Auto, no fuerza cierres ni promete "+
+            "visibilidad sin inspección física.",13,QUIET);
+        text("DIAGNÓSTICO DE CAPAS · SÓLO LECTURA",17,WHITE);
+        button("INSPECCIONAR TABLERO · NO MODIFICAR CAPAS",
+            ()->startActivity(new Intent(this,BridgeLayersActivity.class)));
+        text("INICIO AUTOMÁTICO DE BRIDGE · SÓLO XIAOMI",17,WHITE);
         boolean enabled=BootConfig.enabled(this);
         button(enabled?"AUTOINICIO: ACTIVADO · DESACTIVAR":
             "AUTOINICIO: DESACTIVADO · ACTIVAR",this::setAuto);
         text("ESTADO / ERRORES DEL ÚLTIMO PEDIDO",17,WHITE);
-        statusLabel=text(prefs().getString("last_status",
-            "Todavía no hay un diagnóstico"),13,QUIET);
+        statusLabel=text(bridgeStatus()+"\n\nÚLTIMA ACCIÓN:\n"+
+            prefs().getString("last_status",
+                "Sin solicitudes enviadas"),13,QUIET);
         statusLabel.setBackgroundColor(PANEL);
         statusLabel.setTextIsSelectable(true);
-        text("CONEXIÓN CON EL CELULAR: no se diagnostica desde Boot. "+
-            "La conexión Sender/Receiver es independiente del mosaico; "+
-            "no se informa como conectada hasta verificarla.",12,QUIET);
-        button("ACTUALIZAR DIAGNÓSTICO (SIN SALIR)",this::draw);
+        text("Los estados de Xiaomi corresponden exclusivamente "+
+            "a Bridge. Un QR emitido NO es conexión confirmada.",12,QUIET);
+        button("ACTUALIZAR ESTADO",this::draw);
         setContentView(scroll);
         getWindow().getDecorView().setSystemUiVisibility(
             View.SYSTEM_UI_FLAG_LAYOUT_STABLE|

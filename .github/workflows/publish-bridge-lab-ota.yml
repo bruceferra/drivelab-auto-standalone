@@ -1,0 +1,203 @@
+name: Publish signed Bridge LAB independent OTA v24
+# One-off, reviewed publication from the owner-maintained Bridge branch.
+# T1Launcher task parser regression verified after fixing regex group 3 (actual Maps Activity).
+# LAB 0.1.27 source-only MediaProjection QA passed; Android APK and signer verified at publication.
+# LAB 0.1.27 requires an owner-only private Display Activity source contract.
+# All Android Lint fatal checks remain active except the narrowly guarded
+# OEM private-API reflection in the parked-only Freeform experiment.
+# NEVER change stable /releases/latest. The isolated LAB has its own package.
+on:
+  push:
+    branches: [refactor/boot-receiver-unificado-seguro]
+    paths: ['.github/workflows/publish-bridge-lab-ota.yml']
+    # Snapshot persistence regression tests passed on Bridge read-only CI.
+    # Run signed LAB publisher only after testing and keeping the release separate.
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: drivelab-bridge-lab-signed-ota
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.repository == 'bruceferra/drivelab-auto-standalone' && github.ref == 'refs/heads/refactor/boot-receiver-unificado-seguro'
+    runs-on: ubuntu-24.04
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RECEIVER_STORE_PASSWORD: ${{ secrets.RECEIVER_STORE_PASSWORD }}
+      RECEIVER_KEY_ALIAS: ${{ secrets.RECEIVER_KEY_ALIAS }}
+      RECEIVER_KEY_PASSWORD: ${{ secrets.RECEIVER_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Restore existing permanent signing identity (never output keys)
+        env:
+          RECEIVER_KEYSTORE_B64: ${{ secrets.RECEIVER_KEYSTORE_B64 }}
+        run: |
+          set -euo pipefail
+          tool=$(command -v sdkmanager || find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)
+          "$tool" 'platforms;android-35' 'build-tools;35.0.0'
+          test -n "$RECEIVER_KEYSTORE_B64" && test -n "$RECEIVER_STORE_PASSWORD"
+          test -n "$RECEIVER_KEY_ALIAS" && test -n "$RECEIVER_KEY_PASSWORD"
+          printf %s "$RECEIVER_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/receiver.p12"
+          chmod 600 "$RUNNER_TEMP/receiver.p12"
+          echo "RECEIVER_KEYSTORE=$RUNNER_TEMP/receiver.p12" >> "$GITHUB_ENV"
+      - name: Contract test LAB OTA package, signer, version and no ADB
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-lab-ota
+          javac -encoding UTF-8 -d /tmp/bridge-lab-ota boot/tests/BridgeLabOtaSourceContractTest.java
+          java -cp /tmp/bridge-lab-ota ar.com.rango5gps.drivelabauto.boot.BridgeLabOtaSourceContractTest
+          javac -encoding UTF-8 -d /tmp/bridge-lab-ota boot/tests/BridgeImmersiveSourceContractTest.java
+          java -cp /tmp/bridge-lab-ota ar.com.rango5gps.drivelabauto.boot.BridgeImmersiveSourceContractTest
+          javac -encoding UTF-8 -d /tmp/bridge-lab-ota \
+            boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeAccessPolicy.java \
+            boot/tests/BridgeAccessPolicyTest.java \
+            boot/tests/BridgeAccessRecoverySourceTest.java \
+            boot/tests/BridgeIndependentBootContractTest.java
+          java -cp /tmp/bridge-lab-ota ar.com.rango5gps.drivelabauto.boot.BridgeAccessPolicyTest
+          java -cp /tmp/bridge-lab-ota ar.com.rango5gps.drivelabauto.boot.BridgeAccessRecoverySourceTest
+          java -cp /tmp/bridge-lab-ota ar.com.rango5gps.drivelabauto.boot.BridgeIndependentBootContractTest
+          javac -encoding UTF-8 -d /tmp/bridge-lab-ota boot/tests/BridgeUpdateInstallerSourceContractTest.java
+          java -cp /tmp/bridge-lab-ota ar.com.rango5gps.drivelabauto.boot.BridgeUpdateInstallerSourceContractTest
+          javac -encoding UTF-8 -d /tmp/bridge-lab-ota boot/tests/BridgeBackgroundLaunchSourceTest.java
+          java -cp /tmp/bridge-lab-ota ar.com.rango5gps.drivelabauto.boot.BridgeBackgroundLaunchSourceTest
+          javac -encoding UTF-8 -d /tmp/bridge-lab-ota \
+            boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeClusterRecoveryPolicy.java \
+            boot/tests/BridgeClusterRecoveryPolicyTest.java \
+            boot/tests/BridgeClusterSafetySourceTest.java
+          java -cp /tmp/bridge-lab-ota ar.com.rango5gps.drivelabauto.boot.BridgeClusterRecoveryPolicyTest
+          java -cp /tmp/bridge-lab-ota ar.com.rango5gps.drivelabauto.boot.BridgeClusterSafetySourceTest
+          javac -encoding UTF-8 -d /tmp/bridge-lab-ota boot/tests/BridgeLayerCapturePersistenceSourceTest.java
+          java -cp /tmp/bridge-lab-ota ar.com.rango5gps.drivelabauto.boot.BridgeLayerCapturePersistenceSourceTest
+          javac -encoding UTF-8 -d /tmp/bridge-lab-ota \
+            boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeClusterRecoveryPolicy.java \
+            boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWazeForegroundPolicy.java \
+            boot/tests/BridgeWazeForegroundProbeTest.java
+          java -cp /tmp/bridge-lab-ota ar.com.rango5gps.drivelabauto.boot.BridgeWazeForegroundProbeTest
+          javac -encoding UTF-8 -d /tmp/bridge-lab-ota \
+            boot/tests/BridgeClusterSurfaceProbeSourceTest.java \
+            boot/tests/BridgeOwnedVirtualActivitySourceTest.java \
+            boot/tests/BridgeMediaProjectionLabContractTest.java \
+            boot/tests/BridgeMapsReceiverAutoRouteSourceTest.java \
+            boot/tests/BridgeWheelReceiverParitySourceTest.java \
+            boot/tests/BridgeOemUnifiedInputSourceTest.java \
+            boot/tests/BridgeOtaLayerTrialSourceTest.java \
+            boot/tests/BridgeNativeSplitMosaicSourceTest.java
+          javac -encoding UTF-8 -d /tmp/bridge-lab-ota \
+            boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeT1LauncherRoutePolicy.java \
+            boot/tests/BridgeT1LauncherRoutePolicyTest.java \
+            sender/tests/SenderT1LauncherTrialSourceTest.java
+          java -cp /tmp/bridge-lab-ota \
+            ar.com.rango5gps.drivelabauto.boot.BridgeT1LauncherRoutePolicyTest
+          java -cp /tmp/bridge-lab-ota \
+            ar.com.rango5gps.drivelabauto.sender.SenderT1LauncherTrialSourceTest
+          java -cp /tmp/bridge-lab-ota \
+            ar.com.rango5gps.drivelabauto.boot.BridgeNativeSplitMosaicSourceTest
+          java -cp /tmp/bridge-lab-ota \
+            ar.com.rango5gps.drivelabauto.boot.BridgeOtaLayerTrialSourceTest
+          java -cp /tmp/bridge-lab-ota \
+            ar.com.rango5gps.drivelabauto.boot.BridgeOemUnifiedInputSourceTest
+          java -cp /tmp/bridge-lab-ota \
+            ar.com.rango5gps.drivelabauto.boot.BridgeMapsReceiverAutoRouteSourceTest
+          java -cp /tmp/bridge-lab-ota \
+            ar.com.rango5gps.drivelabauto.boot.BridgeWheelReceiverParitySourceTest
+          java -cp /tmp/bridge-lab-ota \
+            ar.com.rango5gps.drivelabauto.boot.BridgeClusterSurfaceProbeSourceTest
+          java -cp /tmp/bridge-lab-ota \
+            ar.com.rango5gps.drivelabauto.boot.BridgeOwnedVirtualActivitySourceTest
+          java -cp /tmp/bridge-lab-ota \
+            ar.com.rango5gps.drivelabauto.boot.BridgeMediaProjectionLabContractTest
+          javac -encoding UTF-8 -d /tmp/bridge-lab-ota \
+            boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeModeLayerDiff.java \
+            boot/tests/BridgeModeLayerDiffTest.java
+          java -cp /tmp/bridge-lab-ota ar.com.rango5gps.drivelabauto.boot.BridgeModeLayerDiffTest
+          javac -encoding UTF-8 -d /tmp/bridge-lab-ota \
+            boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeDualRoutePolicy.java \
+            boot/tests/BridgeDualRoutePolicyTest.java
+          java -cp /tmp/bridge-lab-ota ar.com.rango5gps.drivelabauto.boot.BridgeDualRoutePolicyTest
+          javac -encoding UTF-8 -d /tmp/bridge-lab-ota boot/tests/BridgeSenderDisplayRoutingTest.java boot/tests/BridgeStandaloneWindowContractTest.java
+          java -cp /tmp/bridge-lab-ota ar.com.rango5gps.drivelabauto.boot.BridgeSenderDisplayRoutingTest
+          java -cp /tmp/bridge-lab-ota ar.com.rango5gps.drivelabauto.boot.BridgeStandaloneWindowContractTest
+      - name: Build permanently signed isolated Bridge LAB APK and verify stable signer
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'bruceferra/drivelab-auto-standalone'
+          ! gh release view bridge-lab-v24 >/dev/null 2>&1
+          gradle --no-daemon :boot:assembleLab
+          apk=boot/build/outputs/apk/lab/boot-lab.apk
+          test -s "$apk"
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          signer="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          "$aapt" dump badging "$apk" | grep -F "package: name='ar.com.rango5gps.drivelabauto.boot.lab'"
+          "$aapt" dump badging "$apk" | grep -F "versionCode='28'"
+          "$aapt" dump badging "$apk" | grep -F "versionName='0.1.27-lab.24'"
+          "$signer" verify --print-certs "$apk"
+          mkdir -p /tmp/bridge-old-boot dist
+          gh release download v0.3.97 --pattern 'DriveLab-Boot-v0.1.3.apk' --dir /tmp/bridge-old-boot
+          "$signer" verify --print-certs /tmp/bridge-old-boot/DriveLab-Boot-v0.1.3.apk
+          oldcert=$("$signer" verify --print-certs /tmp/bridge-old-boot/DriveLab-Boot-v0.1.3.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          newcert=$("$signer" verify --print-certs "$apk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          test -n "$oldcert" && test "$oldcert" = "$newcert"
+          cp "$apk" dist/DriveLab-Bridge-LAB-v0.1.27-lab.24.apk
+          sha256sum dist/*.apk > dist/bridge-lab.sha256
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib
+          apk=pathlib.Path("dist/DriveLab-Bridge-LAB-v0.1.27-lab.24.apk")
+          manifest={
+             "channel":"bridge-lab",
+             "packageName":"ar.com.rango5gps.drivelabauto.boot.lab",
+             "versionName":"0.1.27-lab.24",
+             "versionCode":28,
+             "tag":"bridge-lab-v24",
+             "size":apk.stat().st_size,
+             "sha256":hashlib.sha256(apk.read_bytes()).hexdigest(),
+             "apkUrl":f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/bridge-lab-v24/{apk.name}"
+          }
+          pathlib.Path("dist/bridge-lab.json").write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
+          PY
+          cat dist/bridge-lab.json
+      - name: Publish LAB prerelease but NEVER replace stable latest
+        run: |
+          set -euo pipefail
+          gh release create bridge-lab-v24 \
+            dist/DriveLab-Bridge-LAB-v0.1.27-lab.24.apk \
+            dist/bridge-lab.sha256 dist/bridge-lab.json \
+            --target "$GITHUB_SHA" --prerelease \
+            --title 'DriveLab Bridge LAB 0.1.27 · entregar ruta a Maps existente de T1Launcher' \
+            --notes 'Experimental Sender 0.2.24 and Bridge LAB 0.1.27 task-only navigation to T1Launcher. In the new Sender target T1Launcher, Android receives an authenticated coord_t1/search_t1 destination. Bridge uses authorized LOCAL LOOPBACK ADB to read am stack list twice; if there is exactly ONE standalone Maps task on a VIRTUAL display ID 2 to 99 and it is unchanged, Bridge requests am start with that exact --task, --display and --activity-single-top top component. No relaunch of a second Google Maps on physical Display 1; no task move, OEM writes, task removal, root or data deletion. Acknowledgment only if Android explicitly reports intent delivered to top-most existing Activity. User MUST test while parked and verify route and steering wheel physically, which remain under T1Launcher control. If no unambiguous task the handoff fails closed. Unchanged regular Waze/Maps/Both routes and Receiver/Sender stable. Source, signing and Android compilation verified.'
+          gh release view bridge-lab-v24 --json isPrerelease --jq '.isPrerelease' | grep -Fx true
+          tag=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
+          test "$tag" = v0.3.97
+      - name: Point isolated OTA manifest to published signed asset LAST
+        run: |
+          set -euo pipefail
+          content=$(base64 -w0 dist/bridge-lab.json)
+          # The dedicated bridge-lab-ota branch is managed by this workflow.
+          # Never update main or the stable Receiver manifest.
+          if sha=$(gh api "repos/$GITHUB_REPOSITORY/contents/bridge-lab.json?ref=bridge-lab-ota" --jq .sha 2>/dev/null); then
+            gh api -X PUT "repos/$GITHUB_REPOSITORY/contents/bridge-lab.json" \
+              -f branch=bridge-lab-ota -f sha="$sha" \
+              -f message='ota(bridge-lab): publish verified signed LAB v2' -f content="$content" >/dev/null
+          else
+            gh api -X PUT "repos/$GITHUB_REPOSITORY/contents/bridge-lab.json" \
+              -f branch=bridge-lab-ota \
+              -f message='ota(bridge-lab): publish verified signed LAB v2' -f content="$content" >/dev/null
+          fi
+          gh api "repos/$GITHUB_REPOSITORY/contents/bridge-lab.json?ref=bridge-lab-ota" --jq .content \
+            | base64 -d | grep -F '"versionCode": 28'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: DriveLab-Bridge-LAB-0.1.27-PERMANENT-SIGNED-OTA
+          path: |
+            dist/DriveLab-Bridge-LAB-v0.1.27-lab.24.apk
+            dist/bridge-lab.sha256
+            dist/bridge-lab.json
+          if-no-files-found: error
+          retention-days: 21

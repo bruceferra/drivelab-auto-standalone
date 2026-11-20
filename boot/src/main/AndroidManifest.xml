@@ -1,21 +1,67 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <uses-permission android:name="android.permission.INTERNET" />
+    <!-- Explicit user-granted Android background activity permission for
+         standalone shared map intents. Never overlays system warnings. -->
+    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
-    <uses-permission android:name="ar.com.rango5gps.drivelabauto.receiver.permission.BOOT_MOSAIC" />
+    <!-- Each consented screen copy is a 20-second foreground service.
+         Android 14+ also checks this permission, but LAB targets API 32. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <queries>
-        <package android:name="ar.com.rango5gps.drivelabauto.receiver" />
+        <package android:name="com.waze" />
+        <package android:name="com.google.android.apps.maps" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
     </queries>
-    <application android:label="DriveLab BOOT · Config" android:icon="@drawable/ic_drivelab_boot"
+    <application android:label="${bridgeLabel}" android:icon="@drawable/ic_drivelab_boot"
         android:allowBackup="false"
         android:usesCleartextTraffic="false"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        android:theme="@android:style/Theme.Material.NoActionBar">
+        <!-- Manual, private on-device surface proof only; never a launcher. -->
+        <activity android:name=".BridgeVirtualProbeActivity"
+            android:exported="false"
+            android:resizeableActivity="true" />
+        <!-- One-shot physically bounded secondary-display Presentation. -->
+        <activity android:name=".BridgeClusterSurfaceProbeActivity"
+            android:exported="false"
+            android:resizeableActivity="false" />
+        <!-- Only our UID may start this on our private VirtualDisplay.
+             Separate temporary task, never HOME or externally exported. -->
+        <activity android:name=".BridgeVirtualSceneActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:resizeableActivity="true"
+            android:taskAffinity="${applicationId}.virtualprobe" />
+        <!-- Standalone, never-exported, parked-only explicit Android consent. -->
+        <activity android:name=".BridgeProjectionLabActivity"
+            android:exported="false"
+            android:resizeableActivity="true" />
+        <service android:name=".BridgeProjectionLabService"
+            android:exported="false"
+            android:stopWithTask="false"
+            android:foregroundServiceType="mediaProjection" />
+        <activity android:name=".BridgeLayersActivity"
+            android:exported="false"
+            android:resizeableActivity="true" />
+        <provider android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.updatefiles"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/bridge_update_files" />
+        </provider>
+        <!-- Installer completion/pending-owner-consent only, not exported. -->
+        <receiver android:name=".BridgeInstallResultReceiver"
+            android:exported="false" />
         <activity android:name=".BootActivity" android:exported="true"
             android:resizeableActivity="true"
-            android:taskAffinity="ar.com.rango5gps.drivelabauto.boot.config"
+            android:taskAffinity="${applicationId}.config"
             android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -28,12 +74,18 @@
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
             </intent-filter>
         </receiver>
-        <receiver android:name=".BootResultReceiver" android:exported="true"
-            android:permission="ar.com.rango5gps.drivelabauto.receiver.permission.BOOT_MOSAIC">
+        <service android:name=".BridgeWheelAccessibilityService"
+            android:label="DriveLab Bridge · Volante para mapas"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
             <intent-filter>
-                <action android:name="ar.com.rango5gps.drivelabauto.boot.action.MOSAIC_RESULT" />
+                <action android:name="android.accessibilityservice.AccessibilityService" />
             </intent-filter>
-        </receiver>
+            <meta-data android:name="android.accessibilityservice"
+                android:resource="@xml/bridge_wheel_accessibility" />
+        </service>
+        <service android:name=".BootLinkService" android:exported="false"
+            android:foregroundServiceType="dataSync" />
         <service android:name=".BootAutoService" android:exported="false"
             android:foregroundServiceType="dataSync" />
     </application>

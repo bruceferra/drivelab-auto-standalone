@@ -2,22 +2,27 @@ package ar.com.rango5gps.drivelabauto.common;
 
 /** Signed-route destination policy. Legacy coord/search remain Waze-compatible. */
 public final class BridgeRouteTarget {
-    public static final String WAZE="waze",MAPS="maps",BOTH="both";
+    public static final String WAZE="waze",MAPS="maps",BOTH="both",
+        T1_LAUNCHER="t1";
     private BridgeRouteTarget(){}
     public static String normalize(String mode){
-        return MAPS.equals(mode)?MAPS:BOTH.equals(mode)?BOTH:WAZE;
+        return MAPS.equals(mode)?MAPS:
+            BOTH.equals(mode)?BOTH:T1_LAUNCHER.equals(mode)?T1_LAUNCHER:WAZE;
     }
     /** Null is an invalid wire kind, not an implicit Waze command. */
     public static String baseKind(String kind){
         if("coord".equals(kind)||"search".equals(kind))return kind;
-        if("coord_maps".equals(kind)||"coord_both".equals(kind))return "coord";
-        if("search_maps".equals(kind)||"search_both".equals(kind))return "search";
+        if("coord_maps".equals(kind)||"coord_both".equals(kind)||
+           "coord_t1".equals(kind))return "coord";
+        if("search_maps".equals(kind)||"search_both".equals(kind)||
+           "search_t1".equals(kind))return "search";
         return null;
     }
     public static String target(String kind){
         if("coord".equals(kind)||"search".equals(kind))return WAZE;
         if("coord_maps".equals(kind)||"search_maps".equals(kind))return MAPS;
         if("coord_both".equals(kind)||"search_both".equals(kind))return BOTH;
+        if("coord_t1".equals(kind)||"search_t1".equals(kind))return T1_LAUNCHER;
         return null;
     }
     public static String sendKind(String baseKind,String target){

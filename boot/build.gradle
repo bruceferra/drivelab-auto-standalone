@@ -6,8 +6,9 @@ android {
     applicationId 'ar.com.rango5gps.drivelabauto.boot'
     minSdk 30
     targetSdk 32
-    versionCode 4
-    versionName '0.1.3'
+    // First *permanently signed* LAB build. Version increments for every OTA.
+    versionCode 28
+    versionName '0.1.27'
   }
   signingConfigs {
     release {
@@ -20,12 +21,39 @@ android {
     }
   }
   buildTypes {
-    release { signingConfig signingConfigs.release; minifyEnabled false }
+    // QA/LAB is a separate installable APK. Never replace an existing
+    // stable, differently signed Boot on the owner's Jetour head unit.
+    // Independent package, tasks and private data. No vehicle controls
+    // or OEM changes are enabled implicitly.
+    debug {
+      applicationIdSuffix '.lab'
+      versionNameSuffix '-lab-20261120'
+      manifestPlaceholders.bridgeLabel = 'DriveLab Bridge LAB'
+    }
+    release {
+      signingConfig signingConfigs.release
+      minifyEnabled false
+      manifestPlaceholders.bridgeLabel = 'DriveLab Bridge'
+    }
+    // Same isolated package as debug LAB, but a PERMANENT release keystore.
+    // Subsequent LAB over-the-air installs must use this exact certificate.
+    lab {
+      initWith release
+      applicationIdSuffix '.lab'
+      versionNameSuffix '-lab.24'
+      manifestPlaceholders.bridgeLabel = 'DriveLab Bridge LAB'
+      matchingFallbacks = ['release']
+    }
   }
   compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
 }
+dependencies {
+  implementation project(':common')
+  implementation 'com.google.zxing:core:3.5.4'
+  implementation 'androidx.core:core:1.13.1'
+}
 gradle.taskGraph.whenReady { graph ->
-  if (graph.hasTask(':boot:assembleRelease') && !System.getenv('RECEIVER_KEYSTORE')) {
+  if ((graph.hasTask(':boot:assembleRelease') || graph.hasTask(':boot:assembleLab')) && !System.getenv('RECEIVER_KEYSTORE')) {
     throw new GradleException('Missing RECEIVER_KEYSTORE for signed DriveLab Boot')
   }
 }

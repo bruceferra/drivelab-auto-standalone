@@ -10,8 +10,14 @@ import android.content.Intent;
 public final class BootReceiver extends BroadcastReceiver {
     @Override public void onReceive(Context context,Intent intent){
         if(intent==null||
-            !Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction())||
-            !BootConfig.enabled(context))return;
+            !Intent.ACTION_BOOT_COMPLETED.equals(intent.getAction()))return;
+        // A map that was visibly confirmed before ignition is NOT
+        // guaranteed to exist on the next boot. Require new confirmation
+        // before Sender may target Display 1 again.
+        BridgeStandaloneWindows.prefs(context).edit()
+            .putBoolean(BridgeStandaloneWindows.TAB_CONFIRMED,false)
+            .putBoolean(BridgeStandaloneWindows.TAB_ROUTE,false).apply();
+        if(!BootConfig.enabled(context))return;
         try{
             context.startForegroundService(new Intent(context,
                 BootAutoService.class));

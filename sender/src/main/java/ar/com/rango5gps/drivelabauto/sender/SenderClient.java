@@ -138,13 +138,60 @@ public final class SenderClient {
         }
     }
 
+    private static final class Endpoint {
+        final String ip;
+        final long offset;
+        Endpoint(String address,long clock){ip=address;offset=clock;}
+    }
+    private static Endpoint endpoint(Context c)throws Exception{
+        SharedPreferences p=prefs(c);
+        String ip=p.getString("receiver_ip","");
+        byte[] key=BridgeCrypto.unpackKey(p.getString("receiver_key",""));
+        if(!localIpv4(ip))throw new IOException("IP no configurada");
+        try{
+            // Reuse persisted ECDH/AES key and prior address if it answers.
+            return new Endpoint(ip,remoteClockOffset(ip,key));
+        }catch(Exception staleIp){
+            // Authenticated broadcast, NOT a new QR pairing.
+            String found=SenderBridgeDiscovery.locate(key,ip);
+            long offset=remoteClockOffset(found,key); // verify before commit
+            if(!p.edit().putString("receiver_ip",found).commit())
+                throw new IOException("No se pudo guardar nueva IP autenticada");
+            p.edit().putString("last_status",
+                "BRIDGE RECONECTADO · vínculo QR anterior conservado").apply();
+            return new Endpoint(found,offset);
+        }
+    }
+    /** Explicit, user-friendly connectivity check; never replaces a key.
+     * Sender automatically does this same discovery before each route.
+     */
+    public static Delivery reconnect(Context c){
+        try{
+            if(!configured(c))
+                return new Delivery(false,
+                    "NO VINCULADO · el QR sólo es necesario la primera vez");
+            Endpoint target=endpoint(c);
+            String status="BRIDGE CONECTADO · "+target.ip+
+                " · QR persistente; no hace falta volver a escanear";
+            prefs(c).edit().putString("last_status",status).apply();
+            return new Delivery(true,status);
+        }catch(Exception error){
+            String details=String.valueOf(error.getMessage());
+            if(details.length()>160)details=details.substring(0,160);
+            String status="BRIDGE NO LOCALIZADO · "+details+
+                " · clave QR guardada; no desvincules";
+            prefs(c).edit().putString("last_status",status).apply();
+            return new Delivery(false,status);
+        }
+    }
+
     public static Delivery send(Context c,String kind,String value){
         try{
             SharedPreferences p=prefs(c);
-            String ip=p.getString("receiver_ip","");
+            Endpoint target=endpoint(c);
+            String ip=target.ip;
+            long offset=target.offset;
             byte[] key=BridgeCrypto.unpackKey(p.getString("receiver_key",""));
-            if(!localIpv4(ip))throw new IOException("IP no configurada");
-            long offset=remoteClockOffset(ip,key);
             byte[] packet=BridgeCrypto.encryptWithClockOffset(key,kind,value,offset);
             try(Socket socket=connect(ip,BridgeCrypto.NAV_PORT)){
                 DataOutputStream out=new DataOutputStream(socket.getOutputStream());
@@ -157,14 +204,23 @@ public final class SenderClient {
                 boolean accepted="ack".equals(reply.kind);
                 if(!accepted&&!"not_ready".equals(reply.kind))
                     throw new IOException("Tipo de respuesta inválido");
-                String status=accepted?"T1 CONFIRMÓ RECEPCIÓN CIFRADA":
-                    "T1 recibió el destino, pero la navegación elegida no se inició";
+                boolean t1Trial=kind!=null&&kind.endsWith("_t1");
+                String status=t1Trial?
+                    (accepted?
+                        "T1LAUNCHER: Android reportó entrega a la instancia existente de Maps; verificá ruta en pantalla":
+                        "T1LAUNCHER: NO se verificó entrega a Maps virtual; sin relanzamiento automático"):
+                    (accepted?"T1 CONFIRMÓ RECEPCIÓN CIFRADA":
+                        "T1 recibió el destino, pero la navegación elegida no se inició");
                 SharedPreferences.Editor edit=p.edit().putString("last_status",status);
                 if(accepted)edit.putInt("sent",p.getInt("sent",0)+1);
                 edit.apply();return new Delivery(accepted,status);
             }
         }catch(Exception e){
-            String status="SIN CONEXIÓN T1 · "+e.getClass().getSimpleName();
+            String detail=String.valueOf(e.getMessage());
+            if(detail.length()>160)detail=detail.substring(0,160);
+            String status="SIN CONEXIÓN BRIDGE · "+e.getClass().getSimpleName()+
+                " · "+detail+
+                " · vínculo QR conservado, no hace falta desvincular";
             prefs(c).edit().putString("last_status",status).apply();
             return new Delivery(false,status);
         }
