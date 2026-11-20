@@ -291,9 +291,9 @@ public final class BootActivity extends Activity
             return;
         }
         new AlertDialog.Builder(this)
-            .setTitle("VOLANTE · RECORRER OPCIONES DEL MAPA")
+            .setTitle("VOLANTE · RECIBIR TECLAS Y OPCIONES")
             .setMessage("La rueda avanza o retrocede entre opciones "+
-                "visibles de Waze/Google Maps en Display 1. "+
+                "visibles de Waze/Google Maps en el Display seleccionado. "+
                 "OK confirma y ATRÁS cancela. NO hace zoom.\n\n"+
                 "Antes de activarlo, desactivá VOLANTE → MAPA "+
                 "en T1Launcher: el Binder OEM puede permitir "+
@@ -308,6 +308,45 @@ public final class BootActivity extends Activity
                     .putBoolean(BridgeWheelAccessibilityService.ENABLED,true).apply();
                 draw();
             }).show();
+    }
+    private void askRecaptureKeys(){
+        new AlertDialog.Builder(this)
+            .setTitle("RECAPTURAR VOLANTE · 20 SEGUNDOS")
+            .setMessage("Con la Jetour ESTACIONADA y el control de volante "+
+                "de T1Launcher DESACTIVADO para evitar dos receptores OEM. "+
+                "Bridge conectará temporalmente el Binder de la rueda "+
+                "y registrará códigos 1000–1003 de rueda, OK y Atrás. "+
+                "Durante estos 20 segundos NO ejecuta opciones, zoom, "+
+                "gestos ni acciones sobre Google Maps, Waze o Jetour. "+
+                "Se desconecta al terminar si el volante no estaba "+
+                "habilitado manualmente. No necesita ADB si Accesibilidad "+
+                "Bridge ya está conectada. Si está desconectada, "+
+                "usá el botón ADB local 5556/5555.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("CAPTURAR 20 S",(dialog,which)->{
+                BridgeWheelAccessibilityService.beginKeyCapture(this);
+                draw();
+            }).show();
+    }
+    private void chooseWheelDisplay(){
+        SharedPreferences p=BridgeWheelAccessibilityService.prefs(this);
+        int selected=p.getInt(BridgeWheelAccessibilityService.WINDOW_DISPLAY,1);
+        new AlertDialog.Builder(this)
+            .setTitle("VOLANTE · PANTALLA ANDROID REAL")
+            .setMessage("Elegí dónde está la ventana real y accesible de "+
+                "Google Maps/Waze, no dónde está una copia de imagen. "+
+                "La selección NO mueve tareas. Si el mapa queda detrás "+
+                "de una capa OEM, las teclas se registran pero NO se "+
+                "envían acciones.")
+            .setSingleChoiceItems(new String[]{
+                "DISPLAY 1 · tablero físico",
+                "DISPLAY 0 · pantalla central"
+            },selected==0?1:0,(dialog,which)->{
+                p.edit().putInt(BridgeWheelAccessibilityService.WINDOW_DISPLAY,
+                    which==1?0:1).apply();
+                dialog.dismiss();draw();
+            })
+            .setNegativeButton("CANCELAR",null).show();
     }
     private void chooseWheelMap(){
         SharedPreferences p=BridgeWheelAccessibilityService.prefs(this);
@@ -689,13 +728,26 @@ public final class BootActivity extends Activity
         button("MAPA DEL VOLANTE: "+
             (BridgeWheelAccessibilityService.WAZE.equals(wheelTarget)?
                 "WAZE":"GOOGLE MAPS")+" · CAMBIAR",this::chooseWheelMap);
+        int actualDisplay=wheel.getInt(
+            BridgeWheelAccessibilityService.WINDOW_DISPLAY,1);
+        button("PANTALLA DE CONTROLES: DISPLAY "+actualDisplay+" · CAMBIAR",
+            this::chooseWheelDisplay);
+        button("RECAPTURAR TECLAS OEM · 20 S · SIN ZOOM",
+            this::askRecaptureKeys);
+        text("CAPTURA VOLANTE: "+
+            BridgeWheelAccessibilityService.captureState(this),12,QUIET);
+        text("ACCESIBILIDAD REAL: "+
+            (BridgeWheelAccessibilityService.isConnected()?
+                "CONECTADA":"DESCONECTADA · revisar ADB LOCAL 5556/5555"),
+            12,QUIET);
         button(wheelOn&&BridgeWheelAccessibilityService.isManuallyArmed()?
             "VOLANTE BRIDGE: ACTIVADO · DESACTIVAR":
             "VOLANTE BRIDGE: DESACTIVADO · ACTIVAR",this::toggleWheel);
         text(wheelOn&&BridgeWheelAccessibilityService.isManuallyArmed()?
-            "VOLANTE HABILITADO MANUALMENTE. Captura sólo cuando Waze/Maps "+
-            "es la ventana de aplicación superior verificable en Display 1. "+
-            "Rueda: opciones, OK: aceptar, Atrás: cancelar. Sin zoom.":
+            "VOLANTE HABILITADO MANUALMENTE. Binder OEM puede recibir "+
+            "teclas sin ventana de mapa visible, igual que DriveLab Auto. "+
+            "Sólo ejecuta opciones, OK y Atrás si verifica el mapa en "+
+            "el Display seleccionado. Sin zoom.":
             "VOLANTE APAGADO: no se registra la rueda OEM. "+
             "Para probarlo, desactivá VOLANTE → MAPA en T1Launcher, "+
             "elegí Waze y pulsá ACTIVAR. No se inicia solo.",13,WHITE);
