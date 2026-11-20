@@ -34,6 +34,8 @@ on:
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeClusterRecoveryPolicy.java'
       - 'boot/tests/BridgeClusterRecoveryPolicyTest.java'
       - 'boot/tests/BridgeClusterSafetySourceTest.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeDualRoutePolicy.java'
+      - 'boot/tests/BridgeDualRoutePolicyTest.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeStandaloneWindows.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWindowMath.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeVirtualProbeActivity.java'
@@ -118,6 +120,14 @@ jobs:
             boot/tests/BridgeClusterSafetySourceTest.java
           java -cp /tmp/bridge-cluster-recovery ar.com.rango5gps.drivelabauto.boot.BridgeClusterRecoveryPolicyTest
           java -cp /tmp/bridge-cluster-recovery ar.com.rango5gps.drivelabauto.boot.BridgeClusterSafetySourceTest
+      - name: Verify Waze/Maps/BOTH destinations independent of 0/1 display and foreground
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-dual-route
+          javac -encoding UTF-8 -d /tmp/bridge-dual-route \
+            boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeDualRoutePolicy.java \
+            boot/tests/BridgeDualRoutePolicyTest.java
+          java -cp /tmp/bridge-dual-route ar.com.rango5gps.drivelabauto.boot.BridgeDualRoutePolicyTest
       - name: Verify standalone Bridge Freeform two-screen ownership and geometry
         run: |
           set -euo pipefail
