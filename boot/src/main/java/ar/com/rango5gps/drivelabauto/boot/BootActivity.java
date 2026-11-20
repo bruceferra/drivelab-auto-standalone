@@ -611,14 +611,18 @@ public final class BootActivity extends Activity
         button("INSTALAR / REINTENTAR APK YA DESCARGADA",()->
             BootUpdater.retryInstall(this,s->prefs().edit()
                 .putString("last_status",s).apply()));
+        button("CONFIRMAR INSTALACIÓN ANDROID · ABRIR AHORA",()->
+            BridgeInstallResultReceiver.confirmFromForeground(this,
+                s->prefs().edit().putString("last_status",s).apply()));
         button("INSTALADOR ALTERNATIVO DE ARCHIVOS · APK VERIFICADA",()->
             BootUpdater.openFileInstaller(this,s->prefs().edit()
                 .putString("last_status",s).apply()));
-        text("Si descargaste y Android NO mostró INSTALAR, tocá "+
-            "REINTENTAR. Bridge verifica otra vez SHA-256 y certificado, "+
-            "abre el instalador de Android y conserva el archivo local. "+
-            "Si Jetour bloquea la ventana, revisá el estado o la "+
-            "notificación de instalación.",12,QUIET);
+        text("Instalación OTA: Descargar → Instalar ahora. Si Jetour "+
+            "no muestra el diálogo, tocá REINTENTAR para que Android "+
+            "genere una sesión, y luego CONFIRMAR INSTALACIÓN ANDROID "+
+            "para abrir su confirmación desde Bridge visible. El "+
+            "instalador alternativo conserva la APK y el estado real "+
+            "se muestra abajo. No requiere Termux ni desinstalar.",12,QUIET);
         text("VENTANAS DISPLAY 0 Y DISPLAY 1",18,WHITE);
         text("El motor Freeform de Bridge está separado de Receiver. "+
             "Su disponibilidad real depende de Android Jetour. "+
