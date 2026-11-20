@@ -6,13 +6,12 @@ import java.util.List;
 /** Restricted accessibility list policy. Never erase or reorder OEM entries. */
 final class BridgeAccessPolicy {
     static final String PACKAGE="ar.com.rango5gps.drivelabauto.boot.lab";
-    static final String SHORT=PACKAGE+"/.BridgeWheelAccessibilityService";
-    static final String LONG=PACKAGE+"/"+PACKAGE.replace(".lab","")+
-        ".BridgeWheelAccessibilityService";
-    // Android expands relative class names using the manifest namespace
-    // (ar.com.rango5gps.drivelabauto.boot), NOT the LAB applicationId.
+    // AndroidManifest expands .BridgeWheelAccessibilityService using
+    // Gradle namespace, not LAB applicationId. Always write the full class.
     static final String FULL=PACKAGE+
         "/ar.com.rango5gps.drivelabauto.boot.BridgeWheelAccessibilityService";
+    // Some Android settings stores show the relative alias; read-only accept.
+    static final String SHORT=PACKAGE+"/.BridgeWheelAccessibilityService";
     private BridgeAccessPolicy(){}
     static boolean own(String s){return SHORT.equals(s)||FULL.equals(s);}
     static List<String> parse(String input){
@@ -34,7 +33,7 @@ final class BridgeAccessPolicy {
         if(n>1)return null;
         if(n==1)return input;
         if(all.size()>=32)return null;
-        String next=input==null||input.isEmpty()?SHORT:input+":"+SHORT;
+        String next=input==null||input.isEmpty()?FULL:input+":"+FULL;
         return next.length()>1024?null:next;
     }
     static String removeOwn(String input){
