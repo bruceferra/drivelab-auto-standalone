@@ -82,6 +82,6 @@ final class BridgeClusterRecoveryPolicy {
             (!"com.waze".equals(task.pkg)&&
              !"com.google.android.apps.maps".equals(task.pkg)))
             throw new SecurityException("No es una tarea de mapa verificable");
-        return "am stack remove "+task.taskId;
+        return "am stack remove "+task.stackId;
     }
 }
