@@ -238,6 +238,21 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
         }
         return all;
     }
+    /** Every ignition crossing the selected interval, not merely the
+     * last N sessions. Returned data remains raw, without retrofilling.
+     */
+    synchronized ArrayList<Journey> overlapping(long from,long until){
+        if(from<=0||until<=from)throw new IllegalArgumentException("Rango");
+        ArrayList<Journey> rows=new ArrayList<>();
+        try(Cursor c=getReadableDatabase().rawQuery(
+            "SELECT "+SESSION_COLS+" FROM sessions WHERE start_ms<? "+
+            "AND last_ms>? ORDER BY start_ms LIMIT 10000",
+            new String[]{Long.toString(until),Long.toString(from)})){
+            while(c.moveToNext())rows.add(journey(c));
+        }
+        return rows;
+    }
+
     synchronized Summary since(long epoch){
         Summary out=new Summary();
         try(Cursor c=getReadableDatabase().rawQuery(
