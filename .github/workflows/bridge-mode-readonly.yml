@@ -34,6 +34,9 @@ on:
       - 'boot/tests/BridgeImmersiveSourceContractTest.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeClusterRecovery.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeClusterRecoveryPolicy.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWazeForegroundPolicy.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWazeForegroundProbe.java'
+      - 'boot/tests/BridgeWazeForegroundProbeTest.java'
       - 'boot/tests/BridgeClusterRecoveryPolicyTest.java'
       - 'boot/tests/BridgeClusterSafetySourceTest.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeDualRoutePolicy.java'
@@ -120,6 +123,16 @@ jobs:
             ar.com.rango5gps.drivelabauto.boot.BridgeWheelPolicyTest
           java -cp /tmp/jetour-wheel \
             ar.com.rango5gps.drivelabauto.boot.BridgeWheelAccessibilityContractTest
+      - name: Validate one-shot, same-stack Waze ADB foreground probe, never OEM
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-waze-foreground
+          javac -encoding UTF-8 -d /tmp/bridge-waze-foreground \
+            boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeClusterRecoveryPolicy.java \
+            boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWazeForegroundPolicy.java \
+            boot/tests/BridgeWazeForegroundProbeTest.java
+          java -cp /tmp/bridge-waze-foreground \
+            ar.com.rango5gps.drivelabauto.boot.BridgeWazeForegroundProbeTest
       - name: Safety rollback and parked-only Waze/Maps stack recovery
         run: |
           set -euo pipefail
