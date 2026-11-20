@@ -18,7 +18,7 @@
             <category android:name="android.intent.category.LAUNCHER" />
         </intent>
     </queries>
-    <application android:label="DriveLab Bridge" android:icon="@drawable/ic_drivelab_boot"
+    <application android:label="${bridgeLabel}" android:icon="@drawable/ic_drivelab_boot"
         android:allowBackup="false"
         android:usesCleartextTraffic="false"
         android:theme="@android:style/Theme.Material.NoActionBar">
@@ -38,7 +38,7 @@
         </provider>
         <activity android:name=".BootActivity" android:exported="true"
             android:resizeableActivity="true"
-            android:taskAffinity="ar.com.rango5gps.drivelabauto.boot.config"
+            android:taskAffinity="${applicationId}.config"
             android:launchMode="singleTask">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
