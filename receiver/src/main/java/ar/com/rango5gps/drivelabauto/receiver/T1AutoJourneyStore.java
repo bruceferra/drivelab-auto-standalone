@@ -25,11 +25,13 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
     static final long GAP_MS=90000L;
     static final String SESSION_COLS="_id,start_ms,end_ms,last_ms,last_elapsed,"+
         "start_soc,end_soc,km_oem,km_gps,hv_out,hv_in,n_samples,"+
-        "is_open,closed_reason,start_lat,start_lon,end_lat,end_lon";
+        "is_open,closed_reason,start_lat,start_lon,end_lat,end_lon,"+
+        "fuel_low_l,fuel_last_l,fuel_l_candidate,fuel_samples";
     static final class Journey {
         long id,start,end,last,lastElapsed;
         double soc0,soc1,km,kmGps,hvOut,hvIn,lat0,lon0,lat1,lon1;
-        int samples,open;
+        double fuelLow,fuelLast,fuelCandidateL;
+        int fuelSamples,samples,open;
         String reason;
         double net(){return hvOut-hvIn;}
         String describe(){
@@ -39,6 +41,9 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
                 " · "+(open==1?"AUTO ACTIVA":"FINALIZADA")+
                 "\n"+fmt(km,2)+" km OEM · GPS "+fmt(kmGps,2)+
                 " km · "+samples+" muestras"+
+                (fuelSamples>1?"\nCI186 caída mínima de tanque ~"+
+                    fmt(fuelCandidateL,2)+" L (CANDIDATO, no litros medidos)":
+                    "\nNafta: SIN NIVEL CI186 COMPARABLE")+
                 "\nSOC "+fmt(soc0,1)+" % → "+fmt(soc1,1)+" % ("+
                 (Double.isFinite(soc0)&&Double.isFinite(soc1)?
                   fmt(soc1-soc0,1)+" pp":"sin lectura")+")"+
@@ -63,7 +68,7 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
         return Double.isFinite(n)?
             String.format(Locale.getDefault(),"%."+d+"f",n):"—";
     }
-    T1AutoJourneyStore(Context c){super(c,DB,null,1);}
+    T1AutoJourneyStore(Context c){super(c,DB,null,2);}
     @Override public void onCreate(SQLiteDatabase db){
         db.execSQL("CREATE TABLE sessions ("+
             "_id INTEGER PRIMARY KEY AUTOINCREMENT,"+
@@ -74,18 +79,33 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
             "hv_out REAL NOT NULL DEFAULT 0,hv_in REAL NOT NULL DEFAULT 0,"+
             "n_samples INTEGER NOT NULL DEFAULT 0,"+
             "is_open INTEGER NOT NULL DEFAULT 1,closed_reason TEXT DEFAULT '',"+
-            "start_lat REAL,start_lon REAL,end_lat REAL,end_lon REAL)");
+            "start_lat REAL,start_lon REAL,end_lat REAL,end_lon REAL,"+
+            "fuel_low_l REAL,fuel_last_l REAL,"+
+            "fuel_l_candidate REAL NOT NULL DEFAULT 0,"+
+            "fuel_samples INTEGER NOT NULL DEFAULT 0)");
         db.execSQL("CREATE TABLE samples ("+
             "_id INTEGER PRIMARY KEY AUTOINCREMENT,"+
             "session_id INTEGER NOT NULL,t_epoch_ms INTEGER NOT NULL,"+
             "raw_ready INTEGER,raw_cable INTEGER,raw_gear INTEGER,"+
             "speed_kmh REAL,soc REAL,volt REAL,amps REAL,rpm REAL,"+
             "gps_lat REAL,gps_lon REAL,gps_accuracy_m REAL,"+
-            "km_oem_cum REAL,km_gps_cum REAL,hv_out_cum REAL,hv_in_cum REAL)");
+            "km_oem_cum REAL,km_gps_cum REAL,hv_out_cum REAL,hv_in_cum REAL,"+
+            "fuel_tank_l REAL,soc_internal REAL,fuel_drop_l_cum REAL NOT NULL DEFAULT 0)");
         db.execSQL("CREATE INDEX ix_auto_time ON sessions(start_ms)");
         db.execSQL("CREATE INDEX ix_auto_sample ON samples(session_id,t_epoch_ms)");
     }
-    @Override public void onUpgrade(SQLiteDatabase db,int from,int to){}
+    @Override public void onUpgrade(SQLiteDatabase db,int from,int to){
+        if(from<2){
+            // Non-destructive migration: never rewrite old sessions or GPS.
+            db.execSQL("ALTER TABLE sessions ADD COLUMN fuel_low_l REAL");
+            db.execSQL("ALTER TABLE sessions ADD COLUMN fuel_last_l REAL");
+            db.execSQL("ALTER TABLE sessions ADD COLUMN fuel_l_candidate REAL NOT NULL DEFAULT 0");
+            db.execSQL("ALTER TABLE sessions ADD COLUMN fuel_samples INTEGER NOT NULL DEFAULT 0");
+            db.execSQL("ALTER TABLE samples ADD COLUMN fuel_tank_l REAL");
+            db.execSQL("ALTER TABLE samples ADD COLUMN soc_internal REAL");
+            db.execSQL("ALTER TABLE samples ADD COLUMN fuel_drop_l_cum REAL NOT NULL DEFAULT 0");
+        }
+    }
     private static double nullable(Cursor c,int index){
         return c.isNull(index)?Double.NaN:c.getDouble(index);
     }
@@ -99,6 +119,8 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
         r.samples=c.getInt(11);r.open=c.getInt(12);r.reason=c.getString(13);
         r.lat0=nullable(c,14);r.lon0=nullable(c,15);
         r.lat1=nullable(c,16);r.lon1=nullable(c,17);
+        r.fuelLow=nullable(c,18);r.fuelLast=nullable(c,19);
+        r.fuelCandidateL=c.getDouble(20);r.fuelSamples=c.getInt(21);
         return r;
     }
     synchronized Journey openJourney(){
@@ -122,6 +144,8 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
         row.put("start_ms",p.wallMs);row.put("last_ms",p.wallMs);
         row.put("last_elapsed",p.elapsedMs);
         real(row,"start_soc",p.soc);real(row,"end_soc",p.soc);
+        real(row,"fuel_low_l",p.fuelRemainingLiters);
+        real(row,"fuel_last_l",p.fuelRemainingLiters);
         geo(row,fix,"start_lat","start_lon");
         geo(row,fix,"end_lat","end_lon");
         long id=getWritableDatabase().insertOrThrow("sessions",null,row);
@@ -142,6 +166,8 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
             // Power cut and process restart can reset elapsedRealtime.
             if(p.wallMs<=old.last||dt<0)dt=0;
             double[] incr=T1AutoDrivePolicy.integrate(p.volt,p.amps,p.speed,(long)dt);
+            T1AutoFuelLevelMath.Delta fuel=T1AutoFuelLevelMath.step(
+                old.fuelLow,p.fuelRemainingLiters,(long)dt);
             double gpsKm=0;
             if(gps!=null && Double.isFinite(old.lat1)&&
                Double.isFinite(old.lon1)&&
@@ -161,6 +187,13 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
             v.put("hv_out",old.hvOut+incr[0]);
             v.put("hv_in",old.hvIn+incr[1]);
             v.put("n_samples",old.samples+1);
+            if(T1AutoFuelLevelMath.valid(p.fuelRemainingLiters)){
+                real(v,"fuel_low_l",fuel.low);
+                real(v,"fuel_last_l",p.fuelRemainingLiters);
+                v.put("fuel_samples",old.fuelSamples+1);
+            }
+            v.put("fuel_l_candidate",
+                old.fuelCandidateL+fuel.consumedCandidate);
             geo(v,gps,"end_lat","end_lon");
             db.update("sessions",v,"_id=?",new String[]{Long.toString(id)});
             ContentValues raw=new ContentValues();
@@ -170,6 +203,10 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
             real(raw,"speed_kmh",p.speed);real(raw,"soc",p.soc);
             real(raw,"volt",p.volt);real(raw,"amps",p.amps);
             real(raw,"rpm",p.rpm);
+            real(raw,"soc_internal",p.socInternal);
+            real(raw,"fuel_tank_l",p.fuelRemainingLiters);
+            raw.put("fuel_drop_l_cum",
+                old.fuelCandidateL+fuel.consumedCandidate);
             if(gps!=null){
                 geo(raw,gps,"gps_lat","gps_lon");
                 if(gps.hasAccuracy())raw.put("gps_accuracy_m",gps.getAccuracy());
