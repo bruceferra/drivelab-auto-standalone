@@ -24,15 +24,13 @@ public final class BridgeSenderDisplayRoutingTest {
             prefs.contains("TAB_ROUTE")&&
             prefs.contains("TAB_CONFIRMED,false")&&
             prefs.contains("TAB_ROUTE,false")&&
-            prefs.contains("pkg.equals(tabMap(c))"),
+            prefs.contains("return false;"),
             "Display1 route must require owner visual confirmation and exact app");
-        check(ui.contains("confirmTableroMap()")&&
-            ui.contains("toggleSenderTablero()")&&
-            ui.contains("CONFIRMAR: MAPA SE VE")&&
+        check(ui.contains("LIBERAR CLÚSTER")&&
             ui.contains("SENDER → TABLERO: DESACTIVADO")&&
-            ui.contains("TAB_CONFIRMED,true")&&
-            ui.contains("TAB_ROUTE,true"),
-            "Bridge UI must expose explicit two-stage route approval");
+            !ui.contains("button(\"PROBAR MAPA TABLERO")&&
+            prefs.contains("BridgeClusterRecovery.disableNewCluster(activity)"),
+            "Freeform Display1 and Sender routing must be disabled after physical failure");
         check(ignition.contains("BridgeStandaloneWindows.TAB_CONFIRMED,false")&&
             ignition.contains("BridgeStandaloneWindows.TAB_ROUTE,false")&&
             ignition.contains("if(!BootConfig.enabled(context))return;"),
