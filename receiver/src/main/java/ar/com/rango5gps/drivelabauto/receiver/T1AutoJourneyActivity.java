@@ -257,12 +257,13 @@ public final class T1AutoJourneyActivity extends T1ImmersiveActivity {
             runOnUiThread(()->{
                 computingRange.set(false);
                 if(isFinishing()||isDestroyed())return;
-                if(report==null){
-                    rangeStatus.setText("No se pudo generar: "+failure);
+                if(report==null||merged==null){
+                    rangeStatus.setText("Informe incompleto: "+failure+
+                        ". No se mostrarán viajes sin cruzar las cargas.");
                     return;
                 }
                 selectedFrom=from;selectedUntil=until;
-                rangeCsv=merged==null?report.csv():merged.csv(report);
+                rangeCsv=merged.csv(report);
                 boolean includesReconstructed=from<=T1RebuiltMorning.FROM&&
                     until>=T1RebuiltMorning.UNTIL;
                 String sourceWarning=includesReconstructed?
