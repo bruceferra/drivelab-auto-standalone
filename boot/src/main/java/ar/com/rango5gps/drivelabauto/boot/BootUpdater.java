@@ -390,6 +390,33 @@ final class BootUpdater {
             }
         },"Bridge-Verified-Apk-Retry").start();
     }
+    /** Manual alternative when Jetour suppresses PackageInstaller's
+     * owner-consent window. This never downloads or bypasses Android UI.
+     */
+    static void openFileInstaller(Activity a,Report status){
+        if(busy){status.result("Actualizador ocupado");return;}
+        busy=true;
+        notify(a,status,"Comprobando APK guardada para instalador de archivos…");
+        new Thread(()->{
+            try{
+                File file=verifiedCache(a);
+                a.runOnUiThread(()->{
+                    busy=false;
+                    if(a.isFinishing()||a.isDestroyed())return;
+                    if(Build.VERSION.SDK_INT>=26&&
+                       !a.getPackageManager().canRequestPackageInstalls()){
+                        requestInstallPermission(a,status);
+                        return;
+                    }
+                    installFallback(a,file,status);
+                });
+            }catch(Exception error){
+                busy=false;
+                notify(a,status,"No hay APK verificada para instalar: "+
+                    error.getClass().getSimpleName()+": "+error.getMessage());
+            }
+        },"Bridge-File-Installer").start();
+    }
     private static void requestInstallPermission(Activity a,Report status){
         try{
             a.startActivity(new Intent(
