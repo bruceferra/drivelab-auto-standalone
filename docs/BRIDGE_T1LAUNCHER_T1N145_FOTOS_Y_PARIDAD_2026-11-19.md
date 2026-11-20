@@ -24,6 +24,28 @@
 - En el ajuste principal: Maps seleccionado, Spotify segunda app, `AL ENCENDER`, `VOLANTE → MAPA`, `MODO MANEJO`, `AJUSTAR CAJA`, `CERRAR EL MAPA`. El volante funciona según reporte del conductor: zoom, OK, aceptar, cancelar y retroceso, con prioridad Google Maps.
 - El firmware Jetour oculta las ventanas del mapa en ocasiones. MODE **no** hace aparecer Maps. Lo que en ocasiones consigue levantar mapas y rueda es solicitar la navegación/apertura desde DriveLab T1 Auto. Registrar esa secuencia, NO simular MODE.
 
+## Evolución funcional corroborada por RELEASES oficiales del autor
+
+La investigación no requiere inventar APIs: las notas de cambios documentan las decisiones de diseño y sus correcciones:
+
+- **T1N130, 27/10/2026:** «pantalla escondida donde vive el mapa del cluster» acepta toques. Una pantalla lógica o representación escondida existe, pero no consta con certeza su implementación binaria exacta.
+- **T1N131, 28/10/2026:** servicio «T1 Mapa» para rueda izquierda zoom, ATRÁS, OK y mantener mapa en la pantalla elegida al encender; registro de teclas.
+- **T1N132:** zoom suave con acciones seriadas, nunca varias por clic.
+- **T1N133:** no bloquear Waze ni sacar Maps de seguimiento al aceptar/volver; accesibilidad escucha mientras el mapa esté en pantalla del tablero.
+- **T1N135, 07/11/2026:** tocar una app ya abierta vuelve a la tarea anterior (no relanzar y perder ruta).
+- **T1N136:** manifiesto quitó `clearTaskOnLaunch` y usa `taskAffinity` vacío para aislar tareas del launcher y no destruir las aplicaciones ajenas al regresar. **Verificar esta propiedad en Bridge antes de rediseñar recuperación**.
+- **T1N139, 12/11/2026:** módulo mapa estilo Android Auto en pantalla grande; gesto «CLUSTER» envía el mapa al tablero y lo trae **sin mover la app de su tarea, sin perder la ruta**.
+- **T1N140:** esquinas redondeadas en mapa; no es prueba de que Android exponga API para eliminar barras nativas de ventana Freeform.
+- **T1N141, 13/11/2026:** mapa grande lado conductor + segunda aplicación en rectángulo **vertical** derecho, APP 2 activable, el mapa va al tablero mientras APP 2 crece para ocupar el centro y vuelve al diseño cuando se recupera el mapa.
+- **T1N142:** elimina hueco negro al cambiar tamaño y evita robar foco a otras apps en módulo.
+- **T1N143:** **la pantalla escondida NO cambia de tamaño; cambia el rectángulo de la app visible**, evitando artefactos negros. Esta es una corrección de primer orden frente a nuestro resize a tareas existentes.
+- **T1N144:** solicita modo seguimiento de Google Maps tras 4s y 10s únicamente cuando Maps no tenga ruta; no debe interferir con una navegación activa.
+- **T1N145, 19/11/2026:** Google Maps al iniciarse desde cero arranca en seguimiento; cuando APP 2 reproduce música, volante anterior/siguiente cambia canción. El gesto elegir app vuelve a ocultarla sin cerrarla.
+
+**Interpretación técnica:** nuestra implementación actual usa Freeform sobre tareas vivas y después intenta recuperar o redimensionar; el autor conserva una sesión de mapa separada del tamaño final del panel. No copiar bytecode, diseñar equivalencia propia después de comprobar el mecanismo de superficie/pantalla escondida de T1Launcher.
+
+**Consecuencia para Bridge:** Antes de exponer AUTOBOOT, reemplazar `BootLinkService.openMap` actual (lanza Intent ordinario hacia Display 1) por un orquestador de sesión que (1) no pierda tarea/ruta, (2) maneje pantalla de mapa independiente del rectángulo mostrado, (3) use un único controlador de rueda, (4) no robe foco ni relance cuando ya está visible. No declarar paridad hasta prueba en Jetour con Spotify estrecho, Google seguimiento y mapa de instrumentos.
+
 ## Hallazgo de arquitectura: por qué DriveLab actual no se parece
 - Receiver `T1ClusterLayoutPolicy.start`: `setLaunchDisplayId`, reflexión `setLaunchWindowingMode(5)`, `setLaunchBounds`, flags `NEW_TASK|SINGLE_TOP|CLEAR_TOP`. Los destinos de Sender se envían a la tarea con límites Freeform de la app guardada (si configurado).
 - Bridge WIP `BootLinkService.openMap` actualmente sólo usa `setLaunchDisplayId` sin Bounds/Freeform. **No puede reproducir fielmente las posiciones/tamaños del launcher** y no gestiona rueda todavía. No publicar.
