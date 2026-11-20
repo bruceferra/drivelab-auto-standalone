@@ -53,6 +53,8 @@ public final class BridgeIndependentBootContractTest {
             link.contains("BridgeCrypto.PAIR_PORT")&&
             link.contains("BridgeCrypto.decrypt(")&&
             link.contains("BridgeRouteTarget.baseKind(")&&
+            link.contains("if(intent==null&&!BootConfig.enabled(this))")&&
+            link.contains("BootConfig.enabled(this)?START_STICKY:START_NOT_STICKY")&&
             qr.contains("QRCodeWriter")&&
             updater.contains("SHA-256"),
             "Independent Xiaomi AES/QR receiver and signed local updater");
