@@ -20,25 +20,37 @@ import java.util.Locale;
 import org.json.JSONArray;
 import org.json.JSONObject;
 
-/** In-place first-party Boot updater, independent of legacy Receiver.
- * Only official stable release, exact asset SHA-256, app ID and Android
- * signing certificate accepted. No shell, no WebADB, no silent install.
+/** In-place first-party Bridge OTA, independent of legacy Receiver.
+ * Stable Boot uses the official release. The isolated LAB package uses
+ * its own immutable signed APK channel and its own pinned manifest.
+ * SHA-256, package, version and signing certificate must ALL agree.
+ * Never installs silently, uses ADB, or replaces the OEM launcher.
  */
 final class BootUpdater {
     private static final String PACKAGE="ar.com.rango5gps.drivelabauto.boot";
+    private static final String LAB_PACKAGE=PACKAGE+".lab";
+    // Read only release pointer. Updated ONLY after the signed APK and
+    // its signer are checked by the protected publication workflow.
+    private static final String LAB_MANIFEST=
+        "https://raw.githubusercontent.com/bruceferra/drivelab-auto-standalone/"+
+        "bridge-lab-ota/bridge-lab.json";
     private static final String RELEASE=
         "https://api.github.com/repos/bruceferra/drivelab-auto-standalone/releases/latest";
     private static final String DOWNLOAD_BASE=
         "https://github.com/bruceferra/drivelab-auto-standalone/releases/download/";
     private static final int META_MAX=256_000;
+    private static final int LAB_META_MAX=16_384;
     private static final long APK_MAX=20L*1024*1024;
     private static boolean busy;
     interface Report {void result(String s);}
     private static final class Offer {
         final String version,url,sha;
-        final long size;
+        final long size,code;
         Offer(String v,String u,String h,long s){
-            version=v;url=u;sha=h;size=s;
+            this(v,u,h,s,-1);
+        }
+        Offer(String v,String u,String h,long s,long n){
+            version=v;url=u;sha=h;size=s;code=n;
         }
     }
     private BootUpdater(){}
@@ -118,6 +130,43 @@ final class BootUpdater {
             throw new java.io.IOException("No hay APK Boot en la release estable");
         return found;
     }
+    /** LAB is not allowed to browse stable Boot releases. The manifest
+     * is a restricted pointer, NOT an authority to install arbitrary APKs:
+     * downloaded bytes and Android certificate are checked afterwards.
+     */
+    private static Offer labOffer()throws Exception{
+        byte[] payload;
+        HttpURLConnection conn=open(LAB_MANIFEST);
+        try(InputStream in=conn.getInputStream();
+            ByteArrayOutputStream out=new ByteArrayOutputStream()){
+            byte[] buffer=new byte[4096];int n;
+            while((n=in.read(buffer))!=-1){
+                if(out.size()+n>LAB_META_MAX)
+                    throw new SecurityException("Manifiesto LAB demasiado grande");
+                out.write(buffer,0,n);
+            }
+            payload=out.toByteArray();
+        }finally{conn.disconnect();}
+        JSONObject meta=new JSONObject(
+            new String(payload,java.nio.charset.StandardCharsets.UTF_8));
+        String pkg=meta.getString("packageName");
+        String channel=meta.getString("channel");
+        String version=meta.getString("versionName");
+        long code=meta.getLong("versionCode");
+        String hash=meta.getString("sha256").toLowerCase(Locale.ROOT);
+        String tag=meta.getString("tag");
+        String url=meta.getString("apkUrl");
+        long size=meta.getLong("size");
+        String file="DriveLab-Bridge-LAB-v"+version+".apk";
+        if(!LAB_PACKAGE.equals(pkg)||!"bridge-lab".equals(channel)||
+           !version.matches("0\\.1\\.[0-9]+-lab\\.[0-9]+")||
+           code<5||code>1000000||size<1024||size>APK_MAX||
+           !hash.matches("[a-f0-9]{64}")||
+           !tag.matches("bridge-lab-v[0-9]+")||
+           !url.equals(DOWNLOAD_BASE+tag+"/"+file))
+            throw new SecurityException("Manifiesto LAB inválido o ajeno");
+        return new Offer(version,url,hash,size,code);
+    }
     private static String hex(byte[] bytes){
         StringBuilder out=new StringBuilder(bytes.length*2);
         for(byte b:bytes)out.append(String.format(Locale.ROOT,"%02x",b&255));
@@ -133,6 +182,9 @@ final class BootUpdater {
         return signatures[0].toByteArray();
     }
     private static File download(Activity a,Offer item)throws Exception{
+        String self=a.getPackageName();
+        if(!PACKAGE.equals(self)&&!LAB_PACKAGE.equals(self))
+            throw new SecurityException("Paquete Bridge desconocido");
         File dir=new File(a.getCacheDir(),"boot_update");
         if(!dir.isDirectory()&&!dir.mkdirs())
             throw new java.io.IOException("Sin caché privada de actualización");
@@ -160,13 +212,19 @@ final class BootUpdater {
         PackageInfo candidate=pm.getPackageArchiveInfo(
             partial.getAbsolutePath(),PackageManager.GET_SIGNING_CERTIFICATES);
         PackageInfo current=pm.getPackageInfo(
-            PACKAGE,PackageManager.GET_SIGNING_CERTIFICATES);
-        if(candidate==null||!PACKAGE.equals(candidate.packageName)||
+            self,PackageManager.GET_SIGNING_CERTIFICATES);
+        if(candidate==null||!self.equals(candidate.packageName)||
            !item.version.equals(candidate.versionName)||
-           candidate.getLongVersionCode()<=current.getLongVersionCode()||
-           !Arrays.equals(cert(candidate),cert(current)))
+           (item.code!=-1&&candidate.getLongVersionCode()!=item.code)||
+           candidate.getLongVersionCode()<=current.getLongVersionCode())
             throw new SecurityException(
-                "La APK no es una actualización firmada de este Boot");
+                "La APK no corresponde a una versión posterior de "+self);
+        if(!Arrays.equals(cert(candidate),cert(current)))
+            throw new SecurityException(
+                LAB_PACKAGE.equals(self)?
+                "Firma anterior de LAB distinta: la primera LAB temporal "+
+                "requiere migración UNA SOLA VEZ a LAB firmada permanente.":
+                "Certificado de Boot estable no coincide");
         if(ready.exists())ready.delete();
         if(!partial.renameTo(ready))
             throw new java.io.IOException("No se pudo guardar actualización verificada");
@@ -175,22 +233,49 @@ final class BootUpdater {
     static void check(Activity a,Report status){
         if(busy){status.result("Actualizador ocupado");return;}
         busy=true;
-        status.result("Buscando actualización oficial de Boot…");
+        final boolean lab=LAB_PACKAGE.equals(a.getPackageName());
+        status.result(lab?"Buscando actualización firmada de Bridge LAB…":
+            "Buscando actualización oficial de Boot…");
         new Thread(()->{
             try{
-                Offer item=offer();
+                Offer item=lab?labOffer():offer();
+                long currentCode=a.getPackageManager().getPackageInfo(
+                    a.getPackageName(),0).getLongVersionCode();
                 a.runOnUiThread(()->{
+                    if(item.code!=-1&&currentCode>=item.code){
+                        busy=false;
+                        status.result("Bridge LAB al día: versión instalada "+
+                            currentCode+"; última publicada "+item.code+".");
+                        return;
+                    }
                     if(a.isFinishing()||a.isDestroyed()){busy=false;return;}
                     new AlertDialog.Builder(a)
-                        .setTitle("ACTUALIZAR BOOT & RECEIVER")
-                        .setMessage("Versión oficial: "+item.version+
-                            "\nSólo instala la aplicación Boot. "+
+                        .setTitle(lab?"ACTUALIZAR BRIDGE LAB":
+                            "ACTUALIZAR BOOT ESTABLE")
+                        .setMessage((lab?"Versión LAB firmada: ":
+                            "Versión oficial: ")+item.version+
+                            "\nSólo actualiza esta aplicación. "+
                             "Android pedirá confirmación. No se desinstalan "+
                             "apps, mapas, cuentas ni configuraciones. "+
                             "¿Descargar y verificar?")
                         .setNegativeButton("CANCELAR",
                             (d,w)->busy=false)
                         .setPositiveButton("DESCARGAR",(d,w)->{
+                            if(android.os.Build.VERSION.SDK_INT>=26&&
+                               !a.getPackageManager().canRequestPackageInstalls()){
+                                busy=false;
+                                status.result("Autorizá instalar apps desde "+
+                                    "Bridge y volvé a Buscar actualización.");
+                                try{
+                                    a.startActivity(new Intent(
+                                        Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                                        Uri.parse("package:"+a.getPackageName())));
+                                }catch(Exception rejected){
+                                    status.result("Android no abrió permisos "+
+                                        "de instalación: "+rejected.getMessage());
+                                }
+                                return;
+                            }
                             status.result("Descargando APK y verificando firma…");
                             new Thread(()->{
                                 try{
@@ -199,7 +284,7 @@ final class BootUpdater {
                                         busy=false;
                                         try{
                                             Uri uri=FileProvider.getUriForFile(a,
-                                                PACKAGE+".updatefiles",apk);
+                                                a.getPackageName()+".updatefiles",apk);
                                             Intent install=new Intent(
                                                 Intent.ACTION_INSTALL_PACKAGE);
                                             install.setData(uri);
@@ -208,8 +293,8 @@ final class BootUpdater {
                                             install.putExtra(
                                                 Intent.EXTRA_NOT_UNKNOWN_SOURCE,true);
                                             a.startActivity(install);
-                                            status.result("APK verificada; "+
-                                                "Android debe confirmar instalación");
+                                            status.result("APK y firma verificadas; "+
+                                                "confirmá la actualización en Android");
                                         }catch(Exception error){
                                             status.result("Android bloqueó "+
                                                 "el instalador: "+error.getMessage());
