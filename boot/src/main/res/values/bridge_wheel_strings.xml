@@ -1,0 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+  <string name="bridge_wheel_service_description">DriveLab Bridge: control opcional de rueda de volante para Waze/Google Maps visibles en Display 1. No controla la instrumentación ni otros botones del vehículo.</string>
+</resources>
