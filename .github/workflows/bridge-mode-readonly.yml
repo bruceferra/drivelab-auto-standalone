@@ -34,6 +34,7 @@ on:
       - 'boot/tests/BridgeWheelReceiverParitySourceTest.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeOtaLayerTrial.java'
       - 'boot/tests/BridgeOtaLayerTrialSourceTest.java'
+      - 'boot/tests/BridgeNativeSplitMosaicSourceTest.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeOemVoiceLauncher.java'
       - 'boot/tests/BridgeOemUnifiedInputSourceTest.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeGoogleMapsReplacement.java'
@@ -171,6 +172,14 @@ jobs:
             boot/tests/BridgeOtaLayerTrialSourceTest.java
           java -cp /tmp/bridge-ota-layer-probe \
             ar.com.rango5gps.drivelabauto.boot.BridgeOtaLayerTrialSourceTest
+      - name: Verify optional Android 11 split mosaic without Freeform captions
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-mosaic-native
+          javac -encoding UTF-8 -d /tmp/bridge-mosaic-native \
+            boot/tests/BridgeNativeSplitMosaicSourceTest.java
+          java -cp /tmp/bridge-mosaic-native \
+            ar.com.rango5gps.drivelabauto.boot.BridgeNativeSplitMosaicSourceTest
       - name: Validate one-shot, same-stack Waze ADB foreground probe, never OEM
         run: |
           set -euo pipefail
