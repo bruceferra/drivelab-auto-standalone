@@ -47,6 +47,7 @@ public final class BootActivity extends Activity
     private ImageView qrImage;
     private TextView qrCaption;
     private TextView statusLabel;
+    private TextView wheelRecoveryLabel;
     private final String[] selected=new String[3];
     private boolean clusterEnabled,clusterConfirmed;
     private int clusterCount,clusterPercent,captionSafeDp;
@@ -81,6 +82,7 @@ public final class BootActivity extends Activity
         bridgeUiVisible=true;
         prefs().registerOnSharedPreferenceChangeListener(this);
         linkPrefs().registerOnSharedPreferenceChangeListener(this);
+        BridgeWheelAccessRecovery.prefs(this).registerOnSharedPreferenceChangeListener(this);
         if(content!=null)draw();
         onSharedPreferenceChanged(prefs(),"last_status");
     }
@@ -92,10 +94,19 @@ public final class BootActivity extends Activity
         bridgeUiVisible=false;
         prefs().unregisterOnSharedPreferenceChangeListener(this);
         linkPrefs().unregisterOnSharedPreferenceChangeListener(this);
+        BridgeWheelAccessRecovery.prefs(this).unregisterOnSharedPreferenceChangeListener(this);
         super.onPause();
     }
     @Override public void onSharedPreferenceChanged(SharedPreferences p,
             String key){
+        if(p==BridgeWheelAccessRecovery.prefs(this)){
+            runOnUiThread(()->{
+                if(wheelRecoveryLabel!=null)
+                    wheelRecoveryLabel.setText(
+                        BridgeWheelAccessRecovery.describe(this));
+            });
+            return;
+        }
         if(p==linkPrefs()){
             if("qr_ticket".equals(key)||"qr_until".equals(key)||
                "pair_status".equals(key)||"pair_port_status".equals(key)||
@@ -771,8 +782,15 @@ public final class BootActivity extends Activity
                 "WAZE":"GOOGLE MAPS")+" · CAMBIAR",this::chooseWheelMap);
         button(wheelOn?"VOLANTE OPCIONES: ACTIVADO · DESACTIVAR":
             "VOLANTE OPCIONES: DESACTIVADO · ACTIVAR",this::toggleWheel);
-        button("AUTORIZAR ACCESIBILIDAD DE BRIDGE",
+        button("RECONECTAR ACCESIBILIDAD · ADB LOCAL · SIN TERMUX",
+            ()->BridgeWheelAccessRecovery.ask(this));
+        wheelRecoveryLabel=text(
+            BridgeWheelAccessRecovery.describe(this),13,WHITE);
+        button("AJUSTES ACCESIBILIDAD ANDROID · OPCIONAL",
             this::openWheelPermission);
+        text("ADB es local 127.0.0.1:5555/5556, no requiere Termux "+
+            "si Android autorizó la clave de Bridge LAB. El volante "+
+            "NO se activa con este botón; se controla por separado.",12,QUIET);
         text("RUEDA: siguiente/anterior opción. OK: confirmar. "+
             "ATRÁS: cancelar dentro del mapa. Nunca zoom. "+
             "Android debe autorizar accesibilidad. Desactivá primero "+
