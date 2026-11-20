@@ -65,9 +65,9 @@ public final class BridgeUpdateInstallerSourceContractTest {
             status.contains("pendingAndroidConsent=confirm")&&
             status.contains("static void confirmFromForeground(Activity activity")&&
             status.contains("activity.startActivity(confirm)")&&
-            ui.contains("BridgeInstallResultReceiver.confirmFromForeground(this,"),
-            "Jetour update must not pre-gate all paths on unavailable unknown-source Settings; "+
-            "native pending user consent must be reopenable from foreground Bridge");
+            !ui.contains("BridgeInstallResultReceiver.confirmFromForeground(this,"),
+            "Native OTA remains available, but the redundant manual confirmation "+
+            "button must not clutter the Bridge home screen");
         // Conformance: same Android steps that worked in Receiver.
         for(String step:new String[]{
             "installer.createSession(params)",
@@ -86,15 +86,20 @@ public final class BridgeUpdateInstallerSourceContractTest {
         check(updater.contains("setOnCancelListener(d->busy=false)")&&
             updater.contains("BRIDGE AL DÍA · SIN APK PENDIENTE"),
             "Cancel and latest-version state must give explicit feedback");
-        check(ui.contains("INSTALAR / REINTENTAR APK YA DESCARGADA")&&
-            ui.contains("INSTALADOR ALTERNATIVO DE ARCHIVOS")&&
+        check(ui.contains("button(\"BUSCAR ACTUALIZACIÓN · LAB OTA\"")&&
+            ui.indexOf("BUSCAR ACTUALIZACIÓN · LAB OTA")<
+                ui.indexOf("XIAOMI · CONEXIÓN DIRECTA")&&
+            !ui.contains("INSTALAR / REINTENTAR APK YA DESCARGADA")&&
+            !ui.contains("CONFIRMAR INSTALACIÓN ANDROID · ABRIR AHORA")&&
+            !ui.contains("INSTALADOR ALTERNATIVO DE ARCHIVOS")&&
+            !ui.contains("ACTUALIZADOR DE BRIDGE")&&
             !updater.contains("pm install")&&
             !updater.contains("Runtime.getRuntime().exec")&&
             !updater.contains("am force-stop")&&
             !updater.contains("pm clear")&&
             !status.contains("pm install")&&
             !status.contains("Runtime.getRuntime()"),
-            "Manual consent and no shell/ADB/uninstall as part of OTA");
+            "Only one prominent OTA button on Bridge home; no shell/ADB/uninstall");
         System.out.println("PASS Bridge OTA Installer: verified APK cache, Android consent, retry, file fallback");
     }
 }
