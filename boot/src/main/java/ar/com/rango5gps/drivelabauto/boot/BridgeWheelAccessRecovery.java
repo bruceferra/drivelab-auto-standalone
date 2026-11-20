@@ -53,6 +53,12 @@ final class BridgeWheelAccessRecovery {
         }
     }
     static String describe(Context c){
+        if(trulyConnected())
+            return "ACCESIBILIDAD BRIDGE: CONECTADA\n"+
+                (prefs(c).getBoolean(BridgeWheelAccessibilityService.ENABLED,false)?
+                    "Volante habilitado por el propietario; "+
+                    "la visibilidad del mapa y OEM aún se verifican por separado.":
+                    "Volante desactivado; no hace falta ADB ni Termux.");
         return state(c)+"\n"+prefs(c).getString(STATUS,
             "Sin intento ADB local desde esta LAB");
     }
