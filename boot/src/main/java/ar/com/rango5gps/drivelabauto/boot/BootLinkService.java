@@ -16,11 +16,14 @@ import android.os.IBinder;
 import android.provider.Settings;
 import android.view.Display;
 import ar.com.rango5gps.drivelabauto.common.BridgeCrypto;
+import ar.com.rango5gps.drivelabauto.common.BridgeDiscoveryProof;
 import ar.com.rango5gps.drivelabauto.common.BridgeRouteTarget;
 import java.io.DataInputStream;
 import java.io.DataOutputStream;
 import java.net.Inet4Address;
 import java.net.InetAddress;
+import java.net.DatagramSocket;
+import java.net.DatagramPacket;
 import java.net.NetworkInterface;
 import java.net.ServerSocket;
 import java.net.Socket;
@@ -50,6 +53,7 @@ public final class BootLinkService extends Service {
     private static final String CHANNEL="boot_receiver_lan";
     private volatile boolean running;
     private ServerSocket navServer,pairServer;
+    private DatagramSocket discoverySocket;
     private volatile Pending pairing;
     private final LinkedHashSet<String> recent=new LinkedHashSet<>();
     private static final class Pending {
@@ -140,6 +144,7 @@ public final class BootLinkService extends Service {
             update("status","Iniciando puertos 48391/48392…");
             new Thread(this::listenNav,"BootReceiver-Nav").start();
             new Thread(this::listenPair,"BootReceiver-QR").start();
+            new Thread(this::listenDiscovery,"Bridge-Paired-Discovery").start();
         }
         if(PAIR_QR.equals(action)){
             pairing=null;
@@ -209,6 +214,47 @@ public final class BootLinkService extends Service {
             stopForeground(STOP_FOREGROUND_REMOVE);
             stopSelf();
         }
+    }
+    /** Only an owner-paired Xiaomi that already knows the saved key can
+     * find Bridge after DHCP changes its IP. Broadcast is LAN only and
+     * never advertises keys, QR tickets, OEM state, or app activities.
+     * A failed/missing discovery port cannot interrupt navigation/QR.
+     */
+    private void listenDiscovery(){
+        try(DatagramSocket socket=new DatagramSocket(BridgeDiscoveryProof.PORT)){
+            discoverySocket=socket;
+            socket.setSoTimeout(1000);
+            update("discover_status","DESCUBRIMIENTO CIFRADO · PUERTO 48393 LISTO");
+            byte[] raw=new byte[BridgeDiscoveryProof.SIZE+1];
+            while(running){
+                DatagramPacket ask=new DatagramPacket(raw,raw.length);
+                try{
+                    socket.receive(ask);
+                    if(!privatePeer(ask.getAddress())||
+                        ask.getLength()!=BridgeDiscoveryProof.SIZE)
+                        continue;
+                    byte[] key;
+                    try{
+                        key=BridgeCrypto.unpackKey(
+                            prefs(this).getString("secret",""));
+                    }catch(Exception noPair){continue;}
+                    if(!BridgeDiscoveryProof.acceptsRequest(
+                        key,ask.getData(),ask.getLength()))continue;
+                    byte[] response=BridgeDiscoveryProof.response(key,
+                        java.util.Arrays.copyOf(ask.getData(),ask.getLength()));
+                    socket.send(new DatagramPacket(
+                        response,response.length,
+                        ask.getAddress(),ask.getPort()));
+                }catch(SocketTimeoutException ignored){}
+                catch(Exception ignored){
+                    // Do not disclose pairing/addresses and do not stop NAV.
+                }
+            }
+        }catch(Exception blocked){
+            update("discover_status","DESCUBRIMIENTO NO DISPONIBLE: "+
+                blocked.getClass().getSimpleName()+
+                ". QR/clave guardados sin cambios.");
+        }finally{discoverySocket=null;}
     }
     private boolean dispatch(BridgeCrypto.Packet packet){
         String kind=BridgeRouteTarget.baseKind(packet.kind);
@@ -380,6 +426,14 @@ public final class BootLinkService extends Service {
             deny(out);return;
         }
         pairing=null;
+        // A successful, physically owner-authorized QR pairing is an
+        // explicit request to keep the independent Xiaomi listener ready
+        // at future ignitions. Never start maps, OEM or Receiver.
+        if(!BootConfig.prefs(this).edit()
+                .putBoolean("enabled",true).commit()){
+            update("pair_status","VÍNCULO GUARDADO, pero no se pudo activar "+
+                "autoinicio de Bridge; revisá el interruptor AUTOINICIO");
+        }
         out.writeInt(BridgeCrypto.PAIR_MAGIC);out.writeByte(12);
         BridgeCrypto.write(out,BridgeCrypto.encrypt(
             p.secret,"ack",BridgeCrypto.nonce(proof)));
@@ -388,7 +442,9 @@ public final class BootLinkService extends Service {
         running=false;
         try{if(navServer!=null)navServer.close();}catch(Exception ignored){}
         try{if(pairServer!=null)pairServer.close();}catch(Exception ignored){}
-        update("status","RECEPTOR BOOT DETENIDO");
+        try{if(discoverySocket!=null)discoverySocket.close();}
+        catch(Exception ignored){}
+        update("status","RECEPTOR BRIDGE DETENIDO · vínculo conservado");
     }
     @Override public void onDestroy(){
         shutdown();
