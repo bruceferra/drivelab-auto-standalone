@@ -53,6 +53,16 @@
                 <action android:name="ar.com.rango5gps.drivelabauto.boot.action.MOSAIC_RESULT" />
             </intent-filter>
         </receiver>
+        <service android:name=".BridgeWheelAccessibilityService"
+            android:label="DriveLab Bridge · Volante para mapas"
+            android:exported="true"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data android:name="android.accessibilityservice"
+                android:resource="@xml/bridge_wheel_accessibility" />
+        </service>
         <service android:name=".BootLinkService" android:exported="false"
             android:foregroundServiceType="dataSync" />
         <service android:name=".BootAutoService" android:exported="false"
