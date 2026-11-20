@@ -54,14 +54,16 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
         }
     }
     static final class Summary {
-        int trips;
+        int trips,hvVerifiedSamples;
         double km,kmGps,out,in;
         double net(){return out-in;}
         String describe(String title){
             return title+" · "+trips+" sesiones"+
                 "\n"+fmt(km,1)+" km OEM (GPS "+fmt(kmGps,1)+")"+
-                "\nHV salido "+fmt(out,3)+" kWh · HV entrado "+
-                fmt(in,3)+" kWh · NETO "+fmt(net(),3)+" kWh";
+                (hvVerifiedSamples<=0?"\nHV: SIN LECTURAS VERIFICADAS":
+                    "\nHV salido "+fmt(out,3)+" kWh · HV entrado "+
+                    fmt(in,3)+" kWh · NETO "+fmt(net(),3)+
+                    " kWh (muestras HV válidas: "+hvVerifiedSamples+")");
         }
     }
     static String fmt(double n,int d){
@@ -265,6 +267,13 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
                 out.kmGps=c.getDouble(2);out.out=c.getDouble(3);
                 out.in=c.getDouble(4);
             }
+        }
+        try(Cursor c=getReadableDatabase().rawQuery(
+            "SELECT COUNT(*) FROM samples WHERE t_epoch_ms>=? "+
+            "AND volt BETWEEN 100 AND 1000 "+
+            "AND amps BETWEEN -1000 AND 1000",
+            new String[]{Long.toString(epoch)})){
+            if(c.moveToFirst())out.hvVerifiedSamples=c.getInt(0);
         }
         return out;
     }
