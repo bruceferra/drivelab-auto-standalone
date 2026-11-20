@@ -19,7 +19,7 @@ public final class BridgeWheelAccessibilityContractTest {
             binder.contains("code<1000||code>1003"),
             "Binding must be scoped to known T1 wheel keys, register/unregister cleanly");
         yes(service.contains("getWindowsOnAllDisplays()")&&
-            service.contains("window.getDisplayId()!=1")&&
+            service.contains("window.getDisplayId()!=selectedDisplay")&&
             service.contains("BridgeWheelPolicy.translate(")&&
             service.contains("case BridgeWheelPolicy.NEXT:")&&
             service.contains("case BridgeWheelPolicy.PREVIOUS:")&&
@@ -36,7 +36,7 @@ public final class BridgeWheelAccessibilityContractTest {
             !service.contains("settings put")&&
             !service.contains("T1WazeWheelService")&&
             !service.contains("BootConfig.assertReceiver("),
-            "Wheel service must navigate app options ONLY, no zoom, independent and no OEM/global control");
+            "Wheel service supports manually selected real window Display0/1 and no zoom/OEM/global controls");
         yes(activity.contains("BridgeWheelAccessibilityService")&&
             activity.contains("this::toggleWheel")&&
             activity.contains("setManuallyArmed(true)")&&
