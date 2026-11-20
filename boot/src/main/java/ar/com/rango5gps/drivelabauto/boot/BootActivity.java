@@ -391,6 +391,26 @@ public final class BootActivity extends Activity
             })
             .setNegativeButton("CANCELAR",null).show();
     }
+    private void askRealClusterSurfaceProbe(){
+        new AlertDialog.Builder(this)
+            .setTitle("PRUEBA REAL DE SUPERFICIE · DISPLAY 1")
+            .setMessage("Sólo con la Jetour COMPLETAMENTE ESTACIONADA. "+
+                "Durante 15 segundos Bridge mostrará un pequeño "+
+                "recuadro de diagnóstico, no un mapa, en el centro "+
+                "del tablero. Usará Presentation y VirtualDisplay "+
+                "propios sin ADB, ni tocar el firmware, ni modificar "+
+                "el orden de las superficies OEM. "+
+                "Se borrará al salir o automáticamente. "+
+                "NO uses esta prueba conduciendo. "+
+                "Si aparece delante de Radio/Bluetooth tendremos "+
+                "una prueba del mecanismo gráfico; si no, Android "+
+                "Jetour no deja superponer esta Presentation.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("COMPROBAR 15 SEGUNDOS",(d,w)->
+                startActivity(new Intent(this,
+                    BridgeClusterSurfaceProbeActivity.class)))
+            .show();
+    }
     private void toggleDisplay1(){
         if(BridgeStandaloneWindows.tableroEnabled(this)){
             BridgeStandaloneWindows.disableTablero(this);
@@ -573,9 +593,10 @@ public final class BootActivity extends Activity
             "DISPLAY 1 SIN RUTAS. Los destinos se envían a Display 0. "+
             "Desactivar no cierra ni borra aplicaciones ya abiertas "+
             "por Android.",12,QUIET);
-        button("PROBAR ADB · WAZE AL FRENTE · DISPLAY 1",
-            ()->BridgeWazeForegroundProbe.ask(this));
-        text("PRUEBA ADB: "+BridgeWazeForegroundProbe.status(this),12,QUIET);
+        button("COMPROBAR CAPA REAL · DISPLAY 1 · 15 SEGUNDOS",
+            this::askRealClusterSurfaceProbe);
+        text("CAPA REAL: "+BridgeClusterSurfaceProbeActivity.lastResult(this),
+            12,QUIET);
         button("LIBERAR CLÚSTER · SÓLO MAPAS VERIFICADOS",
             ()->BridgeClusterRecovery.ask(this));
         text("RECUPERACIÓN: "+BridgeClusterRecovery.status(this),12,QUIET);
