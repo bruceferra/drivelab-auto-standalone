@@ -104,7 +104,7 @@ public final class BootLinkService extends Service {
         super.onCreate();
         NotificationManager n=getSystemService(NotificationManager.class);
         if(n!=null)n.createNotificationChannel(new NotificationChannel(
-            CHANNEL,"DriveLab Boot & Receiver · Xiaomi",
+            CHANNEL,"DriveLab Bridge · Xiaomi",
             NotificationManager.IMPORTANCE_LOW));
     }
     @Override public IBinder onBind(Intent i){return null;}
@@ -128,7 +128,7 @@ public final class BootLinkService extends Service {
                 PendingIntent.FLAG_UPDATE_CURRENT|PendingIntent.FLAG_IMMUTABLE);
             startForeground(7701,new Notification.Builder(this,CHANNEL)
                 .setSmallIcon(android.R.drawable.ic_menu_directions)
-                .setContentTitle("DriveLab Boot & Receiver")
+                .setContentTitle("DriveLab Bridge · receptor Xiaomi activo")
                 .setContentText("Receptor Xiaomi cifrado · independiente")
                 .setContentIntent(open).setOngoing(true).build());
         }catch(Exception ex){
@@ -257,10 +257,12 @@ public final class BootLinkService extends Service {
         String kind=BridgeRouteTarget.baseKind(packet.kind);
         String target=BridgeRouteTarget.target(packet.kind);
         if(kind==null||target==null)return false;
-        if(!Settings.canDrawOverlays(this)&&
+        if(!BridgeBackgroundAccess.authorized(this)&&
             !BootActivity.isVisible()){
-            update("last_route","DESTINO RECIBIDO · Android bloquea "+
-                "abrir mapas desde segundo plano; habilitá el permiso");
+            update("last_route","DESTINO RECIBIDO, PERO NO ABIERTO: "+
+                "Android Jetour no autorizó SYSTEM_ALERT_WINDOW a Bridge. "+
+                "En Bridge tocá HABILITAR SEGUNDO PLANO · ADB LOCAL "+
+                "una sola vez; el QR se conserva.");
             return false;
         }
         String[] apps=BridgeRouteTarget.BOTH.equals(target)?
@@ -294,7 +296,12 @@ public final class BootLinkService extends Service {
                     Uri.encode(destination,"coord".equals(base)?",":"")+"&mode=d");
                 map=new Intent(Intent.ACTION_VIEW,uri).setPackage(pkg);
             }else return false;
-            if(getPackageManager().resolveActivity(map,0)==null)return false;
+            if(getPackageManager().resolveActivity(map,0)==null){
+                update("last_route","ANDROID NO ENCUENTRA "+
+                    ("com.waze".equals(pkg)?"WAZE":"GOOGLE MAPS")+
+                    " en la pantalla principal");
+                return false;
+            }
             map.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|
                 Intent.FLAG_ACTIVITY_SINGLE_TOP);
             // Bridge's own, user-confirmed destination. NEVER consult the
@@ -306,7 +313,14 @@ public final class BootLinkService extends Service {
                 throw new SecurityException("Tablero no habilitado");
             startActivity(map); // Display 0 only until virtual host QA.
             return true;
-        }catch(Exception ignored){return false;}
+        }catch(Exception blocked){
+            update("last_route","ANDROID RECHAZÓ ABRIR "+
+                ("com.waze".equals(pkg)?"WAZE":"GOOGLE MAPS")+
+                ": "+blocked.getClass().getSimpleName()+
+                " · permiso de segundo plano: "+
+                (BridgeBackgroundAccess.authorized(this)?"sí":"no"));
+            return false;
+        }
     }
     private void listenPair(){
         try(ServerSocket server=new ServerSocket(BridgeCrypto.PAIR_PORT,3)){
