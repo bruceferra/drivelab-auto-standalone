@@ -46,7 +46,8 @@ public final class BridgeIndependentBootContractTest {
             ui.contains("BootLinkService.PAIR_QR")&&
             ui.contains("BootLinkService.STOP")&&
             ui.contains("PROBAR DOS VENTANAS · SÓLO BRIDGE")&&
-            ui.contains("PROBAR MAPA TABLERO · ESTACIONADO")&&
+            ui.contains("LIBERAR CLÚSTER")&&
+            !ui.contains("button(\"PROBAR MAPA TABLERO")&&
             ui.contains("RECONECTAR ACCESIBILIDAD · ADB LOCAL · SIN TERMUX")&&
             !ui.contains("legacyAdvanced")&&
             !ui.contains("BootConfig.assertReceiver")&&
