@@ -456,10 +456,66 @@ public final class BootActivity extends Activity
                     BridgeStandaloneWindows.prefs(this).edit()
                         .putString(BridgeStandaloneWindows.TAB_MAP,
                             choice==0?BridgeWindowsPolicy.MAPS:
-                            BridgeWindowsPolicy.WAZE).apply();
+                            BridgeWindowsPolicy.WAZE)
+                        .putBoolean(BridgeStandaloneWindows.TAB_CONFIRMED,false)
+                        .putBoolean(BridgeStandaloneWindows.TAB_ROUTE,false)
+                        .apply();
                     d.dismiss();draw();
                 })
             .setNegativeButton("CANCELAR",null).show();
+    }
+    private void confirmTableroMap(){
+        String prior=BridgeStandaloneWindows.prefs(this).getString(
+            BridgeStandaloneWindows.LAST,"");
+        if(!prior.startsWith("Display 1: 1 solicitudes")){
+            new AlertDialog.Builder(this).setTitle("MAPA SIN PRUEBA RECIENTE")
+                .setMessage("Primero solicitá el mapa desde Bridge. "+
+                    "Una respuesta de Android no prueba que sea visible.")
+                .setPositiveButton("OK",null).show();
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("CONFIRMAR MAPA VISIBLE EN DISPLAY 1")
+            .setMessage("Confirmá únicamente si ves Waze o Google Maps "+
+                "sobre la pantalla del tablero sin que desaparezcan "+
+                "las alertas importantes de Jetour. Esta confirmación "+
+                "caduca en el próximo arranque y al cambiar el mapa.")
+            .setNegativeButton("TODAVÍA NO",null)
+            .setPositiveButton("SÍ, SE VE",(d,w)->{
+                BridgeStandaloneWindows.prefs(this).edit()
+                    .putBoolean(BridgeStandaloneWindows.TAB_CONFIRMED,true)
+                    .apply();
+                draw();
+            }).show();
+    }
+    private void toggleSenderTablero(){
+        SharedPreferences p=BridgeStandaloneWindows.prefs(this);
+        boolean enabled=p.getBoolean(BridgeStandaloneWindows.TAB_ROUTE,false);
+        if(enabled){
+            p.edit().putBoolean(BridgeStandaloneWindows.TAB_ROUTE,false).apply();
+            draw();return;
+        }
+        if(!p.getBoolean(BridgeStandaloneWindows.TAB_CONFIRMED,false)){
+            new AlertDialog.Builder(this).setTitle("TABLERO SIN CONFIRMACIÓN")
+                .setMessage("La ruta del Xiaomi seguirá yendo a la "+
+                    "pantalla central hasta que confirmes que el mapa "+
+                    "de Bridge está visible en Display 1.")
+                .setPositiveButton("OK",null).show();
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("XIAOMI SENDER → DISPLAY 1")
+            .setMessage("Las rutas enviadas desde Xiaomi a "+
+                labelFor(BridgeStandaloneWindows.tabMap(this))+
+                " se solicitarán en Display 1. Las rutas al otro "+
+                "navegador siguen en la pantalla central. "+
+                "No se cambia tamaño ni se reinician mapas al "+
+                "recibir destinos. ¿Activar esta preferencia?")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("ACTIVAR",(d,w)->{
+                p.edit().putBoolean(BridgeStandaloneWindows.TAB_ROUTE,true)
+                    .apply();draw();
+            }).show();
     }
     private void askBridgeWindows(boolean tablero){
         new AlertDialog.Builder(this)
@@ -652,6 +708,18 @@ public final class BootActivity extends Activity
             " · CAMBIAR",this::chooseBridgeMap);
         button("PROBAR MAPA TABLERO · ESTACIONADO",
             ()->askBridgeWindows(true));
+        SharedPreferences windows=BridgeStandaloneWindows.prefs(this);
+        boolean visibleTab=windows.getBoolean(
+            BridgeStandaloneWindows.TAB_CONFIRMED,false);
+        boolean routesTab=windows.getBoolean(
+            BridgeStandaloneWindows.TAB_ROUTE,false);
+        button(visibleTab?"MAPA DISPLAY 1 · CONFIRMADO VISUALMENTE":
+            "CONFIRMAR: MAPA SE VE EN DISPLAY 1",
+            this::confirmTableroMap);
+        button(routesTab?
+            "SENDER → TABLERO: ACTIVADO · APAGAR":
+            "SENDER → TABLERO: DESACTIVADO · ACTIVAR",
+            this::toggleSenderTablero);
         text("El modo RELOJES, el desvanecido y la posición "+
             "permanente siguen en desarrollo. Todavía no se "+
             "garantiza cubrir la interfaz MODE ni preservar "+
