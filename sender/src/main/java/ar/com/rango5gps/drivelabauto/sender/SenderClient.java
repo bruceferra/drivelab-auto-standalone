@@ -204,8 +204,13 @@ public final class SenderClient {
                 boolean accepted="ack".equals(reply.kind);
                 if(!accepted&&!"not_ready".equals(reply.kind))
                     throw new IOException("Tipo de respuesta inválido");
-                String status=accepted?"T1 CONFIRMÓ RECEPCIÓN CIFRADA":
-                    "T1 recibió el destino, pero la navegación elegida no se inició";
+                boolean t1Trial=kind!=null&&kind.endsWith("_t1");
+                String status=t1Trial?
+                    (accepted?
+                        "T1LAUNCHER: Android reportó entrega a la instancia existente de Maps; verificá ruta en pantalla":
+                        "T1LAUNCHER: NO se verificó entrega a Maps virtual; sin relanzamiento automático"):
+                    (accepted?"T1 CONFIRMÓ RECEPCIÓN CIFRADA":
+                        "T1 recibió el destino, pero la navegación elegida no se inició");
                 SharedPreferences.Editor edit=p.edit().putString("last_status",status);
                 if(accepted)edit.putInt("sent",p.getInt("sent",0)+1);
                 edit.apply();return new Delivery(accepted,status);
