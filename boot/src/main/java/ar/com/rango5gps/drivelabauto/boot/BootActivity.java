@@ -647,6 +647,8 @@ public final class BootActivity extends Activity
             this::askPublicVirtualActivityProbe);
         text("RESULTADO CAPA / APP: "+
             BridgeClusterSurfaceProbeActivity.lastResult(this),12,QUIET);
+        text("DIAGNÓSTICO PERSISTENTE: "+
+            BridgeClusterSurfaceProbeActivity.lastDiagnostic(this),12,QUIET);
         button("LIBERAR CLÚSTER · SÓLO MAPAS VERIFICADOS",
             ()->BridgeClusterRecovery.ask(this));
         text("RECUPERACIÓN: "+BridgeClusterRecovery.status(this),12,QUIET);

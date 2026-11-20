@@ -28,6 +28,8 @@ public final class BridgeOwnedVirtualActivitySourceTest {
             host.contains("catch(SecurityException denied)")&&
             host.contains("showDeniedLaunchFallback(d,denied)")&&
             host.contains("PRESENTATION ANIMADA")&&
+            host.contains("last_diagnostic")&&
+            host.contains("static String lastDiagnostic(Context c)")&&
             host.contains("main.removeCallbacks(fallbackTicker)")&&
             host.contains("BridgeVirtualSceneActivity.finishSession(sceneToken)")&&
             host.contains("main.postDelayed(timeout,activityProbe?APP_MAX_MS:MAX_MS)")&&

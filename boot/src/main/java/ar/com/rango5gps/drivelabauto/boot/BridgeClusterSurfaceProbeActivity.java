@@ -149,8 +149,25 @@ public final class BridgeClusterSurfaceProbeActivity extends Activity
 
     private void report(String message){
         if(status!=null)status.setText(message);
-        getSharedPreferences(PREFS,Context.MODE_PRIVATE).edit()
-            .putString("last_result",message).apply();
+        android.content.SharedPreferences.Editor e=
+            getSharedPreferences(PREFS,Context.MODE_PRIVATE).edit()
+                .putString("last_result",message);
+        // Preserve diagnostic even after the automatic close overwrites
+        // the most recent status with the cleanup message.
+        if(message.startsWith("ANDROID RECHAZÓ")||
+           message.startsWith("ACTIVIDAD BRIDGE EN")||
+           message.startsWith("NO SE PUDO")||
+           message.startsWith("ACTIVITY DENEGADA")||
+           message.startsWith("SIN CONFIRMACIÓN")||
+           message.startsWith("Jetour bloqueó")){
+            e.putString("last_diagnostic",message)
+             .putLong("last_diagnostic_at",System.currentTimeMillis());
+        }
+        e.apply();
+    }
+    static String lastDiagnostic(Context c){
+        return c.getSharedPreferences(PREFS,Context.MODE_PRIVATE)
+            .getString("last_diagnostic","Sin resultado de actividad virtual todavía");
     }
     static String lastResult(Context c){
         return c.getSharedPreferences(PREFS,Context.MODE_PRIVATE)
@@ -279,6 +296,9 @@ public final class BridgeClusterSurfaceProbeActivity extends Activity
                 "Pendiente confirmación visual.");
         };
         BridgeVirtualSceneActivity.setListener(sceneListener);
+        getSharedPreferences(PREFS,Context.MODE_PRIVATE).edit()
+            .putString("last_diagnostic","EN PRUEBA "+(publicProbe?"PÚBLICA":"PRIVADA")+
+                ": esperando autorización de Android").apply();
         report("Solicitando Activity propia en Display virtual "+
             requested+" · modo "+(publicProbe?"PÚBLICO":"PRIVADO")+
             ". Waze y Maps permanecen sin cambios.");
