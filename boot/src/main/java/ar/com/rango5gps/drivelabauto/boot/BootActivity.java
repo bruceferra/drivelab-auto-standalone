@@ -56,6 +56,19 @@ public final class BootActivity extends Activity
     @Override protected void onResume(){
         super.onResume();
         bridgeUiVisible=true;
+        // Jetour may suspend Android without BOOT_COMPLETED on ignition.
+        // When the owner opens Bridge after wake, restore ONLY the paired
+        // LAN listener; never re-pair or change cluster/OEM state.
+        if(BootConfig.enabled(this)){
+            try{
+                startForegroundService(new Intent(this,BootLinkService.class)
+                    .setAction(BootLinkService.START));
+            }catch(Exception failed){
+                prefs().edit().putString("last_status",
+                    "No se pudo reanudar receptor Xiaomi: "+
+                    failed.getClass().getSimpleName()).apply();
+            }
+        }
         prefs().registerOnSharedPreferenceChangeListener(this);
         linkPrefs().registerOnSharedPreferenceChangeListener(this);
         BridgeWheelAccessRecovery.prefs(this).registerOnSharedPreferenceChangeListener(this);
