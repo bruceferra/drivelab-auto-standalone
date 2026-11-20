@@ -783,13 +783,17 @@ public final class BootActivity extends Activity
         boolean wheelOn=wheel.getBoolean(
             BridgeWheelAccessibilityService.ENABLED,false);
         String wheelTarget=BridgeWheelAccessibilityService.targetFor(this);
-        button("MAPA DEL VOLANTE: "+
-            (BridgeWheelAccessibilityService.WAZE.equals(wheelTarget)?
-                "WAZE":"GOOGLE MAPS")+
-            (BridgeStandaloneWindows.tableroEnabled(this)&&
-                !BridgeDualRoutePolicy.BOTH.equals(
-                    BridgeStandaloneWindows.tabMap(this))?
-                " · SIGUE MAPA TABLERO":" · CAMBIAR"),this::chooseWheelMap);
+        boolean followsTablero=BridgeStandaloneWindows.tableroEnabled(this)&&
+            !BridgeDualRoutePolicy.BOTH.equals(
+                BridgeStandaloneWindows.tabMap(this));
+        String wheelMapName=BridgeWheelAccessibilityService.WAZE.equals(wheelTarget)?
+            "WAZE":"GOOGLE MAPS";
+        if(followsTablero)
+            text("MAPA DEL VOLANTE: "+wheelMapName+
+                " · AUTOMÁTICO SEGÚN MAPA DEL TABLERO",13,WHITE);
+        else
+            button("MAPA DEL VOLANTE: "+wheelMapName+" · CAMBIAR",
+                this::chooseWheelMap);
         int actualDisplay=wheel.getInt(
             BridgeWheelAccessibilityService.WINDOW_DISPLAY,1);
         button("PANTALLA DE CONTROLES: DISPLAY "+actualDisplay+" · CAMBIAR",
