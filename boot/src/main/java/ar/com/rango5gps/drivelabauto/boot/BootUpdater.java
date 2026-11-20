@@ -1,6 +1,14 @@
 package ar.com.rango5gps.drivelabauto.boot;
 
 import android.app.Activity;
+import android.app.PendingIntent;
+import android.content.ClipData;
+import android.content.pm.PackageInstaller;
+import android.os.Build;
+import java.io.FileInputStream;
+import java.io.OutputStream;
+import android.content.Context;
+import android.content.SharedPreferences;
 import android.app.AlertDialog;
 import android.content.Intent;
 import android.content.pm.PackageInfo;
@@ -42,6 +50,8 @@ final class BootUpdater {
     private static final int LAB_META_MAX=16_384;
     private static final long APK_MAX=20L*1024*1024;
     private static boolean busy;
+    private static final String READY_PREFS="bridge_update_verified_v1";
+    private static final String READY_STATUS="last_status";
     interface Report {void result(String s);}
     private static final class Offer {
         final String version,url,sha;
@@ -181,36 +191,40 @@ final class BootUpdater {
             throw new SecurityException("Firmas Android ambiguas");
         return signatures[0].toByteArray();
     }
-    private static File download(Activity a,Offer item)throws Exception{
+    private static File cacheFile(Activity a){
+        return new File(new File(a.getCacheDir(),"boot_update"),
+            "DriveLab-Bridge-verified-update.apk");
+    }
+    static void record(Context c,String value){
+        BootConfig.prefs(c).edit().putString(READY_STATUS,value).apply();
+    }
+    private static void notify(Activity a,Report status,String value){
+        record(a,value);
+        a.runOnUiThread(()->{
+            if(!a.isFinishing()&&!a.isDestroyed())status.result(value);
+        });
+    }
+    private static void verifyApk(Activity a,File apk,Offer item)throws Exception{
+        if(!apk.isFile()||apk.length()!=item.size||
+           apk.length()<1024||apk.length()>APK_MAX)
+            throw new SecurityException("APK descargada incompleta");
+        MessageDigest digest=MessageDigest.getInstance("SHA-256");
+        try(InputStream in=new FileInputStream(apk)){
+            byte[] bytes=new byte[32768];int n;
+            while((n=in.read(bytes))!=-1)digest.update(bytes,0,n);
+        }
+        if(!item.sha.equals(hex(digest.digest())))
+            throw new SecurityException("SHA-256 de actualización no coincide");
+        try(InputStream in=new FileInputStream(apk)){
+            if(in.read()!=0x50||in.read()!=0x4b)
+                throw new SecurityException("No es un archivo APK");
+        }
         String self=a.getPackageName();
         if(!PACKAGE.equals(self)&&!LAB_PACKAGE.equals(self))
-            throw new SecurityException("Paquete Bridge desconocido");
-        File dir=new File(a.getCacheDir(),"boot_update");
-        if(!dir.isDirectory()&&!dir.mkdirs())
-            throw new java.io.IOException("Sin caché privada de actualización");
-        File partial=new File(dir,"boot.part");
-        File ready=new File(dir,"DriveLab-Boot-update.apk");
-        if(partial.exists())partial.delete();
-        MessageDigest digest=MessageDigest.getInstance("SHA-256");
-        HttpURLConnection conn=open(item.url);
-        long size=0;
-        try(InputStream in=conn.getInputStream();
-            FileOutputStream out=new FileOutputStream(partial)){
-            byte[] data=new byte[32768];int n;
-            while((n=in.read(data))!=-1){
-                size+=n;
-                if(size>APK_MAX||size>item.size)
-                    throw new SecurityException("APK supera el tamaño aprobado");
-                digest.update(data,0,n);
-                out.write(data,0,n);
-            }
-            out.getFD().sync();
-        }finally{conn.disconnect();}
-        if(size!=item.size||!item.sha.equals(hex(digest.digest())))
-            throw new SecurityException("SHA-256 o tamaño de Boot incorrecto");
+            throw new SecurityException("Paquete de Bridge desconocido");
         PackageManager pm=a.getPackageManager();
         PackageInfo candidate=pm.getPackageArchiveInfo(
-            partial.getAbsolutePath(),PackageManager.GET_SIGNING_CERTIFICATES);
+            apk.getAbsolutePath(),PackageManager.GET_SIGNING_CERTIFICATES);
         PackageInfo current=pm.getPackageInfo(
             self,PackageManager.GET_SIGNING_CERTIFICATES);
         if(candidate==null||!self.equals(candidate.packageName)||
@@ -218,17 +232,182 @@ final class BootUpdater {
            (item.code!=-1&&candidate.getLongVersionCode()!=item.code)||
            candidate.getLongVersionCode()<=current.getLongVersionCode())
             throw new SecurityException(
-                "La APK no corresponde a una versión posterior de "+self);
+                "No es una actualización posterior del Bridge instalado");
         if(!Arrays.equals(cert(candidate),cert(current)))
-            throw new SecurityException(
-                LAB_PACKAGE.equals(self)?
-                "Firma anterior de LAB distinta: la primera LAB temporal "+
-                "requiere migración UNA SOLA VEZ a LAB firmada permanente.":
-                "Certificado de Boot estable no coincide");
-        if(ready.exists())ready.delete();
+            throw new SecurityException("Firma Android distinta; no se instalará");
+    }
+    private static File download(Activity a,Offer item)throws Exception{
+        File ready=cacheFile(a),dir=ready.getParentFile();
+        if(!dir.isDirectory()&&!dir.mkdirs())
+            throw new java.io.IOException("Sin caché privada para descarga");
+        // Android's PackageParser expects an APK filename, even for staging.
+        // The previous 'boot.part' extension could not be parsed on some ROMs.
+        File partial=new File(dir,"bridge-download.part.apk");
+        if(partial.exists()&&!partial.delete())
+            throw new java.io.IOException("No se pudo limpiar descarga anterior");
+        MessageDigest digest=MessageDigest.getInstance("SHA-256");
+        HttpURLConnection conn=open(item.url);long size=0;
+        try(InputStream in=conn.getInputStream();
+            FileOutputStream out=new FileOutputStream(partial)){
+            byte[] bytes=new byte[32768];int n;
+            while((n=in.read(bytes))!=-1){
+                size+=n;
+                if(size>APK_MAX||size>item.size)
+                    throw new SecurityException("APK supera el tamaño aprobado");
+                digest.update(bytes,0,n);
+                out.write(bytes,0,n);
+            }
+            out.getFD().sync();
+        }finally{conn.disconnect();}
+        if(size!=item.size||!item.sha.equals(hex(digest.digest())))
+            throw new SecurityException("SHA-256 o tamaño de Bridge incorrecto");
+        verifyApk(a,partial,item);
+        if(ready.exists()&&!ready.delete())
+            throw new java.io.IOException("No se pudo reemplazar caché");
         if(!partial.renameTo(ready))
-            throw new java.io.IOException("No se pudo guardar actualización verificada");
+            throw new java.io.IOException("No se pudo conservar APK verificada");
+        SharedPreferences.Editor e=a.getSharedPreferences(READY_PREFS,
+            Context.MODE_PRIVATE).edit()
+            .putString("version",item.version)
+            .putString("url",item.url)
+            .putString("sha",item.sha)
+            .putLong("size",item.size).putLong("code",item.code);
+        if(!e.commit())throw new java.io.IOException(
+            "No se pudo registrar descarga verificada");
         return ready;
+    }
+    private static File verifiedCache(Activity a)throws Exception{
+        SharedPreferences p=a.getSharedPreferences(READY_PREFS,
+            Context.MODE_PRIVATE);
+        String version=p.getString("version","");
+        String url=p.getString("url","");
+        String hash=p.getString("sha","");
+        long size=p.getLong("size",0),code=p.getLong("code",-1);
+        if(!version.matches("0\\.1\\.[0-9]+-lab\\.[0-9]+")||
+           !hash.matches("[a-f0-9]{64}")||
+           !url.startsWith(DOWNLOAD_BASE+"bridge-lab-v")||
+           size<1024||size>APK_MAX||code<5)
+            throw new SecurityException(
+                "No hay una actualización verificada para instalar");
+        Offer item=new Offer(version,url,hash,size,code);
+        File file=cacheFile(a);
+        verifyApk(a,file,item); // Verifies again on EVERY retry.
+        return file;
+    }
+    private static void installSession(Activity a,File file,Report status)
+            throws Exception{
+        PackageInstaller installer=a.getPackageManager().getPackageInstaller();
+        PackageInstaller.SessionParams params=new PackageInstaller.SessionParams(
+            PackageInstaller.SessionParams.MODE_FULL_INSTALL);
+        params.setAppPackageName(a.getPackageName());
+        params.setSize(file.length());
+        if(Build.VERSION.SDK_INT>=31)params.setRequireUserAction(
+            PackageInstaller.SessionParams.USER_ACTION_REQUIRED);
+        int id=installer.createSession(params);
+        boolean committed=false;
+        try(PackageInstaller.Session session=installer.openSession(id)){
+            try(InputStream in=new FileInputStream(file);
+                OutputStream out=session.openWrite("base.apk",0,file.length())){
+                byte[] chunk=new byte[16384];int n;
+                while((n=in.read(chunk))!=-1)out.write(chunk,0,n);
+                session.fsync(out);
+            }
+            Intent callback=new Intent(a,BridgeInstallResultReceiver.class)
+                .setAction(BridgeInstallResultReceiver.ACTION);
+            int flags=PendingIntent.FLAG_UPDATE_CURRENT;
+            if(Build.VERSION.SDK_INT>=31)flags|=PendingIntent.FLAG_MUTABLE;
+            PendingIntent result=PendingIntent.getBroadcast(a,id,callback,flags);
+            notify(a,status,"Sesión Android iniciada; esperando ventana de "+
+                "confirmación para instalar Bridge…");
+            session.commit(result.getIntentSender());
+            committed=true;
+        }finally{
+            if(!committed)installer.abandonSession(id);
+        }
+    }
+    private static void installFallback(Activity a,File file,Report status){
+        if(a.isFinishing()||a.isDestroyed())return;
+        try{
+            Uri uri=FileProvider.getUriForFile(a,
+                a.getPackageName()+".updatefiles",file);
+            Intent install=new Intent(Intent.ACTION_INSTALL_PACKAGE);
+            install.setDataAndType(uri,"application/vnd.android.package-archive");
+            install.setClipData(ClipData.newRawUri("DriveLab Bridge LAB",uri));
+            install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+            try{
+                a.startActivity(install);
+                notify(a,status,"Instalador alternativo solicitado; "+
+                    "confirmá instalar en Android.");
+            }catch(Exception first){
+                install.setAction(Intent.ACTION_VIEW);
+                try{
+                    a.startActivity(install);
+                    notify(a,status,"Instalador de archivos solicitado; "+
+                        "confirmá instalar en Android.");
+                }catch(Exception second){
+                    notify(a,status,"La ROM de Jetour no abre instaladores: "+
+                        first.getClass().getSimpleName()+" / "+
+                        second.getClass().getSimpleName()+
+                        ". APK verificada conservada para reintentar.");
+                }
+            }
+        }catch(Exception failure){
+            notify(a,status,"No se pudo entregar la APK a Android: "+
+                failure.getClass().getSimpleName());
+        }
+    }
+    static void retryInstall(Activity a,Report status){
+        if(busy){status.result("Actualizador ocupado");return;}
+        busy=true;
+        notify(a,status,"Verificando APK guardada antes de instalar…");
+        new Thread(()->{
+            try{
+                File file=verifiedCache(a);
+                a.runOnUiThread(()->{
+                    if(a.isFinishing()||a.isDestroyed()){busy=false;return;}
+                    if(Build.VERSION.SDK_INT>=26&&
+                       !a.getPackageManager().canRequestPackageInstalls()){
+                        busy=false;
+                        notify(a,status,"Android requiere permiso "+
+                            "«Instalar apps desconocidas» para Bridge.");
+                        requestInstallPermission(a,status);
+                        return;
+                    }
+                    new Thread(()->{
+                        try{installSession(a,file,status);}
+                        catch(Exception failed){
+                            notify(a,status,"El instalador de sesión falló ("+
+                                failed.getClass().getSimpleName()+
+                                "); abriendo instalador alternativo.");
+                            a.runOnUiThread(()->installFallback(a,file,status));
+                        }finally{busy=false;}
+                    },"Bridge-Session-Installer").start();
+                });
+            }catch(Exception error){
+                busy=false;
+                notify(a,status,"No hay APK válida lista para instalar: "+
+                    error.getClass().getSimpleName()+": "+error.getMessage());
+            }
+        },"Bridge-Verified-Apk-Retry").start();
+    }
+    private static void requestInstallPermission(Activity a,Report status){
+        try{
+            a.startActivity(new Intent(
+                Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                Uri.parse("package:"+a.getPackageName())));
+            notify(a,status,"Autorizá instalar desde Bridge. "+
+                "Volvé y tocá REINTENTAR INSTALACIÓN; no se descarga de nuevo.");
+        }catch(Exception unavailable){
+            try{
+                a.startActivity(new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                    Uri.parse("package:"+a.getPackageName())));
+                notify(a,status,"Buscá «Instalar aplicaciones desconocidas» "+
+                    "en los permisos de Bridge; luego reintentá.");
+            }catch(Exception rejected){
+                notify(a,status,"Jetour no abrió permisos de instalación: "+
+                    rejected.getClass().getSimpleName());
+            }
+        }
     }
     static void check(Activity a,Report status){
         if(busy){status.result("Actualizador ocupado");return;}
@@ -282,23 +461,20 @@ final class BootUpdater {
                                     File apk=download(a,item);
                                     a.runOnUiThread(()->{
                                         busy=false;
-                                        try{
-                                            Uri uri=FileProvider.getUriForFile(a,
-                                                a.getPackageName()+".updatefiles",apk);
-                                            Intent install=new Intent(
-                                                Intent.ACTION_INSTALL_PACKAGE);
-                                            install.setData(uri);
-                                            install.addFlags(
-                                                Intent.FLAG_GRANT_READ_URI_PERMISSION);
-                                            install.putExtra(
-                                                Intent.EXTRA_NOT_UNKNOWN_SOURCE,true);
-                                            a.startActivity(install);
-                                            status.result("APK y firma verificadas; "+
-                                                "confirmá la actualización en Android");
-                                        }catch(Exception error){
-                                            status.result("Android bloqueó "+
-                                                "el instalador: "+error.getMessage());
-                                        }
+                                        if(a.isFinishing()||a.isDestroyed())return;
+                                        notify(a,status,"Descarga verificada y guardada: "+
+                                            item.version+". Tocá INSTALAR AHORA.");
+                                        new AlertDialog.Builder(a)
+                                            .setTitle("BRIDGE · APK VERIFICADA")
+                                            .setMessage("La versión "+item.version+
+                                                " está descargada con SHA-256, "+
+                                                "paquete y firma válidos. "+
+                                                "Android debe confirmar la instalación. "+
+                                                "¿Instalar ahora?")
+                                            .setNegativeButton("MÁS TARDE",null)
+                                            .setPositiveButton("INSTALAR AHORA",
+                                                (dialog,which)->retryInstall(a,status))
+                                            .show();
                                     });
                                 }catch(Exception error){
                                     a.runOnUiThread(()->{
