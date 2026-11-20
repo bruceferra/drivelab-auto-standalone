@@ -309,25 +309,6 @@ public final class BootActivity extends Activity
                 draw();
             }).show();
     }
-    private void askStartExistingGoogleMapsRoute(){
-        new AlertDialog.Builder(this)
-            .setTitle("GOOGLE MAPS · INICIAR NAVEGACIÓN")
-            .setMessage("Sólo con la Jetour estacionada, si Google Maps "+
-                "YA muestra un resumen de una ruta elegida. "+
-                "Bridge buscará un ÚNICO botón exacto Iniciar "+
-                "navegación dentro de la ventana real y visible de Maps "+
-                "en el Display seleccionado y solicitará ese clic "+
-                "mediante la Accesibilidad ya autorizada. "+
-                "No cambia el destino, NO abre Maps, no manda OK "+
-                "global, ni toca el OEM. Si no detecta el botón "+
-                "de forma inequívoca, no hará nada.")
-            .setNegativeButton("CANCELAR",null)
-            .setPositiveButton("INICIAR RUTA MOSTRADA",(dialog,which)->{
-                BridgeWheelAccessibilityService
-                    .startMapsRouteFromSummary(this);
-                draw();
-            }).show();
-    }
     private void askRecaptureKeys(){
         new AlertDialog.Builder(this)
             .setTitle("RECAPTURAR VOLANTE · 20 SEGUNDOS")
@@ -753,10 +734,12 @@ public final class BootActivity extends Activity
             this::chooseWheelDisplay);
         button("RECAPTURAR TECLAS OEM · 20 S · SIN ZOOM",
             this::askRecaptureKeys);
-        button("GOOGLE MAPS · INICIAR RUTA DEL RESUMEN",
-            this::askStartExistingGoogleMapsRoute);
-        text("MAPS NAVEGACIÓN: "+
-            BridgeWheelAccessibilityService.mapsStartState(this),12,QUIET);
+        text("GOOGLE MAPS · NAVEGACIÓN AUTOMÁTICA: "+
+            BridgeGoogleMapsReplacement.status(this),12,QUIET);
+        text("DriveLab Auto: destino recibido de Sender → google.navigation "+
+            "→ completar automáticamente Iniciar / reemplazo si Android "+
+            "lo muestra durante 12 segundos. Sin botón manual, sin zoom.",
+            12,QUIET);
         text("CAPTURA VOLANTE: "+
             BridgeWheelAccessibilityService.captureState(this),12,QUIET);
         text("ACCESIBILIDAD REAL: "+
