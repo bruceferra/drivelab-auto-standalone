@@ -50,11 +50,10 @@ final class BridgeStandaloneWindows {
         return prefs(c).getString(TAB_MAP,BridgeWindowsPolicy.MAPS);
     }
     static boolean routeOnTablero(Context c,String pkg){
-        SharedPreferences p=prefs(c);
-        return BridgeWindowsPolicy.validMap(pkg)&&
-            pkg.equals(tabMap(c))&&
-            p.getBoolean(TAB_CONFIRMED,false)&&
-            p.getBoolean(TAB_ROUTE,false);
+        // Disabled pending a real virtual map session + Presentation host.
+        // Previous Freeform direct-Display1 paths distorted Waze/Maps and
+        // left unowned tasks on the Jetour instrument display.
+        return false;
     }
     static final class Result{
         final boolean submitted;
@@ -177,30 +176,12 @@ final class BridgeStandaloneWindows {
      * as the vendor display permits. Must be physically inspected.
      */
     static Result tablero(Activity activity){
-        // A new request is not proof that the previous map is still
-        // visible. Invalidate Sender routing before attempting it.
-        prefs(activity).edit()
-            .putBoolean(TAB_CONFIRMED,false)
-            .putBoolean(TAB_ROUTE,false).apply();
-        String map=tabMap(activity);
-        if(!BridgeWindowsPolicy.validMap(map))
-            return reject(activity,"Display 1 sólo admite Waze o Google Maps");
-        try{
-            Display d=display(activity,1);
-            Point p=pixels(d);
-            BridgeWindowMath.Frame area=
-                BridgeWindowMath.display1(p.x,p.y,8,68,62);
-            Method method=freeformMethod();
-            List<Prepared> jobs=new ArrayList<>(1);
-            jobs.add(prepare(activity,method,1,map,area));
-            return launch(activity,jobs,1);
-        }catch(Exception e){
-            return reject(activity,
-                "Display 1: NO SE ABRIÓ el mapa. "+
-                e.getClass().getSimpleName()+": "+
-                String.valueOf(e.getMessage())+
-                ". No se modificó la interfaz OEM.");
-        }
+        BridgeClusterRecovery.disableNewCluster(activity);
+        return reject(activity,"Display 1 BLOQUEADO en Bridge: "+
+            "la ventana Freeform anterior deformó mapas y no enlazó "+
+            "accesibilidad. Usá LIBERAR CLÚSTER para recuperar únicamente "+
+            "mapas verificables; la nueva arquitectura de pantalla "+
+            "virtual + Presentation sigue en desarrollo.");
     }
     private static Result reject(Context c,String reason){
         prefs(c).edit().putString(LAST,reason).apply();
