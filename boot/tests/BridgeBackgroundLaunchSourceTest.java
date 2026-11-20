@@ -3,7 +3,7 @@ package ar.com.rango5gps.drivelabauto.boot;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-/** Physical Jeep/Jetour Android 11 background launch contract. Permission
+/** Physical Jetour Android 11 background launch contract. Permission
  * correctness is checked by Android at runtime; source tests only ensure the
  * dangerous legacy Settings dead-end and false success statuses are gone.
  */
@@ -31,8 +31,8 @@ public final class BridgeBackgroundLaunchSourceTest {
             background.contains("AUTORIZAR SEGUNDO PLANO")&&
             background.contains("Settings.canDrawOverlays(c)")&&
             background.contains("BridgeLocalAdb.shell(app,command)")&&
-            background.contains("appops set "+ "\"+LAB+\""+ " SYSTEM_ALERT_WINDOW allow")&&
-            background.contains("appops get "+ "\"+LAB+\""+ " SYSTEM_ALERT_WINDOW")&&
+            background.contains("appops set \"+LAB+\" SYSTEM_ALERT_WINDOW allow")&&
+            background.contains("appops get \"+LAB+\" SYSTEM_ALERT_WINDOW")&&
             background.contains("if(!authorized(app))")&&
             background.contains("putBoolean(\"enabled\",true).commit()")&&
             background.contains("app.startForegroundService(")&&
