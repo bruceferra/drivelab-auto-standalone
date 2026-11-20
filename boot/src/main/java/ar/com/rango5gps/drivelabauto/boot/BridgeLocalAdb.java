@@ -76,7 +76,15 @@ final class BridgeLocalAdb {
      * No Termux, remote IPs, system UI commands, OEM/vehicle operations.
      */
     static String shell(Context context,String command)throws Exception{
-        if(!("settings get secure enabled_accessibility_services".equals(command)||
+        // These two additional commands are ONLY for a one-time,
+        // owner-confirmed recovery of map-only stacks on Display 1.
+        // "am stack remove" takes STACK ID, NOT task ID (Android 11).
+        // Never expose general shell, display move, force-stop or OEM access.
+        boolean readStacks="am stack list".equals(command);
+        boolean removeValidatedStack=command.matches(
+            "am stack remove [1-9][0-9]{1,6}");
+        if(!(readStacks||removeValidatedStack||
+             "settings get secure enabled_accessibility_services".equals(command)||
              "settings get secure accessibility_enabled".equals(command)||
              "settings put secure accessibility_enabled 1".equals(command)||
              (command.startsWith(
@@ -114,7 +122,7 @@ final class BridgeLocalAdb {
                     if(remote==0)remote=msg.arg0;
                 }else if(msg.is("WRTE")){
                     if(remote==0)remote=msg.arg0;
-                    if(output.size()+msg.payload.length>8192)
+                    if(output.size()+msg.payload.length>(readStacks?128_000:8192))
                         throw new SecurityException("Salida ADB LAB demasiado grande");
                     output.write(msg.payload);
                     send(sock,"OKAY",1,remote,new byte[0]);
