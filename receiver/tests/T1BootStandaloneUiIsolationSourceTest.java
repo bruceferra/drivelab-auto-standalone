@@ -26,11 +26,11 @@ public final class T1BootStandaloneUiIsolationSourceTest {
             !ui.contains("MOSAICO_RECUPERADO_SOLICITADO:"),
             "Default Bridge UI owns QR/center/tablero/wheel independently");
         ck(windows.contains("BridgeWindowMath.center(")&&
-            windows.contains("BridgeClusterRecovery.disableNewCluster(activity)")&&
-            windows.contains("return false;")&&
+            windows.contains("options.setLaunchDisplayId(1)")&&
+            windows.contains("BridgeDualRoutePolicy.BOTH")&&
             !windows.contains("ReceiverService")&&
-            link.contains("BridgeStandaloneWindows.routeOnTablero(this,pkg)"),
-            "Sender is fail-closed for unsafe display1 until virtual host is built");
+            link.contains("BridgeDualRoutePolicy.plan("),
+            "Bridge independently routes selected map(s) on owner's chosen display");
         ck(manifest.contains("android:taskAffinity=\"${applicationId}.config\"")&&
             manifest.contains("android:launchMode=\"singleTask\"")&&
             manifest.contains("android:icon=\"@drawable/ic_drivelab_boot\"")&&
