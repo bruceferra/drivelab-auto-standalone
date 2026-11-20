@@ -494,6 +494,10 @@ public final class BootActivity extends Activity
         text("DRIVELAB BRIDGE",24,0xFF32DBD5);
         text("Versión "+packageVersion(getPackageName())+
             " · Enlace Xiaomi + actualizador independientes",14,QUIET);
+        // Principal y único acceso a OTA, siempre arriba, sin desplazamiento.
+        button("BUSCAR ACTUALIZACIÓN · LAB OTA",()->
+            BootUpdater.check(this,s->prefs().edit()
+                .putString("last_status",s).apply()));
         text("No abre la pantalla DriveLab Auto. No reemplaza "+
             "el firmware ni los avisos del Jetour.",13,QUIET);
         text("XIAOMI · CONEXIÓN DIRECTA",18,WHITE);
@@ -602,27 +606,6 @@ public final class BootActivity extends Activity
         text("ÚLTIMO ESTADO VOLANTE: "+
             wheel.getString(BridgeWheelAccessibilityService.STATUS,
                 "Sin prueba física"),12,QUIET);
-        text("ACTUALIZADOR DE BRIDGE",18,WHITE);
-        button(getPackageName().endsWith(".lab")?
-            "BUSCAR ACTUALIZACIÓN FIRMADA · LAB OTA":
-            "BUSCAR ACTUALIZACIÓN FIRMADA · BOOT ESTABLE",()->
-            BootUpdater.check(this,s->prefs().edit()
-                .putString("last_status",s).apply()));
-        button("INSTALAR / REINTENTAR APK YA DESCARGADA",()->
-            BootUpdater.retryInstall(this,s->prefs().edit()
-                .putString("last_status",s).apply()));
-        button("CONFIRMAR INSTALACIÓN ANDROID · ABRIR AHORA",()->
-            BridgeInstallResultReceiver.confirmFromForeground(this,
-                s->prefs().edit().putString("last_status",s).apply()));
-        button("INSTALADOR ALTERNATIVO DE ARCHIVOS · APK VERIFICADA",()->
-            BootUpdater.openFileInstaller(this,s->prefs().edit()
-                .putString("last_status",s).apply()));
-        text("Instalación OTA: Descargar → Instalar ahora. Si Jetour "+
-            "no muestra el diálogo, tocá REINTENTAR para que Android "+
-            "genere una sesión, y luego CONFIRMAR INSTALACIÓN ANDROID "+
-            "para abrir su confirmación desde Bridge visible. El "+
-            "instalador alternativo conserva la APK y el estado real "+
-            "se muestra abajo. No requiere Termux ni desinstalar.",12,QUIET);
         text("VENTANAS DISPLAY 0 Y DISPLAY 1",18,WHITE);
         text("El motor Freeform de Bridge está separado de Receiver. "+
             "Su disponibilidad real depende de Android Jetour. "+
