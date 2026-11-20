@@ -59,6 +59,7 @@ public final class BootActivity extends Activity
     private SharedPreferences linkPrefs(){return BootLinkService.prefs(this);}
     @Override protected void onCreate(Bundle state){
         super.onCreate(state);
+        BridgeImmersive.apply(this);
         SharedPreferences p=prefs();
         mode=Math.min(4,Math.max(0,p.getInt("mode",3)));
         percent=Math.min(99,Math.max(1,p.getInt("percent",65)));
@@ -82,6 +83,10 @@ public final class BootActivity extends Activity
         linkPrefs().registerOnSharedPreferenceChangeListener(this);
         if(content!=null)draw();
         onSharedPreferenceChanged(prefs(),"last_status");
+    }
+    @Override public void onWindowFocusChanged(boolean hasFocus){
+        super.onWindowFocusChanged(hasFocus);
+        if(hasFocus)BridgeImmersive.apply(this);
     }
     @Override protected void onPause(){
         bridgeUiVisible=false;
