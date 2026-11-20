@@ -48,6 +48,9 @@ public final class BootActivity extends Activity
     @Override protected void onCreate(Bundle state){
         super.onCreate(state);
         BridgeImmersive.apply(this);
+        // Safety rollback: no new Display 1 Freeform activity or OEM wheel
+        // callback until a verified virtual map session exists.
+        BridgeClusterRecovery.disableNewCluster(this);
         draw();
     }
     @Override protected void onResume(){
@@ -534,20 +537,20 @@ public final class BootActivity extends Activity
         button("MAPA DEL TABLERO · "+
             labelFor(BridgeStandaloneWindows.tabMap(this))+
             " · CAMBIAR",this::chooseBridgeMap);
-        button("PROBAR MAPA TABLERO · ESTACIONADO",
-            ()->askBridgeWindows(true));
+        text("MAPAS EN DISPLAY 1: TEMPORALMENTE BLOQUEADOS. "+
+            "El anterior Freeform dejó mapas deformados y no existe "+
+            "todavía una sesión virtual comprobada; no se abrirán "+
+            "otras ventanas en el tablero.",13,WHITE);
+        button("LIBERAR CLÚSTER · RETIRAR SÓLO MAPAS VERIFICADOS",
+            ()->BridgeClusterRecovery.ask(this));
+        text("RECUPERACIÓN: "+BridgeClusterRecovery.status(this),12,QUIET);
         SharedPreferences windows=BridgeStandaloneWindows.prefs(this);
         boolean visibleTab=windows.getBoolean(
             BridgeStandaloneWindows.TAB_CONFIRMED,false);
         boolean routesTab=windows.getBoolean(
             BridgeStandaloneWindows.TAB_ROUTE,false);
-        button(visibleTab?"MAPA DISPLAY 1 · CONFIRMADO VISUALMENTE":
-            "CONFIRMAR: MAPA SE VE EN DISPLAY 1",
-            this::confirmTableroMap);
-        button(routesTab?
-            "SENDER → TABLERO: ACTIVADO · APAGAR":
-            "SENDER → TABLERO: DESACTIVADO · ACTIVAR",
-            this::toggleSenderTablero);
+        text("SENDER → TABLERO: DESACTIVADO POR SEGURIDAD. "+
+            "Las rutas nuevas no abrirán mapas en Display 1.",12,QUIET);
         text("El modo RELOJES, el desvanecido y la posición "+
             "permanente siguen en desarrollo. Todavía no se "+
             "garantiza cubrir la interfaz MODE ni preservar "+
@@ -566,14 +569,16 @@ public final class BootActivity extends Activity
         button("MAPA DEL VOLANTE: "+
             (BridgeWheelAccessibilityService.WAZE.equals(wheelTarget)?
                 "WAZE":"GOOGLE MAPS")+" · CAMBIAR",this::chooseWheelMap);
-        button(wheelOn?"VOLANTE OPCIONES: ACTIVADO · DESACTIVAR":
-            "VOLANTE OPCIONES: DESACTIVADO · ACTIVAR",this::toggleWheel);
+        text("VOLANTE MAPAS: DESACTIVADO. Accesibilidad puede estar "+
+            "conectada, pero no hay todavía un mapa en una superficie "+
+            "virtual verificada. No se captura la rueda OEM.",13,WHITE);
         button("RECONECTAR ACCESIBILIDAD · ADB LOCAL · SIN TERMUX",
             ()->BridgeWheelAccessRecovery.ask(this));
         wheelRecoveryLabel=text(
             BridgeWheelAccessRecovery.describe(this),13,WHITE);
-        button("AJUSTES ACCESIBILIDAD ANDROID · OPCIONAL",
-            this::openWheelPermission);
+        text("La ROM Jetour puede bloquear Ajustes de accesibilidad. "+
+            "No necesitás abrirlos otra vez: el permiso ya se obtuvo "+
+            "por ADB local.",12,QUIET);
         text("ADB es local 127.0.0.1:5555/5556, no requiere Termux "+
             "si Android autorizó la clave de Bridge LAB. El volante "+
             "NO se activa con este botón; se controla por separado.",12,QUIET);
