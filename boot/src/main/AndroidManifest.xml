@@ -21,7 +21,7 @@
     <application android:label="DriveLab Bridge" android:icon="@drawable/ic_drivelab_boot"
         android:allowBackup="false"
         android:usesCleartextTraffic="false"
-        android:theme="@android:style/Theme.Material.Light.NoActionBar">
+        android:theme="@android:style/Theme.Material.NoActionBar">
         <activity android:name=".BridgeLayersActivity"
             android:exported="false"
             android:resizeableActivity="true" />
