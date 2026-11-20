@@ -1,5 +1,7 @@
 name: Publish signed Bridge LAB independent OTA v1
 # One-off, reviewed publication from the owner-maintained Bridge branch.
+# All Android Lint fatal checks remain active except the narrowly guarded
+# OEM private-API reflection in the parked-only Freeform experiment.
 # NEVER change stable /releases/latest. The isolated LAB has its own package.
 on:
   push:
