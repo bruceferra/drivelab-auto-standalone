@@ -4,15 +4,15 @@ public final class BridgeWheelPolicyTest {
         if(actual!=expected)throw new AssertionError(note+" "+actual+" != "+expected);
     }
     public static void main(String[] args){
-        expect(BridgeWheelPolicy.translate(1000,100,false),BridgeWheelPolicy.ZOOM_IN,"first notch");
-        expect(BridgeWheelPolicy.translate(1001,100,false),BridgeWheelPolicy.ZOOM_OUT,"second notch");
+        expect(BridgeWheelPolicy.translate(1000,100,false),BridgeWheelPolicy.NEXT,"first notch");
+        expect(BridgeWheelPolicy.translate(1001,100,false),BridgeWheelPolicy.PREVIOUS,"second notch");
         expect(BridgeWheelPolicy.translate(1002,100,false),BridgeWheelPolicy.CANCEL,"back");
         expect(BridgeWheelPolicy.translate(1003,100,false),BridgeWheelPolicy.CONFIRM,"ok");
         expect(BridgeWheelPolicy.translate(1000,101,false),BridgeWheelPolicy.NONE,"release ignored");
         expect(BridgeWheelPolicy.translate(1010,100,false),BridgeWheelPolicy.NONE,"voice untouched");
         expect(BridgeWheelPolicy.translate(2200,100,false),BridgeWheelPolicy.NONE,"MODE untouched");
-        expect(BridgeWheelPolicy.translate(1000,100,true),BridgeWheelPolicy.ZOOM_OUT,"reverse zoom");
-        expect(BridgeWheelPolicy.translate(1001,100,true),BridgeWheelPolicy.ZOOM_IN,"reverse zoom");
+        expect(BridgeWheelPolicy.translate(1000,100,true),BridgeWheelPolicy.PREVIOUS,"reverse option navigation");
+        expect(BridgeWheelPolicy.translate(1001,100,true),BridgeWheelPolicy.NEXT,"reverse option navigation");
         System.out.println("PASS independent Bridge wheel: OEM key filter and press/release semantics");
     }
 }
