@@ -132,6 +132,9 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
         if(clean.isEmpty()||clean.length()>110)return false;
         for(String item:EXCLUDED_LABELS)
             if(clean.equals(item))return false;
+        if(clean.contains("zoom")||clean.contains("acercar")||
+           clean.contains("alejar")||clean.contains("ampliar mapa")||
+           clean.contains("reducir mapa"))return false;
         return true;
     }
     private AccessibilityNodeInfo findOwnNode(
@@ -242,11 +245,15 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
             if(!button.isClickable()){
                 AccessibilityNodeInfo parent=button.getParent();
                 for(int level=0;level<3&&parent!=null;level++){
+                    // Never traverse into a clickable Jetour/Android wrapper.
+                    if(!target().equals(String.valueOf(
+                        parent.getPackageName())))break;
                     if(parent.isClickable()){button=parent;break;}
                     parent=parent.getParent();
                 }
             }
-            if(button.isClickable()){
+            if(button.isClickable()&&
+               target().equals(String.valueOf(button.getPackageName()))){
                 Rect r=new Rect();button.getBoundsInScreen(r);
                 if(r.width()>24&&r.height()>18&&r.width()<850&&
                    r.height()<400){
@@ -299,6 +306,7 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
         }
         Choice selection=choices.get(selected);
         boolean clicked=selection.node.isVisibleToUser()&&
+            target().equals(String.valueOf(selection.node.getPackageName()))&&
             selection.node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
         status(clicked?"OK: acción del mapa solicitada: "+selection.text:
             "OK: el mapa rechazó la pulsación");
@@ -323,6 +331,7 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
             }
             if(dismiss!=null){
                 boolean click=dismiss.node.isVisibleToUser()&&
+                    target().equals(String.valueOf(dismiss.node.getPackageName()))&&
                     dismiss.node.performAction(AccessibilityNodeInfo.ACTION_CLICK);
                 status(click?"ATRÁS: botón del mapa solicitado":
                     "ATRÁS: el mapa rechazó la pulsación");
