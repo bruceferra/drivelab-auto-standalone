@@ -2,10 +2,8 @@ package ar.com.rango5gps.drivelabauto.boot;
 
 import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.AccessibilityServiceInfo;
-import android.accessibilityservice.GestureDescription;
 import android.content.Context;
 import android.content.SharedPreferences;
-import android.graphics.Path;
 import android.graphics.Rect;
 import android.os.Handler;
 import android.os.Looper;
@@ -33,7 +31,7 @@ import java.util.Locale;
  * - Never captures MODE, voice, hazard, ADAS or other OEM buttons.
  * - Never sends global BACK, ADB commands or vehicle property writes.
  * - OK/CANCEL acts only on own accessible Waze/Maps node, never OEM dialogs.
- * - Direct pinches use exactly Display 1 and bounds of verified map window.
+ * - Scroll moves a visible accessibility selection; never zooms or injects gestures.
  * - If the map disappears, immediately unregister the OEM callback.
  * - Can coexist installed with T1Launcher, but owner must NOT enable
  *   two hard-key callbacks simultaneously; UI makes that explicit.
@@ -48,11 +46,12 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
     static final String WAZE="com.waze";
     private static final long COOLDOWN_MS=180;
     private static final int MAX_NODES=550;
-    private static final String[] CANDIDATE_ACTIONS={
-        "continuar","iniciar","ir","aceptar","ok","listo",
-        "confirmar","start","go","continue","done",
-        "cancelar","atras","volver","back","cancel","no gracias",
-        "no grabar","detener","descartar"
+    // Only labels from a VISIBLE actionable node owned by the chosen map.
+    // Exclude the map's own +/- zoom buttons, which the driver does not
+    // want the steering wheel to operate.
+    private static final String[] EXCLUDED_LABELS={
+        "acercar","alejar","zoom","zoom in","zoom out",
+        "mas zoom","menos zoom","ampliar mapa","reducir mapa"
     };
     private final Handler main=new Handler(Looper.getMainLooper());
     private final ArrayList<Choice> choices=new ArrayList<>();
@@ -132,10 +131,9 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
     private static boolean permitted(String input){
         String clean=normalized(input);
         if(clean.isEmpty()||clean.length()>110)return false;
-        for(String item:CANDIDATE_ACTIONS){
-            if(clean.equals(item))return true;
-        }
-        return false;
+        for(String item:EXCLUDED_LABELS)
+            if(clean.equals(item))return false;
+        return true;
     }
     private AccessibilityNodeInfo findOwnNode(
             AccessibilityNodeInfo root,String packageName,int depth){
@@ -218,11 +216,12 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
         prefs(this).edit().putString(LAST_KEY,
             code+" / "+BridgeWheelPolicy.name(cmd)).apply();
         switch(cmd){
-            case BridgeWheelPolicy.ZOOM_IN:
-            case BridgeWheelPolicy.ZOOM_OUT:
-                if(!promptChoices(map.root))zoom(map,
-                    cmd==BridgeWheelPolicy.ZOOM_IN);
-                else moveChoice(cmd==BridgeWheelPolicy.ZOOM_IN);
+            case BridgeWheelPolicy.NEXT:
+            case BridgeWheelPolicy.PREVIOUS:
+                if(promptChoices(map.root))
+                    moveChoice(cmd==BridgeWheelPolicy.NEXT);
+                else status("RUEDA: el mapa no muestra opciones seleccionables; "+
+                    "no se ejecutó ningún gesto");
                 break;
             case BridgeWheelPolicy.CONFIRM:
                 confirm(map.root);break;
@@ -269,12 +268,12 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
         Collections.sort(choices,Comparator
             .comparingInt((Choice a)->a.bounds.top)
             .thenComparingInt(a->a.bounds.left));
-        if(choices.size()<2||choices.size()>10){
+        if(choices.isEmpty()||choices.size()>25){
             choices.clear();selected=-1;selectedName="";
             return false;
         }
-        // Normal Maps map may have an 'iniciar' button; that alone is NOT
-        // a modal. At least two actual named actions are required.
+        // This is a navigation list of visible buttons, not a zoom mode.
+        // A single valid map option is selectable with the wheel too.
         if(!selectedName.isEmpty()){
             selected=-1;
             for(int i=0;i<choices.size();i++)
@@ -286,8 +285,13 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
         if(choices.isEmpty())return;
         selected=Math.floorMod(selected+(forward?1:-1),choices.size());
         selectedName=choices.get(selected).text;
+        Choice active=choices.get(selected);
+        // Accessibility focus highlights the chosen map button when Android
+        // supports it. It does NOT click or operate any OEM control.
+        active.node.performAction(
+            AccessibilityNodeInfo.ACTION_ACCESSIBILITY_FOCUS);
         status("VOLANTE: opción "+(selected+1)+"/"+choices.size()+
-            " · "+selectedName+" (OK para confirmar)");
+            " · "+selectedName+" (OK confirma · ATRÁS cancela)");
     }
     private void confirm(AccessibilityNodeInfo root){
         if(!promptChoices(root)||selected<0||selected>=choices.size()){
@@ -328,37 +332,6 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
         }
         selected=-1;selectedName="";choices.clear();
         status("ATRÁS: selección cancelada; NUNCA se envió BACK global");
-    }
-    private void zoom(MapWindow visible,boolean zoomIn){
-        Rect area=visible.area;
-        float length=Math.min(area.width(),area.height());
-        float inner=length*0.08f,outer=length*0.21f;
-        float centerX=area.exactCenterX(),centerY=area.exactCenterY();
-        Path a=new Path(),b=new Path();
-        a.moveTo(centerX-(zoomIn?inner:outer),centerY);
-        b.moveTo(centerX+(zoomIn?inner:outer),centerY);
-        a.lineTo(centerX-(zoomIn?outer:inner),centerY);
-        b.lineTo(centerX+(zoomIn?outer:inner),centerY);
-        try{
-            GestureDescription gesture=new GestureDescription.Builder()
-                .setDisplayId(visible.displayId)
-                .addStroke(new GestureDescription.StrokeDescription(a,0,230))
-                .addStroke(new GestureDescription.StrokeDescription(b,0,230))
-                .build();
-            boolean accepted=dispatchGesture(gesture,
-                new GestureResultCallback(){
-                    @Override public void onCompleted(GestureDescription desc){
-                        status("ZOOM "+(zoomIn?"+":"−")+
-                            " realizado sobre mapa en Display 1");
-                    }
-                    @Override public void onCancelled(GestureDescription desc){
-                        status("ZOOM: Android canceló el gesto");
-                    }
-                },main);
-            if(!accepted)status("ZOOM: Android rechazó el gesto");
-        }catch(Exception ex){
-            status("ZOOM no permitido: "+ex.getClass().getSimpleName());
-        }
     }
     @Override public void onAccessibilityEvent(AccessibilityEvent event){
         if(event==null)return;
