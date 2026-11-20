@@ -83,8 +83,7 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
         serviceReady=true;
         AccessibilityServiceInfo info=getServiceInfo();
         if(info!=null){
-            info.flags|=AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
-                |AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS;
+            info.flags|=AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;
             info.feedbackType=AccessibilityServiceInfo.FEEDBACK_GENERIC;
             info.eventTypes=AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED|
                 AccessibilityEvent.TYPE_WINDOWS_CHANGED|
