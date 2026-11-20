@@ -321,6 +321,18 @@ jobs:
             receiver/tests/T1AutoJourneySourceContractTest.java
           java -cp /tmp/t1-auto-drive ar.com.rango5gps.drivelabauto.receiver.T1AutoDrivePolicyTest
           java -cp /tmp/t1-auto-drive ar.com.rango5gps.drivelabauto.receiver.T1AutoJourneySourceContractTest
+      - name: Joined charging and ignition timeline (pure JVM)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/t1-auto-timeline
+          javac -encoding UTF-8 -d /tmp/t1-auto-timeline \
+            receiver/tests/timeline_stubs/T1AutoJourneyStore.java \
+            receiver/tests/timeline_stubs/T1ChargeStore.java \
+            receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1AutoRangeTimeline.java \
+            receiver/tests/T1AutoRangeTimelineTest.java
+          java -cp /tmp/t1-auto-timeline \
+            ar.com.rango5gps.drivelabauto.receiver.T1AutoRangeTimelineTest
       - name: CI186 lower-bound fuel estimator (pure JVM)
         shell: bash
         run: |
