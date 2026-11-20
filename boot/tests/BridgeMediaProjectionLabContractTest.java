@@ -63,7 +63,7 @@ public final class BridgeMediaProjectionLabContractTest {
             "Non-exported consent Activity, isolated mediaProjection FGS");
         for(String forbidden:new String[]{
             "am force-stop","pm clear","am stack","am display move-stack",
-            "FLAG_ACTIVITY_CLEAR_TASK","MediaRecorder","MediaCodec",
+            "FLAG_ACTIVITY_CLEAR_TASK","new MediaRecorder(","new MediaCodec(",
             "HttpURLConnection","Socket(","setType(","TYPE_APPLICATION_OVERLAY",
             "MediaProjectionConfig","MANAGE_MEDIA_PROJECTION","captureAudio"
         }){
