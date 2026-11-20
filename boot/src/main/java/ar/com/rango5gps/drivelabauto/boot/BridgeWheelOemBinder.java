@@ -29,6 +29,9 @@ final class BridgeWheelOemBinder {
     private static final String KEY_LAST="last_callback";
     private static final String KEY_COUNT="callback_count";
     private static final String KEY_MIC_COUNT="mic_count";
+    static SharedPreferences monitorPrefs(Context c){
+        return prefs(c);
+    }
     private static SharedPreferences prefs(Context c){
         return c.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
     }
