@@ -27,8 +27,9 @@ import java.util.ArrayList;
 import java.util.Map;
 import java.util.TreeMap;
 
-/** Independent DriveLab Bridge: Xiaomi QR and updater are standalone.
- * Legacy Receiver mosaics remain ONLY in opt-in diagnostics.
+/** Independent DriveLab Bridge: two-display requests, QR, encrypted
+ * Xiaomi navigation, wheel Accessibility and OTA are self-owned.
+ * Receiver may be uninstalled: no runtime IPC or signature dependency.
  */
 public final class BootActivity extends Activity
         implements SharedPreferences.OnSharedPreferenceChangeListener {
