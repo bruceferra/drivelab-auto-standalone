@@ -57,6 +57,8 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
     private final ArrayList<Choice> choices=new ArrayList<>();
     private BridgeWheelOemBinder oem;
     private volatile boolean serviceReady=false;
+    private static volatile boolean connectedNow=false;
+    static boolean isConnected(){return connectedNow;}
     private long lastKeyAt=0;
     private int lastKey=-1,selected=-1;
     private String selectedName="";
@@ -81,6 +83,7 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
     @Override protected void onServiceConnected(){
         super.onServiceConnected();
         serviceReady=true;
+        connectedNow=true;
         AccessibilityServiceInfo info=getServiceInfo();
         if(info!=null){
             info.flags|=AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;
@@ -361,6 +364,7 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
     }
     private void release(){
         serviceReady=false;
+        connectedNow=false;
         main.removeCallbacks(refresh);
         try{prefs(this).unregisterOnSharedPreferenceChangeListener(this);}
         catch(Exception ignored){}
