@@ -54,6 +54,16 @@ public final class BridgeUpdateInstallerSourceContractTest {
             manifest.contains("android:exported=\"false\"")&&
             files.contains("path=\"boot_update/\""),
             "Android OEM consent callback must be registered and resumable");
+        check(!updater.contains("canRequestPackageInstalls()")&&
+            updater.contains("session.commit(result.getIntentSender())")&&
+            updater.contains("installFallback(a,file,status)")&&
+            updater.contains("bridge-download.part.apk")&&
+            status.contains("pendingAndroidConsent=confirm")&&
+            status.contains("static void confirmFromForeground(Activity activity")&&
+            status.contains("activity.startActivity(confirm)")&&
+            ui.contains("BridgeInstallResultReceiver.confirmFromForeground(this,"),
+            "Jetour update must not pre-gate all paths on unavailable unknown-source Settings; "+
+            "native pending user consent must be reopenable from foreground Bridge");
         check(ui.contains("INSTALAR / REINTENTAR APK YA DESCARGADA")&&
             ui.contains("INSTALADOR ALTERNATIVO DE ARCHIVOS")&&
             !updater.contains("pm install")&&
