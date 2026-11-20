@@ -75,8 +75,8 @@ public final class BridgeModeLayerDiffTest {
               !reader.contains("\"settings put")&&
               !reader.contains("startActivity("),
             "Bridge ADB layers tool must never mutate apps or firmware");
-        check(ui.contains("CAPTURAR CUANDO MODE TAPA MAPAS")&&
-              ui.contains("CAPTURAR CUANDO LOS MAPAS SE VEN")&&
+        check(ui.contains("CAPTURAR CUANDO JETOUR TAPA MAPAS")&&
+              ui.contains("CAPTURAR TRAS EL ENVÍO QUE MOSTRÓ MAPAS")&&
               ui.contains("compare(covered,visible)")&&
               !ui.contains("force-stop")&&
               !ui.contains("pm clear")&&
