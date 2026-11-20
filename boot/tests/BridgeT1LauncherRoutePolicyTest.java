@@ -8,8 +8,8 @@ public final class BridgeT1LauncherRoutePolicyTest {
         "com.google.android.apps.maps/com.google.android.maps.MapsActivity";
     static String root(int stack,int display,int task,String name){
         return "Stack id="+stack+" bounds=null displayId="+display+
-            " userId=0\\n"+
-            "  taskId="+task+": "+name+" bounds=null\\n";
+            " userId=0\n"+
+            "  taskId="+task+": "+name+" bounds=null\n";
     }
     public static void main(String[] args){
         String own=root(100,0,700,MAP)+
@@ -37,7 +37,7 @@ public final class BridgeT1LauncherRoutePolicyTest {
             root(192,14,820,MAP))==null,
             "Two virtual Maps instances must fail closed");
         ok(BridgeT1LauncherRoutePolicy.find(
-            own+"  taskId=812: com.jetour.hmi/.OEMActivity\\n")==null,
+            own+"  taskId=812: com.jetour.hmi/.OEMActivity\n")==null,
             "Mixed OEM task in map stack must never be selected");
         BridgeT1LauncherRoutePolicy.Target second=
             BridgeT1LauncherRoutePolicy.find(own);
@@ -62,7 +62,7 @@ public final class BridgeT1LauncherRoutePolicyTest {
         }catch(SecurityException expected){unsafe=true;}
         ok(unsafe,"Physical cluster MUST be rejected");
         ok(BridgeT1LauncherRoutePolicy.deliveredToExistingTop(
-            "Starting: Intent {...}\\nWarning: Activity not started, "+
+            "Starting: Intent {...}\nWarning: Activity not started, "+
             "intent has been delivered to currently running top-most instance."),
             "Android explicitly reports reuse");
         ok(!BridgeT1LauncherRoutePolicy.deliveredToExistingTop(
