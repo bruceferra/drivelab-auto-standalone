@@ -317,10 +317,14 @@ final class BootUpdater {
             int flags=PendingIntent.FLAG_UPDATE_CURRENT;
             if(Build.VERSION.SDK_INT>=31)flags|=PendingIntent.FLAG_MUTABLE;
             PendingIntent result=PendingIntent.getBroadcast(a,id,callback,flags);
-            notify(a,status,"Sesión Android iniciada; esperando ventana de "+
-                "confirmación para instalar Bridge…");
+            notify(a,status,"Sesión de Android "+id+
+                " preparada; enviando APK para que el sistema confirme…");
             session.commit(result.getIntentSender());
             committed=true;
+            notify(a,status,"APK entregada a Android (sesión "+id+
+                "). Si no aparece INSTALAR, tocá "+
+                "CONFIRMAR INSTALACIÓN ANDROID en Bridge para abrir "+
+                "la confirmación que envíe el sistema.");
         }finally{
             if(!committed)installer.abandonSession(id);
         }
@@ -336,14 +340,17 @@ final class BootUpdater {
             install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
             try{
                 a.startActivity(install);
-                notify(a,status,"Instalador alternativo solicitado; "+
-                    "confirmá instalar en Android.");
+                notify(a,status,"Android aceptó abrir el intento de "+
+                    "instalación alternativo; si no aparece INSTALAR, "+
+                    "la ROM bloqueó o ignoró la ventana. "+
+                    "El archivo sigue guardado.");
             }catch(Exception first){
                 install.setAction(Intent.ACTION_VIEW);
                 try{
                     a.startActivity(install);
-                    notify(a,status,"Instalador de archivos solicitado; "+
-                        "confirmá instalar en Android.");
+                    notify(a,status,"Android aceptó el intento "+
+                        "ACTION_VIEW; si no ves INSTALAR, la ROM no "+
+                        "presentó la pantalla. Sin pérdida de datos.");
                 }catch(Exception second){
                     notify(a,status,"La ROM de Jetour no abre instaladores: "+
                         first.getClass().getSimpleName()+" / "+
@@ -365,14 +372,11 @@ final class BootUpdater {
                 File file=verifiedCache(a);
                 a.runOnUiThread(()->{
                     if(a.isFinishing()||a.isDestroyed()){busy=false;return;}
-                    if(Build.VERSION.SDK_INT>=26&&
-                       !a.getPackageManager().canRequestPackageInstalls()){
-                        busy=false;
-                        notify(a,status,"Android requiere permiso "+
-                            "«Instalar apps desconocidas» para Bridge.");
-                        requestInstallPermission(a,status);
-                        return;
-                    }
+                    // Jetour Android 11 may report canRequestPackageInstalls=false
+                    // while its restricted Settings page cannot open. Receiver's
+                    // working path commits PackageInstaller directly and lets
+                    // Android produce a real consent or rejection result.
+                    // Do NOT prematurely block this user-initiated request.
                     new Thread(()->{
                         try{installSession(a,file,status);}
                         catch(Exception failed){
@@ -403,11 +407,9 @@ final class BootUpdater {
                 a.runOnUiThread(()->{
                     busy=false;
                     if(a.isFinishing()||a.isDestroyed())return;
-                    if(Build.VERSION.SDK_INT>=26&&
-                       !a.getPackageManager().canRequestPackageInstalls()){
-                        requestInstallPermission(a,status);
-                        return;
-                    }
+                    // ACTION_INSTALL_PACKAGE/ACTION_VIEW must be attempted
+                    // from the foreground Activity even if the ROM hides
+                    // the unknown-sources preference page.
                     installFallback(a,file,status);
                 });
             }catch(Exception error){
@@ -467,21 +469,10 @@ final class BootUpdater {
                         .setNegativeButton("CANCELAR",
                             (d,w)->busy=false)
                         .setPositiveButton("DESCARGAR",(d,w)->{
-                            if(android.os.Build.VERSION.SDK_INT>=26&&
-                               !a.getPackageManager().canRequestPackageInstalls()){
-                                busy=false;
-                                status.result("Autorizá instalar apps desde "+
-                                    "Bridge y volvé a Buscar actualización.");
-                                try{
-                                    a.startActivity(new Intent(
-                                        Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
-                                        Uri.parse("package:"+a.getPackageName())));
-                                }catch(Exception rejected){
-                                    status.result("Android no abrió permisos "+
-                                        "de instalación: "+rejected.getMessage());
-                                }
-                                return;
-                            }
+                            // Download and verify regardless of whether Jetour
+                            // exposes the unknown-app-sources Settings UI.
+                            // Android itself is the install authority and
+                            // will request explicit owner confirmation.
                             status.result("Descargando APK y verificando firma…");
                             new Thread(()->{
                                 try{
