@@ -7,6 +7,8 @@ on:
   push:
     branches: [refactor/boot-receiver-unificado-seguro]
     paths: ['.github/workflows/publish-bridge-lab-ota.yml']
+    # Snapshot persistence regression tests passed on Bridge read-only CI.
+    # Run signed LAB publisher only after testing and keeping the release separate.
   workflow_dispatch:
 permissions:
   contents: write
