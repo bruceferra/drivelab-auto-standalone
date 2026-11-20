@@ -19,6 +19,8 @@ on:
       - 'boot/src/main/res/xml/bridge_wheel_accessibility.xml'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeStandaloneWindows.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWindowMath.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeVirtualProbeActivity.java'
+      - 'boot/tests/BridgeVirtualProbeContractTest.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWindowsPolicy.java'
       - 'boot/tests/BridgeWindowMathTest.java'
       - 'boot/tests/BridgeWindowsPolicyTest.java'
@@ -86,6 +88,14 @@ jobs:
             ar.com.rango5gps.drivelabauto.boot.BridgeStandaloneWindowContractTest
           java -cp /tmp/jetour-bridge-windows \
             ar.com.rango5gps.drivelabauto.boot.BridgeSenderDisplayRoutingTest
+      - name: Verify isolated private VirtualDisplay to TextureView proof (no maps or OEM)
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/jetour-bridge-virtual
+          javac -encoding UTF-8 -d /tmp/jetour-bridge-virtual \
+            boot/tests/BridgeVirtualProbeContractTest.java
+          java -cp /tmp/jetour-bridge-virtual \
+            ar.com.rango5gps.drivelabauto.boot.BridgeVirtualProbeContractTest
       - name: No map data wipe or OEM window mutation in diagnostic
         run: |
           set -euo pipefail
