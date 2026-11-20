@@ -1,7 +1,7 @@
-name: Publish signed Bridge LAB independent OTA v19
+name: Publish signed Bridge LAB independent OTA v20
 # One-off, reviewed publication from the owner-maintained Bridge branch.
-# LAB 0.1.22 source-only MediaProjection QA passed; Android APK and signer verified at publication.
-# LAB 0.1.22 requires an owner-only private Display Activity source contract.
+# LAB 0.1.23 source-only MediaProjection QA passed; Android APK and signer verified at publication.
+# LAB 0.1.23 requires an owner-only private Display Activity source contract.
 # All Android Lint fatal checks remain active except the narrowly guarded
 # OEM private-API reflection in the parked-only Freeform experiment.
 # NEVER change stable /releases/latest. The isolated LAB has its own package.
@@ -83,7 +83,13 @@ jobs:
           javac -encoding UTF-8 -d /tmp/bridge-lab-ota \
             boot/tests/BridgeClusterSurfaceProbeSourceTest.java \
             boot/tests/BridgeOwnedVirtualActivitySourceTest.java \
-            boot/tests/BridgeMediaProjectionLabContractTest.java
+            boot/tests/BridgeMediaProjectionLabContractTest.java \
+            boot/tests/BridgeMapsReceiverAutoRouteSourceTest.java \
+            boot/tests/BridgeWheelReceiverParitySourceTest.java
+          java -cp /tmp/bridge-lab-ota \
+            ar.com.rango5gps.drivelabauto.boot.BridgeMapsReceiverAutoRouteSourceTest
+          java -cp /tmp/bridge-lab-ota \
+            ar.com.rango5gps.drivelabauto.boot.BridgeWheelReceiverParitySourceTest
           java -cp /tmp/bridge-lab-ota \
             ar.com.rango5gps.drivelabauto.boot.BridgeClusterSurfaceProbeSourceTest
           java -cp /tmp/bridge-lab-ota \
@@ -105,15 +111,15 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'bruceferra/drivelab-auto-standalone'
-          ! gh release view bridge-lab-v19 >/dev/null 2>&1
+          ! gh release view bridge-lab-v20 >/dev/null 2>&1
           gradle --no-daemon :boot:assembleLab
           apk=boot/build/outputs/apk/lab/boot-lab.apk
           test -s "$apk"
           aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
           signer="$ANDROID_HOME/build-tools/35.0.0/apksigner"
           "$aapt" dump badging "$apk" | grep -F "package: name='ar.com.rango5gps.drivelabauto.boot.lab'"
-          "$aapt" dump badging "$apk" | grep -F "versionCode='23'"
-          "$aapt" dump badging "$apk" | grep -F "versionName='0.1.22-lab.19'"
+          "$aapt" dump badging "$apk" | grep -F "versionCode='24'"
+          "$aapt" dump badging "$apk" | grep -F "versionName='0.1.23-lab.20'"
           "$signer" verify --print-certs "$apk"
           mkdir -p /tmp/bridge-old-boot dist
           gh release download v0.3.97 --pattern 'DriveLab-Boot-v0.1.3.apk' --dir /tmp/bridge-old-boot
@@ -121,20 +127,20 @@ jobs:
           oldcert=$("$signer" verify --print-certs /tmp/bridge-old-boot/DriveLab-Boot-v0.1.3.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
           newcert=$("$signer" verify --print-certs "$apk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
           test -n "$oldcert" && test "$oldcert" = "$newcert"
-          cp "$apk" dist/DriveLab-Bridge-LAB-v0.1.22-lab.19.apk
+          cp "$apk" dist/DriveLab-Bridge-LAB-v0.1.23-lab.20.apk
           sha256sum dist/*.apk > dist/bridge-lab.sha256
           python3 - <<'PY'
           import hashlib,json,os,pathlib
-          apk=pathlib.Path("dist/DriveLab-Bridge-LAB-v0.1.22-lab.19.apk")
+          apk=pathlib.Path("dist/DriveLab-Bridge-LAB-v0.1.23-lab.20.apk")
           manifest={
              "channel":"bridge-lab",
              "packageName":"ar.com.rango5gps.drivelabauto.boot.lab",
-             "versionName":"0.1.22-lab.19",
-             "versionCode":23,
-             "tag":"bridge-lab-v19",
+             "versionName":"0.1.23-lab.20",
+             "versionCode":24,
+             "tag":"bridge-lab-v20",
              "size":apk.stat().st_size,
              "sha256":hashlib.sha256(apk.read_bytes()).hexdigest(),
-             "apkUrl":f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/bridge-lab-v19/{apk.name}"
+             "apkUrl":f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/bridge-lab-v20/{apk.name}"
           }
           pathlib.Path("dist/bridge-lab.json").write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
           PY
@@ -142,13 +148,13 @@ jobs:
       - name: Publish LAB prerelease but NEVER replace stable latest
         run: |
           set -euo pipefail
-          gh release create bridge-lab-v19 \
-            dist/DriveLab-Bridge-LAB-v0.1.22-lab.19.apk \
+          gh release create bridge-lab-v20 \
+            dist/DriveLab-Bridge-LAB-v0.1.23-lab.20.apk \
             dist/bridge-lab.sha256 dist/bridge-lab.json \
             --target "$GITHUB_SHA" --prerelease \
-            --title 'DriveLab Bridge LAB 0.1.22 · captura local autorizada Display0 a Display1' \
-            --notes 'LAB 0.1.22 follows failed PRIVATE and PUBLIC Activity launch probes on Jetour: a separate, explicit Android MediaProjection consent prompt can mirror the CENTRAL (Display0) to the previously verified nonfocusable/noninteractive lower 65 percent Presentation on physical Display1 for MAX 20 seconds. This does NOT embed Waze on a virtual display, move any task or create an independent navigation app; the entire visible central screen including notifications may appear on the instrument display. It uses an Android foregroundServiceType=mediaProjection service, a visible stop notification, explicit stop, one-shot consent, no recording/network storage, callback cleanup and hard auto stop. The user must remain PARKED. The 12s full-width diagnostic remains. No OEM writes, no ADB, no wheel/QR/Sender changes, no production feature or auto-start. Results are physical-vehicle UNVERIFIED.'
-          gh release view bridge-lab-v19 --json isPrerelease --jq '.isPrerelease' | grep -Fx true
+            --title 'DriveLab Bridge LAB 0.1.23 · navegación Maps automática y recaptura de volante' \
+            --notes 'LAB 0.1.23 ports the previously working DriveLab Auto Receiver behavior into isolated Bridge: EXACT Google Maps turn-by-turn google.navigation:q=DESTINO&mode=d, a 12-second one-shot NEW authenticated Sender intent gate, automatic detection and click of unique visible Maps Start button after route preview, and narrow previous-route replacement confirmation; never generic OK or a blind map relaunch. It also restores OEM wheel Binder registration independent of the accessibility root, retries a disconnected/stale Binder, and adds owner-approved 20s read-only key recapture with Display0/Display1 selection and clear accessibility/ADB 5556 status. The wheel never zooms, changes OEM properties, sends BACK globally, or intercepts voice/MODE. Previous experimental MediaProjection 20s remains unchanged. No stable Receiver/Sender edits, no PR merge or boot auto enabling. Jetour physical result NOT YET VERIFIED.'
+          gh release view bridge-lab-v20 --json isPrerelease --jq '.isPrerelease' | grep -Fx true
           tag=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
           test "$tag" = v0.3.97
       - name: Point isolated OTA manifest to published signed asset LAST
@@ -167,12 +173,12 @@ jobs:
               -f message='ota(bridge-lab): publish verified signed LAB v2' -f content="$content" >/dev/null
           fi
           gh api "repos/$GITHUB_REPOSITORY/contents/bridge-lab.json?ref=bridge-lab-ota" --jq .content \
-            | base64 -d | grep -F '"versionCode": 23'
+            | base64 -d | grep -F '"versionCode": 24'
       - uses: actions/upload-artifact@v4
         with:
-          name: DriveLab-Bridge-LAB-0.1.22-PERMANENT-SIGNED-OTA
+          name: DriveLab-Bridge-LAB-0.1.23-PERMANENT-SIGNED-OTA
           path: |
-            dist/DriveLab-Bridge-LAB-v0.1.22-lab.19.apk
+            dist/DriveLab-Bridge-LAB-v0.1.23-lab.20.apk
             dist/bridge-lab.sha256
             dist/bridge-lab.json
           if-no-files-found: error
