@@ -124,6 +124,20 @@ final class T1AutoRangeTimeline {
             result.events.add(e);
         }
         for(T1ChargeStore.Record charge:charges){
+            boolean imported=charge.source!=null&&
+                charge.source.contains("IMPORTACIÓN MANUAL");
+            boolean duplicateManual=false;
+            if(imported){
+                long manualEnd=charge.end>0?charge.end:charge.last;
+                for(T1ChargeStore.Record other:charges){
+                    if(other==charge||other.source==null||
+                       other.source.contains("IMPORTACIÓN MANUAL"))continue;
+                    long otherEnd=other.end>0?other.end:other.last;
+                    if(charge.start<=otherEnd&&manualEnd>=other.start){
+                        duplicateManual=true;break;
+                    }
+                }
+            }
             long end=charge.end>0?charge.end:
                 charge.last>0?charge.last:charge.start;
             boolean complete=charge.open==0&&charge.end>0&&
@@ -143,6 +157,8 @@ final class T1AutoRangeTimeline {
                     "atribuibles íntegramente al rango; ":"")+
                 (charge.open!=0?"CARGA PARCIAL AÚN ABIERTA; ":"")+
                 (meter?"kWh red con medidor":"kWh batería HV estimados")+
+                (duplicateManual?"; IMPORTACIÓN MANUAL SUPERPUESTA CON AUTO "+
+                    "· NO SUMAR OTRA VEZ":"")+
                 "; no mezclar con regeneración de conducción");
             if(valid)e.chargeBattery=charge.kwh;
             if(meter)e.meter=charge.meterKwh;
@@ -151,7 +167,7 @@ final class T1AutoRangeTimeline {
                 if(Double.isFinite(charge.price)&&charge.price>=0)
                     e.cost=priced*charge.price;
             }
-            if(complete){
+            if(complete&&!duplicateManual){
                 if(valid)result.chargeBattery+=charge.kwh;
                 if(meter)result.gridMeter+=charge.meterKwh;
                 if(Double.isFinite(e.cost))result.costEstimated+=e.cost;
