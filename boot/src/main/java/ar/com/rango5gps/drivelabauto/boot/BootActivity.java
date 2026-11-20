@@ -403,6 +403,90 @@ public final class BootActivity extends Activity
                 .setPositiveButton("ENTENDIDO",null).show();
         }
     }
+    private void chooseBridgeApp(boolean first){
+        TreeMap<String,String> choices=new TreeMap<>(
+            String.CASE_INSENSITIVE_ORDER);
+        PackageManager pm=getPackageManager();
+        Intent query=new Intent(Intent.ACTION_MAIN)
+            .addCategory(Intent.CATEGORY_LAUNCHER);
+        for(ResolveInfo found:pm.queryIntentActivities(query,0)){
+            if(found.activityInfo==null)continue;
+            String pkg=found.activityInfo.packageName;
+            if(!BridgeWindowsPolicy.allowed(pkg))continue;
+            choices.put(found.loadLabel(pm)+" · "+pkg,pkg);
+        }
+        // Maps can be a preinstalled Android application. Keep named
+        // eligible choices even if Jetour filters system packages.
+        for(String pkg:new String[]{BridgeWindowsPolicy.MAPS,
+                BridgeWindowsPolicy.WAZE,BridgeWindowsPolicy.SPOTIFY}){
+            try{
+                if(pm.getLaunchIntentForPackage(pkg)==null)continue;
+                choices.put(pm.getApplicationLabel(
+                    pm.getApplicationInfo(pkg,0))+" · "+pkg,pkg);
+            }catch(Exception ignored){}
+        }
+        if(choices.isEmpty()){
+            new AlertDialog.Builder(this)
+                .setTitle("APLICACIONES DE BRIDGE")
+                .setMessage("No encontré aplicaciones instaladas para "+
+                    "estas ventanas. No se abrirá DriveLab Auto.")
+                .setPositiveButton("OK",null).show();
+            return;
+        }
+        String[] labels=choices.keySet().toArray(new String[0]);
+        String[] pkgs=choices.values().toArray(new String[0]);
+        new AlertDialog.Builder(this)
+            .setTitle(first?"PANTALLA CENTRAL · APP IZQUIERDA":
+                "PANTALLA CENTRAL · APP DERECHA")
+            .setItems(labels,(d,which)->{
+                BridgeStandaloneWindows.prefs(this).edit()
+                    .putString(first?BridgeStandaloneWindows.FIRST:
+                        BridgeStandaloneWindows.SECOND,pkgs[which]).apply();
+                draw();
+            })
+            .setNegativeButton("CANCELAR",null).show();
+    }
+    private void chooseBridgeMap(){
+        String current=BridgeStandaloneWindows.tabMap(this);
+        new AlertDialog.Builder(this)
+            .setTitle("PANTALLA DEL TABLERO · MAPA")
+            .setSingleChoiceItems(new String[]{"Google Maps","Waze"},
+                BridgeWindowsPolicy.WAZE.equals(current)?1:0,
+                (d,choice)->{
+                    BridgeStandaloneWindows.prefs(this).edit()
+                        .putString(BridgeStandaloneWindows.TAB_MAP,
+                            choice==0?BridgeWindowsPolicy.MAPS:
+                            BridgeWindowsPolicy.WAZE).apply();
+                    d.dismiss();draw();
+                })
+            .setNegativeButton("CANCELAR",null).show();
+    }
+    private void askBridgeWindows(boolean tablero){
+        new AlertDialog.Builder(this)
+            .setTitle(tablero?
+                "PRUEBA DISPLAY 1 · TABLERO JETOUR":
+                "PRUEBA DISPLAY 0 · DOS VENTANAS")
+            .setMessage("Realizar SOLAMENTE con la camioneta estacionada. "+
+                "Bridge solicitará ventanas Freeform por API Android. "+
+                "No detendrá apps ni borrará rutas o datos. "+
+                "Si Android bloquea el modo, no abrirá nada en "+
+                "pantalla completa. Los avisos Jetour tienen prioridad "+
+                "y la visibilidad final debe comprobarse físicamente. "+
+                "¿Enviar solicitud?")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("PROBAR",(d,w)->{
+                BridgeStandaloneWindows.Result result=tablero?
+                    BridgeStandaloneWindows.tablero(this):
+                    BridgeStandaloneWindows.center(this);
+                new AlertDialog.Builder(this)
+                    .setTitle(result.submitted?
+                        "SOLICITUD ENVIADA · NO VERIFICADA":
+                        "NO SE ABRIERON VENTANAS")
+                    .setMessage(result.message)
+                    .setPositiveButton("ENTENDIDO",(dialog,which)->draw())
+                    .show();
+            }).show();
+    }
     private void toggleLegacy(){
         if(legacyAdvanced){legacyAdvanced=false;draw();return;}
         new AlertDialog.Builder(this)
@@ -530,6 +614,52 @@ public final class BootActivity extends Activity
         button(Settings.canDrawOverlays(this)?
             "PERMISO VENTANAS CONCEDIDO · REVISAR":
             "AUTORIZAR VENTANAS EN SEGUNDO PLANO",this::requestOverlay);
+        text("PANTALLA CENTRAL · DISPLAY 0 · BRIDGE",18,WHITE);
+        text("Panel izquierdo ancho + panel derecho vertical "+
+            "(Spotify tipo celular). Para pruebas también podés "+
+            "elegir Spotify y ProManager; DriveLab Auto está excluido.",12,QUIET);
+        button("APP IZQUIERDA · "+
+            labelFor(BridgeStandaloneWindows.first(this)),
+            ()->chooseBridgeApp(true));
+        button("APP DERECHA · "+
+            labelFor(BridgeStandaloneWindows.second(this)),
+            ()->chooseBridgeApp(false));
+        int centerRatio=BridgeStandaloneWindows.ratio(this);
+        TextView ratioInfo=text("REPARTO CENTRAL: "+
+            centerRatio+"% / "+(100-centerRatio)+"%",14,WHITE);
+        SeekBar bridgeRatio=new SeekBar(this);
+        bridgeRatio.setMin(40);bridgeRatio.setMax(80);
+        bridgeRatio.setProgress(centerRatio);
+        bridgeRatio.setOnSeekBarChangeListener(
+            new SeekBar.OnSeekBarChangeListener(){
+                @Override public void onProgressChanged(
+                    SeekBar bar,int value,boolean user){
+                    ratioInfo.setText("REPARTO CENTRAL: "+
+                        value+"% / "+(100-value)+"%");
+                    if(user)BridgeStandaloneWindows.prefs(BootActivity.this)
+                        .edit().putInt(BridgeStandaloneWindows.RATIO,value)
+                        .apply();
+                }
+                @Override public void onStartTrackingTouch(SeekBar bar){}
+                @Override public void onStopTrackingTouch(SeekBar bar){}
+            });
+        content.addView(bridgeRatio);
+        button("PROBAR DOS VENTANAS · SÓLO BRIDGE · ESTACIONADO",
+            ()->askBridgeWindows(false));
+        text("PANTALLA DEL TABLERO · DISPLAY 1",18,WHITE);
+        button("MAPA DEL TABLERO · "+
+            labelFor(BridgeStandaloneWindows.tabMap(this))+
+            " · CAMBIAR",this::chooseBridgeMap);
+        button("PROBAR MAPA TABLERO · ESTACIONADO",
+            ()->askBridgeWindows(true));
+        text("El modo RELOJES, el desvanecido y la posición "+
+            "permanente siguen en desarrollo. Todavía no se "+
+            "garantiza cubrir la interfaz MODE ni preservar "+
+            "dos mapas en Display 1.",12,QUIET);
+        text("ESTADO DE VENTANAS: "+
+            BridgeStandaloneWindows.prefs(this).getString(
+                BridgeStandaloneWindows.LAST,"SIN SOLICITUD DESDE BRIDGE"),
+            12,QUIET);
         text("VOLANTE · SELECCIÓN DE OPCIONES · SIN ZOOM",18,WHITE);
         SharedPreferences wheel=BridgeWheelAccessibilityService.prefs(this);
         boolean wheelOn=wheel.getBoolean(
@@ -556,9 +686,10 @@ public final class BootActivity extends Activity
             BootUpdater.check(this,s->prefs().edit()
                 .putString("last_status",s).apply()));
         text("VENTANAS DISPLAY 0 Y DISPLAY 1",18,WHITE);
-        text("Mosaico independiente, modo reloj, transparencia "+
-            "y rueda: todavía sin comprobación física. "+
-            "No se lanza DriveLab Auto para simular éxito.",13,QUIET);
+        text("El motor Freeform de Bridge está separado de Receiver. "+
+            "Su disponibilidad real depende de Android Jetour. "+
+            "No abre DriveLab Auto, no fuerza cierres ni promete "+
+            "visibilidad sin inspección física.",13,QUIET);
         button(legacyAdvanced?"CERRAR EXPERIMENTOS ANTIGUOS":
             "ABRIR EXPERIMENTOS ANTIGUOS · REQUIERE RECEIVER",
             this::toggleLegacy);
