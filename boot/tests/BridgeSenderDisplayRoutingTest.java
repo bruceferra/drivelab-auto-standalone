@@ -17,7 +17,8 @@ public final class BridgeSenderDisplayRoutingTest {
         check(listener.contains("BridgeStandaloneWindows.routeOnTablero(this,pkg)")&&
             !listener.contains("getBoolean(\"cluster_enabled\"")&&
             !listener.contains("getInt(\"cluster_display_id\"")&&
-            listener.contains("setLaunchDisplayId(1)")&&
+            !listener.contains("setLaunchDisplayId(1)")&&
+            listener.contains("startActivity(map); // Display 0 only")&&
             listener.contains("BridgeRouteTarget.baseKind("),
             "Sender routes must be Bridge-owned, not old Receiver flags");
         check(prefs.contains("TAB_CONFIRMED")&&
