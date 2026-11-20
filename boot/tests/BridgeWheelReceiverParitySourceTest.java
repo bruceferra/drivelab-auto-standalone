@@ -17,7 +17,7 @@ public final class BridgeWheelReceiverParitySourceTest {
         String ui=get("BootActivity.java");
         String access=get("BridgeWheelAccessRecovery.java");
         String adb=get("BridgeLocalAdb.java");
-        String navigation=get("BridgeMapsStartPolicy.java");
+        String navigation=get("BridgeGoogleMapsReplacement.java");
         String link=get("BootLinkService.java");
         yes(service.contains("beginKeyCapture(Context c)")&&
             service.contains("CAPTURE_DURATION_MS=20000L")&&
@@ -42,25 +42,29 @@ public final class BridgeWheelReceiverParitySourceTest {
             "Binder requested-but-disconnected recovery, strict OEM key range");
         yes(ui.contains("this::askRecaptureKeys")&&
             ui.contains("this::chooseWheelDisplay")&&
-            ui.contains("this::askStartExistingGoogleMapsRoute")&&
+            ui.contains("BridgeGoogleMapsReplacement.status(this)")&&
             ui.contains("RECAPTURAR TECLAS OEM · 20 S · SIN ZOOM")&&
-            ui.contains("GOOGLE MAPS · INICIAR RUTA DEL RESUMEN")&&
+            !ui.contains("GOOGLE MAPS · INICIAR RUTA DEL RESUMEN")&&
             ui.contains("BridgeWheelAccessibilityService.captureState(this)")&&
-            ui.contains("BridgeWheelAccessibilityService.mapsStartState(this)")&&
+            !ui.contains("this::askStartExistingGoogleMapsRoute")&&
             ui.contains("BridgeWheelAccessibilityService.isConnected()")&&
             ui.contains("RECONECTAR ACCESIBILIDAD · ADB LOCAL")&&
             adb.contains("PERSISTENT_PORT=5556, MANUAL_PORT=5555")&&
             access.contains("BridgeLocalAdb.shell(app,"),
             "Bring Receiver recapture and 5556 diagnostics into Bridge UI");
-        yes(service.contains("startMapsNavigationButton()")&&
-            service.contains("explicitStart(label(node))")&&
-            service.contains("found.size()!=1")&&
-            service.contains("start.performAction(AccessibilityNodeInfo.ACTION_CLICK)")&&
-            service.contains("visibleMap(MAPS)")&&
-            navigation.contains("s.equals(\"iniciar navegacion\")")&&
+        yes(service.contains("maybeStartMapsNavigation()")&&
+            service.contains("BridgeGoogleMapsReplacement.startAction(label(node))")&&
+            service.contains("start.unique!=1")&&
+            service.contains("start.button.performAction(")&&
+            service.contains("bridgeMapsRoot()")&&
+            navigation.contains("n.equals(\"iniciar navegacion\")")&&
+            navigation.contains("TTL=12000L")&&
             link.contains("google.navigation:q=")&&
+            link.contains("BridgeGoogleMapsReplacement.arm(this,displayId)")&&
+            link.contains("BridgeWheelAccessibilityService.navigationIntentArrived(this)")&&
             !link.contains("Intent.FLAG_ACTIVITY_CLEAR_TASK"),
-            "Start only already-previewed Google Maps route, never new app/task");
+            "Copy Receiver's automatic 12s Sender-triggered Maps navigation "+
+            "and replace-old-route flow, not a manual click or guessed map task");
         for(String src:new String[]{service,binder,ui,access}){
             yes(!src.contains("dispatchGesture(")&&
                 !src.contains("GestureDescription")&&
