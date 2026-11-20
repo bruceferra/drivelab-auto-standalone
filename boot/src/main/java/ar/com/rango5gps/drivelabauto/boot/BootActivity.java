@@ -49,9 +49,11 @@ public final class BootActivity extends Activity
     @Override protected void onCreate(Bundle state){
         super.onCreate(state);
         BridgeImmersive.apply(this);
-        // Safety rollback: no new Display 1 Freeform activity or OEM wheel
-        // callback until a verified virtual map session exists.
-        BridgeClusterRecovery.disableNewCluster(this);
+        // Never auto-launch a map on ignition and NEVER capture OEM wheel.
+        // Do not erase an owner's confirmed Display1 routing merely because
+        // Bridge's configuration Activity is opened/resumed.
+        BridgeWheelAccessibilityService.prefs(this).edit()
+            .putBoolean(BridgeWheelAccessibilityService.ENABLED,false).apply();
         draw();
     }
     @Override protected void onResume(){
@@ -372,73 +374,73 @@ public final class BootActivity extends Activity
     }
     private void chooseBridgeMap(){
         String current=BridgeStandaloneWindows.tabMap(this);
+        final String[] labels={"Waze","Google Maps","Waze + Google Maps"};
+        final String[] pkgs={BridgeWindowsPolicy.WAZE,
+            BridgeWindowsPolicy.MAPS,BridgeDualRoutePolicy.BOTH};
+        int checked=BridgeWindowsPolicy.MAPS.equals(current)?1:
+            BridgeDualRoutePolicy.BOTH.equals(current)?2:0;
         new AlertDialog.Builder(this)
-            .setTitle("PANTALLA DEL TABLERO · MAPA")
-            .setSingleChoiceItems(new String[]{"Google Maps","Waze"},
-                BridgeWindowsPolicy.WAZE.equals(current)?1:0,
-                (d,choice)->{
-                    BridgeStandaloneWindows.prefs(this).edit()
-                        .putString(BridgeStandaloneWindows.TAB_MAP,
-                            choice==0?BridgeWindowsPolicy.MAPS:
-                            BridgeWindowsPolicy.WAZE)
-                        .putBoolean(BridgeStandaloneWindows.TAB_CONFIRMED,false)
-                        .putBoolean(BridgeStandaloneWindows.TAB_ROUTE,false)
-                        .apply();
-                    d.dismiss();draw();
-                })
+            .setTitle("DISPLAY 1 · QUÉ MAPAS QUERÉS ABRIR")
+            .setSingleChoiceItems(labels,checked,(d,choice)->{
+                BridgeStandaloneWindows.prefs(this).edit()
+                    .putString(BridgeStandaloneWindows.TAB_MAP,pkgs[choice])
+                    .putBoolean(BridgeStandaloneWindows.TAB_CONFIRMED,false)
+                    .putBoolean(BridgeStandaloneWindows.TAB_ROUTE,false)
+                    .apply();
+                d.dismiss();draw();
+            })
             .setNegativeButton("CANCELAR",null).show();
     }
-    private void confirmTableroMap(){
-        String prior=BridgeStandaloneWindows.prefs(this).getString(
-            BridgeStandaloneWindows.LAST,"");
-        if(!prior.startsWith("Display 1: 1 solicitudes")){
-            new AlertDialog.Builder(this).setTitle("MAPA SIN PRUEBA RECIENTE")
-                .setMessage("Primero solicitá el mapa desde Bridge. "+
-                    "Una respuesta de Android no prueba que sea visible.")
-                .setPositiveButton("OK",null).show();
+    private void toggleDisplay1(){
+        if(BridgeStandaloneWindows.tableroEnabled(this)){
+            BridgeStandaloneWindows.disableTablero(this);
+            draw();
             return;
         }
+        String selection=BridgeStandaloneWindows.tabMap(this);
+        String name=BridgeDualRoutePolicy.BOTH.equals(selection)?
+            "Waze y Google Maps":BridgeWindowsPolicy.WAZE.equals(selection)?
+            "Waze":"Google Maps";
         new AlertDialog.Builder(this)
-            .setTitle("CONFIRMAR MAPA VISIBLE EN DISPLAY 1")
-            .setMessage("Confirmá únicamente si ves Waze o Google Maps "+
-                "sobre la pantalla del tablero sin que desaparezcan "+
-                "las alertas importantes de Jetour. Esta confirmación "+
-                "caduca en el próximo arranque y al cambiar el mapa.")
-            .setNegativeButton("TODAVÍA NO",null)
-            .setPositiveButton("SÍ, SE VE",(d,w)->{
-                BridgeStandaloneWindows.prefs(this).edit()
-                    .putBoolean(BridgeStandaloneWindows.TAB_CONFIRMED,true)
-                    .apply();
-                draw();
-            }).show();
-    }
-    private void toggleSenderTablero(){
-        SharedPreferences p=BridgeStandaloneWindows.prefs(this);
-        boolean enabled=p.getBoolean(BridgeStandaloneWindows.TAB_ROUTE,false);
-        if(enabled){
-            p.edit().putBoolean(BridgeStandaloneWindows.TAB_ROUTE,false).apply();
-            draw();return;
-        }
-        if(!p.getBoolean(BridgeStandaloneWindows.TAB_CONFIRMED,false)){
-            new AlertDialog.Builder(this).setTitle("TABLERO SIN CONFIRMACIÓN")
-                .setMessage("La ruta del Xiaomi seguirá yendo a la "+
-                    "pantalla central hasta que confirmes que el mapa "+
-                    "de Bridge está visible en Display 1.")
-                .setPositiveButton("OK",null).show();
-            return;
-        }
-        new AlertDialog.Builder(this)
-            .setTitle("XIAOMI SENDER → DISPLAY 1")
-            .setMessage("Las rutas enviadas desde Xiaomi a "+
-                labelFor(BridgeStandaloneWindows.tabMap(this))+
-                " se solicitarán en Display 1. Las rutas al otro "+
-                "navegador siguen en la pantalla central. "+
-                "No se cambia tamaño ni se reinician mapas al "+
-                "recibir destinos. ¿Activar esta preferencia?")
+            .setTitle("ACTIVAR DISPLAY 1 · 100%")
+            .setMessage("Sólo con la Jetour ESTACIONADA. Bridge solicitará "+
+                name+" en Display 1, a pantalla completa, sin Freeform. "+
+                "La pantalla puede cubrir indicadores o avisos del auto: "+
+                "si ocurre, NO uses el mapa en marcha.\n\n"+
+                "Un pedido aceptado por Android no garantiza que el mapa "+
+                "sea visible ni que permanezca en Display 1. "+
+                "Para activar el envío de rutas tendrás que confirmar "+
+                "visualmente el resultado.\n\n"+
+                "El volante queda desactivado y el receptor Xiaomi "+
+                "no se modifica.")
             .setNegativeButton("CANCELAR",null)
-            .setPositiveButton("ACTIVAR",(d,w)->{
-                p.edit().putBoolean(BridgeStandaloneWindows.TAB_ROUTE,true)
-                    .apply();draw();
+            .setPositiveButton("ABRIR MAPA(S)",(d,w)->{
+                BridgeStandaloneWindows.Result result=
+                    BridgeStandaloneWindows.tablero(this);
+                if(!result.submitted){
+                    new AlertDialog.Builder(this)
+                        .setTitle("NO SE ABRIÓ DISPLAY 1")
+                        .setMessage(result.message)
+                        .setPositiveButton("ENTENDIDO",(dialog,x)->draw())
+                        .show();
+                    return;
+                }
+                new AlertDialog.Builder(this)
+                    .setTitle("CONFIRMAR DISPLAY 1")
+                    .setMessage(result.message+"\n\n"+
+                        "¿Comprobaste que el mapa aparece en el tablero "+
+                        "sin tapar indicadores o alertas esenciales? "+
+                        "Si pediste ambos, Android puede dejar sólo "+
+                        "uno visible encima del otro; los dos pueden "+
+                        "recibir destinos de forma independiente.")
+                    .setNegativeButton("NO ACTIVAR RUTAS",(dialog,x)->draw())
+                    .setPositiveButton("SÍ, ACTIVAR ENVÍOS",(dialog,x)->{
+                        BridgeStandaloneWindows.prefs(this).edit()
+                            .putBoolean(BridgeStandaloneWindows.TAB_CONFIRMED,true)
+                            .putBoolean(BridgeStandaloneWindows.TAB_ROUTE,true)
+                            .apply();
+                        draw();
+                    }).show();
             }).show();
     }
     private void askBridgeWindows(boolean tablero){
@@ -553,27 +555,27 @@ public final class BootActivity extends Activity
             "diagnóstico; todavía NO migra ni muestra aplicaciones "+
             "en el tablero.",12,QUIET);
         text("PANTALLA DEL TABLERO · DISPLAY 1",18,WHITE);
-        button("MAPA DEL TABLERO · "+
-            labelFor(BridgeStandaloneWindows.tabMap(this))+
-            " · CAMBIAR",this::chooseBridgeMap);
-        text("MAPAS EN DISPLAY 1: TEMPORALMENTE BLOQUEADOS. "+
-            "El anterior Freeform dejó mapas deformados y no existe "+
-            "todavía una sesión virtual comprobada; no se abrirán "+
-            "otras ventanas en el tablero.",13,WHITE);
-        button("LIBERAR CLÚSTER · RETIRAR SÓLO MAPAS VERIFICADOS",
+        String tabChoice=BridgeStandaloneWindows.tabMap(this);
+        String tabName=BridgeDualRoutePolicy.BOTH.equals(tabChoice)?
+            "WAZE + GOOGLE MAPS":BridgeWindowsPolicy.WAZE.equals(tabChoice)?
+            "WAZE":"GOOGLE MAPS";
+        button("MAPA(S) DEL TABLERO: "+tabName+" · CAMBIAR",
+            this::chooseBridgeMap);
+        boolean tabActive=BridgeStandaloneWindows.tableroEnabled(this);
+        button(tabActive?
+            "DESACTIVAR DISPLAY 1 · ENVIAR A CENTRAL":
+            "ACTIVAR DISPLAY 1 · PANTALLA COMPLETA 100%",
+            this::toggleDisplay1);
+        text(tabActive?
+            "DISPLAY 1 ACTIVADO PARA RUTAS: "+tabName+
+            ". El destino Waze/Google Maps/Ambos se selecciona "+
+            "desde Sender y no depende de la app visible.":
+            "DISPLAY 1 SIN RUTAS. Los destinos se envían a Display 0. "+
+            "Desactivar no cierra ni borra aplicaciones ya abiertas "+
+            "por Android.",12,QUIET);
+        button("LIBERAR CLÚSTER · SÓLO MAPAS VERIFICADOS",
             ()->BridgeClusterRecovery.ask(this));
         text("RECUPERACIÓN: "+BridgeClusterRecovery.status(this),12,QUIET);
-        SharedPreferences windows=BridgeStandaloneWindows.prefs(this);
-        boolean visibleTab=windows.getBoolean(
-            BridgeStandaloneWindows.TAB_CONFIRMED,false);
-        boolean routesTab=windows.getBoolean(
-            BridgeStandaloneWindows.TAB_ROUTE,false);
-        text("SENDER → TABLERO: DESACTIVADO POR SEGURIDAD. "+
-            "Las rutas nuevas no abrirán mapas en Display 1.",12,QUIET);
-        text("El modo RELOJES, el desvanecido y la posición "+
-            "permanente siguen en desarrollo. Todavía no se "+
-            "garantiza cubrir la interfaz MODE ni preservar "+
-            "dos mapas en Display 1.",12,QUIET);
         text("ESTADO DE VENTANAS: "+
             BridgeStandaloneWindows.prefs(this).getString(
                 BridgeStandaloneWindows.LAST,"SIN SOLICITUD DESDE BRIDGE"),
