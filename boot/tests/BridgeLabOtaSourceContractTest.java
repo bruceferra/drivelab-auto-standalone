@@ -13,6 +13,8 @@ public final class BridgeLabOtaSourceContractTest {
     }
     public static void main(String[] args)throws Exception{
         String updater=src("boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BootUpdater.java");
+        String nativeInstall=src(
+            "boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeNativeInstaller.java");
         String gradle=src("boot/build.gradle");
         String manifest=src("boot/src/main/AndroidManifest.xml");
         String workflow=src(".github/workflows/publish-bridge-lab-ota.yml");
@@ -30,9 +32,10 @@ public final class BridgeLabOtaSourceContractTest {
            updater.contains("Arrays.equals(cert(candidate),cert(current))")&&
            updater.contains("candidate.getLongVersionCode()!=item.code")&&
            updater.contains("!self.equals(candidate.packageName)")&&
-           updater.contains("a.getPackageName()+\".updatefiles\"")&&
-           updater.contains("Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES")&&
-           updater.contains("Intent.ACTION_INSTALL_PACKAGE")&&
+           nativeInstall.contains("a.getPackageName()+\".updatefiles\"")&&
+           nativeInstall.contains("Intent.ACTION_INSTALL_PACKAGE")&&
+           nativeInstall.contains("PackageInstaller.SessionParams.MODE_FULL_INSTALL")&&
+           updater.contains("BridgeNativeInstaller.commitSession(a,file,status)")&&
            !updater.contains("Runtime.getRuntime().exec(")&&
            !updater.contains("pm clear")&&
            !updater.contains("am force-stop"),
