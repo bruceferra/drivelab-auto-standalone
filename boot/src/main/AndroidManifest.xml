@@ -24,6 +24,10 @@
         <activity android:name=".BridgeVirtualProbeActivity"
             android:exported="false"
             android:resizeableActivity="true" />
+        <!-- One-shot physically bounded secondary-display Presentation. -->
+        <activity android:name=".BridgeClusterSurfaceProbeActivity"
+            android:exported="false"
+            android:resizeableActivity="false" />
         <activity android:name=".BridgeLayersActivity"
             android:exported="false"
             android:resizeableActivity="true" />
