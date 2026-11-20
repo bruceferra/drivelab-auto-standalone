@@ -44,7 +44,7 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
     static final String PREFS="drivelab_bridge_wheel_v1";
     static final String ENABLED="enabled",TARGET="target",
         REVERSE="reverse",STATUS="status",LAST_KEY="last_key",
-        WINDOW_DISPLAY="window_display",MAPS_START_STATUS="maps_start_status",
+        WINDOW_DISPLAY="window_display",
         CAPTURE_STATUS="capture_status",CAPTURE_COUNT="capture_count",
         CAPTURE_LAST="capture_last",
         LAST_TIME="last_event",SERVICE_CONNECTED="connected";
@@ -76,23 +76,10 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
         live.main.post(live::reconcileWheel);
         return true;
     }
-    static String startMapsRouteFromSummary(Context c){
+    static void navigationIntentArrived(Context c){
         BridgeWheelAccessibilityService live=connectedInstance;
-        if(live==null||!live.serviceReady){
-            String error="MAPS: Accesibilidad Bridge DESCONECTADA. "+
-                "Revisá 5556/5555; no se tocó Google Maps.";
-            prefs(c).edit().putString(MAPS_START_STATUS,error).apply();
-            return error;
-        }
-        String requested="MAPS: buscando botón Iniciar navegación "+
-            "en ventana accesible; no abrir ni mover tareas";
-        prefs(c).edit().putString(MAPS_START_STATUS,requested).apply();
-        live.main.post(live::startMapsNavigationButton);
-        return requested;
-    }
-    static String mapsStartState(Context c){
-        return prefs(c).getString(MAPS_START_STATUS,
-            "Sin intento de inicio de ruta desde Bridge");
+        if(live==null||!live.serviceReady)return;
+        live.requestRefresh();
     }
     static String captureState(Context c){
         SharedPreferences p=prefs(c);
@@ -230,13 +217,14 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
         return visibleMap(target());
     }
     private MapWindow visibleMap(String expected){
-        if(!serviceReady)return null;
+        return visibleMap(expected,prefs(this).getInt(WINDOW_DISPLAY,1));
+    }
+    private MapWindow visibleMap(String expected,int selectedDisplay){
+        if(!serviceReady||(
+            selectedDisplay!=0&&selectedDisplay!=1))return null;
         try{
             SparseArray<List<AccessibilityWindowInfo>> all=
                 getWindowsOnAllDisplays();
-            int selectedDisplay=prefs(this).getInt(WINDOW_DISPLAY,1);
-            if(selectedDisplay!=0&&selectedDisplay!=1)
-                selectedDisplay=1;
             List<AccessibilityWindowInfo> one=
                 all==null?null:all.get(selectedDisplay);
             if(one==null)return null;
@@ -264,69 +252,140 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
         }catch(Exception ignored){}
         return null;
     }
-    private void navigationStartStatus(String message){
-        prefs(this).edit().putString(MAPS_START_STATUS,message).apply();
+    private AccessibilityNodeInfo bridgeMapsRoot(){
+        MapWindow verified=visibleMap(MAPS,
+            BridgeGoogleMapsReplacement.displayId(this));
+        return verified==null?null:verified.root;
     }
-    private void collectStartButtons(AccessibilityNodeInfo node,int depth,
-            int[] visited,ArrayList<AccessibilityNodeInfo> choices){
-        if(node==null||depth>14||visited[0]++>450||
-            !node.isVisibleToUser())return;
-        String pkg=String.valueOf(node.getPackageName());
-        if(MAPS.equals(pkg)&&BridgeMapsStartPolicy.explicitStart(label(node))){
-            AccessibilityNodeInfo button=node;
-            if(!button.isClickable()){
-                AccessibilityNodeInfo parent=button.getParent();
-                for(int level=0;level<2&&parent!=null;level++){
-                    if(!MAPS.equals(String.valueOf(parent.getPackageName())))break;
-                    if(parent.isClickable()){button=parent;break;}
-                    parent=parent.getParent();
+    /** Explicit new Sender/voice destination authorizes replacing the old
+     * Maps route. Only the one labelled STOP-confirmation in Maps is clickable,
+     * within a short intent-scoped window; no global back, generic YES or taps.
+     */
+    private static final class StopPrompt {
+        boolean question,exactExitQuestion,genericAction;
+        AccessibilityNodeInfo button;
+        Rect bounds;
+        int differentButtons;
+    }
+    private void findStopPrompt(AccessibilityNodeInfo n,StopPrompt prompt,
+                                int depth,int[] visits){
+        if(n==null||depth>16||visits[0]++>400||!n.isVisibleToUser())return;
+        String label=label(n);
+        if(BridgeGoogleMapsReplacement.stopQuestion(label))prompt.question=true;
+        if(BridgeGoogleMapsReplacement.exitQuestion(label))prompt.exactExitQuestion=true;
+        boolean generic=BridgeGoogleMapsReplacement.genericExitAction(label);
+        if(BridgeGoogleMapsReplacement.stopAction(label)||generic){
+            AccessibilityNodeInfo clickable=n.isClickable()?n:null;
+            if(clickable==null){
+                AccessibilityNodeInfo parent=n.getParent();
+                if(parent!=null&&parent.isClickable())clickable=parent;
+            }
+            if(clickable!=null){
+                Rect b=new Rect();clickable.getBoundsInScreen(b);
+                if(b.width()>28&&b.height()>20&&b.width()<700&&b.height()<260){
+                    if(prompt.bounds==null||!prompt.bounds.equals(b)){
+                        prompt.differentButtons++;
+                        prompt.genericAction=generic;
+                        prompt.bounds=b;
+                        prompt.button=clickable;
+                    }
                 }
             }
-            if(button.isClickable()&&
-                MAPS.equals(String.valueOf(button.getPackageName()))&&
-                !choices.contains(button)){
-                choices.add(button);
+        }
+        for(int i=0;i<n.getChildCount()&&visits[0]<400;i++)
+            findStopPrompt(n.getChild(i),prompt,depth+1,visits);
+    }
+    private void maybeConfirmMapsReplacement(){
+        if(!BridgeGoogleMapsReplacement.pending(this))return;
+        AccessibilityNodeInfo root=bridgeMapsRoot();
+        if(root==null||!MAPS.equals(String.valueOf(root.getPackageName())))
+            return;
+        StopPrompt prompt=new StopPrompt();
+        findStopPrompt(root,prompt,0,new int[]{0});
+        if(!prompt.question||prompt.differentButtons!=1||
+           prompt.button==null||
+           (prompt.genericAction&&!prompt.exactExitQuestion))return;
+        // Consume the permission BEFORE clicking so repeated AccessibilityEvents
+        // cannot click twice. If Maps rejects it, leave a diagnostic instead.
+        BridgeGoogleMapsReplacement.consume(this);
+        boolean clicked=false;
+        try{clicked=prompt.button.performAction(
+            AccessibilityNodeInfo.ACTION_CLICK);}
+        catch(Exception ignored){}
+        BridgeGoogleMapsReplacement.result(this,clicked?
+            "Maps: confirmación de salir de la ruta anterior SOLICITADA":
+            "Maps: confirmación identificada, clic rechazado");
+    }
+    /** Start turn-by-turn navigation only after a NEW authenticated
+     * Sender/voice destination, with a unique, visible, clickable START
+     * action owned by Google Maps on the verified cluster display.
+     * Never click generic OK, permissions, system controls or guessed pixels.
+     */
+    private static final class MapsStart {
+        AccessibilityNodeInfo button;
+        Rect bounds;
+        int unique;
+    }
+    private void inspectMapsStart(AccessibilityNodeInfo node,
+                                  MapsStart found,int depth,int[] visited){
+        if(node==null||depth>18||visited[0]++>450||
+           !node.isVisibleToUser())return;
+        if(BridgeGoogleMapsReplacement.startAction(label(node))){
+            AccessibilityNodeInfo clickable=node.isClickable()?node:null;
+            if(clickable==null){
+                AccessibilityNodeInfo parent=node.getParent();
+                if(parent!=null&&parent.isClickable())clickable=parent;
+            }
+            if(clickable!=null&&clickable.isEnabled()){
+                Rect rect=new Rect();clickable.getBoundsInScreen(rect);
+                if(rect.width()>28&&rect.height()>20&&
+                   rect.width()<800&&rect.height()<300){
+                    if(found.bounds==null||!found.bounds.equals(rect)){
+                        found.unique++;
+                        found.bounds=rect;
+                        found.button=clickable;
+                    }
+                }
             }
         }
-        for(int i=0;i<node.getChildCount()&&visited[0]<450;i++){
-            collectStartButtons(node.getChild(i),depth+1,visited,choices);
-        }
+        for(int i=0;i<node.getChildCount()&&visited[0]<450;i++)
+            inspectMapsStart(node.getChild(i),found,depth+1,visited);
     }
-    private void startMapsNavigationButton(){
-        MapWindow maps=visibleMap(MAPS);
-        if(maps==null){
-            navigationStartStatus("MAPS: No hay ventana Google Maps "+
-                "verificable al frente en Display "+
-                prefs(this).getInt(WINDOW_DISPLAY,1)+
-                ". No se tocó ninguna tarea ni el resumen.");
+    private void maybeStartMapsNavigation(){
+        if(!BridgeGoogleMapsReplacement.startPending(this))return;
+        AccessibilityNodeInfo root=bridgeMapsRoot();
+        if(root==null||!MAPS.equals(String.valueOf(root.getPackageName())))
             return;
-        }
-        ArrayList<AccessibilityNodeInfo> found=new ArrayList<>();
-        collectStartButtons(maps.root,0,new int[]{0},found);
-        if(found.size()!=1){
-            navigationStartStatus("MAPS: "+found.size()+
-                " botones Iniciar inequívocos; no se pulsó nada. "+
-                "Mostrá el resumen con una ruta elegida en el tablero.");
-            return;
-        }
-        AccessibilityNodeInfo start=found.get(0);
-        Rect hit=new Rect();
-        start.getBoundsInScreen(hit);
-        Rect allowable=new Rect(maps.area);
-        if(!hit.intersect(allowable)||hit.width()<32||hit.height()<20){
-            navigationStartStatus("MAPS: botón Iniciar fuera de área "+
-                "del mapa. Se dejó intacta la navegación.");
-            return;
-        }
-        boolean clicked=start.isVisibleToUser()&&
-            start.performAction(AccessibilityNodeInfo.ACTION_CLICK);
-        navigationStartStatus(clicked?
-            "MAPS: Android recibió clic en Iniciar navegación; "+
-                "verificá que muestre indicaciones y no resumen":
-            "MAPS: Android rechazó clic en Iniciar; ruta intacta");
+        // Never click an underlying Start button while a STOP/exit dialog
+        // is covering the route. The stop path has its own narrow consent.
+        StopPrompt stop=new StopPrompt();
+        findStopPrompt(root,stop,0,new int[]{0});
+        if(stop.question)return;
+        MapsStart start=new MapsStart();
+        inspectMapsStart(root,start,0,new int[]{0});
+        if(start.unique!=1||start.button==null)return;
+        // Consume BEFORE click to prevent duplicate click on redraw/events.
+        BridgeGoogleMapsReplacement.consumeStart(this);
+        boolean clicked=false;
+        try{
+            clicked=start.button.performAction(
+                AccessibilityNodeInfo.ACTION_CLICK);
+        }catch(Exception ignored){}
+        BridgeGoogleMapsReplacement.result(this,clicked?
+            "Google Maps · Iniciar navegación: clic accesible solicitado":
+            "Google Maps · botón Iniciar detectado, clic rechazado por Android");
     }
     private void reconcileWheel(){
         if(oem==null)return;
+        // Ported from DriveLab Auto Receiver: fresh Sender intent arms
+        // a 12-second, one-shot Maps route replacement/start flow.
+        boolean routePending=
+            BridgeGoogleMapsReplacement.pending(this)||
+            BridgeGoogleMapsReplacement.startPending(this);
+        if(routePending){
+            maybeConfirmMapsReplacement();
+            maybeStartMapsNavigation();
+        }
         boolean optIn=isManuallyArmed()&&prefs(this).getBoolean(ENABLED,false);
         boolean capture=isCaptureActive();
         if(!capture&&lastCaptureRunning){
@@ -342,6 +401,9 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
             status("Volante Bridge APAGADO; controla el sistema Jetour");
             choices.clear();selected=-1;selectedName="";
             main.removeCallbacks(refresh);
+            // Route auto-start must operate even if driver chose
+            // VOLANTE OFF. Still no OEM callback when wheel is off.
+            if(routePending)main.postDelayed(refresh,650L);
             return;
         }
         // Crucial Receiver parity: receiving OEM events must NOT depend
@@ -522,8 +584,15 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
         int type=event.getEventType();
         if(type==AccessibilityEvent.TYPE_WINDOWS_CHANGED||
            type==AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED||
-           type==AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED)
-            requestRefresh();
+           type==AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED){
+            // NAV response is limited to the encrypted Sender request;
+            // no generic map UI events alone can arm a navigation click.
+            if(BridgeGoogleMapsReplacement.pending(this)||
+               BridgeGoogleMapsReplacement.startPending(this))
+                requestRefresh();
+            else if(isManuallyArmed()||isCaptureActive())
+                requestRefresh();
+        }
     }
     @Override public void onInterrupt(){release();}
     @Override public boolean onUnbind(android.content.Intent intent){
