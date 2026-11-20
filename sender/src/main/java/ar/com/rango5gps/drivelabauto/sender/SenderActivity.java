@@ -295,6 +295,13 @@ public final class SenderActivity extends Activity {
             },"Sender-Pair-Finish").start()).show();
     }
     private void test(){
+        if(BridgeRouteTarget.T1_LAUNCHER.equals(
+                SenderRouteTarget.selected(this))){
+            info("T1LAUNCHER: no se envía ruta de prueba a La Plata. "+
+                "Usá un destino real compartido desde Uber; "+
+                "no queremos reemplazar la navegación actual.");
+            return;
+        }
         if(!SenderClient.configured(this)){info("Primero vinculá el Receiver");return;}
         new Thread(()->{
             SenderClient.Delivery result=SenderClient.send(this,
