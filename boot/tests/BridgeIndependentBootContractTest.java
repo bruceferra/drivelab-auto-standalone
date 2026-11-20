@@ -58,7 +58,8 @@ public final class BridgeIndependentBootContractTest {
             qr.contains("QRCodeWriter")&&
             updater.contains("SHA-256"),
             "Independent Xiaomi AES/QR receiver and signed local updater");
-        ok(manifest.contains("android:label=\"DriveLab Bridge\"")&&
+        ok(manifest.contains("android:label=\"${bridgeLabel}\"")&&
+            manifest.contains("android:taskAffinity=\"${applicationId}.config\"")&&
             manifest.contains("android.permission.SYSTEM_ALERT_WINDOW")&&
             !manifest.contains("android.intent.category.HOME")&&
             !manifest.contains("WRITE_SECURE_SETTINGS")&&
