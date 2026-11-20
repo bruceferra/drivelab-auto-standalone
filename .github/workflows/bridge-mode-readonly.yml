@@ -32,6 +32,8 @@ on:
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeMapsStartPolicy.java'
       - 'boot/tests/BridgeMapsStartPolicyTest.java'
       - 'boot/tests/BridgeWheelReceiverParitySourceTest.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeOtaLayerTrial.java'
+      - 'boot/tests/BridgeOtaLayerTrialSourceTest.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeOemVoiceLauncher.java'
       - 'boot/tests/BridgeOemUnifiedInputSourceTest.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeGoogleMapsReplacement.java'
@@ -161,6 +163,14 @@ jobs:
             boot/tests/BridgeOemUnifiedInputSourceTest.java
           java -cp /tmp/bridge-oem-shared \
             ar.com.rango5gps.drivelabauto.boot.BridgeOemUnifiedInputSourceTest
+      - name: Verify harmless install-only layer trial and 67/33 manual layout preset
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-ota-layer-probe
+          javac -encoding UTF-8 -d /tmp/bridge-ota-layer-probe \
+            boot/tests/BridgeOtaLayerTrialSourceTest.java
+          java -cp /tmp/bridge-ota-layer-probe \
+            ar.com.rango5gps.drivelabauto.boot.BridgeOtaLayerTrialSourceTest
       - name: Validate one-shot, same-stack Waze ADB foreground probe, never OEM
         run: |
           set -euo pipefail
