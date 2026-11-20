@@ -1,4 +1,4 @@
-name: Publish signed Bridge LAB independent OTA v5
+name: Publish signed Bridge LAB independent OTA v6
 # One-off, reviewed publication from the owner-maintained Bridge branch.
 # All Android Lint fatal checks remain active except the narrowly guarded
 # OEM private-API reflection in the parked-only Freeform experiment.
@@ -71,15 +71,15 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'bruceferra/drivelab-auto-standalone'
-          ! gh release view bridge-lab-v5 >/dev/null 2>&1
+          ! gh release view bridge-lab-v6 >/dev/null 2>&1
           gradle --no-daemon :boot:assembleLab
           apk=boot/build/outputs/apk/lab/boot-lab.apk
           test -s "$apk"
           aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
           signer="$ANDROID_HOME/build-tools/35.0.0/apksigner"
           "$aapt" dump badging "$apk" | grep -F "package: name='ar.com.rango5gps.drivelabauto.boot.lab'"
-          "$aapt" dump badging "$apk" | grep -F "versionCode='9'"
-          "$aapt" dump badging "$apk" | grep -F "versionName='0.1.8-lab.5'"
+          "$aapt" dump badging "$apk" | grep -F "versionCode='10'"
+          "$aapt" dump badging "$apk" | grep -F "versionName='0.1.9-lab.6'"
           "$signer" verify --print-certs "$apk"
           mkdir -p /tmp/bridge-old-boot dist
           gh release download v0.3.97 --pattern 'DriveLab-Boot-v0.1.3.apk' --dir /tmp/bridge-old-boot
@@ -87,20 +87,20 @@ jobs:
           oldcert=$("$signer" verify --print-certs /tmp/bridge-old-boot/DriveLab-Boot-v0.1.3.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
           newcert=$("$signer" verify --print-certs "$apk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
           test -n "$oldcert" && test "$oldcert" = "$newcert"
-          cp "$apk" dist/DriveLab-Bridge-LAB-v0.1.8-lab.5.apk
+          cp "$apk" dist/DriveLab-Bridge-LAB-v0.1.9-lab.6.apk
           sha256sum dist/*.apk > dist/bridge-lab.sha256
           python3 - <<'PY'
           import hashlib,json,os,pathlib
-          apk=pathlib.Path("dist/DriveLab-Bridge-LAB-v0.1.8-lab.5.apk")
+          apk=pathlib.Path("dist/DriveLab-Bridge-LAB-v0.1.9-lab.6.apk")
           manifest={
              "channel":"bridge-lab",
              "packageName":"ar.com.rango5gps.drivelabauto.boot.lab",
-             "versionName":"0.1.8-lab.5",
-             "versionCode":9,
-             "tag":"bridge-lab-v5",
+             "versionName":"0.1.9-lab.6",
+             "versionCode":10,
+             "tag":"bridge-lab-v6",
              "size":apk.stat().st_size,
              "sha256":hashlib.sha256(apk.read_bytes()).hexdigest(),
-             "apkUrl":f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/bridge-lab-v5/{apk.name}"
+             "apkUrl":f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/bridge-lab-v6/{apk.name}"
           }
           pathlib.Path("dist/bridge-lab.json").write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
           PY
@@ -108,13 +108,13 @@ jobs:
       - name: Publish LAB prerelease but NEVER replace stable latest
         run: |
           set -euo pipefail
-          gh release create bridge-lab-v5 \
-            dist/DriveLab-Bridge-LAB-v0.1.8-lab.5.apk \
+          gh release create bridge-lab-v6 \
+            dist/DriveLab-Bridge-LAB-v0.1.9-lab.6.apk \
             dist/bridge-lab.sha256 dist/bridge-lab.json \
             --target "$GITHUB_SHA" --prerelease \
-            --title 'DriveLab Bridge LAB 0.1.8 · recuperación segura del clúster' \
-            --notes 'Bridge LAB 0.1.8: recovery-only safety release after physical Jetour Freeform Display1 failure. Disables new direct Waze/Maps launches to Display1 and Xiaomi cluster routing. Disables Bridge steering-wheel capture. Parked user-confirmed LIBERAR CLUSTER: first inspects local ADB stack list, then rechecks every isolated map-only Waze/Maps stack on Display1 before asking Android to remove it; mixed/OEM/system tasks are NEVER touched. This does NOT fix the virtual map or steering wheel. Independent QR and OTA remain, no Receiver dependency or data wipe.'
-          gh release view bridge-lab-v5 --json isPrerelease --jq '.isPrerelease' | grep -Fx true
+            --title 'DriveLab Bridge LAB 0.1.9 · instalador Jetour reparado' \
+            --notes 'Bridge LAB 0.1.9: Jetour native OTA installer reliability. Removes premature canRequestPackageInstalls() gate which blocked all three actions in Jetour restricted Settings. Uses Android PackageInstaller session with owner consent even if the unknown-sources page is unavailable, keeps pending PackageInstaller system consent Intent for direct owner tap from foreground Bridge, adds CONFIRMAR INSTALACION ANDROID button, clearer OS status and verified APK retry/FileProvider fallback. No silent install, no root/ADB for updater. Preserves Bridge LAB package, signing identity, QR key, independent Receiver operation and safety rollback of Display1 Freeform/wheel. If already installed older version cannot invoke installer, user may need to install this APK once from file manager; this release cannot bypass Jetour OS installer policy.'
+          gh release view bridge-lab-v6 --json isPrerelease --jq '.isPrerelease' | grep -Fx true
           tag=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
           test "$tag" = v0.3.97
       - name: Point isolated OTA manifest to published signed asset LAST
@@ -133,12 +133,12 @@ jobs:
               -f message='ota(bridge-lab): publish verified signed LAB v2' -f content="$content" >/dev/null
           fi
           gh api "repos/$GITHUB_REPOSITORY/contents/bridge-lab.json?ref=bridge-lab-ota" --jq .content \
-            | base64 -d | grep -F '"versionCode": 9'
+            | base64 -d | grep -F '"versionCode": 10'
       - uses: actions/upload-artifact@v4
         with:
-          name: DriveLab-Bridge-LAB-0.1.8-PERMANENT-SIGNED-OTA
+          name: DriveLab-Bridge-LAB-0.1.9-PERMANENT-SIGNED-OTA
           path: |
-            dist/DriveLab-Bridge-LAB-v0.1.8-lab.5.apk
+            dist/DriveLab-Bridge-LAB-v0.1.9-lab.6.apk
             dist/bridge-lab.sha256
             dist/bridge-lab.json
           if-no-files-found: error
