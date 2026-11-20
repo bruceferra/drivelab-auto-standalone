@@ -593,6 +593,9 @@ public final class BootActivity extends Activity
         button("INSTALAR / REINTENTAR APK YA DESCARGADA",()->
             BootUpdater.retryInstall(this,s->prefs().edit()
                 .putString("last_status",s).apply()));
+        button("INSTALADOR ALTERNATIVO DE ARCHIVOS · APK VERIFICADA",()->
+            BootUpdater.openFileInstaller(this,s->prefs().edit()
+                .putString("last_status",s).apply()));
         text("Si descargaste y Android NO mostró INSTALAR, tocá "+
             "REINTENTAR. Bridge verifica otra vez SHA-256 y certificado, "+
             "abre el instalador de Android y conserva el archivo local. "+
