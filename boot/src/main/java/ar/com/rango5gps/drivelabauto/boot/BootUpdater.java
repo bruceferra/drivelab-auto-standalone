@@ -1,12 +1,8 @@
 package ar.com.rango5gps.drivelabauto.boot;
 
 import android.app.Activity;
-import android.app.PendingIntent;
-import android.content.ClipData;
-import android.content.pm.PackageInstaller;
 import android.os.Build;
 import java.io.FileInputStream;
-import java.io.OutputStream;
 import android.content.Context;
 import android.content.SharedPreferences;
 import android.app.AlertDialog;
@@ -15,7 +11,6 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.net.Uri;
 import android.provider.Settings;
-import androidx.core.content.FileProvider;
 import java.io.ByteArrayOutputStream;
 import java.io.File;
 import java.io.FileOutputStream;
@@ -276,7 +271,7 @@ final class BootUpdater {
             "No se pudo registrar descarga verificada");
         return ready;
     }
-    private static File verifiedCache(Activity a)throws Exception{
+    static File verifiedCache(Activity a)throws Exception{
         SharedPreferences p=a.getSharedPreferences(READY_PREFS,
             Context.MODE_PRIVATE);
         String version=p.getString("version","");
@@ -294,75 +289,8 @@ final class BootUpdater {
         verifyApk(a,file,item); // Verifies again on EVERY retry.
         return file;
     }
-    private static void installSession(Activity a,File file,Report status)
-            throws Exception{
-        PackageInstaller installer=a.getPackageManager().getPackageInstaller();
-        PackageInstaller.SessionParams params=new PackageInstaller.SessionParams(
-            PackageInstaller.SessionParams.MODE_FULL_INSTALL);
-        params.setAppPackageName(a.getPackageName());
-        params.setSize(file.length());
-        if(Build.VERSION.SDK_INT>=31)params.setRequireUserAction(
-            PackageInstaller.SessionParams.USER_ACTION_REQUIRED);
-        int id=installer.createSession(params);
-        boolean committed=false;
-        try(PackageInstaller.Session session=installer.openSession(id)){
-            try(InputStream in=new FileInputStream(file);
-                OutputStream out=session.openWrite("base.apk",0,file.length())){
-                byte[] chunk=new byte[16384];int n;
-                while((n=in.read(chunk))!=-1)out.write(chunk,0,n);
-                session.fsync(out);
-            }
-            Intent callback=new Intent(a,BridgeInstallResultReceiver.class)
-                .setAction(BridgeInstallResultReceiver.ACTION);
-            int flags=PendingIntent.FLAG_UPDATE_CURRENT;
-            if(Build.VERSION.SDK_INT>=31)flags|=PendingIntent.FLAG_MUTABLE;
-            PendingIntent result=PendingIntent.getBroadcast(a,id,callback,flags);
-            notify(a,status,"Sesión de Android "+id+
-                " preparada; enviando APK para que el sistema confirme…");
-            session.commit(result.getIntentSender());
-            committed=true;
-            notify(a,status,"APK entregada a Android (sesión "+id+
-                "). Si no aparece INSTALAR, tocá "+
-                "CONFIRMAR INSTALACIÓN ANDROID en Bridge para abrir "+
-                "la confirmación que envíe el sistema.");
-        }finally{
-            if(!committed)installer.abandonSession(id);
-        }
-    }
-    private static void installFallback(Activity a,File file,Report status){
-        if(a.isFinishing()||a.isDestroyed())return;
-        try{
-            Uri uri=FileProvider.getUriForFile(a,
-                a.getPackageName()+".updatefiles",file);
-            Intent install=new Intent(Intent.ACTION_INSTALL_PACKAGE);
-            install.setDataAndType(uri,"application/vnd.android.package-archive");
-            install.setClipData(ClipData.newRawUri("DriveLab Bridge LAB",uri));
-            install.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
-            try{
-                a.startActivity(install);
-                notify(a,status,"Android aceptó abrir el intento de "+
-                    "instalación alternativo; si no aparece INSTALAR, "+
-                    "la ROM bloqueó o ignoró la ventana. "+
-                    "El archivo sigue guardado.");
-            }catch(Exception first){
-                install.setAction(Intent.ACTION_VIEW);
-                try{
-                    a.startActivity(install);
-                    notify(a,status,"Android aceptó el intento "+
-                        "ACTION_VIEW; si no ves INSTALAR, la ROM no "+
-                        "presentó la pantalla. Sin pérdida de datos.");
-                }catch(Exception second){
-                    notify(a,status,"La ROM de Jetour no abre instaladores: "+
-                        first.getClass().getSimpleName()+" / "+
-                        second.getClass().getSimpleName()+
-                        ". APK verificada conservada para reintentar.");
-                }
-            }
-        }catch(Exception failure){
-            notify(a,status,"No se pudo entregar la APK a Android: "+
-                failure.getClass().getSimpleName());
-        }
-    }
+    // Native installer is now a direct port of the Receiver's proven
+    // PackageInstaller implementation. No second implementation in Bridge.
     static void retryInstall(Activity a,Report status){
         if(busy){status.result("Actualizador ocupado");return;}
         busy=true;
@@ -378,12 +306,12 @@ final class BootUpdater {
                     // Android produce a real consent or rejection result.
                     // Do NOT prematurely block this user-initiated request.
                     new Thread(()->{
-                        try{installSession(a,file,status);}
+                        try{BridgeNativeInstaller.commitSession(a,file,status);}
                         catch(Exception failed){
                             notify(a,status,"El instalador de sesión falló ("+
                                 failed.getClass().getSimpleName()+
                                 "); abriendo instalador alternativo.");
-                            a.runOnUiThread(()->installFallback(a,file,status));
+                            a.runOnUiThread(()->BridgeNativeInstaller.openFileInstaller(a,file,status));
                         }finally{busy=false;}
                     },"Bridge-Session-Installer").start();
                 });
@@ -410,7 +338,7 @@ final class BootUpdater {
                     // ACTION_INSTALL_PACKAGE/ACTION_VIEW must be attempted
                     // from the foreground Activity even if the ROM hides
                     // the unknown-sources preference page.
-                    installFallback(a,file,status);
+                    BridgeNativeInstaller.openFileInstaller(a,file,status);
                 });
             }catch(Exception error){
                 busy=false;
@@ -452,8 +380,16 @@ final class BootUpdater {
                 a.runOnUiThread(()->{
                     if(item.code!=-1&&currentCode>=item.code){
                         busy=false;
-                        status.result("Bridge LAB al día: versión instalada "+
-                            currentCode+"; última publicada "+item.code+".");
+                        String message="BRIDGE YA TIENE LA ÚLTIMA VERSIÓN ("+
+                            item.version+"). No hay una APK más reciente para "+
+                            "instalar. Reintentar sólo funciona cuando hay "+
+                            "una actualización verificada y pendiente.";
+                        status.result(message);
+                        if(!a.isFinishing()&&!a.isDestroyed())
+                            new AlertDialog.Builder(a)
+                                .setTitle("BRIDGE AL DÍA · SIN APK PENDIENTE")
+                                .setMessage(message)
+                                .setPositiveButton("ENTENDIDO",null).show();
                         return;
                     }
                     if(a.isFinishing()||a.isDestroyed()){busy=false;return;}
@@ -466,6 +402,7 @@ final class BootUpdater {
                             "Android pedirá confirmación. No se desinstalan "+
                             "apps, mapas, cuentas ni configuraciones. "+
                             "¿Descargar y verificar?")
+                        .setOnCancelListener(d->busy=false)
                         .setNegativeButton("CANCELAR",
                             (d,w)->busy=false)
                         .setPositiveButton("DESCARGAR",(d,w)->{
