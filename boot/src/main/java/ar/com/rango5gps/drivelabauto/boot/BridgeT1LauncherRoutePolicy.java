@@ -55,7 +55,10 @@ final class BridgeT1LauncherRoutePolicy {
                 if(task.find()){
                     mapsCount++;
                     taskId=Integer.parseInt(task.group(1));
-                    component=MAPS+"/"+task.group(2);
+                    // Group 2 is the exact package; group 3 is the
+                    // actual Activity component. Never accidentally
+                    // target a synthetic package/package Activity.
+                    component=MAPS+"/"+task.group(3);
                 }
             }
         }
