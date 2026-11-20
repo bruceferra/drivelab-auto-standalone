@@ -31,7 +31,7 @@ public final class T1BootMosaicRevealContractTest {
             ui.contains("MOSAICO_RECUPERADO_SOLICITADO:")&&
             ui.contains("revealPending=false")&&
             ui.contains("moveTaskToBack(true)")&&
-            ui.contains("La conexión Sender/Receiver es independiente"),
+            ui.contains("Los estados de Xiaomi corresponden exclusivamente"),
             "Boot hides UI only upon receiver acknowledgement and separates Sender state");
         check(config.contains("ACTION_REVEAL")&&
             config.contains("static void revealCenter(Context context)")&&
