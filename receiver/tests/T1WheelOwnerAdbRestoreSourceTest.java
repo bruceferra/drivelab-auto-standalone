@@ -38,10 +38,11 @@ public final class T1WheelOwnerAdbRestoreSourceTest {
             ui.contains("127.0.0.1:5556 o :5555")&&
             ui.contains("sin celular, internet ni Termux"),
             "User confirmation and embedded local loopback ADB (never silent auto granting)");
-        ok(home.contains("T1WheelOwnerAdbDialog.show(this)")&&
+        ok(home.contains("ABRIR DRIVELAB BRIDGE")&&
+            !home.contains("T1WheelOwnerAdbDialog.show(this)")&&
             wheel.contains("T1WheelOwnerAdbDialog.show(this)")&&
             wheel.contains("RESTAURAR PERMISO POR ADB LOCAL · SIN CELULAR"),
-            "One tap appears in main and wheel settings");
+            "Owner-approved legacy recovery remains in wheel settings, not Receiver home");
         ok(adb.contains("LOOPBACK=\"127.0.0.1\"")&&
             adb.contains("settings get secure enabled_accessibility_services")&&
             adb.contains("settings put secure accessibility_enabled 1")&&
