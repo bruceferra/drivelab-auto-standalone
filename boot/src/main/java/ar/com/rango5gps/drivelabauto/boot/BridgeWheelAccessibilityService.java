@@ -129,7 +129,10 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
     }
     private static boolean permitted(String input){
         String clean=normalized(input);
-        if(clean.isEmpty()||clean.length()>110)return false;
+        if(clean.isEmpty()||clean.length()>110||
+           clean.equals("+")||clean.equals("-")||
+           clean.equals("−")||clean.equals("＋")||
+           clean.equals("–"))return false;
         for(String item:EXCLUDED_LABELS)
             if(clean.equals(item))return false;
         if(clean.contains("zoom")||clean.contains("acercar")||
