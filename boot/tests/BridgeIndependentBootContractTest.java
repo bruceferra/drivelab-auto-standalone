@@ -24,6 +24,8 @@ public final class BridgeIndependentBootContractTest {
         String link=src("BootLinkService.java");
         String qr=src("BootQr.java");
         String updater=src("BootUpdater.java");
+        String config=src("BootConfig.java");
+        String windows=src("BridgeStandaloneWindows.java");
         String manifest=Files.readString(Path.of(
             "boot/src/main/AndroidManifest.xml"));
         ok(boot.contains("BootLinkService.START")&&
@@ -43,11 +45,14 @@ public final class BridgeIndependentBootContractTest {
             ui.contains("BootQr.draw(")&&
             ui.contains("BootLinkService.PAIR_QR")&&
             ui.contains("BootLinkService.STOP")&&
-            ui.contains("legacyAdvanced")&&
-            ui.contains("EXPERIMENTOS ANTIGUOS · NO VERIFICADOS")&&
-            ui.contains("VENTANAS DE MAPAS: sin arranque independiente")&&
+            ui.contains("PROBAR DOS VENTANAS · SÓLO BRIDGE")&&
+            ui.contains("PROBAR MAPA TABLERO · ESTACIONADO")&&
+            ui.contains("RECONECTAR ACCESIBILIDAD · ADB LOCAL · SIN TERMUX")&&
+            !ui.contains("legacyAdvanced")&&
+            !ui.contains("BootConfig.assertReceiver")&&
             !ui.contains("BootConfig.takeOver(this)")&&
-            !ui.contains("apps.put(\"DriveLab T1 · Cockpit\""),
+            !ui.contains("BootConfig.send")&&
+            !ui.contains("BootConfig.revealCenter"),
             "Bridge owns the setup screen and does not auto-open Cockpit");
         ok(link.contains("BridgeCrypto.NAV_PORT")&&
             link.contains("BridgeCrypto.PAIR_PORT")&&
@@ -58,7 +63,16 @@ public final class BridgeIndependentBootContractTest {
             qr.contains("QRCodeWriter")&&
             updater.contains("SHA-256"),
             "Independent Xiaomi AES/QR receiver and signed local updater");
-        ok(manifest.contains("android:label=\"${bridgeLabel}\"")&&
+        ok(config.contains("getBoolean(\"enabled\",false)")&&
+            !config.contains("assertReceiver(")&&
+            !config.contains("T1BootMosaicBridgeReceiver")&&
+            !config.contains("sendBroadcast(")&&
+            windows.contains("static Result center(")&&
+            windows.contains("static Result tablero(")&&
+            !manifest.contains("receiver.permission.BOOT_MOSAIC")&&
+            !manifest.contains("BootResultReceiver")&&
+            !manifest.contains("ar.com.rango5gps.drivelabauto.receiver\"")&&
+            manifest.contains("android:label=\"${bridgeLabel}\"")&&
             manifest.contains("android:taskAffinity=\"${applicationId}.config\"")&&
             manifest.contains("android.permission.SYSTEM_ALERT_WINDOW")&&
             !manifest.contains("android.intent.category.HOME")&&
@@ -67,6 +81,6 @@ public final class BridgeIndependentBootContractTest {
             !link.contains("am force-stop"),
             "Bridge never becomes OEM HOME or clears third-party data");
         System.out.println("PASS independent DriveLab Bridge: "+
-            "opt-in QR boot, updater, legacy isolation, no destructive commands");
+            "opt-in QR boot, native windows, wheel, updater and zero Receiver IPC");
     }
 }
