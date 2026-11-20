@@ -106,15 +106,23 @@ public final class BridgeVirtualProbeActivity extends Activity
             DisplayManager manager=(DisplayManager)
                 getSystemService(Context.DISPLAY_SERVICE);
             if(manager==null)throw new IllegalStateException("DisplayManager no disponible");
+            // Snapshot before creation: Android may assign ID 1 to a
+            // private virtual display on devices with no physical second
+            // screen. Never infer physical/vIRTUAL identity from number.
+            Display[] existing=manager.getDisplays();
             virtualDisplay=manager.createVirtualDisplay(
                 "DriveLabBridgeProbe",WIDTH,HEIGHT,DENSITY_DPI,sink,FLAGS);
             if(virtualDisplay==null||virtualDisplay.getDisplay()==null)
                 throw new IllegalStateException("Android negó VirtualDisplay");
             Display target=virtualDisplay.getDisplay();
             if(target.getDisplayId()==Display.DEFAULT_DISPLAY||
-               target.getDisplayId()==1)
+               (target.getFlags()&Display.FLAG_PRIVATE)==0)
                 throw new IllegalStateException(
-                    "Identificador no aislado: "+target.getDisplayId());
+                    "Pantalla virtual no aislada: "+target.getDisplayId());
+            for(Display previous:existing)
+                if(previous.getDisplayId()==target.getDisplayId())
+                    throw new IllegalStateException(
+                        "Pantalla existente no autorizada: "+target.getDisplayId());
 
             presentation=new Presentation(this,target);
             LinearLayout scene=new LinearLayout(this);
@@ -178,6 +186,7 @@ public final class BridgeVirtualProbeActivity extends Activity
         }
         if(sink!=null){sink.release();sink=null;}
         report(message);
+        if(preview!=null)preview.setVisibility(android.view.View.GONE);
     }
 
     @Override protected void onStop(){
