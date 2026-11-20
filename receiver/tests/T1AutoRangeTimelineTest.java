@@ -48,8 +48,9 @@ public final class T1AutoRangeTimelineTest {
         near(result.gridMeter,7);
         near(result.costEstimated,7*250);
         check(result.events.size()==5,"all source records remain visible");
-        check("CONDUCCION".equals(result.events.get(0).type),
-              "chronology sorted by time");
+        check("CARGA".equals(result.events.get(0).type)&&
+              "CONDUCCION".equals(result.events.get(1).type),
+              "chronology sorted by time; partial charge starts first");
         String csv=result.csv(report);
         check(csv.contains("CONDUCCION")&&csv.contains("CARGA_EN_CURSO")&&
               csv.contains("IMPORTACIÓN MANUAL SUPERPUESTA")&&
