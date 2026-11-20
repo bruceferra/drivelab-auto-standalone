@@ -40,14 +40,18 @@ public final class BridgeClusterSurfaceProbeActivity extends Activity
     private static final int DPI=213;
     private int width,height,bandHeight;
     static final String EXTRA_ACTIVITY_PROBE="bridge_owned_activity_probe";
+    static final String EXTRA_PUBLIC_PROBE="bridge_owned_public_display_probe";
     private static final long MAX_MS=12000L;
     private static final long APP_MAX_MS=20000L;
     private static final String PREFS="bridge_display1_surface_probe_v1";
     private static final int FLAGS=
         DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY|
         DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION;
+    // Only for explicitly selected owner Activity test; never default.
+    private static final int PUBLIC_FLAGS=FLAGS|
+        DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC;
     private final Handler main=new Handler(Looper.getMainLooper());
-    private boolean activityProbe,sceneVerified;
+    private boolean activityProbe,publicProbe,sceneVerified;
     private final Runnable timeout=()->stop(activityProbe?
         "PRUEBA DE ACTIVITY FINALIZADA tras 20 segundos. "+
             "Actividad, superficie y capa liberadas.":
@@ -84,19 +88,29 @@ public final class BridgeClusterSurfaceProbeActivity extends Activity
         super.onCreate(saved);
         activityProbe=getIntent()!=null&&
             getIntent().getBooleanExtra(EXTRA_ACTIVITY_PROBE,false);
+        publicProbe=activityProbe&&getIntent()!=null&&
+            getIntent().getBooleanExtra(EXTRA_PUBLIC_PROBE,false);
         BridgeImmersive.apply(this);
         LinearLayout body=new LinearLayout(this);
         body.setPadding(24,22,24,24);
         body.setOrientation(LinearLayout.VERTICAL);
         body.setBackgroundColor(0xFF101C27);
         TextView title=new TextView(this);
-        title.setText(activityProbe?
-            "BRIDGE · APP REAL EN PANTALLA VIRTUAL":
+        title.setText(publicProbe?
+            "BRIDGE · LAB · DISPLAY PÚBLICO":
+            activityProbe?"BRIDGE · APP REAL EN PANTALLA VIRTUAL":
             "BRIDGE · COMPROBAR CAPA REAL EN DISPLAY 1");
         title.setTextSize(19); title.setTextColor(0xFF42E3D0);
         body.addView(title);
         TextView instructions=new TextView(this);
-        instructions.setText(activityProbe?
+        instructions.setText(publicProbe?
+            "EXPERIMENTO PÚBLICO: SÓLO ESTACIONADO. Durante 20 segundos "+
+            "Bridge intentará abrir ÚNICAMENTE una actividad propia "+
+            "en un display virtual PÚBLICO con OWN_CONTENT_ONLY, "+
+            "sin duplicar la pantalla central. Es visible a otras apps "+
+            "durante la sesión; se libera al terminar. NO abre Waze, "+
+            "no mueve tareas ni controla el vehículo.":
+            activityProbe?
             "SÓLO ESTACIONADO. Durante 20 segundos Bridge intentará abrir "+
             "una ACTIVIDAD ANDROID PROPIA (no Waze) en su Display virtual "+
             "privado y mostrarla en el 65 % inferior del tablero, "+
@@ -211,15 +225,17 @@ public final class BridgeClusterSurfaceProbeActivity extends Activity
         try{
             texture.setDefaultBufferSize(width,bandHeight);
             surface=new Surface(texture);
-            virtual=displays.createVirtualDisplay("BridgeDisplay1LayerProbe",
-                width,bandHeight,DPI,surface,FLAGS);
+            virtual=displays.createVirtualDisplay(publicProbe?
+                "BridgeLabPublicOwnContent":"BridgeDisplay1LayerProbe",
+                width,bandHeight,DPI,surface,publicProbe?PUBLIC_FLAGS:FLAGS);
             if(virtual==null||virtual.getDisplay()==null)
                 throw new IllegalStateException("VirtualDisplay no creado");
             Display d=virtual.getDisplay();
-            if(d.getDisplayId()==0||d.getDisplayId()==1||
-               (d.getFlags()&Display.FLAG_PRIVATE)==0)
-                throw new SecurityException(
-                    "Pantalla virtual no está aislada");
+            boolean isPrivate=(d.getFlags()&Display.FLAG_PRIVATE)!=0;
+            if(d.getDisplayId()<=1||isPrivate==publicProbe)
+                throw new SecurityException(publicProbe?
+                    "Display público solicitado pero Android entregó privado":
+                    "Pantalla virtual privada no está aislada");
             if(activityProbe){
                 launchOwnActivity(d);
                 return;
@@ -264,9 +280,10 @@ public final class BridgeClusterSurfaceProbeActivity extends Activity
         };
         BridgeVirtualSceneActivity.setListener(sceneListener);
         report("Solicitando Activity propia en Display virtual "+
-            requested+". Waze y Maps permanecen sin cambios.");
+            requested+" · modo "+(publicProbe?"PÚBLICO":"PRIVADO")+
+            ". Waze y Maps permanecen sin cambios.");
         try{
-            BridgeVirtualTaskLauncher.launchOwn(this,d,sceneToken);
+            BridgeVirtualTaskLauncher.launchOwn(this,d,sceneToken,publicProbe);
         }catch(SecurityException denied){
             showDeniedLaunchFallback(d,denied);
             return;
@@ -304,7 +321,8 @@ public final class BridgeClusterSurfaceProbeActivity extends Activity
                 reason.startsWith("PRECHECK_")?reason:
                 "START_ACTIVITY_SECURITY_EXCEPTION";
             report("ANDROID RECHAZÓ LA ACTIVITY EN DISPLAY VIRTUAL "+
-                fallbackDisplayId+" · "+category+
+                fallbackDisplayId+" · "+(publicProbe?"PÚBLICO":"PRIVADO")+
+                " · "+category+
                 ". Se muestra sólo PRESENTATION ANIMADA de respaldo. "+
                 "Esto NO acredita ejecución de Waze.");
         }catch(RuntimeException fail){

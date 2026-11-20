@@ -398,6 +398,26 @@ public final class BootActivity extends Activity
             })
             .setNegativeButton("CANCELAR",null).show();
     }
+    private void askPublicVirtualActivityProbe(){
+        new AlertDialog.Builder(this)
+            .setTitle("LAB · DISPLAY VIRTUAL PÚBLICO")
+            .setMessage("Sólo con la Jetour ESTACIONADA. Esta prueba de "+
+                "20 segundos crea un display virtual PÚBLICO y limitado "+
+                "a contenido propio, por lo que otras aplicaciones "+
+                "podrían verlo durante la sesión. Intentará abrir "+
+                "ÚNICAMENTE una actividad propia de Bridge; jamás "+
+                "Waze ni Maps. No duplica pantalla central, "+
+                "no modifica tareas ni funciones Jetour. "+
+                "Si Android deniega la actividad, lo informará "+
+                "y mostrará la animación de respaldo.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("PROBAR PÚBLICO 20 S",(d,w)->
+                startActivity(new Intent(this,
+                    BridgeClusterSurfaceProbeActivity.class)
+                    .putExtra(BridgeClusterSurfaceProbeActivity.EXTRA_ACTIVITY_PROBE,true)
+                    .putExtra(BridgeClusterSurfaceProbeActivity.EXTRA_PUBLIC_PROBE,true)))
+            .show();
+    }
     private void askRealVirtualActivityProbe(){
         new AlertDialog.Builder(this)
             .setTitle("LAB · APP REAL EN DISPLAY VIRTUAL")
@@ -623,6 +643,8 @@ public final class BootActivity extends Activity
             this::askRealClusterSurfaceProbe);
         button("LAB · PROBAR APP REAL EN CAPA VIRTUAL · 20 S",
             this::askRealVirtualActivityProbe);
+        button("LAB · DISPLAY VIRTUAL PÚBLICO · APP PROPIA · 20 S",
+            this::askPublicVirtualActivityProbe);
         text("RESULTADO CAPA / APP: "+
             BridgeClusterSurfaceProbeActivity.lastResult(this),12,QUIET);
         button("LIBERAR CLÚSTER · SÓLO MAPAS VERIFICADOS",

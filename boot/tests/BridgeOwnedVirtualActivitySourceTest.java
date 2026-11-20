@@ -21,7 +21,9 @@ public final class BridgeOwnedVirtualActivitySourceTest {
         ok(host.contains("EXTRA_ACTIVITY_PROBE")&&
             host.contains("APP_MAX_MS=20000L")&&
             host.contains("if(activityProbe)")&&
-            host.contains("BridgeVirtualTaskLauncher.launchOwn(this,d,sceneToken)")&&
+            host.contains("BridgeVirtualTaskLauncher.launchOwn(this,d,sceneToken,publicProbe)")&&
+            host.contains("publicProbe?PUBLIC_FLAGS:FLAGS")&&
+            host.contains("DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC")&&
             host.contains("sceneVerified=true")&&
             host.contains("catch(SecurityException denied)")&&
             host.contains("showDeniedLaunchFallback(d,denied)")&&
@@ -37,6 +39,8 @@ public final class BridgeOwnedVirtualActivitySourceTest {
             launch.contains("options.setLaunchDisplayId(id)")&&
             launch.contains("isActivityStartAllowedOnDisplay(host,id,own)")&&
             launch.contains("PRECHECK_DENIED_PRIVATE_DISPLAY")&&
+            launch.contains("PRECHECK_DENIED_PUBLIC_DISPLAY")&&
+            launch.contains("privateDisplay==expectPublic")&&
             launch.contains("id<=1")&&
             launch.contains("Display.FLAG_PRIVATE")&&
             launch.contains("FLAG_ACTIVITY_NEW_TASK")&&
@@ -49,6 +53,8 @@ public final class BridgeOwnedVirtualActivitySourceTest {
             "Private VirtualDisplay only own Activity, no maps or OEM");
         ok(scene.contains("Display actual=getDisplay()")&&
             scene.contains("actualId==expected")&&
+            scene.contains("EXTRA_EXPECT_PUBLIC")&&
+            scene.contains(")==expectedPublic")&&
             scene.contains("expected>1")&&
             scene.contains("Display.FLAG_PRIVATE")&&
             scene.contains("finishAndRemoveTask()")&&
@@ -57,6 +63,8 @@ public final class BridgeOwnedVirtualActivitySourceTest {
             !scene.contains("com.waze"),
             "Real Activity verifies display, animates and terminates");
         ok(ui.contains("this::askRealVirtualActivityProbe")&&
+            ui.contains("this::askPublicVirtualActivityProbe")&&
+            ui.contains("EXTRA_PUBLIC_PROBE,true")&&
             ui.contains("LAB · PROBAR APP REAL EN CAPA VIRTUAL · 20 S")&&
             ui.contains("BridgeClusterSurfaceProbeActivity.EXTRA_ACTIVITY_PROBE")&&
             !listener.contains("BridgeVirtualSceneActivity")&&

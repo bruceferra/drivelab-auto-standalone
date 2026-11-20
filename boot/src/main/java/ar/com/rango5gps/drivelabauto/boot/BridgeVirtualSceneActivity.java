@@ -15,6 +15,7 @@ import java.lang.ref.WeakReference;
 public final class BridgeVirtualSceneActivity extends Activity {
     static final String EXTRA_EXPECTED_DISPLAY="bridge_probe_expected_display";
     static final String EXTRA_SESSION="bridge_probe_session";
+    static final String EXTRA_EXPECT_PUBLIC="bridge_probe_expected_public";
     interface Listener {
         void onAttached(long token,int actualDisplay,boolean virtualPrivate);
     }
@@ -55,10 +56,11 @@ public final class BridgeVirtualSceneActivity extends Activity {
         sessionToken=getIntent().getLongExtra(EXTRA_SESSION,-1L);
         int expected=getIntent().getIntExtra(EXTRA_EXPECTED_DISPLAY,
             Display.INVALID_DISPLAY);
+        boolean expectedPublic=getIntent().getBooleanExtra(EXTRA_EXPECT_PUBLIC,false);
         Display actual=getDisplay();
         actualId=actual==null?Display.INVALID_DISPLAY:actual.getDisplayId();
         boolean owned=actual!=null&&actualId==expected&&expected>1&&
-            (actual.getFlags()&Display.FLAG_PRIVATE)!=0;
+            (((actual.getFlags()&Display.FLAG_PRIVATE)==0)==expectedPublic);
         current=new WeakReference<>(this);
         if(!owned||sessionToken<=0){
             Listener l=listener;
