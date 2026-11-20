@@ -416,10 +416,14 @@ public final class T1AutoJourneyActivity extends T1ImmersiveActivity {
             }
             if(lastCharge!=null){
                 T1AutoJourneyStore.Summary since=db.since(chargedAt);
+                // No paid-energy attribution when the OEM journey
+                // never supplied a confirmed HV sample. Historic 0kWh
+                // must NOT mean the pack consumed zero.
                 T1PlugEnergyLedger.Result allocation=
+                    since.hvVerifiedSamples>0?
                     T1PlugEnergyLedger.estimate(lastCharge.kwh,
                         lastCharge.meterKwh,since.out,since.in,
-                        lastCharge.price);
+                        lastCharge.price):null;
                 text.append("\n\n").append(since.describe(
                     "DESDE ÚLTIMA CARGA · OEM ORIGINAL, "+
                     "NO ES RECONSTRUCCIÓN T1LAUNCHER"));
@@ -471,7 +475,10 @@ public final class T1AutoJourneyActivity extends T1ImmersiveActivity {
                         "térmico y regeneración. El 15% protegido no "+
                         "define por sí solo su origen ni su precio.");
                 }else{
-                    text.append("\nCarga sin kWh válidos para atribuir costos");
+                    text.append(since.hvVerifiedSamples<=0?
+                        "\nSIN HV VERIFICADO EN CONDUCCIÓN: no se puede "+
+                        "imputar uso eléctrico al enchufe.":
+                        "\nCarga sin kWh válidos para atribuir costos");
                 }
             }else{
                 text.append("\n\nDESDE ÚLTIMA CARGA: no hay una "+
@@ -483,7 +490,8 @@ public final class T1AutoJourneyActivity extends T1ImmersiveActivity {
             // This is a chronological ACCOUNTING estimate, not a claim
             // that we can identify the physical origin of the electrons.
             java.util.HashMap<Long,String> allocations=new java.util.HashMap<>();
-            if(lastCharge!=null && lastCharge.kwh>0){
+            if(lastCharge!=null && lastCharge.kwh>0&&
+               db.since(chargedAt).hvVerifiedSamples>0){
                 ArrayList<T1AutoJourneyStore.Journey> chronological=db.latest(500);
                 java.util.Collections.reverse(chronological);
                 double cumulativeOut=0,cumulativeIn=0;
