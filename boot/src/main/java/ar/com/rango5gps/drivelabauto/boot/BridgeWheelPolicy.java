@@ -9,13 +9,13 @@ package ar.com.rango5gps.drivelabauto.boot;
 final class BridgeWheelPolicy {
     static final int PRESS=100, RELEASE=101;
     static final int SCROLL_A=1000,SCROLL_B=1001,BACK=1002,OK=1003;
-    static final int NONE=0,ZOOM_IN=1,ZOOM_OUT=2,CANCEL=3,CONFIRM=4;
+    static final int NONE=0,NEXT=1,PREVIOUS=2,CANCEL=3,CONFIRM=4;
     private BridgeWheelPolicy(){}
     static int translate(int key,int action,boolean reverse){
         if(action!=PRESS)return NONE;
         switch(key){
-            case SCROLL_A:return reverse?ZOOM_OUT:ZOOM_IN;
-            case SCROLL_B:return reverse?ZOOM_IN:ZOOM_OUT;
+            case SCROLL_A:return reverse?PREVIOUS:NEXT;
+            case SCROLL_B:return reverse?NEXT:PREVIOUS;
             case BACK:return CANCEL;
             case OK:return CONFIRM;
             default:return NONE;
@@ -23,8 +23,8 @@ final class BridgeWheelPolicy {
     }
     static String name(int action){
         switch(action){
-            case ZOOM_IN:return "ACERCAR";
-            case ZOOM_OUT:return "ALEJAR";
+            case NEXT:return "SIGUIENTE OPCIÓN";
+            case PREVIOUS:return "OPCIÓN ANTERIOR";
             case CANCEL:return "CANCELAR";
             case CONFIRM:return "ACEPTAR";
             default:return "IGNORAR";
