@@ -51,6 +51,7 @@ public final class BridgeVirtualProbeActivity extends Activity
 
     @Override protected void onCreate(Bundle saved){
         super.onCreate(saved);
+        BridgeImmersive.apply(this);
         LinearLayout root=new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(22,20,22,22);
@@ -189,6 +190,10 @@ public final class BridgeVirtualProbeActivity extends Activity
         if(preview!=null)preview.setVisibility(android.view.View.GONE);
     }
 
+    @Override public void onWindowFocusChanged(boolean hasFocus){
+        super.onWindowFocusChanged(hasFocus);
+        if(hasFocus)BridgeImmersive.apply(this);
+    }
     @Override protected void onStop(){
         // Never leave a virtual display alive behind another app or while
         // the owner may resume driving.
