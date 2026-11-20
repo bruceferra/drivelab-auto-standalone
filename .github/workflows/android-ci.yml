@@ -1033,7 +1033,7 @@ jobs:
           apk=boot/build/outputs/apk/debug/boot-debug.apk
           test -s "$apk"
           "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" | grep "package: name='ar.com.rango5gps.drivelabauto.boot.lab'"
-          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" | grep "versionName='0.1.9-lab-20261120'"
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging "$apk" | grep "versionName='0.1.10-lab-20261120'"
           sha256sum "$apk" > boot/build/outputs/apk/debug/boot-debug.apk.sha256
       - uses: actions/upload-artifact@v4
         with:
