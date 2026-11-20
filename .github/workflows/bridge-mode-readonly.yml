@@ -17,6 +17,12 @@ on:
       - 'boot/tests/BridgeWheelPolicyTest.java'
       - 'boot/tests/BridgeWheelAccessibilityContractTest.java'
       - 'boot/src/main/res/xml/bridge_wheel_accessibility.xml'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeStandaloneWindows.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWindowMath.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWindowsPolicy.java'
+      - 'boot/tests/BridgeWindowMathTest.java'
+      - 'boot/tests/BridgeWindowsPolicyTest.java'
+      - 'boot/tests/BridgeStandaloneWindowContractTest.java'
       - 'boot/src/main/AndroidManifest.xml'
       - '.github/workflows/bridge-mode-readonly.yml'
   workflow_dispatch:
@@ -60,6 +66,22 @@ jobs:
             ar.com.rango5gps.drivelabauto.boot.BridgeWheelPolicyTest
           java -cp /tmp/jetour-wheel \
             ar.com.rango5gps.drivelabauto.boot.BridgeWheelAccessibilityContractTest
+      - name: Verify standalone Bridge Freeform two-screen ownership and geometry
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/jetour-bridge-windows
+          javac -encoding UTF-8 -d /tmp/jetour-bridge-windows \
+            boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWindowMath.java \
+            boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWindowsPolicy.java \
+            boot/tests/BridgeWindowMathTest.java \
+            boot/tests/BridgeWindowsPolicyTest.java \
+            boot/tests/BridgeStandaloneWindowContractTest.java
+          java -cp /tmp/jetour-bridge-windows \
+            ar.com.rango5gps.drivelabauto.boot.BridgeWindowMathTest
+          java -cp /tmp/jetour-bridge-windows \
+            ar.com.rango5gps.drivelabauto.boot.BridgeWindowsPolicyTest
+          java -cp /tmp/jetour-bridge-windows \
+            ar.com.rango5gps.drivelabauto.boot.BridgeStandaloneWindowContractTest
       - name: No map data wipe or OEM window mutation in diagnostic
         run: |
           set -euo pipefail
