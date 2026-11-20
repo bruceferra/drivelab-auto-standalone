@@ -38,7 +38,7 @@ public final class BridgeClusterSurfaceProbeSourceTest {
             test.contains("FLAG_NOT_FOCUSABLE")&&
             test.contains("FLAG_NOT_TOUCHABLE")&&
             test.contains("if((physical.getFlags()&Display.FLAG_PRIVATE)!=0)")&&
-            test.contains("main.postDelayed(timeout,MAX_MS)")&&
+            test.contains("main.postDelayed(timeout,activityProbe?APP_MAX_MS:MAX_MS)")&&
             test.contains("main.removeCallbacks(timeout)")&&
             test.contains("@Override protected void onStop()")&&
             test.contains("@Override protected void onDestroy()")&&
