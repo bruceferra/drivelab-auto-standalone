@@ -44,7 +44,7 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
     static final String PREFS="drivelab_bridge_wheel_v1";
     static final String ENABLED="enabled",TARGET="target",
         REVERSE="reverse",STATUS="status",LAST_KEY="last_key",
-        WINDOW_DISPLAY="window_display",
+        WINDOW_DISPLAY="window_display",MAPS_START_STATUS="maps_start_status",
         CAPTURE_STATUS="capture_status",CAPTURE_COUNT="capture_count",
         CAPTURE_LAST="capture_last",
         LAST_TIME="last_event",SERVICE_CONNECTED="connected";
@@ -75,6 +75,24 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
             .apply();
         live.main.post(live::reconcileWheel);
         return true;
+    }
+    static String startMapsRouteFromSummary(Context c){
+        BridgeWheelAccessibilityService live=connectedInstance;
+        if(live==null||!live.serviceReady){
+            String error="MAPS: Accesibilidad Bridge DESCONECTADA. "+
+                "Revisá 5556/5555; no se tocó Google Maps.";
+            prefs(c).edit().putString(MAPS_START_STATUS,error).apply();
+            return error;
+        }
+        String requested="MAPS: buscando botón Iniciar navegación "+
+            "en ventana accesible; no abrir ni mover tareas";
+        prefs(c).edit().putString(MAPS_START_STATUS,requested).apply();
+        live.main.post(live::startMapsNavigationButton);
+        return requested;
+    }
+    static String mapsStartState(Context c){
+        return prefs(c).getString(MAPS_START_STATUS,
+            "Sin intento de inicio de ruta desde Bridge");
     }
     static String captureState(Context c){
         SharedPreferences p=prefs(c);
@@ -156,7 +174,8 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
         main.postDelayed(refresh,180);
     }
     @Override public void onSharedPreferenceChanged(SharedPreferences p,String key){
-        if(ENABLED.equals(key)||TARGET.equals(key)||REVERSE.equals(key))
+        if(ENABLED.equals(key)||TARGET.equals(key)||REVERSE.equals(key)||
+            WINDOW_DISPLAY.equals(key))
             requestRefresh();
     }
     private String target(){
@@ -208,8 +227,10 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
         }
     }
     private MapWindow visibleMap(){
+        return visibleMap(target());
+    }
+    private MapWindow visibleMap(String expected){
         if(!serviceReady)return null;
-        String expected=target();
         try{
             SparseArray<List<AccessibilityWindowInfo>> all=
                 getWindowsOnAllDisplays();
@@ -242,6 +263,67 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
             }
         }catch(Exception ignored){}
         return null;
+    }
+    private void navigationStartStatus(String message){
+        prefs(this).edit().putString(MAPS_START_STATUS,message).apply();
+    }
+    private void collectStartButtons(AccessibilityNodeInfo node,int depth,
+            int[] visited,ArrayList<AccessibilityNodeInfo> choices){
+        if(node==null||depth>14||visited[0]++>450||
+            !node.isVisibleToUser())return;
+        String pkg=String.valueOf(node.getPackageName());
+        if(MAPS.equals(pkg)&&BridgeMapsStartPolicy.explicitStart(label(node))){
+            AccessibilityNodeInfo button=node;
+            if(!button.isClickable()){
+                AccessibilityNodeInfo parent=button.getParent();
+                for(int level=0;level<2&&parent!=null;level++){
+                    if(!MAPS.equals(String.valueOf(parent.getPackageName())))break;
+                    if(parent.isClickable()){button=parent;break;}
+                    parent=parent.getParent();
+                }
+            }
+            if(button.isClickable()&&
+                MAPS.equals(String.valueOf(button.getPackageName()))&&
+                !choices.contains(button)){
+                choices.add(button);
+            }
+        }
+        for(int i=0;i<node.getChildCount()&&visited[0]<450;i++){
+            collectStartButtons(node.getChild(i),depth+1,visited,choices);
+        }
+    }
+    private void startMapsNavigationButton(){
+        MapWindow maps=visibleMap(MAPS);
+        if(maps==null){
+            navigationStartStatus("MAPS: No hay ventana Google Maps "+
+                "verificable al frente en Display "+
+                prefs(this).getInt(WINDOW_DISPLAY,1)+
+                ". No se tocó ninguna tarea ni el resumen.");
+            return;
+        }
+        ArrayList<AccessibilityNodeInfo> found=new ArrayList<>();
+        collectStartButtons(maps.root,0,new int[]{0},found);
+        if(found.size()!=1){
+            navigationStartStatus("MAPS: "+found.size()+
+                " botones Iniciar inequívocos; no se pulsó nada. "+
+                "Mostrá el resumen con una ruta elegida en el tablero.");
+            return;
+        }
+        AccessibilityNodeInfo start=found.get(0);
+        Rect hit=new Rect();
+        start.getBoundsInScreen(hit);
+        Rect allowable=new Rect(maps.area);
+        if(!hit.intersect(allowable)||hit.width()<32||hit.height()<20){
+            navigationStartStatus("MAPS: botón Iniciar fuera de área "+
+                "del mapa. Se dejó intacta la navegación.");
+            return;
+        }
+        boolean clicked=start.isVisibleToUser()&&
+            start.performAction(AccessibilityNodeInfo.ACTION_CLICK);
+        navigationStartStatus(clicked?
+            "MAPS: Android recibió clic en Iniciar navegación; "+
+                "verificá que muestre indicaciones y no resumen":
+            "MAPS: Android rechazó clic en Iniciar; ruta intacta");
     }
     private void reconcileWheel(){
         if(oem==null)return;
