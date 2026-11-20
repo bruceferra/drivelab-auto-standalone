@@ -16,7 +16,7 @@ final class BridgeWindowsPolicy {
             "[A-Za-z_][A-Za-z0-9_]*(\\.[A-Za-z_][A-Za-z0-9_]*)+"))
             return false;
         String p=pkg.toLowerCase(Locale.ROOT);
-        return !p.equals(AUTO)&&!p.equals(BRIDGE)&&
+        return !p.startsWith("ar.com.rango5gps.drivelabauto.")&&
             !p.startsWith("android.")&&
             !p.startsWith("com.android.")&&
             !p.startsWith("com.autolink.")&&
