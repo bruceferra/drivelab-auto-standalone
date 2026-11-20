@@ -37,7 +37,9 @@ final class BridgeLocalAdb {
     private static volatile int lastLocalPort=PERSISTENT_PORT;
     private static final int PROTOCOL=0x01000000;
     private static final String LOOPBACK="127.0.0.1";
-    private static final String KEY_FILE="bridge_lab_local_adb_host_v1.pk8";
+    // Reuse ONLY Bridge LAB's own previously authorized diagnostic ADB key.
+    // NEVER import the Receiver private ADB host identity.
+    private static final String KEY_FILE="bridge_adb_readonly_key.pk8";
     private static final byte[] SHA1_DIGEST_INFO={
         0x30,0x21,0x30,0x09,0x06,0x05,0x2b,0x0e,0x03,0x02,
         0x1a,0x05,0x00,0x04,0x14
@@ -193,7 +195,7 @@ final class BridgeLocalAdb {
         b.put(little(BigInteger.ONE.shiftLeft(4096).mod(mod),256));
         b.putInt(key.getPublicExponent().intValue());
         String pub=Base64.encodeToString(b.array(),Base64.NO_WRAP)+
-            " drivelab-t1@localhost\0";
+            " drivelab-bridge@localhost\0";
         return ascii(pub);
     }
     private static byte[] ascii(String s){
