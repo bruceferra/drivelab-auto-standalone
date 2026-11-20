@@ -133,62 +133,22 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
         label(body,"FUNCIONES",17);
         button(body,"COCKPIT · VIAJES Y ENERGÍA",()->
             startActivity(new Intent(this,T1PremiumCockpitActivity.class)));
-        button(body,"▦ VOLVER AL MOSAICO · RECUPERAR VENTANAS",
-            ()->T1CenterMosaicRecovery.restore(this,(requested,report)->{
-                if(requested||isFinishing()||isDestroyed())return;
-                new AlertDialog.Builder(this)
-                    .setTitle("MOSAICO NO RECUPERADO")
-                    .setMessage(report)
-                    .setNegativeButton("CERRAR",null)
-                    .setPositiveButton("CONFIGURAR",(d,w)->
-                        startActivity(new Intent(this,
-                            T1CenterMosaicActivity.class))).show();
-            }));
-        button(body,"MOSAICO · PANTALLA CENTRAL",()->
-            startActivity(new Intent(this,T1CenterMosaicActivity.class)));
-        // Independent Boot launcher: install through Android, never WebADB or
-        // raw ADB. Direct entry in Inicio so an owner can recover from a
-        // USB/WebADB connection failure without entering technical menus.
+        // Navigation/window design is OWNED by the separate DriveLab
+        // Bridge APK. This data/telemetry app must not duplicate controls.
+        label(body,"MAPAS · VENTANAS · QR XIAOMI → DRIVELAB BRIDGE",13);
         if(T1BootInstaller.installed(this)){
-            label(body,"DriveLab Boot 0.1.3 · instalada · recuperación real de mosaico",13);
-            button(body,"ABRIR DRIVELAB BOOT · CONFIGURAR MOSAICO",
+            button(body,"ABRIR DRIVELAB BRIDGE",
                 ()->T1BootInstaller.openBoot(this,this::report));
         }else{
-            button(body,"INSTALAR DRIVELAB BOOT · SIN WEBADB",
-                ()->T1BootInstaller.prompt(this,this::report));
-            label(body,"Boot: "+T1BootInstaller.status(this),13);
-            if(T1BootInstaller.cached(this)){
-                button(body,"REINTENTAR INSTALACIÓN BOOT",
-                    ()->T1BootInstaller.retry(this,this::report));
-                button(body,"INSTALADOR ANDROID ALTERNATIVO · BOOT",
-                    ()->T1BootInstaller.alternate(this,this::report));
-                button(body,"PERMISO ANDROID PARA INSTALAR APPS",
-                    ()->T1BootInstaller.requestPermission(this,this::report));
-            }
+            label(body,"Bridge no instalado. Este Receiver no configura "+
+                "las ventanas ni toma el volante.",13);
         }
         button(body,"APPS ABIERTAS · CERRAR / LIMPIAR MEMORIA",()->
             startActivity(new Intent(this,T1AppTaskManagerActivity.class)));
         button(body,"CAPTURA DE PANTALLA · TRES DEDOS / COMPARTIR",()->
             startActivity(new Intent(this,T1ScreenshotReviewActivity.class)));
-        button(body,"CLÚSTER · PANELES A/B",()->
-            startActivity(new Intent(this,T1ClusterLayoutSettingsActivity.class)));
         button(body,"VEHÍCULO · ESTADO Y AJUSTES",()->
             startActivity(new Intent(this,ReceiverVehicleActivity.class)));
-        button(body,"RUEDITA · RECONECTAR ACCESIBILIDAD",()->{
-            String result=T1WheelAccessibilityRecovery.requestManual(this);
-            Toast.makeText(this,result,Toast.LENGTH_LONG).show();
-            if(result.startsWith("DESHABILITADA EN ANDROID")){
-                // Jetour's Settings screen may be hidden; let the owner
-                // explicitly choose trusted ADB localhost or Android Settings.
-                T1WheelOwnerAdbDialog.show(this);
-            }
-        });
-        label(body,"Xiaomi: "+p.getString("status","Sin iniciar")+
-            " · destinos recibidos: "+p.getInt("received",0),14);
-        button(body,connectionExpanded?"OCULTAR CONEXIÓN XIAOMI":
-            "CONEXIÓN XIAOMI / ACTUALIZAR",()->{
-            connectionExpanded=!connectionExpanded;render();
-        });
         button(body,technicalExpanded?"CERRAR MENÚ TÉCNICO":
             "MENÚ TÉCNICO · PRUEBAS Y AJUSTES",()->{
             technicalExpanded=!technicalExpanded;render();
@@ -205,10 +165,9 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
         body.addView(technical);
         if(technicalExpanded){
             label(technical,"DIAGNÓSTICO Y CONFIGURACIÓN AVANZADA",17);
-            button(technical,"DISPLAY / CLÚSTER · PRUEBAS",()->
-                startActivity(new Intent(this,T1ClusterWazeSettingsActivity.class)));
-            button(technical,"VOLANTE · DETECTAR TECLAS Y MENÚS",()->
-                startActivity(new Intent(this,T1WheelSettingsActivity.class)));
+            label(technical,"Mapas, tableros y rueda se configuran "+
+                "en DriveLab Bridge. Aquí sólo vehículo, registros "+
+                "y apagado de servicios anteriores.",13);
             button(technical,"PENDIENTES · VALIDACIONES OEM",()->
                 startActivity(new Intent(this,T1ValidationWizardActivity.class)));
             button(technical,"TABLERO · TANQUES Y TELEMETRÍA",()->
