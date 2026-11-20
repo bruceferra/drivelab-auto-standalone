@@ -29,7 +29,11 @@ public final class BridgeT1LauncherRoutePolicyTest {
            !cmd.contains("move-stack")&&
            !cmd.contains("force-stop")&&
            !cmd.contains("am task resize"),
-           "Only an existing explicit Maps virtual task can receive route");
+           "Only an existing explicit Maps virtual task can receive route: "+cmd+
+           " | --task "+cmd.contains("--task 725")+
+           " --display "+cmd.contains("--display 13")+
+           " --single-top "+cmd.contains("--activity-single-top")+
+           " --component "+cmd.contains("-n "+MAP));
         ok(BridgeT1LauncherRoutePolicy.find(
             root(120,0,725,MAP)+root(130,1,726,MAP))==null,
             "No destination on physical display 0 or 1");
