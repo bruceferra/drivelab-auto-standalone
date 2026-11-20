@@ -445,12 +445,35 @@ public final class BootActivity extends Activity
         content.setPadding(14,8,14,24);
         scroll.addView(content);
 
-        text("DRIVELAB BOOT · CONFIGURACIÓN",24,WHITE);
-        text("BOOT "+packageVersion(getPackageName())+
-            "   |   RECEIVER "+packageVersion(BootConfig.RECEIVER),14,QUIET);
-        text("Son DOS apps distintas. Esta pantalla es Boot; Receiver "+
-            "se usa sólo como motor de las ventanas.",13,QUIET);
-        navigation();
+        text("DRIVELAB BRIDGE",24,0xFF32DBD5);
+        text("Versión "+packageVersion(getPackageName())+
+            " · Enlace Xiaomi + actualizador independientes",14,QUIET);
+        text("No abre la pantalla DriveLab Auto. No reemplaza "+
+            "el firmware ni los avisos del Jetour.",13,QUIET);
+        text("XIAOMI · CONEXIÓN DIRECTA",18,WHITE);
+        button("INICIAR RECEPTOR XIAOMI",()->
+            startLink(BootLinkService.START));
+        button("VINCULAR POR QR · MOSTRAR CÓDIGO",this::showQr);
+        button("DETENER RECEPTOR Y SU AUTOINICIO",this::stopBridge);
+        text("Para recibir destinos con Bridge oculto, Android "+
+            "puede requerir autorización de ventanas superpuestas. "+
+            "El permiso no garantiza que Jetour muestre mapas.",12,QUIET);
+        button(Settings.canDrawOverlays(this)?
+            "PERMISO VENTANAS CONCEDIDO · REVISAR":
+            "AUTORIZAR VENTANAS EN SEGUNDO PLANO",this::requestOverlay);
+        text("ACTUALIZADOR DE BRIDGE",18,WHITE);
+        button("BUSCAR ACTUALIZACIÓN FIRMADA",()->
+            BootUpdater.check(this,s->prefs().edit()
+                .putString("last_status",s).apply()));
+        text("VENTANAS DISPLAY 0 Y DISPLAY 1",18,WHITE);
+        text("Mosaico independiente, modo reloj, transparencia "+
+            "y rueda: todavía sin comprobación física. "+
+            "No se lanza DriveLab Auto para simular éxito.",13,QUIET);
+        button(legacyAdvanced?"CERRAR EXPERIMENTOS ANTIGUOS":
+            "ABRIR EXPERIMENTOS ANTIGUOS · REQUIERE RECEIVER",
+            this::toggleLegacy);
+        if(legacyAdvanced){
+            navigation();
         text("DIAGNÓSTICO MODE · FIRMWARE JETOUR",17,WHITE);
         button("INSPECCIONAR CAPAS EN EL TABLERO · SOLO LECTURA",
             ()->startActivity(
@@ -579,19 +602,20 @@ public final class BootActivity extends Activity
                 "Display 1 puede probarse manualmente, pero no "+
                     "se abrirá con Boot al encender.",12,QUIET);
         }
-        text("INICIO AUTOMÁTICO DE BOOT",17,WHITE);
+        } // Las configuraciones antiguas sólo se abren por decisión explícita.
+        text("INICIO AUTOMÁTICO DE BRIDGE · SÓLO XIAOMI",17,WHITE);
         boolean enabled=BootConfig.enabled(this);
         button(enabled?"AUTOINICIO: ACTIVADO · DESACTIVAR":
             "AUTOINICIO: DESACTIVADO · ACTIVAR",this::setAuto);
         text("ESTADO / ERRORES DEL ÚLTIMO PEDIDO",17,WHITE);
-        statusLabel=text(prefs().getString("last_status",
-            "Todavía no hay un diagnóstico"),13,QUIET);
+        statusLabel=text(bridgeStatus()+"\n\nÚLTIMA ACCIÓN:\n"+
+            prefs().getString("last_status",
+                "Sin solicitudes enviadas"),13,QUIET);
         statusLabel.setBackgroundColor(PANEL);
         statusLabel.setTextIsSelectable(true);
-        text("CONEXIÓN CON EL CELULAR: no se diagnostica desde Boot. "+
-            "La conexión Sender/Receiver es independiente del mosaico; "+
-            "no se informa como conectada hasta verificarla.",12,QUIET);
-        button("ACTUALIZAR DIAGNÓSTICO (SIN SALIR)",this::draw);
+        text("Los estados de Xiaomi corresponden exclusivamente "+
+            "a Bridge. Un QR emitido NO es conexión confirmada.",12,QUIET);
+        button("ACTUALIZAR ESTADO",this::draw);
         setContentView(scroll);
         getWindow().getDecorView().setSystemUiVisibility(
             View.SYSTEM_UI_FLAG_LAYOUT_STABLE|
