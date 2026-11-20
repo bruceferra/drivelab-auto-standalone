@@ -49,7 +49,8 @@ public final class T1ChargeHistoryActivity extends T1ImmersiveActivity {
         sc.addView(content);
         TextView header=text("CARGAS · REGISTRO INDEPENDIENTE",23,FG);
         content.addView(header);
-        content.addView(text("Lee cable OEM 1060 y batería 1062/1063/1064. "+
+        content.addView(text("Lee cable OEM 1060, SOC interno 1042, "+
+            "SOC tablero 1062 y batería HV 1063/1064. "+
             "Guarda sesiones propias en SQLite aunque no haya viaje GPS. "+
             "T1 Launcher NO es necesario.",14,MUTED));
         live=text("Verificando servicio…",15,FG);
@@ -126,7 +127,9 @@ public final class T1ChargeHistoryActivity extends T1ImmersiveActivity {
             new SimpleDateFormat("HH:mm:ss",Locale.getDefault())
                 .format(new Date(sampleAt))+
             (sampleOk&&recent?" · ACTUAL":" · NO ACTUAL")+
-            "\n1062 SOC: "+T1ChargeStore.fmt(
+            "\n1042 SOC interno (real): "+T1ChargeStore.fmt(
+                p.getFloat(T1ChargeStore.LAST_SOC_INTERNAL,Float.NaN),1)+" %"+
+            " · 1062 SOC tablero: "+T1ChargeStore.fmt(
                 p.getFloat(T1ChargeStore.LAST_SOC,Float.NaN),1)+" %" +
             " · 1063: "+T1ChargeStore.fmt(
                 p.getFloat(T1ChargeStore.LAST_VOLTS,Float.NaN),1)+" V" +

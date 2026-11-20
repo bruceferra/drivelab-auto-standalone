@@ -25,6 +25,17 @@ public final class T1ChargeAutoModuleSourceContractTest {
             oem.contains("getFloatOrUnknown(b,1064)")&&
             !oem.contains("transact(15"),
             "No actuator writes or whole Vehicle diagnostic scan");
+        yes(oem.contains("getFloatOrUnknown(b,1042)")&&
+            oem.contains("getFloatOrUnknown(b,1062)")&&
+            oem.contains("socInternal=internal")&&
+            store.contains("LAST_SOC_INTERNAL")&&
+            service.contains("LAST_SOC_INTERNAL")&&
+            screen.contains("1042 SOC interno (real)")&&
+            screen.contains("1062 SOC tablero")&&
+            service.contains("db.begin(data.timeMs,data.soc,")&&
+            !service.contains("db.begin(data.timeMs,data.socInternal"),
+            "1042 real SOC and 1062 dashboard SOC must be separately visible; "+
+            "do not change active charge-session basis or counted HV energy");
         yes(service.contains("CABLE_PRESENT")||
             service.contains("T1ChargeMath.plugged(raw)"),
             "Require explicit connected cable for every automatic session");

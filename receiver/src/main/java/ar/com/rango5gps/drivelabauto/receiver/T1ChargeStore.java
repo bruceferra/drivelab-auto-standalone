@@ -21,7 +21,8 @@ final class T1ChargeStore extends SQLiteOpenHelper {
     static final String PREFS="t1_charge_auto",ENABLED="enabled",
         STATUS="status",LAST_CABLE="last_cable_raw",LAST_READ="last_read",
         CURRENT_SESSION="current_session_id",
-        LAST_SOC="last_soc",LAST_VOLTS="last_volts",
+        LAST_SOC="last_soc",LAST_SOC_INTERNAL="last_soc_internal",
+        LAST_VOLTS="last_volts",
         LAST_AMPS="last_amps",LAST_SAMPLE_OK="last_sample_ok",
         LAST_SAMPLE_AT="last_sample_at",
         LAST_VOLTAGE_PROBE="last_voltage_probe";

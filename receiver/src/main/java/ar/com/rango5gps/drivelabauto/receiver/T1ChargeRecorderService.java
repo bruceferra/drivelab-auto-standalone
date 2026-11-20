@@ -13,7 +13,8 @@ import android.os.IBinder;
 import android.os.SystemClock;
 
 /** Independent headunit charge recorder. No need for GPS trip to be running.
- * Read only OEM 1060 cable, 1062 SOC, 1063 V, 1064 A.
+ * Read only OEM 1060 cable, 1042 internal SOC, 1062 dashboard SOC,
+ * 1063 V, 1064 A. Energy accounting and stored sessions keep 1062.
  * Polling is slower when unplugged to avoid launcher-style constant load.
  */
 public final class T1ChargeRecorderService extends Service {
@@ -121,6 +122,8 @@ public final class T1ChargeRecorderService extends Service {
                     // exists. This lets the owner diagnose current polarity.
                     prefs().edit()
                         .putFloat(T1ChargeStore.LAST_SOC,(float)data.soc)
+                        .putFloat(T1ChargeStore.LAST_SOC_INTERNAL,
+                            (float)data.socInternal)
                         .putFloat(T1ChargeStore.LAST_VOLTS,(float)data.volts)
                         .putFloat(T1ChargeStore.LAST_AMPS,(float)data.amps)
                         .putLong(T1ChargeStore.LAST_SAMPLE_AT,data.timeMs)
@@ -159,8 +162,13 @@ public final class T1ChargeRecorderService extends Service {
                                 " · batería +"+(latest==null?"—":
                                     T1ChargeStore.fmt(latest.kwh,3))+
                                 " kWh est. · "+
+                                 "SOC tablero 1062="+
                                 (T1ChargeMath.validSoc(data.soc)?
-                                    T1ChargeStore.fmt(data.soc,1)+" %":"SOC no leído"),
+                                    T1ChargeStore.fmt(data.soc,1)+" %":"no leído")+
+                                " · SOC interno 1042="+
+                                (T1ChargeMath.validSoc(data.socInternal)?
+                                    T1ChargeStore.fmt(data.socInternal,1)+" %":
+                                    "no leído"),
                                 raw,data.timeMs);
                         }else{
                             status("Cable 1060=1 · confirmando conexión "+
