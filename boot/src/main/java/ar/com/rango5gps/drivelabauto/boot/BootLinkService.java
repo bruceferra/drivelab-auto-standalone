@@ -249,24 +249,27 @@ public final class BootLinkService extends Service {
             if(getPackageManager().resolveActivity(map,0)==null)return false;
             map.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|
                 Intent.FLAG_ACTIVITY_SINGLE_TOP);
-            boolean cluster=BootConfig.prefs(this)
-                .getBoolean("cluster_enabled",false);
-            int id=BootConfig.prefs(this).getInt("cluster_display_id",-1);
-            if(cluster){
+            // Bridge's own, user-confirmed destination. NEVER consult the
+            // legacy Receiver's cluster_enabled / cluster_display_id flags.
+            boolean tablero=BridgeStandaloneWindows.routeOnTablero(this,pkg);
+            if(tablero){
                 DisplayManager dm=(DisplayManager)getSystemService(DISPLAY_SERVICE);
-                Display display=dm==null?null:dm.getDisplay(id);
-                if(display==null||id!=1||display.getState()==Display.STATE_OFF||
+                Display display=dm==null?null:dm.getDisplay(1);
+                if(display==null||display.getState()==Display.STATE_OFF||
                    (display.getFlags()&Display.FLAG_PRIVATE)!=0){
-                    update("last_route","CLÚSTER NO DISPONIBLE · "+
-                        "no se redirigió la navegación a Display 0");
+                    update("last_route","DISPLAY 1 NO DISPONIBLE; "+
+                        "no se cambió de pantalla ni se modificó el mapa");
                     return false;
                 }
                 ActivityOptions opts=ActivityOptions.makeBasic()
-                    .setLaunchDisplayId(id);
-                // Navigation requests must not mutate window geometry
-                // or kill existing Waze/Maps tasks while driving.
+                    .setLaunchDisplayId(1);
+                // Sender routing NEVER changes Freeform bounds or stops tasks.
+                // It reuses Android's normal task/startActivity handling.
                 startActivity(map,opts.toBundle());
             }else{
+                // Destinations requested for other apps stay on Display 0.
+                // If a specific map was confirmed on Display 1, only that
+                // app goes there; no silent fallback or duplicate layers.
                 startActivity(map);
             }
             return true;
@@ -365,7 +368,7 @@ public final class BootLinkService extends Service {
         }
         if(!prefs(this).edit()
                 .putString("secret",BridgeCrypto.packKey(p.secret))
-                .putString("pair_status","XIAOMI VINCULADO A BOOT · AES-GCM")
+                .putString("pair_status","XIAOMI VINCULADO A BRIDGE · AES-GCM")
                 .remove("qr_ticket").remove("qr_until")
                 .remove("pair_code").remove("pair_id").remove("approved_id")
                 .commit()){
