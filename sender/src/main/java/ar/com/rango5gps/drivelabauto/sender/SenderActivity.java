@@ -31,6 +31,7 @@ public final class SenderActivity extends Activity {
     private String status="";
     private ScrollView currentScroll;
     private long lastAutoCheckElapsed=0;
+    private long lastBridgeReconnectElapsed=0;
     @Override public void onCreate(Bundle state){
         super.onCreate(state);render();acceptQrIntent(getIntent());
     }
@@ -42,6 +43,20 @@ public final class SenderActivity extends Activity {
         render();
         Updater.onResume(this,this::info);
         long now=android.os.SystemClock.elapsedRealtime();
+        if(SenderClient.configured(this)&&
+            (lastBridgeReconnectElapsed==0||
+             now-lastBridgeReconnectElapsed>120000)){
+            lastBridgeReconnectElapsed=now;
+            new Thread(()->{
+                SenderClient.Delivery state=SenderClient.reconnect(this);
+                runOnUiThread(()->{
+                    if(!isFinishing()&&!isDestroyed()){
+                        status=state.status;
+                        render();
+                    }
+                });
+            },"Sender-Bridge-QR-Persistent-Reconnect").start();
+        }
         if(lastAutoCheckElapsed==0||now-lastAutoCheckElapsed>120000){
             lastAutoCheckElapsed=now;
             Updater.checkOnOpen(this,"sender",this::info);
@@ -84,6 +99,11 @@ public final class SenderActivity extends Activity {
                 RouteDispatchService.LAST_STATE,"");
         if(!routeState.isEmpty())title(body,"Última navegación desde Uber: "+
             routeState,13);
+        button(body,"RECONECTAR BRIDGE SIN QR · CLAVE GUARDADA",
+            ()->new Thread(()->{
+                SenderClient.Delivery state=SenderClient.reconnect(this);
+                runOnUiThread(()->info(state.status));
+            },"Sender-Reconnect-No-QR").start());
         button(body,"VINCULAR T1 POR QR · SIN CÓDIGOS",this::scanPairQr);
         button(body,"Vincular manualmente · 6 dígitos (respaldo)",this::pair);
         button(body,"Probar envío real a La Plata",this::test);
