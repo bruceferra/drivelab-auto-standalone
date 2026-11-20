@@ -188,6 +188,84 @@ final class BridgeStandaloneWindows {
                 ". Freeform bloqueado o no disponible en este Android.");
         }
     }
+    /**
+     * Experimental CENTRAL Android split-screen rather than floating
+     * Freeform windows. The Android 11 split manager owns the shared
+     * divider, so there are no two Freeform titlebar/caption windows.
+     *
+     * Note: setLaunchBounds is a REQUEST for 70/30 (or selected ratio);
+     * firmware may force 50/50, leave a system status bar, or reject split.
+     * Unlike BridgeVirtualProbeActivity (which displays Bridge's own
+     * test pattern), this method launches REAL third-party apps and does
+     * not claim to control their system-bar flags or presentation.
+     *
+     * No ADB, privileged settings, OEM tasks, window overlays, clear-task
+     * or boot-time execution. Owner opt-in and parked-only.
+     */
+    static Result centerSplitNoFreeform(Activity activity){
+        String first=first(activity),second=second(activity);
+        int ratio=ratio(activity);
+        if(!BridgeWindowsPolicy.validCenter(first,second,ratio))
+            return reject(activity,
+                "Elegí dos apps distintas y un reparto 40-80.");
+        try{
+            Display d=display(activity,Display.DEFAULT_DISPLAY);
+            Point pixels=pixels(d);
+            BridgeWindowMath.Frame[] frames=BridgeWindowMath.center(
+                pixels.x,pixels.y,ratio,0);
+            if(!BridgeWindowMath.disjoint(frames[0],frames[1]))
+                throw new IllegalArgumentException("Paneles superpuestos");
+            // Preflight BOTH launch targets and both non-SDK options
+            // before starting either app: no accidental half-launch if
+            // the OEM denies the Android 11 split-screen API.
+            Method method=freeformMethod();
+            Prepared[] requested=new Prepared[2];
+            String[] packages={first,second};
+            int[] modes={3,4}; // Android 11 split primary / secondary
+            for(int i=0;i<2;i++){
+                String pkg=packages[i];
+                if(!BridgeWindowsPolicy.allowed(pkg))
+                    throw new SecurityException("Aplicación no permitida: "+pkg);
+                Intent open=activity.getPackageManager()
+                    .getLaunchIntentForPackage(pkg);
+                if(open==null||open.getComponent()==null||
+                   !pkg.equals(open.getComponent().getPackageName()))
+                    throw new IllegalStateException(
+                        "Sin actividad LAUNCHER: "+pkg);
+                open.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                if(i==1)open.addFlags(Intent.FLAG_ACTIVITY_LAUNCH_ADJACENT);
+                ActivityOptions options=ActivityOptions.makeBasic();
+                method.invoke(options,modes[i]);
+                options.setLaunchDisplayId(Display.DEFAULT_DISPLAY);
+                BridgeWindowMath.Frame frame=frames[i];
+                options.setLaunchBounds(new Rect(frame.left,frame.top,
+                    frame.right,frame.bottom));
+                requested[i]=new Prepared(open,options);
+            }
+            int sent=0;
+            for(Prepared job:requested){
+                activity.startActivity(job.intent,job.options.toBundle());
+                sent++;
+            }
+            String result="MOSAICO NATIVO: "+sent+
+                "/2 solicitudes Split Android 11 · reparto solicitado "+
+                ratio+"/"+(100-ratio)+
+                ". Sin cabeceras de ventanas Freeform. "+
+                "Jetour puede ignorar el reparto o mantener sus propias "+
+                "barras; confirmación física pendiente. "+
+                "No se modificó OEM ni la navegación de Display 1.";
+            prefs(activity).edit().putString(LAST,result).apply();
+            return new Result(true,result);
+        }catch(Exception denied){
+            return reject(activity,
+                "SPLIT ANDROID 11 NO CONFIRMADO: "+
+                denied.getClass().getSimpleName()+": "+
+                String.valueOf(denied.getMessage())+
+                ". No se intentó forzar políticas ni ocultar el OEM.");
+        }
+    }
+
     /** Manual parked-only FULLSCREEN launch on real Android Display 1.
      * Does not use Freeform/hidden APIs, bounds, scaling, ADB, OEM writes,
      * keyboard/wheel capture or boot-time activity launch. Start is only
