@@ -19,13 +19,13 @@ public final class BridgeStandaloneWindowContractTest {
             win.contains("setLaunchBounds(")&&
             win.contains("setLaunchDisplayId(displayId)")&&
             win.contains("BridgeWindowMath.center(")&&
-            win.contains("BridgeWindowMath.display1("),
+            win.contains("return false;"),
             "Freeform bounds and proper display must be owned by Bridge");
         yes(win.contains("getLaunchIntentForPackage(pkg)")&&
             win.contains("BridgeWindowsPolicy.allowed(pkg)")&&
             win.contains("validCenter(first,second,ratio)")&&
-            win.contains("validMap(map)")&&
-            win.contains("No se modificó la interfaz OEM")&&
+            win.contains("BridgeClusterRecovery.disableNewCluster(activity)")&&
+            win.contains("Display 1 BLOQUEADO")&&
             !win.contains("BootConfig.send")&&
             !win.contains("assertReceiver")&&
             !win.contains("pm clear")&&
@@ -35,7 +35,8 @@ public final class BridgeStandaloneWindowContractTest {
             !win.contains("FLAG_ACTIVITY_CLEAR_TOP"),
             "Independent launch must preserve Maps/Spotify routes and protect OEM");
         yes(ui.contains("PROBAR DOS VENTANAS · SÓLO BRIDGE")&&
-            ui.contains("PROBAR MAPA TABLERO · ESTACIONADO")&&
+            ui.contains("LIBERAR CLÚSTER")&&
+            !ui.contains("button(\"PROBAR MAPA TABLERO")&&
             ui.contains("BridgeStandaloneWindows.center(this)")&&
             ui.contains("BridgeStandaloneWindows.tablero(this)")&&
             ui.contains("BridgeStandaloneWindows.prefs(this)")&&
