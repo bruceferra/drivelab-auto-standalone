@@ -15,6 +15,9 @@ public final class BridgeUpdateInstallerSourceContractTest {
     public static void main(String[] args)throws Exception{
         String root="boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/";
         String updater=read(root+"BootUpdater.java");
+        String nativeInstall=read(root+"BridgeNativeInstaller.java");
+        String receiverProven=read(
+            "receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1BootInstaller.java");
         String status=read(root+"BridgeInstallResultReceiver.java");
         String ui=read(root+"BootActivity.java");
         String manifest=read("boot/src/main/AndroidManifest.xml");
@@ -33,16 +36,17 @@ public final class BridgeUpdateInstallerSourceContractTest {
             updater.contains("static void retryInstall(Activity a,Report status)")&&
             updater.contains("verifyApk(a,file,item)")&&
             updater.contains("static void openFileInstaller(Activity a,Report status)")&&
-            updater.contains("PackageInstaller.SessionParams.MODE_FULL_INSTALL")&&
-            updater.contains("params.setAppPackageName(a.getPackageName())")&&
-            updater.contains("session.commit(result.getIntentSender())")&&
-            updater.contains("Intent.ACTION_INSTALL_PACKAGE")&&
-            updater.contains("Intent.ACTION_VIEW")&&
-            updater.contains("Intent.FLAG_GRANT_READ_URI_PERMISSION")&&
-            updater.contains("ClipData.newRawUri(")&&
-            updater.contains("INSTALAR AHORA")&&
-            updater.contains("Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES"),
-            "Retriable native session and explicit fallback intent, not just download");
+            updater.contains("BridgeNativeInstaller.commitSession(a,file,status)")&&
+            updater.contains("BridgeNativeInstaller.openFileInstaller(a,file,status)")&&
+            nativeInstall.contains("PackageInstaller.SessionParams.MODE_FULL_INSTALL")&&
+            nativeInstall.contains("params.setAppPackageName(a.getPackageName())")&&
+            nativeInstall.contains("session.commit(callback.getIntentSender())")&&
+            nativeInstall.contains("Intent.ACTION_INSTALL_PACKAGE")&&
+            nativeInstall.contains("Intent.ACTION_VIEW")&&
+            nativeInstall.contains("Intent.FLAG_GRANT_READ_URI_PERMISSION")&&
+            nativeInstall.contains("ClipData.newRawUri(")&&
+            updater.contains("INSTALAR AHORA"),
+            "Only one native installer based on Receiver and verified APK cache");
         check(status.contains("PackageInstaller.STATUS_PENDING_USER_ACTION")&&
             status.contains("Intent.EXTRA_INTENT")&&
             status.contains("context.startActivity(confirm)")&&
@@ -55,8 +59,8 @@ public final class BridgeUpdateInstallerSourceContractTest {
             files.contains("path=\"boot_update/\""),
             "Android OEM consent callback must be registered and resumable");
         check(!updater.contains("canRequestPackageInstalls()")&&
-            updater.contains("session.commit(result.getIntentSender())")&&
-            updater.contains("installFallback(a,file,status)")&&
+            nativeInstall.contains("session.commit(callback.getIntentSender())")&&
+            nativeInstall.contains("Intent.ACTION_VIEW")&&
             updater.contains("bridge-download.part.apk")&&
             status.contains("pendingAndroidConsent=confirm")&&
             status.contains("static void confirmFromForeground(Activity activity")&&
@@ -64,6 +68,24 @@ public final class BridgeUpdateInstallerSourceContractTest {
             ui.contains("BridgeInstallResultReceiver.confirmFromForeground(this,"),
             "Jetour update must not pre-gate all paths on unavailable unknown-source Settings; "+
             "native pending user consent must be reopenable from foreground Bridge");
+        // Conformance: same Android steps that worked in Receiver.
+        for(String step:new String[]{
+            "installer.createSession(params)",
+            "installer.openSession(id)",
+            "session.openWrite(\"base.apk\",0,file.length())",
+            "session.fsync(out)",
+            "PendingIntent.getBroadcast(a,id,result,flags)",
+            "session.commit(callback.getIntentSender())",
+            "installer.abandonSession(id)",
+            "Intent.ACTION_INSTALL_PACKAGE",
+            "Intent.ACTION_VIEW",
+            "FileProvider.getUriForFile(a,"}){
+            check(receiverProven.contains(step)&&nativeInstall.contains(step),
+                "Port must preserve exact proven Receiver installer step: "+step);
+        }
+        check(updater.contains("setOnCancelListener(d->busy=false)")&&
+            updater.contains("BRIDGE AL DÍA · SIN APK PENDIENTE"),
+            "Cancel and latest-version state must give explicit feedback");
         check(ui.contains("INSTALAR / REINTENTAR APK YA DESCARGADA")&&
             ui.contains("INSTALADOR ALTERNATIVO DE ARCHIVOS")&&
             !updater.contains("pm install")&&
