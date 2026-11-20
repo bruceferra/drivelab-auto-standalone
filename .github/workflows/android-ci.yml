@@ -944,7 +944,7 @@ jobs:
           grep -q 'this::finishClient' "$ui"
           ! grep -q 'T1JourneyStore.finish(this)' "$svc" "$boot"
       - name: Separate apps and Android APK builds
-        run: gradle --no-daemon :sender:assembleDebug :receiver:assembleDebug
+        run: gradle --no-daemon :sender:assembleDebug :receiver:assembleDebug :boot:assembleDebug
       - name: Verify independent identities, permissions and no telemetry
         shell: bash
         run: |
