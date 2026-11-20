@@ -9,6 +9,7 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Color;
 import android.graphics.Bitmap;
+import android.content.res.ColorStateList;
 import android.net.Uri;
 import android.provider.Settings;
 import android.widget.ImageView;
@@ -148,6 +149,11 @@ public final class BootActivity extends Activity
     private void button(String title,Runnable action){
         Button b=new Button(this);
         b.setAllCaps(false);b.setText(title);b.setTextSize(15);
+        boolean primary=title.contains("QR")||
+            title.contains("INICIAR RECEPTOR");
+        b.setBackgroundTintList(ColorStateList.valueOf(
+            primary?0xFF18C7D6:0xFF16465B));
+        b.setTextColor(primary?0xFF08242C:Color.WHITE);
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,
             ViewGroup.LayoutParams.WRAP_CONTENT);
