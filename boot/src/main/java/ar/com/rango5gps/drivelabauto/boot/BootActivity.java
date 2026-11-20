@@ -39,6 +39,9 @@ public final class BootActivity extends Activity
     private TextView qrCaption;
     private TextView statusLabel;
     private TextView wheelRecoveryLabel;
+    private TextView wheelCaptureLabel;
+    private TextView oemRegistrationLabel;
+    private TextView micButtonLabel;
     private TextView backgroundStatusLabel;
     private LinearLayout content;
     private TextView percentLabel;
@@ -55,6 +58,10 @@ public final class BootActivity extends Activity
         if(!BridgeWheelAccessibilityService.isManuallyArmed()){
             BridgeWheelAccessibilityService.prefs(this).edit()
                 .putBoolean(BridgeWheelAccessibilityService.ENABLED,false).apply();
+        }
+        if(!BridgeWheelAccessibilityService.isMicrophoneArmed()){
+            BridgeWheelAccessibilityService.prefs(this).edit()
+                .putBoolean(BridgeWheelAccessibilityService.MIC_ENABLED,false).apply();
         }
         draw();
     }
@@ -77,6 +84,8 @@ public final class BootActivity extends Activity
         prefs().registerOnSharedPreferenceChangeListener(this);
         linkPrefs().registerOnSharedPreferenceChangeListener(this);
         BridgeWheelAccessRecovery.prefs(this).registerOnSharedPreferenceChangeListener(this);
+        BridgeWheelAccessibilityService.prefs(this).registerOnSharedPreferenceChangeListener(this);
+        BridgeWheelOemBinder.monitorPrefs(this).registerOnSharedPreferenceChangeListener(this);
         if(content!=null)draw();
         onSharedPreferenceChanged(prefs(),"last_status");
     }
@@ -89,10 +98,27 @@ public final class BootActivity extends Activity
         prefs().unregisterOnSharedPreferenceChangeListener(this);
         linkPrefs().unregisterOnSharedPreferenceChangeListener(this);
         BridgeWheelAccessRecovery.prefs(this).unregisterOnSharedPreferenceChangeListener(this);
+        BridgeWheelAccessibilityService.prefs(this).unregisterOnSharedPreferenceChangeListener(this);
+        BridgeWheelOemBinder.monitorPrefs(this).unregisterOnSharedPreferenceChangeListener(this);
         super.onPause();
     }
     @Override public void onSharedPreferenceChanged(SharedPreferences p,
             String key){
+        if(p==BridgeWheelAccessibilityService.prefs(this)||
+           p==BridgeWheelOemBinder.monitorPrefs(this)){
+            runOnUiThread(()->{
+                if(wheelCaptureLabel!=null)
+                    wheelCaptureLabel.setText("CAPTURA VOLANTE · EN VIVO: "+
+                        BridgeWheelAccessibilityService.captureState(this));
+                if(oemRegistrationLabel!=null)
+                    oemRegistrationLabel.setText("BINDER OEM REAL: "+
+                        BridgeWheelAccessibilityService.oemState(this));
+                if(micButtonLabel!=null)
+                    micButtonLabel.setText("MICRÓFONO 1010 / VOZ: "+
+                        BridgeOemVoiceLauncher.state(this));
+            });
+            return;
+        }
         if(p==BridgeWheelAccessRecovery.prefs(this)){
             runOnUiThread(()->{
                 if(wheelRecoveryLabel!=null)
@@ -306,6 +332,38 @@ public final class BootActivity extends Activity
                     p.getString(BridgeWheelAccessibilityService.TARGET,
                         BridgeWheelAccessibilityService.WAZE))
                     .putBoolean(BridgeWheelAccessibilityService.ENABLED,true).apply();
+                draw();
+            }).show();
+    }
+    private void toggleOemMicrophone(){
+        SharedPreferences p=BridgeWheelAccessibilityService.prefs(this);
+        boolean enabled=BridgeWheelAccessibilityService.isMicrophoneArmed()&&
+            p.getBoolean(BridgeWheelAccessibilityService.MIC_ENABLED,false);
+        if(enabled){
+            BridgeWheelAccessibilityService.setMicrophoneArmed(false);
+            p.edit().putBoolean(BridgeWheelAccessibilityService.MIC_ENABLED,false)
+                .apply();
+            draw();
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("MICRÓFONO OEM 1010 · MISMO BINDER")
+            .setMessage("Con la Jetour estacionada: habilitá explícitamente "+
+                "que el botón físico 1010 abra el ASISTENTE DE VOZ "+
+                "PREDETERMINADO de Android mediante VOICE_COMMAND. "+
+                "Este acceso NO es el reconocimiento interno completo "+
+                "de DriveLab Auto y depende de que la ROM tenga un "+
+                "asistente configurado. Rueda 1000–1003 y micrófono 1010 "+
+                "comparten UN SOLO receptor Binder en Bridge. "+
+                "Desactivá antes los controles de volante de "+
+                "T1Launcher/DriveLab Auto para evitar conflicto; "+
+                "Bridge nunca los apaga por su cuenta. "+
+                "No se habilita automáticamente al encender.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("HABILITAR MIC 1010",(d,w)->{
+                BridgeWheelAccessibilityService.setMicrophoneArmed(true);
+                p.edit().putBoolean(BridgeWheelAccessibilityService.MIC_ENABLED,true)
+                    .apply();
                 draw();
             }).show();
     }
@@ -740,8 +798,17 @@ public final class BootActivity extends Activity
             "→ completar automáticamente Iniciar / reemplazo si Android "+
             "lo muestra durante 12 segundos. Sin botón manual, sin zoom.",
             12,QUIET);
-        text("CAPTURA VOLANTE: "+
+        wheelCaptureLabel=text("CAPTURA VOLANTE · EN VIVO: "+
             BridgeWheelAccessibilityService.captureState(this),12,QUIET);
+        oemRegistrationLabel=text("BINDER OEM REAL: "+
+            BridgeWheelAccessibilityService.oemState(this),12,QUIET);
+        boolean micOn=BridgeWheelAccessibilityService.isMicrophoneArmed()&&
+            wheel.getBoolean(BridgeWheelAccessibilityService.MIC_ENABLED,false);
+        button(micOn?"MICRÓFONO OEM 1010: ACTIVADO · DESACTIVAR":
+            "MICRÓFONO OEM 1010: DESACTIVADO · ACTIVAR",
+            this::toggleOemMicrophone);
+        micButtonLabel=text("MICRÓFONO 1010 / VOZ: "+
+            BridgeOemVoiceLauncher.state(this),12,QUIET);
         text("ACCESIBILIDAD REAL: "+
             (BridgeWheelAccessibilityService.isConnected()?
                 "CONECTADA":"DESCONECTADA · revisar ADB LOCAL 5556/5555"),
@@ -769,6 +836,7 @@ public final class BootActivity extends Activity
             "NO se activa con este botón; se controla por separado.",12,QUIET);
         text("RUEDA: siguiente/anterior opción. OK: confirmar. "+
             "ATRÁS: cancelar dentro del mapa. Nunca zoom. "+
+            "El Binder debe declarar REGISTRADO y contar eventos reales. "+
             "Android debe autorizar accesibilidad. Desactivá primero "+
             "el volante de T1Launcher: ambos no deben competir.",12,QUIET);
         text("ÚLTIMO ESTADO VOLANTE: "+
