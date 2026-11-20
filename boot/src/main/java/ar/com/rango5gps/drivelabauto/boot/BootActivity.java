@@ -590,6 +590,14 @@ public final class BootActivity extends Activity
             "BUSCAR ACTUALIZACIÓN FIRMADA · BOOT ESTABLE",()->
             BootUpdater.check(this,s->prefs().edit()
                 .putString("last_status",s).apply()));
+        button("INSTALAR / REINTENTAR APK YA DESCARGADA",()->
+            BootUpdater.retryInstall(this,s->prefs().edit()
+                .putString("last_status",s).apply()));
+        text("Si descargaste y Android NO mostró INSTALAR, tocá "+
+            "REINTENTAR. Bridge verifica otra vez SHA-256 y certificado, "+
+            "abre el instalador de Android y conserva el archivo local. "+
+            "Si Jetour bloquea la ventana, revisá el estado o la "+
+            "notificación de instalación.",12,QUIET);
         text("VENTANAS DISPLAY 0 Y DISPLAY 1",18,WHITE);
         text("El motor Freeform de Bridge está separado de Receiver. "+
             "Su disponibilidad real depende de Android Jetour. "+
