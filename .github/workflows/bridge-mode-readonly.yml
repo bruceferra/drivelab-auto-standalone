@@ -17,6 +17,8 @@ on:
       - 'boot/tests/BridgeWheelPolicyTest.java'
       - 'boot/tests/BridgeWheelAccessibilityContractTest.java'
       - 'boot/src/main/res/xml/bridge_wheel_accessibility.xml'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeImmersive.java'
+      - 'boot/tests/BridgeImmersiveSourceContractTest.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeStandaloneWindows.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWindowMath.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeVirtualProbeActivity.java'
@@ -96,6 +98,12 @@ jobs:
             boot/tests/BridgeVirtualProbeContractTest.java
           java -cp /tmp/jetour-bridge-virtual \
             ar.com.rango5gps.drivelabauto.boot.BridgeVirtualProbeContractTest
+      - name: Verify Android immersive only in Bridge Activity windows
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-immersive
+          javac -encoding UTF-8 -d /tmp/bridge-immersive boot/tests/BridgeImmersiveSourceContractTest.java
+          java -cp /tmp/bridge-immersive ar.com.rango5gps.drivelabauto.boot.BridgeImmersiveSourceContractTest
       - name: No map data wipe or OEM window mutation in diagnostic
         run: |
           set -euo pipefail
