@@ -95,11 +95,17 @@ public final class T1ClusterWazeSourceContractTest {
             receiver.contains("T1ClusterWazeRouter.routeDestination(this,launch)")&&
             receiver.contains("cluster?new Intent(this,ReceiverActivity.class):launch"),
             "Receiver boot and Xiaomi destinations keep cluster route");
+        // The Receiver home is now telemetry-only: window and cluster
+        // controls are intentionally owned by the standalone Bridge app.
+        // Keep existing voice/share routing in their own activities until
+        // the separate Bridge routing is physically validated.
         ok(voice.contains("T1ClusterWazeRouter.routeDestination(this,waze)")&&
             share.contains("T1ClusterWazeRouter.routeDestination(this,navigation)")&&
-            main.contains("T1ClusterWazeSettingsActivity.class")&&
-            main.contains("T1ClusterWazeRouter.routeDestination(this,open)"),
-            "Voice uses visible map and shared destination routing uses selected display");
+            main.contains("T1BootInstaller.openBoot(this,this::report)")&&
+            main.contains("DRIVELAB BRIDGE")&&
+            !main.contains("T1ClusterWazeSettingsActivity.class")&&
+            !main.contains("T1ClusterWazeRouter.routeDestination(this,open)"),
+            "Voice and share routes preserved; Receiver home delegates cluster controls to Bridge");
         System.out.println("PASS opt-in Waze public cluster without replacing T1Launcher");
     }
 }
