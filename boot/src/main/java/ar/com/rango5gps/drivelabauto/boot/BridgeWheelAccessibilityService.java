@@ -26,13 +26,16 @@ import java.util.Locale;
  *
  * STRICT SAFETY CONTRACT:
  * - Manual Android Accessibility authorization and Bridge opt-in BOTH needed.
- * - No hard-key registration unless a real Waze/Maps APPLICATION window
- *   is visible at Android Display 1 (not simply a successful startActivity).
+ * - OEM Binder may register after manual owner opt-in even when Jetour
+ *   hides the map's accessibility root; controls remain fail-closed unless
+ *   an exact Waze/Maps APPLICATION window is verified on chosen Display.
+ * - Separate manual 20s OEM key recapture logs raw wheel codes only.
  * - Never captures MODE, voice, hazard, ADAS or other OEM buttons.
  * - Never sends global BACK, ADB commands or vehicle property writes.
  * - OK/CANCEL acts only on own accessible Waze/Maps node, never OEM dialogs.
  * - Scroll moves a visible accessibility selection; never zooms or injects gestures.
- * - If the map disappears, immediately unregister the OEM callback.
+ * - If the map disappears, never send actions; an opted-in listener may
+ *   remain registered read-only as Receiver does, until manually disabled.
  * - Can coexist installed with T1Launcher, but owner must NOT enable
  *   two hard-key callbacks simultaneously; UI makes that explicit.
  */
@@ -41,10 +44,44 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
     static final String PREFS="drivelab_bridge_wheel_v1";
     static final String ENABLED="enabled",TARGET="target",
         REVERSE="reverse",STATUS="status",LAST_KEY="last_key",
+        WINDOW_DISPLAY="window_display",
+        CAPTURE_STATUS="capture_status",CAPTURE_COUNT="capture_count",
+        CAPTURE_LAST="capture_last",
         LAST_TIME="last_event",SERVICE_CONNECTED="connected";
     static final String MAPS="com.google.android.apps.maps";
     static final String WAZE="com.waze";
     private static final long COOLDOWN_MS=180;
+    private static final long CAPTURE_DURATION_MS=20000L;
+    private static volatile long captureEndElapsed;
+    private static volatile BridgeWheelAccessibilityService connectedInstance;
+    static boolean isCaptureActive(){
+        long until=captureEndElapsed;
+        return until>0&&SystemClock.elapsedRealtime()<until;
+    }
+    static boolean beginKeyCapture(Context c){
+        BridgeWheelAccessibilityService live=connectedInstance;
+        if(live==null||!live.serviceReady){
+            prefs(c).edit().putString(CAPTURE_STATUS,
+                "NO SE PUDO CAPTURAR: accesibilidad Bridge no conectada. "+
+                "Usá RECONECTAR ACCESIBILIDAD · ADB LOCAL 5556/5555.")
+                .apply();
+            return false;
+        }
+        captureEndElapsed=SystemClock.elapsedRealtime()+CAPTURE_DURATION_MS;
+        prefs(c).edit().putInt(CAPTURE_COUNT,0)
+            .putString(CAPTURE_LAST,"Sin tecla todavía")
+            .putString(CAPTURE_STATUS,
+                "CAPTURANDO TECLAS OEM 20 S · sólo lectura, sin zoom/OK/atrás")
+            .apply();
+        live.main.post(live::reconcileWheel);
+        return true;
+    }
+    static String captureState(Context c){
+        SharedPreferences p=prefs(c);
+        String value=p.getString(CAPTURE_STATUS,"Aún no se ejecutó recaptura");
+        return value+" · PULSACIONES "+p.getInt(CAPTURE_COUNT,0)+
+            " · "+p.getString(CAPTURE_LAST,"Sin tecla");
+    }
     private static final int MAX_NODES=550;
     // Only labels from a VISIBLE actionable node owned by the chosen map.
     // Exclude the map's own +/- zoom buttons, which the driver does not
@@ -65,6 +102,7 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
     static boolean isConnected(){return connectedNow;}
     private long lastKeyAt=0;
     private int lastKey=-1,selected=-1;
+    private boolean lastCaptureRunning;
     private String selectedName="";
     private final Runnable refresh=new Runnable(){
         @Override public void run(){reconcileWheel();}
@@ -88,6 +126,7 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
         super.onServiceConnected();
         serviceReady=true;
         connectedNow=true;
+        connectedInstance=this;
         AccessibilityServiceInfo info=getServiceInfo();
         if(info!=null){
             info.flags|=AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS;
@@ -174,13 +213,17 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
         try{
             SparseArray<List<AccessibilityWindowInfo>> all=
                 getWindowsOnAllDisplays();
-            List<AccessibilityWindowInfo> one=all==null?null:all.get(1);
+            int selectedDisplay=prefs(this).getInt(WINDOW_DISPLAY,1);
+            if(selectedDisplay!=0&&selectedDisplay!=1)
+                selectedDisplay=1;
+            List<AccessibilityWindowInfo> one=
+                all==null?null:all.get(selectedDisplay);
             if(one==null)return null;
             // WindowManager returns from top Z to bottom Z. Only the
             // highest APPLICATION window may own the wheel. A Jetour
             // firmware activity above Maps means release the callback.
             for(AccessibilityWindowInfo window:one){
-                if(window==null||window.getDisplayId()!=1||
+                if(window==null||window.getDisplayId()!=selectedDisplay||
                    window.getType()!=AccessibilityWindowInfo.TYPE_APPLICATION)
                     continue;
                 AccessibilityNodeInfo raw=window.getRoot();
@@ -195,7 +238,7 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
                     area.intersect(child);
                 if(area.width()<300||area.height()<160)
                     return null;
-                return new MapWindow(own,area,1);
+                return new MapWindow(own,area,selectedDisplay);
             }
         }catch(Exception ignored){}
         return null;
@@ -203,17 +246,53 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
     private void reconcileWheel(){
         if(oem==null)return;
         boolean optIn=isManuallyArmed()&&prefs(this).getBoolean(ENABLED,false);
-        MapWindow visible=optIn?visibleMap():null;
-        if(!optIn||visible==null){
-            if(oem.active())oem.stop();
-            if(!optIn)status("Volante Bridge APAGADO; controla el sistema Jetour");
-            else status("SIN MAPA VERIFICADO en Display 1; rueda OEM liberada");
+        boolean capture=isCaptureActive();
+        if(!capture&&lastCaptureRunning){
+            captureEndElapsed=0L;
+            int count=prefs(this).getInt(CAPTURE_COUNT,0);
+            prefs(this).edit().putString(CAPTURE_STATUS,
+                "CAPTURA FINALIZADA A LOS 20 S · "+count+
+                " pulsaciones recibidas · sin ejecutar controles").apply();
+        }
+        lastCaptureRunning=capture;
+        if(!capture&&!optIn){
+            oem.stop();
+            status("Volante Bridge APAGADO; controla el sistema Jetour");
             choices.clear();selected=-1;selectedName="";
+            main.removeCallbacks(refresh);
             return;
         }
+        // Crucial Receiver parity: receiving OEM events must NOT depend
+        // on Jetour publishing the Maps root as an Accessibility window.
+        // Controls are still gated by visibleMap() in onOemEvent below.
         if(!oem.active())oem.start();
+        MapWindow visible=optIn?visibleMap():null;
+        if(optIn&&visible==null){
+            choices.clear();selected=-1;selectedName="";
+            status("RECEPTOR OEM SOLICITADO · mapa no verificable: "+
+                "teclas en sólo lectura (Display "+
+                prefs(this).getInt(WINDOW_DISPLAY,1)+")");
+        }else if(optIn&&!capture){
+            status("RECEPTOR OEM SOLICITADO · mapa verificable en Display "+
+                visible.displayId+" · OK/ATRÁS/OPCIONES sin zoom");
+        }
+        // The vendor binder may disconnect while the app's screen is
+        // unchanged. Recheck with bounded polling while manually armed.
+        main.removeCallbacks(refresh);
+        main.postDelayed(refresh,700L);
     }
     private void onOemEvent(int code,int action){
+        if(isCaptureActive()){
+            SharedPreferences p=prefs(this);
+            int count=p.getInt(CAPTURE_COUNT,0)+(action==100?1:0);
+            p.edit().putInt(CAPTURE_COUNT,count)
+                .putString(CAPTURE_LAST,
+                    "TECLA "+code+" · ACCIÓN "+action)
+                .putString(CAPTURE_STATUS,
+                    "BINDER OEM RECIBE EVENTOS · 20 S sólo lectura")
+                .apply();
+            return; // No selection/click/back/gesture during recapture.
+        }
         if(!isManuallyArmed()||
            !prefs(this).getBoolean(ENABLED,false))return;
         boolean reverse=prefs(this).getBoolean(REVERSE,false);
@@ -221,7 +300,11 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
         if(cmd==BridgeWheelPolicy.NONE)return;
         MapWindow map=visibleMap();
         if(map==null){
-            reconcileWheel();return;
+            status("TECLA OEM "+code+" recibida, pero Maps/Waze no está "+
+                "en la ventana superior verificable del Display "+
+                prefs(this).getInt(WINDOW_DISPLAY,1)+
+                " · ninguna acción ejecutada");
+            return;
         }
         long now=SystemClock.elapsedRealtime();
         if(code==lastKey&&now-lastKeyAt<COOLDOWN_MS)return;
@@ -370,6 +453,9 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
     private void release(){
         serviceReady=false;
         connectedNow=false;
+        if(connectedInstance==this)connectedInstance=null;
+        captureEndElapsed=0L;
+        lastCaptureRunning=false;
         main.removeCallbacks(refresh);
         try{prefs(this).unregisterOnSharedPreferenceChangeListener(this);}
         catch(Exception ignored){}
