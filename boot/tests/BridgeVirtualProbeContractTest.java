@@ -39,7 +39,9 @@ public final class BridgeVirtualProbeContractTest {
             activity.contains("stopProbe("),
             "Preview must time out and release all resources on exit/failure");
         ok(activity.contains("Display.DEFAULT_DISPLAY")&&
-            activity.contains("target.getDisplayId()==1")&&
+            activity.contains("Display[] existing=manager.getDisplays()")&&
+            activity.contains("Display.FLAG_PRIVATE")&&
+            activity.contains("previous.getDisplayId()==target.getDisplayId()")&&
             !activity.contains("startActivity(")&&
             !activity.contains("getLaunchIntentForPackage(")&&
             !activity.contains("setLaunchDisplayId(")&&
