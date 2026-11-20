@@ -1,6 +1,5 @@
 package ar.com.rango5gps.drivelabauto.boot;
 
-import android.app.ActivityOptions;
 import android.app.Notification;
 import android.app.NotificationChannel;
 import android.app.NotificationManager;
@@ -10,11 +9,9 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.graphics.Rect;
-import android.hardware.display.DisplayManager;
 import android.net.Uri;
 import android.os.IBinder;
 import android.provider.Settings;
-import android.view.Display;
 import ar.com.rango5gps.drivelabauto.common.BridgeCrypto;
 import ar.com.rango5gps.drivelabauto.common.BridgeDiscoveryProof;
 import ar.com.rango5gps.drivelabauto.common.BridgeRouteTarget;
@@ -302,27 +299,12 @@ public final class BootLinkService extends Service {
                 Intent.FLAG_ACTIVITY_SINGLE_TOP);
             // Bridge's own, user-confirmed destination. NEVER consult the
             // legacy Receiver's cluster_enabled / cluster_display_id flags.
-            boolean tablero=BridgeStandaloneWindows.routeOnTablero(this,pkg);
-            if(tablero){
-                DisplayManager dm=(DisplayManager)getSystemService(DISPLAY_SERVICE);
-                Display display=dm==null?null:dm.getDisplay(1);
-                if(display==null||display.getState()==Display.STATE_OFF||
-                   (display.getFlags()&Display.FLAG_PRIVATE)!=0){
-                    update("last_route","DISPLAY 1 NO DISPONIBLE; "+
-                        "no se cambió de pantalla ni se modificó el mapa");
-                    return false;
-                }
-                ActivityOptions opts=ActivityOptions.makeBasic()
-                    .setLaunchDisplayId(1);
-                // Sender routing NEVER changes Freeform bounds or stops tasks.
-                // It reuses Android's normal task/startActivity handling.
-                startActivity(map,opts.toBundle());
-            }else{
-                // Destinations requested for other apps stay on Display 0.
-                // If a specific map was confirmed on Display 1, only that
-                // app goes there; no silent fallback or duplicate layers.
-                startActivity(map);
-            }
+            // Direct Sender-to-Display1 launch is disabled after the
+            // physical Jetour Freeform/volante failures. No display 1
+            // activity can be opened by an incoming Xiaomi destination.
+            if(BridgeStandaloneWindows.routeOnTablero(this,pkg))
+                throw new SecurityException("Tablero no habilitado");
+            startActivity(map); // Display 0 only until virtual host QA.
             return true;
         }catch(Exception ignored){return false;}
     }
