@@ -222,50 +222,130 @@ public final class BootActivity extends Activity
             })
             .setNegativeButton("CANCELAR",null).show();
     }
-    private void setAuto(){
-        boolean current=BootConfig.enabled(this);
-        if(current){
-            prefs().edit().putBoolean("enabled",false).apply();
-            try{BootConfig.takeOver(this,false);}catch(Exception ignored){}
-            draw();return;
-        }
-        if(clusterEnabled&&!clusterConfirmed){
-            new AlertDialog.Builder(this)
-                .setTitle("PRIMERO PROBAR DISPLAY 1")
-                .setMessage("Aplicá el diseño con el vehículo detenido y "+
-                    "confirmá visualmente Waze/Maps en Display 1 antes de "+
-                    "habilitar el autoinicio de ambas pantallas.")
+    private void startLink(String action){
+        try{
+            startForegroundService(new Intent(this,BootLinkService.class)
+                .setAction(action));
+            prefs().edit().putString("last_status",
+                "Solicitud local: "+action+" · esperando confirmación").apply();
+        }catch(Exception ex){
+            new AlertDialog.Builder(this).setTitle("BRIDGE NO INICIADO")
+                .setMessage("Android rechazó el servicio: "+
+                    ex.getClass().getSimpleName()+": "+ex.getMessage())
                 .setPositiveButton("ENTENDIDO",null).show();
+        }
+    }
+    private String bridgeStatus(){
+        SharedPreferences p=linkPrefs();
+        return "RECEPTOR XIAOMI INDEPENDIENTE\n"+
+            p.getString("status","Receptor no iniciado")+
+            "\nQR: "+p.getString("pair_status","Sin vínculo verificado")+
+            "\n"+p.getString("last_route","Todavía no recibió destinos")+
+            "\nSolicitudes confirmadas por protocolo: "+p.getInt("received",0)+
+            "\nAUTOARRANQUE BRIDGE: "+(BootConfig.enabled(this)?
+                "ACTIVO, solo enlace Xiaomi":"APAGADO")+
+            "\nVENTANAS DE MAPAS: sin arranque independiente verificado. "+
+            "No se abre DriveLab Auto.";
+    }
+    private void renderQr(){
+        if(qrImage==null||qrCaption==null)return;
+        String payload=BootLinkService.qr(this);
+        if(payload.isEmpty()){
+            qrImage.setVisibility(View.GONE);
+            qrCaption.setText(linkPrefs().getString("pair_status",
+                "Creando QR (Jetour y Xiaomi en la misma red)…"));
+            return;
+        }
+        try{
+            qrImage.setImageBitmap(BootQr.draw(payload));
+            qrImage.setVisibility(View.VISIBLE);
+            qrCaption.setText("Leelo desde Sender Xiaomi. "+
+                "Expira en 2 minutos. La clave no se muestra en texto.");
+        }catch(Exception ex){
+            qrImage.setVisibility(View.GONE);
+            qrCaption.setText("QR inválido: "+ex.getClass().getSimpleName());
+        }
+    }
+    private void showQr(){
+        startLink(BootLinkService.PAIR_QR);
+        LinearLayout layout=new LinearLayout(this);
+        layout.setOrientation(LinearLayout.VERTICAL);
+        layout.setPadding(16,12,16,10);
+        qrCaption=new TextView(this);
+        qrCaption.setTextColor(Color.WHITE);
+        qrCaption.setTextSize(16);
+        layout.addView(qrCaption,new LinearLayout.LayoutParams(-1,-2));
+        qrImage=new ImageView(this);
+        qrImage.setBackgroundColor(Color.WHITE);
+        qrImage.setAdjustViewBounds(true);
+        layout.addView(qrImage,new LinearLayout.LayoutParams(-1,420));
+        renderQr();
+        new AlertDialog.Builder(this)
+            .setTitle("VINCULAR XIAOMI · DRIVE LAB BRIDGE")
+            .setView(layout)
+            .setPositiveButton("CERRAR",null)
+            .setOnDismissListener(d->{qrImage=null;qrCaption=null;})
+            .show();
+    }
+    private void setAuto(){
+        if(BootConfig.enabled(this)){
+            prefs().edit().putBoolean("enabled",false)
+                .putString("last_status",
+                    "Autoinicio Bridge APAGADO. DriveLab Auto sigue apagado.")
+                .apply();
+            draw();
             return;
         }
         new AlertDialog.Builder(this)
-            .setTitle("ACTIVAR AL ENCENDER EL T1")
-            .setMessage("DriveLab Boot intentará abrir Display 0 y, si "+
-                "lo habilitaste, el diseño de navegación de Display 1 "+
-                "después de que Android termine de arrancar. "+
-                "El autoinicio independiente anterior del clúster se "+
-                "desactivará para evitar tareas duplicadas. No reemplaza "+
-                "T1 Launcher ni los indicadores OEM. "+
-                "Receiver debe estar instalado con ADB autorizado. "+
-                "Si Jetour bloquea el autoinicio, podrás aplicarlo "+
-                "manualmente. ¿Activar?")
+            .setTitle("AUTOINICIO INDEPENDIENTE")
+            .setMessage("Activará SOLAMENTE el receptor Xiaomi cifrado de "+
+                "DriveLab Bridge al encender. No arrancará la pantalla "+
+                "de DriveLab Auto, ni mapas, ni el firmware del tablero. "+
+                "La multiventana automática todavía está pendiente de "+
+                "validación. ¿Activar?")
             .setNegativeButton("CANCELAR",null)
             .setPositiveButton("ACTIVAR",(d,w)->{
-                try{
-                    persist();
-                    BootConfig.takeOver(this);
-                    prefs().edit().putBoolean("enabled",true).apply();
-                    draw();
-                    Toast.makeText(this,"DriveLab Boot configurado. "+
-                        "El arranque anterior de Cockpit queda desactivado; "+
-                        "los servicios Receiver siguen encendidos.",
-                        Toast.LENGTH_LONG).show();
-                }catch(Exception ex){
-                    new AlertDialog.Builder(this)
-                        .setTitle("NO SE ACTIVÓ AUTOINICIO")
-                        .setMessage(ex.getMessage())
-                        .setPositiveButton("OK",null).show();
-                }
+                prefs().edit().putBoolean("enabled",true)
+                    .putString("last_status",
+                        "Autoinicio Bridge: enlace Xiaomi opt-in; "+
+                        "no se abrirán mapas ni Cockpit").apply();
+                draw();
+            }).show();
+    }
+    private void stopBridge(){
+        new AlertDialog.Builder(this)
+            .setTitle("DETENER BRIDGE")
+            .setMessage("Detiene el receptor Xiaomi de Bridge y su "+
+                "próximo autoinicio. No fuerza detener mapas ni borra "+
+                "datos; no toca DriveLab Auto ni el firmware Jetour.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("DETENER",(d,w)->{
+                prefs().edit().putBoolean("enabled",false).apply();
+                startLink(BootLinkService.STOP);
+                draw();
+            }).show();
+    }
+    private void requestOverlay(){
+        try{
+            startActivity(new Intent(
+                Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                Uri.parse("package:"+getPackageName())));
+        }catch(Exception ex){
+            Toast.makeText(this,"Android no abrió el permiso: "+
+                ex.getClass().getSimpleName(),Toast.LENGTH_LONG).show();
+        }
+    }
+    private void toggleLegacy(){
+        if(legacyAdvanced){legacyAdvanced=false;draw();return;}
+        new AlertDialog.Builder(this)
+            .setTitle("EXPERIMENTOS ANTIGUOS · NO VERIFICADOS")
+            .setMessage("Este módulo todavía utiliza el Receiver "+
+                "de DriveLab Auto para ventanas. No debe usarse "+
+                "al encender. Sólo para diagnóstico con vehículo "+
+                "estacionado, sin tocar procesos OEM.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("ABRIR",(d,w)->{
+                legacyAdvanced=true;draw();
             }).show();
     }
     /** Opening Display 0 is a separate, explicit action. If Cockpit is a
