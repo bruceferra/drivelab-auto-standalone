@@ -45,6 +45,7 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
     static final String ENABLED="enabled",TARGET="target",
         REVERSE="reverse",STATUS="status",LAST_KEY="last_key",
         WINDOW_DISPLAY="window_display",
+        MIC_ENABLED="mic_enabled",
         CAPTURE_STATUS="capture_status",CAPTURE_COUNT="capture_count",
         CAPTURE_LAST="capture_last",
         LAST_TIME="last_event",SERVICE_CONNECTED="connected";
@@ -74,6 +75,8 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
                 "CAPTURANDO TECLAS OEM 20 S · sólo lectura, sin zoom/OK/atrás")
             .apply();
         live.main.post(live::reconcileWheel);
+        // No map actions during capture. The Binder may be held by
+        // another installed service, which is reported, not bypassed.
         return true;
     }
     static void navigationIntentArrived(Context c){
@@ -102,9 +105,15 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
     private static volatile boolean connectedNow=false;
     // Process-local manual opt-in; never re-register OEM callback at ignition.
     private static volatile boolean manuallyArmed=false;
+    private static volatile boolean microphoneArmed=false;
     static void setManuallyArmed(boolean value){manuallyArmed=value;}
+    static void setMicrophoneArmed(boolean value){microphoneArmed=value;}
+    static boolean isMicrophoneArmed(){return microphoneArmed;}
     static boolean isManuallyArmed(){return manuallyArmed;}
     static boolean isConnected(){return connectedNow;}
+    static String oemState(Context c){
+        return BridgeWheelOemBinder.diagnostic(c);
+    }
     private long lastKeyAt=0;
     private int lastKey=-1,selected=-1;
     private boolean lastCaptureRunning;
@@ -145,7 +154,7 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
         prefs(this).edit().putBoolean(SERVICE_CONNECTED,true).apply();
         oem=new BridgeWheelOemBinder(this,new BridgeWheelOemBinder.Listener(){
             @Override public void event(int code,int action,int extra){
-                onOemEvent(code,action);
+                onOemEvent(code,action,extra);
             }
             @Override public void status(String message){
                 BridgeWheelAccessibilityService.this.status(message);
@@ -161,7 +170,8 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
         main.postDelayed(refresh,180);
     }
     @Override public void onSharedPreferenceChanged(SharedPreferences p,String key){
-        if(ENABLED.equals(key)||TARGET.equals(key)||REVERSE.equals(key)||
+        if(ENABLED.equals(key)||MIC_ENABLED.equals(key)||
+            TARGET.equals(key)||REVERSE.equals(key)||
             WINDOW_DISPLAY.equals(key))
             requestRefresh();
     }
@@ -387,6 +397,7 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
             maybeStartMapsNavigation();
         }
         boolean optIn=isManuallyArmed()&&prefs(this).getBoolean(ENABLED,false);
+        boolean mic=isMicrophoneArmed()&&prefs(this).getBoolean(MIC_ENABLED,false);
         boolean capture=isCaptureActive();
         if(!capture&&lastCaptureRunning){
             captureEndElapsed=0L;
@@ -396,7 +407,7 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
                 " pulsaciones recibidas · sin ejecutar controles").apply();
         }
         lastCaptureRunning=capture;
-        if(!capture&&!optIn){
+        if(!capture&&!optIn&&!mic){
             oem.stop();
             status("Volante Bridge APAGADO; controla el sistema Jetour");
             choices.clear();selected=-1;selectedName="";
@@ -416,26 +427,39 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
             status("RECEPTOR OEM SOLICITADO · mapa no verificable: "+
                 "teclas en sólo lectura (Display "+
                 prefs(this).getInt(WINDOW_DISPLAY,1)+")");
-        }else if(optIn&&!capture){
+        }else if(optIn&&!capture&&visible!=null){
             status("RECEPTOR OEM SOLICITADO · mapa verificable en Display "+
                 visible.displayId+" · OK/ATRÁS/OPCIONES sin zoom");
+        }else if(mic&&!optIn&&!capture){
+            status("RECEPTOR OEM SOLICITADO · micrófono 1010 habilitado "+
+                "manualmente; rueda no configurada");
         }
         // The vendor binder may disconnect while the app's screen is
         // unchanged. Recheck with bounded polling while manually armed.
         main.removeCallbacks(refresh);
         main.postDelayed(refresh,700L);
     }
-    private void onOemEvent(int code,int action){
+    private void onOemEvent(int code,int action,int extra){
         if(isCaptureActive()){
             SharedPreferences p=prefs(this);
             int count=p.getInt(CAPTURE_COUNT,0)+(action==100?1:0);
             p.edit().putInt(CAPTURE_COUNT,count)
                 .putString(CAPTURE_LAST,
-                    "TECLA "+code+" · ACCIÓN "+action)
+                    "TECLA "+code+" · ACCIÓN "+action+
+                    " · EXTRA "+extra)
                 .putString(CAPTURE_STATUS,
                     "BINDER OEM RECIBE EVENTOS · 20 S sólo lectura")
                 .apply();
             return; // No selection/click/back/gesture during recapture.
+        }
+        if(code==1010){
+            if(isMicrophoneArmed()&&prefs(this).getBoolean(MIC_ENABLED,false)){
+                BridgeOemVoiceLauncher.trigger(this,action);
+            }else{
+                status("MICRÓFONO OEM 1010 recibido por Bridge · "+
+                    "asistente de voz no habilitado manualmente");
+            }
+            return;
         }
         if(!isManuallyArmed()||
            !prefs(this).getBoolean(ENABLED,false))return;
