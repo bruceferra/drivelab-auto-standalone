@@ -1,5 +1,6 @@
 name: Publish signed Bridge LAB independent OTA v24
 # One-off, reviewed publication from the owner-maintained Bridge branch.
+# T1Launcher task parser regression verified after fixing regex group 3 (actual Maps Activity).
 # LAB 0.1.27 source-only MediaProjection QA passed; Android APK and signer verified at publication.
 # LAB 0.1.27 requires an owner-only private Display Activity source contract.
 # All Android Lint fatal checks remain active except the narrowly guarded
