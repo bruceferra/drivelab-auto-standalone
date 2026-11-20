@@ -47,13 +47,31 @@ final class BridgeStandaloneWindows {
         return prefs(c).getInt(RATIO,65);
     }
     static String tabMap(Context c){
-        return prefs(c).getString(TAB_MAP,BridgeWindowsPolicy.MAPS);
+        String selected=prefs(c).getString(TAB_MAP,BridgeWindowsPolicy.WAZE);
+        return BridgeDualRoutePolicy.BOTH.equals(selected)||
+            BridgeWindowsPolicy.validMap(selected)?
+                selected:BridgeWindowsPolicy.WAZE;
+    }
+    static boolean tableroEnabled(Context c){
+        SharedPreferences p=prefs(c);
+        return p.getBoolean(TAB_CONFIRMED,false)&&
+            p.getBoolean(TAB_ROUTE,false);
     }
     static boolean routeOnTablero(Context c,String pkg){
-        // Disabled pending a real virtual map session + Presentation host.
-        // Previous Freeform direct-Display1 paths distorted Waze/Maps and
-        // left unowned tasks on the Jetour instrument display.
-        return false;
+        return tableroEnabled(c)&&
+            BridgeDualRoutePolicy.selectedForTablero(pkg,tabMap(c));
+    }
+    static void disableTablero(Context c){
+        prefs(c).edit()
+            .putBoolean(TAB_CONFIRMED,false)
+            .putBoolean(TAB_ROUTE,false)
+            .putString(LAST,"Display 1 DESACTIVADO: próximos destinos "+
+                "van a Display 0. Android puede conservar un mapa "+
+                "abierto en el tablero; no se borran ni detienen tareas.").apply();
+    }
+    static boolean display1Available(Context c){
+        try{display(c,1);return true;}
+        catch(Exception unavailable){return false;}
     }
     static final class Result{
         final boolean submitted;
@@ -170,18 +188,59 @@ final class BridgeStandaloneWindows {
                 ". Freeform bloqueado o no disponible en este Android.");
         }
     }
-    /** Explicit parked-only experiment. No boot autolaunch and never
-     * touches SystemUI, MODE, wheel keys or the T1 OEM task.
-     * Bounded map area to leave the instrument regions intact as far
-     * as the vendor display permits. Must be physically inspected.
+    /** Manual parked-only FULLSCREEN launch on real Android Display 1.
+     * Does not use Freeform/hidden APIs, bounds, scaling, ADB, OEM writes,
+     * keyboard/wheel capture or boot-time activity launch. Start is only
+     * a request; owner confirms actual visibility before Sender routing.
+     * Both maps can receive routes on the same display even though Android
+     * can show only one fullscreen activity on top at a time.
      */
     static Result tablero(Activity activity){
-        BridgeClusterRecovery.disableNewCluster(activity);
-        return reject(activity,"Display 1 BLOQUEADO en Bridge: "+
-            "la ventana Freeform anterior deformó mapas y no enlazó "+
-            "accesibilidad. Usá LIBERAR CLÚSTER para recuperar únicamente "+
-            "mapas verificables; la nueva arquitectura de pantalla "+
-            "virtual + Presentation sigue en desarrollo.");
+        String selected=tabMap(activity);
+        String[] apps=BridgeDualRoutePolicy.BOTH.equals(selected)?
+            new String[]{BridgeWindowsPolicy.WAZE,BridgeWindowsPolicy.MAPS}:
+            new String[]{selected};
+        try{
+            Display target=display(activity,1);
+            Point point=pixels(target);
+            if(point.x<400||point.y<200)
+                throw new IllegalArgumentException(
+                    "Display 1 no tiene resolución válida");
+            // Preflight ALL apps before opening any; never open something
+            // unintentionally on Display 0 as a fallback.
+            List<Intent> intents=new ArrayList<>();
+            PackageManager pm=activity.getPackageManager();
+            for(String pkg:apps){
+                if(!BridgeWindowsPolicy.validMap(pkg))
+                    throw new SecurityException("Sólo Waze/Google Maps");
+                Intent intent=pm.getLaunchIntentForPackage(pkg);
+                if(intent==null||intent.getComponent()==null||
+                   !pkg.equals(intent.getComponent().getPackageName()))
+                    throw new IllegalStateException(pkg+" no está instalado");
+                intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|
+                    Intent.FLAG_ACTIVITY_SINGLE_TOP);
+                intents.add(intent);
+            }
+            int sent=0;
+            ActivityOptions options=ActivityOptions.makeBasic();
+            options.setLaunchDisplayId(1);
+            for(Intent intent:intents){
+                activity.startActivity(intent,options.toBundle());
+                sent++;
+            }
+            String message="Display 1: "+sent+" solicitudes a pantalla "+
+                "completa (100%, sin Freeform). "+
+                "Android aceptó abrir "+selected+
+                ", pero la ubicación y visibilidad requieren "+
+                "confirmación visual. No se alteraron tareas Jetour.";
+            prefs(activity).edit().putString(LAST,message).apply();
+            return new Result(true,message);
+        }catch(Exception failed){
+            return reject(activity,"Display 1: solicitud NO completada: "+
+                failed.getClass().getSimpleName()+": "+
+                String.valueOf(failed.getMessage())+
+                ". No hubo sustitución automática por Display 0.");
+        }
     }
     private static Result reject(Context c,String reason){
         prefs(c).edit().putString(LAST,reason).apply();
