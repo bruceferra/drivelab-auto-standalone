@@ -102,6 +102,13 @@ public final class RouteDispatchService extends Service {
         else mark("T1 CONFIRMÓ · "+SenderRouteTarget.label(mode)+
             " solicitados en segundo plano");
         if(!only&&sent.accepted){
+            if(BridgeRouteTarget.T1_LAUNCHER.equals(mode)){
+                // This trial must never open a second Maps/Waze on Xiaomi.
+                // Only the existing T1Launcher Android task receives it.
+                mark("T1LAUNCHER: destino solicitado en la tarea virtual "+
+                    "existente; no se abrió navegación en Xiaomi.");
+                return;
+            }
             // CLÚSTER + XIAOMI still launches at most ONE phone app.
             // Both means both on the T1, not two competing phone windows.
             boolean google=BridgeRouteTarget.MAPS.equals(mode);

@@ -266,6 +266,32 @@ public final class BootLinkService extends Service {
                 "una sola vez; el QR se conserva.");
             return false;
         }
+        if(BridgeRouteTarget.T1_LAUNCHER.equals(target)){
+            // Experimental existing-task handoff: use exactly the Waze/Maps
+            // virtual task T1Launcher already owns, NEVER launch another
+            // physical Display 1 Maps window as the standard route does.
+            // The current trial targets Google Maps only.
+            String result;
+            boolean acknowledged=false;
+            try{
+                String uri="google.navigation:q="+
+                    Uri.encode(packet.value,"coord".equals(kind)?",":"")+
+                    "&mode=d";
+                result=BridgeLocalAdb.deliverToExistingT1Maps(this,uri);
+                acknowledged=result.startsWith("ENTREGADO AL GOOGLE MAPS");
+            }catch(Exception denied){
+                result="T1LAUNCHER: NO SE ENVIÓ · "+
+                    denied.getClass().getSimpleName()+": "+
+                    String.valueOf(denied.getMessage())+
+                    ". T1Launcher y Maps permanecen abiertos.";
+            }
+            prefs(this).edit().putString("last_route",result)
+                .putInt("received",prefs(this).getInt("received",0)+
+                    (acknowledged?1:0)).apply();
+            // A strict ACK only means Android reported onNewIntent to
+            // the existing top Activity. Physical routing needs the owner.
+            return acknowledged;
+        }
         // Sender's target is INDEPENDENT from where each app lives.
         // BOTH means TWO separate route intents every time, including
         // when one map was closed, backgrounded, or placed on Display 1.
