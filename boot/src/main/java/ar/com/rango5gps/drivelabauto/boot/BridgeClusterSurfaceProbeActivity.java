@@ -63,6 +63,22 @@ public final class BridgeClusterSurfaceProbeActivity extends Activity
     private boolean closed,frame;
     private long sceneToken;
     private BridgeVirtualSceneActivity.Listener sceneListener;
+    private TextView fallbackMarker;
+    private int fallbackTicks;
+    private int fallbackDisplayId=-1;
+    private final Runnable fallbackTicker=new Runnable(){
+        @Override public void run(){
+            if(closed||fallbackMarker==null)return;
+            fallbackTicks++;
+            fallbackMarker.setText("BRIDGE · PRESENTATION ANIMADA\n"+
+                "DISPLAY VIRTUAL "+fallbackDisplayId+"\n"+
+                "CONTADOR RESPALDO: "+fallbackTicks+"\n"+
+                "ACTIVITY DENEGADA POR ANDROID");
+            fallbackMarker.setBackgroundColor(
+                fallbackTicks%2==0?0xFF145E70:0xFF1A704E);
+            main.postDelayed(this,650L);
+        }
+    };
 
     @Override protected void onCreate(Bundle saved){
         super.onCreate(saved);
@@ -249,12 +265,52 @@ public final class BridgeClusterSurfaceProbeActivity extends Activity
         BridgeVirtualSceneActivity.setListener(sceneListener);
         report("Solicitando Activity propia en Display virtual "+
             requested+". Waze y Maps permanecen sin cambios.");
-        BridgeVirtualTaskLauncher.launchOwn(this,d,sceneToken);
+        try{
+            BridgeVirtualTaskLauncher.launchOwn(this,d,sceneToken);
+        }catch(SecurityException denied){
+            showDeniedLaunchFallback(d,denied);
+            return;
+        }
         main.postDelayed(()->{
             if(!closed&&!sceneVerified)
                 stop("SIN CONFIRMACIÓN DE ACTIVITY VIRTUAL tras 8 s. "+
                     "Android Jetour puede impedir esta operación.");
         },8000L);
+    }
+    private void showDeniedLaunchFallback(Display d,SecurityException denied){
+        // The display pipeline works, but Android forbade Activity launch.
+        // A Presentation from our own UID is the already-proven fallback.
+        if(sceneListener!=null){
+            BridgeVirtualSceneActivity.clearListener(sceneListener);
+            sceneListener=null;
+        }
+        sceneToken=0;
+        fallbackDisplayId=d.getDisplayId();
+        try{
+            pattern=new Presentation(this,d);
+            LinearLayout scene=new LinearLayout(pattern.getContext());
+            scene.setGravity(Gravity.CENTER);
+            scene.setBackgroundColor(0xFF123A4B);
+            fallbackMarker=new TextView(pattern.getContext());
+            fallbackMarker.setGravity(Gravity.CENTER);
+            fallbackMarker.setTextSize(25);
+            fallbackMarker.setTextColor(Color.WHITE);
+            scene.addView(fallbackMarker);
+            pattern.setContentView(scene);
+            pattern.show();
+            main.post(fallbackTicker);
+            String reason=denied.getMessage();
+            String category=reason!=null&&
+                reason.startsWith("PRECHECK_")?reason:
+                "START_ACTIVITY_SECURITY_EXCEPTION";
+            report("ANDROID RECHAZÓ LA ACTIVITY EN DISPLAY VIRTUAL "+
+                fallbackDisplayId+" · "+category+
+                ". Se muestra sólo PRESENTATION ANIMADA de respaldo. "+
+                "Esto NO acredita ejecución de Waze.");
+        }catch(RuntimeException fail){
+            stop("ACTIVITY DENEGADA y PRESENTATION no disponible: "+
+                fail.getClass().getSimpleName());
+        }
     }
     @Override public void onSurfaceTextureUpdated(SurfaceTexture texture){
         if(closed||frame)return;
@@ -278,6 +334,8 @@ public final class BridgeClusterSurfaceProbeActivity extends Activity
         if(closed)return;
         closed=true;
         main.removeCallbacks(timeout);
+        main.removeCallbacks(fallbackTicker);
+        fallbackMarker=null;
         if(sceneListener!=null){
             BridgeVirtualSceneActivity.clearListener(sceneListener);
             sceneListener=null;

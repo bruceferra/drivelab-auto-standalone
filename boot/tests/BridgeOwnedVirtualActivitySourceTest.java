@@ -23,6 +23,10 @@ public final class BridgeOwnedVirtualActivitySourceTest {
             host.contains("if(activityProbe)")&&
             host.contains("BridgeVirtualTaskLauncher.launchOwn(this,d,sceneToken)")&&
             host.contains("sceneVerified=true")&&
+            host.contains("catch(SecurityException denied)")&&
+            host.contains("showDeniedLaunchFallback(d,denied)")&&
+            host.contains("PRESENTATION ANIMADA")&&
+            host.contains("main.removeCallbacks(fallbackTicker)")&&
             host.contains("BridgeVirtualSceneActivity.finishSession(sceneToken)")&&
             host.contains("main.postDelayed(timeout,activityProbe?APP_MAX_MS:MAX_MS)")&&
             host.contains("virtual.release()")&&host.contains("surface.release()")&&
@@ -31,6 +35,8 @@ public final class BridgeOwnedVirtualActivitySourceTest {
             "Only user initiated bounded noninteractive compositor");
         ok(launch.contains("new Intent(host,BridgeVirtualSceneActivity.class)")&&
             launch.contains("options.setLaunchDisplayId(id)")&&
+            launch.contains("isActivityStartAllowedOnDisplay(host,id,own)")&&
+            launch.contains("PRECHECK_DENIED_PRIVATE_DISPLAY")&&
             launch.contains("id<=1")&&
             launch.contains("Display.FLAG_PRIVATE")&&
             launch.contains("FLAG_ACTIVITY_NEW_TASK")&&
