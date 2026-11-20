@@ -92,7 +92,8 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
             "speed_kmh REAL,soc REAL,volt REAL,amps REAL,rpm REAL,"+
             "gps_lat REAL,gps_lon REAL,gps_accuracy_m REAL,"+
             "km_oem_cum REAL,km_gps_cum REAL,hv_out_cum REAL,hv_in_cum REAL,"+
-            "fuel_tank_l REAL,soc_internal REAL,fuel_drop_l_cum REAL NOT NULL DEFAULT 0)");
+            "fuel_tank_l REAL,soc_internal REAL,"+
+            "fuel_drop_l_cum REAL NOT NULL DEFAULT 0,hv_source TEXT)");
         db.execSQL("CREATE INDEX ix_auto_time ON sessions(start_ms)");
         db.execSQL("CREATE INDEX ix_auto_sample ON samples(session_id,t_epoch_ms)");
     }
@@ -106,6 +107,7 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
             db.execSQL("ALTER TABLE samples ADD COLUMN fuel_tank_l REAL");
             db.execSQL("ALTER TABLE samples ADD COLUMN soc_internal REAL");
             db.execSQL("ALTER TABLE samples ADD COLUMN fuel_drop_l_cum REAL NOT NULL DEFAULT 0");
+            db.execSQL("ALTER TABLE samples ADD COLUMN hv_source TEXT");
         }
     }
     private static double nullable(Cursor c,int index){
@@ -209,6 +211,7 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
             real(raw,"fuel_tank_l",p.fuelRemainingLiters);
             raw.put("fuel_drop_l_cum",
                 old.fuelCandidateL+fuel.consumedCandidate);
+            if(p.voltageSource!=null)raw.put("hv_source",p.voltageSource);
             if(gps!=null){
                 geo(raw,gps,"gps_lat","gps_lon");
                 if(gps.hasAccuracy())raw.put("gps_accuracy_m",gps.getAccuracy());
@@ -461,12 +464,12 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
             "marcha_1033;velocidad_kmh;soc;volt;amps;rpm;gps_lat;gps_lon;"+
             "precision_m;km_oem_acum;km_gps_acum;hv_salida_acum;"+
             "hv_entrada_acum;soc_interno_1042;tanque_ci186_l;"+
-            "caida_tanque_candidata_l_acum\n");
+            "caida_tanque_candidata_l_acum;fuente_hv\n");
         try(Cursor c=getReadableDatabase().rawQuery(
             "SELECT session_id,t_epoch_ms,raw_ready,raw_cable,raw_gear,"+
                 "speed_kmh,soc,volt,amps,rpm,gps_lat,gps_lon,"+
                 "gps_accuracy_m,km_oem_cum,km_gps_cum,hv_out_cum,hv_in_cum,"+
-                "soc_internal,fuel_tank_l,fuel_drop_l_cum "+
+                "soc_internal,fuel_tank_l,fuel_drop_l_cum,hv_source "+
                 "FROM samples WHERE t_epoch_ms>=? AND t_epoch_ms<? "+
                 "ORDER BY t_epoch_ms",
             new String[]{Long.toString(from),Long.toString(until)})){
@@ -474,7 +477,8 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
                 StringBuilder row=new StringBuilder();
                 for(int i=0;i<c.getColumnCount();i++){
                     if(i>0)row.append(';');
-                    if(!c.isNull(i))row.append(i<=4?
+                    if(!c.isNull(i))row.append(i>=20?
+                        safeCell(c.getString(i)):i<=4?
                         Long.toString(c.getLong(i)):fmtCsv(c.getDouble(i)));
                 }
                 writeLine(out,row.append('\n').toString());
@@ -483,6 +487,10 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
         out.flush();
     }
 
+    private static String safeCell(String s){
+        return s==null?"":s.replace(';',',').replace('\n',' ')
+            .replace('\r',' ');
+    }
     private static String fmtCsv(double x){
         return Double.isFinite(x)?String.format(Locale.ROOT,"%.6f",x):"";
     }
@@ -495,19 +503,21 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
                 "marcha_1033;velocidad_kmh;soc_1062;volt_1063;amps_1064;"+
                 "rpm_1035;gps_lat;gps_lon;gps_accuracy_m;km_oem_acum;"+
                 "km_gps_acum;hv_salida_kwh_acum;hv_entrada_kwh_acum;"+
-                "soc_interno_1042;tanque_ci186_l;caida_tanque_candidata_l_acum\n");
+                "soc_interno_1042;tanque_ci186_l;"+
+                "caida_tanque_candidata_l_acum;fuente_hv\n");
             try(Cursor c=getReadableDatabase().rawQuery(
                 "SELECT session_id,t_epoch_ms,raw_ready,raw_cable,"+
                 "raw_gear,speed_kmh,soc,volt,amps,rpm,gps_lat,gps_lon,"+
                 "gps_accuracy_m,km_oem_cum,km_gps_cum,hv_out_cum,hv_in_cum,"+
-                "soc_internal,fuel_tank_l,fuel_drop_l_cum "+
+                "soc_internal,fuel_tank_l,fuel_drop_l_cum,hv_source "+
                 "FROM samples ORDER BY t_epoch_ms",null)){
                 while(c.moveToNext()){
                     StringBuilder line=new StringBuilder();
                     for(int i=0;i<c.getColumnCount();i++){
                         if(i>0)line.append(';');
                         if(!c.isNull(i))
-                            line.append(i<=4?Long.toString(c.getLong(i)):
+                            line.append(i>=20?safeCell(c.getString(i)):
+                                i<=4?Long.toString(c.getLong(i)):
                                 fmtCsv(c.getDouble(i)));
                     }
                     writeLine(out,line.append('\n').toString());
