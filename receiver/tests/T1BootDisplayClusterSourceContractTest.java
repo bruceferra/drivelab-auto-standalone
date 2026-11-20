@@ -25,11 +25,11 @@ public final class T1BootDisplayClusterSourceContractTest {
             "Bridge LAB and Receiver remain separately installed; Receiver untouched");
         ok(ui.contains("PANTALLA CENTRAL · DISPLAY 0 · BRIDGE")&&
             ui.contains("PANTALLA DEL TABLERO · DISPLAY 1")&&
-            ui.contains("CONFIRMAR: MAPA SE VE EN DISPLAY 1")&&
+            ui.contains("LIBERAR CLÚSTER")&&
             windows.contains("static Result center(")&&
             windows.contains("static Result tablero(")&&
             windows.contains("BridgeWindowMath.center(")&&
-            windows.contains("BridgeWindowMath.display1("),
+            windows.contains("Display 1 BLOQUEADO"),
             "Bridge owns manual center and instrument requests and user confirmation");
         ok(config.contains("getBoolean(\"enabled\",false)")&&
             !config.contains("receiverCode<")&&
@@ -42,7 +42,7 @@ public final class T1BootDisplayClusterSourceContractTest {
             "Receiver uninstall cannot invalidate Bridge's screen or Xiaomi paths");
         ok(windows.contains("Display.FLAG_PRIVATE")&&
             windows.contains("getState()==Display.STATE_OFF")&&
-            windows.contains("!BridgeWindowsPolicy.validMap(map)")&&
+            windows.contains("BridgeClusterRecovery.disableNewCluster(activity)")&&
             !windows.contains("pm clear")&&
             !windows.contains("am force-stop"),
             "Fail closed on private/off displays or invalid map packages; no OEM changes");
