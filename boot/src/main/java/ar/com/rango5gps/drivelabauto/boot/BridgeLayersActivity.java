@@ -11,9 +11,10 @@ import android.widget.ScrollView;
 import android.widget.TextView;
 
 /**
- * Jetour MODE vs Waze/Maps Display 1 forensic panel, ON CENTRAL DISPLAY.
+ * Jetour firmware display-layer vs Waze/Maps Display 1 forensic panel, ON CENTRAL DISPLAY.
  * Read only. An owner captures first when OEM MODE covers maps, again after
- * THEY manually toggle MODE until maps become visible. The app NEVER
+ * THEY reproduce the previously observed manual MAP SEND that makes the
+ * map visible. MODE by itself does not show maps. The app NEVER
  * synthesizes steering keys, alters OEM windows or kills processes.
  */
 public final class BridgeLayersActivity extends Activity {
@@ -34,17 +35,17 @@ public final class BridgeLayersActivity extends Activity {
         addText(body,"DRIVELAB BRIDGE",24,WHITE);
         addText(body,"DIAGNÓSTICO DE CAPAS · TABLERO (DISPLAY 1)",18,ACCENT);
         addText(body,
-            "El menú MODE del firmware Jetour tapa a veces Waze/Maps. "+
+            "La interfaz nativa del tablero Jetour tapa a veces Waze/Maps. "+
             "Vamos a comparar dos estados del compositor sin abrir/cerrar "+
             "ninguna app ni tocar el firmware.",15,WHITE);
         addText(body,
             "Uso sólo con el vehículo estacionado. "+
             "Para la segunda captura, cambiá vos el MODE como siempre "+
             "hasta que los mapas queden visibles. "+
-            "El diagnóstico nunca genera pulsaciones de volante.",13,0xFFBFD1DA);
-        button(body,"1 · CAPTURAR CUANDO MODE TAPA MAPAS",()->
+            "El diagnóstico no pulsa MODE ni altera controles OEM.",13,0xFFBFD1DA);
+        button(body,"1 · CAPTURAR CUANDO JETOUR TAPA MAPAS",()->
             confirm("TAPADO"));
-        button(body,"2 · CAPTURAR CUANDO LOS MAPAS SE VEN",()->
+        button(body,"2 · CAPTURAR TRAS EL ENVÍO QUE MOSTRÓ MAPAS",()->
             confirm("VISIBLE"));
         button(body,"COMPARAR AMBAS CAPTURAS",this::compare);
         result=addText(body,"Sin lecturas. La clave ADB de Bridge "+
@@ -80,7 +81,7 @@ public final class BridgeLayersActivity extends Activity {
         if(busy)return;
         new AlertDialog.Builder(this)
             .setTitle(phase.equals("TAPADO")?
-                "CAPTURA A · MODE ENCIMA":"CAPTURA B · MAPAS VISIBLES")
+                "CAPTURA A · JETOUR ENCIMA":"CAPTURA B · MAPAS VISIBLES")
             .setMessage("Confirmá que el vehículo está estacionado y "+
                 "Display 1 está en el estado indicado. "+
                 "Sólo se leerán ventanas, tareas y superficies. "+
