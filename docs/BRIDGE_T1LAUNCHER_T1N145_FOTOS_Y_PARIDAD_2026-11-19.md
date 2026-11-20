@@ -1,3 +1,5 @@
+> **ACTUALIZACIÓN: APK T1N145 aportada por el propietario y analizada estáticamente.** Los apartados históricos que dicen “APK no descargada” se refieren al estado anterior. Véase [inspección binaria real](BRIDGE_T1N145_APK_EVIDENCIA_REAL_2026-11-19.md) para evidencia confirmada de `VirtualDisplay`, `SurfaceTexture`, `Presentation`, APP 2 y volante. Sigue faltando prueba física en T1.
+
 # DriveLab Bridge — contrato visual y funcional basado en T1Launcher, 19/11/2026
 
 ## Fuentes verificadas
