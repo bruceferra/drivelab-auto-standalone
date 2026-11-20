@@ -87,8 +87,8 @@ public final class BridgeLayersActivity extends Activity {
         String second=visible==null?"FALTA":
             "GUARDADA · "+stamp(BridgeLayerCaptureStore.timestamp(this,"VISIBLE"));
         savedStatus.setText("1 · TABLERO ORIGINAL: "+first+
-            "\\n2 · MAPA VISIBLE: "+second+
-            "\\n"+(covered!=null&&visible!=null?
+            "\n2 · MAPA VISIBLE: "+second+
+            "\n"+(covered!=null&&visible!=null?
                 "LISTO PARA COMPARAR. Tocá COMPARAR AMBAS CAPTURAS.":
                 "Podés salir y volver; las capturas se conservan."));
     }
@@ -183,13 +183,13 @@ public final class BridgeLayersActivity extends Activity {
                 if(!saved){
                     result.setText("CAPTURA LEÍDA PERO NO GUARDADA. "+
                         "Android rechazó persistir el diagnóstico. "+
-                        "No sigas con la segunda captura.\\n\\n"+message);
+                        "No sigas con la segunda captura.\n\n"+message);
                     return;
                 }
                 result.setText("CAPTURA "+phase+" GUARDADA. "+
-                    "Podés salir y volver sin perderla.\\n\\n"+
+                    "Podés salir y volver sin perderla.\n\n"+
                     message+
-                    "\\n\\nNo se ejecutaron acciones sobre ninguna ventana.");
+                    "\n\nNo se ejecutaron acciones sobre ninguna ventana.");
             });
         },"Bridge-Jetour-MODE-Read-Only").start();
     }
