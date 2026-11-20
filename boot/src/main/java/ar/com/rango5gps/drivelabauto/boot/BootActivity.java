@@ -550,6 +550,19 @@ public final class BootActivity extends Activity
                     .show();
             }).show();
     }
+    private void askBridgeVirtualProbe(){
+        new AlertDialog.Builder(this)
+            .setTitle("PRUEBA AISLADA · PANTALLA VIRTUAL")
+            .setMessage("Sólo con la Jetour detenida. Se creará una pantalla "+
+                "virtual PRIVADA y se dibujará un patrón propio dentro de "+
+                "Bridge, en la pantalla central. NO se abrirá Waze, Spotify "+
+                "ni Display 1. La prueba se libera al salir o tras 2 minutos. "+
+                "¿Ejecutar?")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("PROBAR",(dialog,which)->
+                startActivity(new Intent(this,BridgeVirtualProbeActivity.class)))
+            .show();
+    }
     private void toggleLegacy(){
         if(legacyAdvanced){legacyAdvanced=false;draw();return;}
         new AlertDialog.Builder(this)
