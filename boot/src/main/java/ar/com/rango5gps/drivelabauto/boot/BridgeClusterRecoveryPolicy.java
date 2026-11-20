@@ -35,14 +35,15 @@ final class BridgeClusterRecoveryPolicy {
         for(String line:lines){
             Matcher head=STACK.matcher(line);
             if(head.find()){
-                if(root>=0&&display==1){
-                    if(tasks!=1||matched!=1||mapId<=10)return Collections.emptyList();
+                if(root>=0&&display==1&&matched>0){
+                    if(tasks!=1||matched!=1||mapId<=10||root<=10)
+                        return Collections.emptyList();
                     found.add(new Task(root,mapId,pkg));
                 }
                 root=Integer.parseInt(head.group(1));
                 display=Integer.parseInt(head.group(2));
-                // Must never touch stack 0, home/system/vendor roots.
-                if(root<=10&&display==1)return Collections.emptyList();
+                // OEM/home stacks may coexist on Display 1, but are
+                // NEVER candidates to remove; mixed map+OEM is rejected.
                 tasks=0;matched=0;mapId=-1;pkg=null;
             }else if(ANY_TASK.matcher(line).find()){
                 if(root<0)return Collections.emptyList();
@@ -59,8 +60,9 @@ final class BridgeClusterRecoveryPolicy {
             }
         }
         if(malformed)return Collections.emptyList();
-        if(root>=0&&display==1){
-            if(tasks!=1||matched!=1||mapId<=10)return Collections.emptyList();
+        if(root>=0&&display==1&&matched>0){
+            if(tasks!=1||matched!=1||mapId<=10||root<=10)
+                return Collections.emptyList();
             found.add(new Task(root,mapId,pkg));
         }
         if(found.isEmpty()||found.size()>2)return Collections.emptyList();
