@@ -8,11 +8,9 @@
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
-    <uses-permission android:name="ar.com.rango5gps.drivelabauto.receiver.permission.BOOT_MOSAIC" />
     <queries>
         <package android:name="com.waze" />
         <package android:name="com.google.android.apps.maps" />
-        <package android:name="ar.com.rango5gps.drivelabauto.receiver" />
         <intent>
             <action android:name="android.intent.action.MAIN" />
             <category android:name="android.intent.category.LAUNCHER" />
@@ -49,12 +47,6 @@
         <receiver android:name=".BootReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
-            </intent-filter>
-        </receiver>
-        <receiver android:name=".BootResultReceiver" android:exported="true"
-            android:permission="ar.com.rango5gps.drivelabauto.receiver.permission.BOOT_MOSAIC">
-            <intent-filter>
-                <action android:name="ar.com.rango5gps.drivelabauto.boot.action.MOSAIC_RESULT" />
             </intent-filter>
         </receiver>
         <service android:name=".BridgeWheelAccessibilityService"
