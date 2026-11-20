@@ -47,6 +47,8 @@ jobs:
           mkdir -p /tmp/bridge-lab-ota
           javac -encoding UTF-8 -d /tmp/bridge-lab-ota boot/tests/BridgeLabOtaSourceContractTest.java
           java -cp /tmp/bridge-lab-ota ar.com.rango5gps.drivelabauto.boot.BridgeLabOtaSourceContractTest
+          javac -encoding UTF-8 -d /tmp/bridge-lab-ota boot/tests/BridgeImmersiveSourceContractTest.java
+          java -cp /tmp/bridge-lab-ota ar.com.rango5gps.drivelabauto.boot.BridgeImmersiveSourceContractTest
       - name: Build permanently signed isolated Bridge LAB APK and verify stable signer
         run: |
           set -euo pipefail
@@ -112,10 +114,8 @@ jobs:
               -f branch=bridge-lab-ota \
               -f message='ota(bridge-lab): publish verified signed LAB v1' -f content="$content" >/dev/null
           fi
-          curl --fail --location --retry 4 --retry-delay 2 \
-            -H 'Cache-Control: no-cache' \
-            "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/bridge-lab-ota/bridge-lab.json" \
-            | grep -F '"versionCode": 5'
+          gh api "repos/$GITHUB_REPOSITORY/contents/bridge-lab.json?ref=bridge-lab-ota" --jq .content \
+            | base64 -d | grep -F '"versionCode": 5'
       - uses: actions/upload-artifact@v4
         with:
           name: DriveLab-Bridge-LAB-0.1.4-PERMANENT-SIGNED-OTA
