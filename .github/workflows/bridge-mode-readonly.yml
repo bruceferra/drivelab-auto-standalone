@@ -32,6 +32,8 @@ on:
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeMapsStartPolicy.java'
       - 'boot/tests/BridgeMapsStartPolicyTest.java'
       - 'boot/tests/BridgeWheelReceiverParitySourceTest.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeOemVoiceLauncher.java'
+      - 'boot/tests/BridgeOemUnifiedInputSourceTest.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeGoogleMapsReplacement.java'
       - 'boot/tests/BridgeMapsReceiverAutoRouteSourceTest.java'
       - 'boot/src/main/res/xml/bridge_wheel_accessibility.xml'
@@ -151,6 +153,14 @@ jobs:
             ar.com.rango5gps.drivelabauto.boot.BridgeWheelReceiverParitySourceTest
           java -cp /tmp/bridge-wheel-parity \
             ar.com.rango5gps.drivelabauto.boot.BridgeMapsReceiverAutoRouteSourceTest
+      - name: Enforce ONE shared OEM microphone 1010 and wheel receiver with live counters
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-oem-shared
+          javac -encoding UTF-8 -d /tmp/bridge-oem-shared \
+            boot/tests/BridgeOemUnifiedInputSourceTest.java
+          java -cp /tmp/bridge-oem-shared \
+            ar.com.rango5gps.drivelabauto.boot.BridgeOemUnifiedInputSourceTest
       - name: Validate one-shot, same-stack Waze ADB foreground probe, never OEM
         run: |
           set -euo pipefail
