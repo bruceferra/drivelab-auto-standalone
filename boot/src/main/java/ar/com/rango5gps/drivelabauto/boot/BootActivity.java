@@ -331,7 +331,10 @@ public final class BootActivity extends Activity
             .setPositiveButton("DETENER",(d,w)->{
                 prefs().edit().putBoolean("enabled",false).apply();
                 startLink(BootLinkService.STOP);
-                draw();
+                // User requested complete shutdown of the standalone
+                // Bridge interface and listener; only this app's own task
+                // is removed. No force-stop or third-party task changes.
+                finishAndRemoveTask();
             }).show();
     }
     private void requestOverlay(){
@@ -463,7 +466,8 @@ public final class BootActivity extends Activity
         button("INICIAR RECEPTOR XIAOMI",()->
             startLink(BootLinkService.START));
         button("VINCULAR POR QR · MOSTRAR CÓDIGO",this::showQr);
-        button("DETENER RECEPTOR Y SU AUTOINICIO",this::stopBridge);
+        button("CERRAR BRIDGE · APAGAR ENLACE Y SALIR",
+            this::stopBridge);
         text("Para recibir destinos con Bridge oculto, Android "+
             "puede requerir autorización de ventanas superpuestas. "+
             "El permiso no garantiza que Jetour muestre mapas.",12,QUIET);
