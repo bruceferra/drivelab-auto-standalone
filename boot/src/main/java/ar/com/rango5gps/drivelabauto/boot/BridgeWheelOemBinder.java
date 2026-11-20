@@ -11,6 +11,7 @@ import android.os.Looper;
 import android.os.Parcel;
 import android.os.RemoteException;
 import android.os.SystemClock;
+import android.content.SharedPreferences;
 
 /** Proprietary Jetour read-only wheel event subscription, no car writes.
  * Register/unregister are vendor interop transactions 1/2, event=3.
@@ -22,6 +23,25 @@ final class BridgeWheelOemBinder {
     interface Listener{
         void event(int code,int action,int extra);
         void status(String message);
+    }
+    private static final String PREFS="bridge_oem_shared_hardkeys_v1";
+    private static final String KEY_STATE="registration_state";
+    private static final String KEY_LAST="last_callback";
+    private static final String KEY_COUNT="callback_count";
+    private static final String KEY_MIC_COUNT="mic_count";
+    private static SharedPreferences prefs(Context c){
+        return c.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
+    }
+    static String diagnostic(Context c){
+        SharedPreferences p=prefs(c);
+        return p.getString(KEY_STATE,"Aún no solicitado")+" · "+
+            "EVENTOS OEM "+p.getInt(KEY_COUNT,0)+
+            " · MICROFONO 1010 "+p.getInt(KEY_MIC_COUNT,0)+
+            " · ULTIMO "+p.getString(KEY_LAST,"ninguno");
+    }
+    private void state(String message){
+        prefs(context).edit().putString(KEY_STATE,message).apply();
+        listener.status(message);
     }
     private static final String SERVICE_PKG="com.autolink.hardkeyservice";
     private static final String SERVICE_CLS=
@@ -45,13 +65,27 @@ final class BridgeWheelOemBinder {
                 if(reply!=null)reply.writeString(CALLBACK_TOKEN);
                 return true;
             }
+            if(transaction==1||transaction==2){
+                data.enforceInterface(CALLBACK_TOKEN);
+                if(reply!=null)reply.writeNoException();
+                return true; // exact callback parity with DriveLab Auto
+            }
             if(transaction!=3)return super.onTransact(transaction,data,reply,flags);
             data.enforceInterface(CALLBACK_TOKEN);
             int code=data.readInt(),action=data.readInt(),extra=data.readInt();
             if(reply!=null)reply.writeNoException();
-            if(code<1000||code>1003)return true;
+            if((code<1000||code>1003)&&code!=1010)return true;
             main.post(()->{
-                if(requested&&registered)listener.event(code,action,extra);
+                if(!requested||!registered)return;
+                SharedPreferences pref=prefs(context);
+                SharedPreferences.Editor e=pref.edit()
+                    .putInt(KEY_COUNT,pref.getInt(KEY_COUNT,0)+1)
+                    .putString(KEY_LAST,"key="+code+" action="+action+
+                        " extra="+extra+" · "+System.currentTimeMillis());
+                if(code==1010)
+                    e.putInt(KEY_MIC_COUNT,pref.getInt(KEY_MIC_COUNT,0)+1);
+                e.apply();
+                listener.event(code,action,extra);
             });
             return true;
         }
@@ -63,9 +97,10 @@ final class BridgeWheelOemBinder {
             try{
                 transact(1);
                 registered=true;
-                listener.status("OEM: rueda conectada; sólo mapas visibles en Display 1");
+                state("BINDER OEM REGISTRADO · único receptor compartido "+
+                    "rueda 1000–1003 / micrófono 1010");
             }catch(Exception ex){
-                listener.status("OEM no permitió registrar rueda: "+
+                state("OEM no permitió registrar Binder compartido: "+
                     ex.getClass().getSimpleName());
                 stop();
             }
@@ -73,7 +108,7 @@ final class BridgeWheelOemBinder {
         @Override public void onServiceDisconnected(ComponentName component){
             server=null;
             registered=false;
-            listener.status("OEM: enlace de volante desconectado");
+            state("OEM: Binder compartido desconectado");
         }
     };
     BridgeWheelOemBinder(Context app,Listener listener){
@@ -91,17 +126,18 @@ final class BridgeWheelOemBinder {
         }
         requested=true;
         requestAt=SystemClock.elapsedRealtime();
+        state("BINDER OEM SOLICITADO · esperando registro de Jetour");
         Intent intent=new Intent().setComponent(
             new ComponentName(SERVICE_PKG,SERVICE_CLS));
         try{
             bound=context.bindService(intent,connection,Context.BIND_AUTO_CREATE);
             if(!bound){
                 requested=false;
-                listener.status("Servicio OEM hardkey no disponible");
+                state("Servicio OEM hardkey no disponible");
             }
         }catch(Exception ex){
             bound=false;requested=false;
-            listener.status("Error conectando volante OEM: "+
+            state("Error conectando Binder OEM: "+
                 ex.getClass().getSimpleName());
         }
     }
@@ -117,6 +153,7 @@ final class BridgeWheelOemBinder {
         }finally{p.recycle();response.recycle();}
     }
     void stop(){
+        if(!requested&&!bound)return;
         requested=false;
         if(registered){
             try{transact(2);}catch(Exception ignored){}
@@ -126,5 +163,6 @@ final class BridgeWheelOemBinder {
             try{context.unbindService(connection);}catch(Exception ignored){}
         }
         bound=false;server=null;
+        state("BINDER OEM LIBERADO por Bridge; registro detenido");
     }
 }
