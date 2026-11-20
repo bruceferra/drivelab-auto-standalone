@@ -7,8 +7,8 @@ android {
     minSdk 30
     targetSdk 32
     // First *permanently signed* LAB build. Version increments for every OTA.
-    versionCode 8
-    versionName '0.1.7'
+    versionCode 9
+    versionName '0.1.8'
   }
   signingConfigs {
     release {
@@ -40,7 +40,7 @@ android {
     lab {
       initWith release
       applicationIdSuffix '.lab'
-      versionNameSuffix '-lab.4'
+      versionNameSuffix '-lab.5'
       manifestPlaceholders.bridgeLabel = 'DriveLab Bridge LAB'
       matchingFallbacks = ['release']
     }
