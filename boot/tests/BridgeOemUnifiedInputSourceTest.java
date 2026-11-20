@@ -37,6 +37,8 @@ public final class BridgeOemUnifiedInputSourceTest {
             service.contains("if(code==1010)")&&
             service.contains("BridgeOemVoiceLauncher.trigger(this,action)")&&
             service.contains("if(isCaptureActive())")&&
+            service.contains("live.oem.stop();")&&
+            service.contains("live.oem.start();")&&
             service.contains("return; // No selection/click/back/gesture during recapture.")&&
             !service.contains("GestureDescription")&&
             !service.contains("dispatchGesture("),

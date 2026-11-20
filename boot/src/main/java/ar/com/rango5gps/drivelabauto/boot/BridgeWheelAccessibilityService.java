@@ -72,9 +72,20 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
         prefs(c).edit().putInt(CAPTURE_COUNT,0)
             .putString(CAPTURE_LAST,"Sin tecla todavía")
             .putString(CAPTURE_STATUS,
-                "CAPTURANDO TECLAS OEM 20 S · sólo lectura, sin zoom/OK/atrás")
+                "REINSCRIBIENDO BINDER OEM · CAPTURA 20 S · sólo lectura; "+
+                "sin zoom/OK/atrás ni acciones en Maps")
             .apply();
-        live.main.post(live::reconcileWheel);
+        live.main.post(()->{
+            // Receiver parity: a stale but reportedly registered OEM
+            // callback can be silent after Jetour changes ownership.
+            // This explicit parked-only test does ONE local unregister/
+            // re-register, not ADB, force-stop or OEM property writes.
+            if(live.oem!=null){
+                live.oem.stop();
+                live.oem.start();
+            }
+            live.reconcileWheel();
+        });
         // No map actions during capture. The Binder may be held by
         // another installed service, which is reported, not bypassed.
         return true;

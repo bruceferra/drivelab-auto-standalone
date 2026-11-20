@@ -372,8 +372,10 @@ public final class BootActivity extends Activity
             .setTitle("RECAPTURAR VOLANTE · 20 SEGUNDOS")
             .setMessage("Con la Jetour ESTACIONADA y el control de volante "+
                 "de T1Launcher DESACTIVADO para evitar dos receptores OEM. "+
-                "Bridge conectará temporalmente el Binder de la rueda "+
-                "y registrará códigos 1000–1003 de rueda, OK y Atrás. "+
+                "Bridge LIBERARÁ Y REINSCRIBIRÁ UNA VEZ su propio Binder "+
+                "para registrar 1000–1003 (rueda, OK y Atrás) y 1010 "+
+                "(micrófono). Si otra app mantiene el único callback, "+
+                "habrá un conflicto de registro; Bridge no la detiene. "+
                 "Durante estos 20 segundos NO ejecuta opciones, zoom, "+
                 "gestos ni acciones sobre Google Maps, Waze o Jetour. "+
                 "Se desconecta al terminar si el volante no estaba "+
