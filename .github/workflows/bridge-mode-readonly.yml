@@ -15,6 +15,8 @@ on:
       - 'boot/tests/BridgeUpdateInstallerSourceContractTest.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeAccessPolicy.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeLocalAdb.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeBackgroundAccess.java'
+      - 'boot/tests/BridgeBackgroundLaunchSourceTest.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWheelAccessRecovery.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeAdbRsaSpec.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BootConfig.java'
@@ -61,6 +63,12 @@ jobs:
           mkdir -p /tmp/bridge-proven-installer
           javac -encoding UTF-8 -d /tmp/bridge-proven-installer boot/tests/BridgeUpdateInstallerSourceContractTest.java
           java -cp /tmp/bridge-proven-installer ar.com.rango5gps.drivelabauto.boot.BridgeUpdateInstallerSourceContractTest
+      - name: Assert background receipt independent from visible Bridge and restricted owner ADB
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-bg
+          javac -encoding UTF-8 -d /tmp/bridge-bg boot/tests/BridgeBackgroundLaunchSourceTest.java
+          java -cp /tmp/bridge-bg ar.com.rango5gps.drivelabauto.boot.BridgeBackgroundLaunchSourceTest
       - name: Assert independent QR/boot/updater, no Receiver autolaunch
         run: |
           set -euo pipefail
