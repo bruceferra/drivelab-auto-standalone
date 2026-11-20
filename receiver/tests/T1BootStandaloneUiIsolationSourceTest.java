@@ -18,7 +18,7 @@ public final class T1BootStandaloneUiIsolationSourceTest {
             ui.contains("PANTALLA CENTRAL · DISPLAY 0 · BRIDGE")&&
             ui.contains("PANTALLA DEL TABLERO · DISPLAY 1")&&
             ui.contains("PROBAR DOS VENTANAS · SÓLO BRIDGE")&&
-            ui.contains("PROBAR MAPA TABLERO · ESTACIONADO")&&
+            ui.contains("LIBERAR CLÚSTER")&&
             ui.contains("VINCULAR POR QR")&&
             ui.contains("BridgeWheelAccessRecovery.ask(this)")&&
             !ui.contains("BootConfig.send")&&
@@ -26,12 +26,11 @@ public final class T1BootStandaloneUiIsolationSourceTest {
             !ui.contains("MOSAICO_RECUPERADO_SOLICITADO:"),
             "Default Bridge UI owns QR/center/tablero/wheel independently");
         ck(windows.contains("BridgeWindowMath.center(")&&
-            windows.contains("BridgeWindowMath.display1(")&&
-            windows.contains("p.getBoolean(TAB_CONFIRMED,false)")&&
-            windows.contains("p.getBoolean(TAB_ROUTE,false)")&&
+            windows.contains("BridgeClusterRecovery.disableNewCluster(activity)")&&
+            windows.contains("return false;")&&
             !windows.contains("ReceiverService")&&
             link.contains("BridgeStandaloneWindows.routeOnTablero(this,pkg)"),
-            "Sender routes by Bridge's own confirmed visual map; no Receiver state");
+            "Sender is fail-closed for unsafe display1 until virtual host is built");
         ck(manifest.contains("android:taskAffinity=\"${applicationId}.config\"")&&
             manifest.contains("android:launchMode=\"singleTask\"")&&
             manifest.contains("android:icon=\"@drawable/ic_drivelab_boot\"")&&
