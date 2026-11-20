@@ -85,9 +85,14 @@ public final class BootLinkService extends Service {
         SharedPreferences p=prefs(c);
         String ip=localIp();
         String ticket=p.getString("qr_ticket","");
+        // Never offer a QR if the old Receiver is still occupying one
+        // of the ports. A valid ticket without live sockets would produce
+        // a pairing failure that looked like a broken Xiaomi Sender.
         if(!ip.matches("[0-9.]{7,15}")||
            !ticket.matches("[0-9a-f]{48}")||
-           p.getLong("qr_until",0)<System.currentTimeMillis())
+           p.getLong("qr_until",0)<System.currentTimeMillis()||
+           !p.getString("status","").startsWith("ESCUCHANDO ")||
+           !p.getString("pair_port_status","").equals("PUERTO 48392 · LISTO"))
             return "";
         return "drivelabauto://pair?ip="+ip+"&ticket="+ticket;
     }
