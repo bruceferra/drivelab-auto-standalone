@@ -24,8 +24,8 @@ public final class BridgeStandaloneWindowContractTest {
         yes(win.contains("getLaunchIntentForPackage(pkg)")&&
             win.contains("BridgeWindowsPolicy.allowed(pkg)")&&
             win.contains("validCenter(first,second,ratio)")&&
-            win.contains("BridgeClusterRecovery.disableNewCluster(activity)")&&
-            win.contains("Display 1 BLOQUEADO")&&
+            win.contains("options.setLaunchDisplayId(1)")&&
+            win.contains("100%, sin Freeform")&&
             !win.contains("BootConfig.send")&&
             !win.contains("assertReceiver")&&
             !win.contains("pm clear")&&
@@ -36,6 +36,7 @@ public final class BridgeStandaloneWindowContractTest {
             "Independent launch must preserve Maps/Spotify routes and protect OEM");
         yes(ui.contains("PROBAR DOS VENTANAS · SÓLO BRIDGE")&&
             ui.contains("LIBERAR CLÚSTER")&&
+            ui.contains("ACTIVAR DISPLAY 1 · PANTALLA COMPLETA 100%")&&
             !ui.contains("button(\"PROBAR MAPA TABLERO")&&
             ui.contains("BridgeStandaloneWindows.center(this)")&&
             ui.contains("BridgeStandaloneWindows.tablero(this)")&&
