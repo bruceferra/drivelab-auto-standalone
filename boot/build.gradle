@@ -20,7 +20,20 @@ android {
     }
   }
   buildTypes {
-    release { signingConfig signingConfigs.release; minifyEnabled false }
+    // QA/LAB is a separate installable APK. Never replace an existing
+    // stable, differently signed Boot on the owner's Jetour head unit.
+    // Independent package, tasks and private data. No vehicle controls
+    // or OEM changes are enabled implicitly.
+    debug {
+      applicationIdSuffix '.lab'
+      versionNameSuffix '-lab-20261120'
+      manifestPlaceholders.bridgeLabel = 'DriveLab Bridge LAB'
+    }
+    release {
+      signingConfig signingConfigs.release
+      minifyEnabled false
+      manifestPlaceholders.bridgeLabel = 'DriveLab Bridge'
+    }
   }
   compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
 }
