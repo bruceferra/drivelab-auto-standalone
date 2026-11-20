@@ -24,7 +24,7 @@ public final class BridgeWheelReceiverParitySourceTest {
             service.contains("if(isCaptureActive())")&&
             service.contains("return; // No selection/click/back/gesture during recapture.")&&
             service.contains("CAPTURE_COUNT")&&
-            service.contains("onOemEvent(int code,int action)")&&
+            service.contains("onOemEvent(int code,int action,int extra)")&&
             service.contains("MapWindow visible=optIn?visibleMap():null;")&&
             service.contains("if(!oem.active())oem.start();")&&
             service.contains("main.postDelayed(refresh,700L)")&&
