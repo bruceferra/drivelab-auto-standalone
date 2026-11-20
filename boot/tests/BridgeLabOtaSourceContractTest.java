@@ -43,8 +43,8 @@ public final class BridgeLabOtaSourceContractTest {
         ok(gradle.contains("applicationIdSuffix '.lab'")&&
            gradle.contains("lab {")&&
            gradle.contains("initWith release")&&
-           gradle.contains("versionNameSuffix '-lab.9'")&&
-           gradle.contains("versionCode 13")&&
+           gradle.contains("versionNameSuffix '-lab.10'")&&
+           gradle.contains("versionCode 14")&&
            gradle.contains("assembleLab")&&
            manifest.contains("android:authorities=\"${applicationId}.updatefiles\"")&&
            manifest.contains("android:allowBackup=\"false\""),
@@ -56,7 +56,7 @@ public final class BridgeLabOtaSourceContractTest {
            workflow.contains("--prerelease")&&
            workflow.contains("bridge-lab-ota")&&
            workflow.contains("Point isolated OTA manifest to published signed asset LAST")&&
-           workflow.contains("gh release create bridge-lab-v9"),
+           workflow.contains("gh release create bridge-lab-v10"),
            "Permanent LAB signing, signer proof, separate prerelease and manifest must publish atomically");
         System.out.println("PASS separate permanent-signed LAB OTA, verified package/cert/hash and Android install consent");
     }
