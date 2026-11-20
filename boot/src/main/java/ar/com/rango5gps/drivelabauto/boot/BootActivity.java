@@ -598,18 +598,18 @@ public final class BootActivity extends Activity
                         clusterConfirmed=true;persist();draw();
                     }).show());
             button(clusterEnabled?
-                "AUTOBOOT INCLUYE CLÚSTER: SÍ · CAMBIAR":
-                "AUTOBOOT INCLUYE CLÚSTER: NO · CAMBIAR",
+                "GUARDADO DISPLAY 1: SÍ · CAMBIAR":
+                "GUARDADO DISPLAY 1: NO · CAMBIAR",
                 ()->{
                     clusterEnabled=!clusterEnabled;
                     if(!clusterEnabled)clusterConfirmed=false;
                     persist();draw();
                 });
             text(clusterEnabled?
-                "Display 1 se incluirá en el próximo encendido SOLO "+
-                    "si su diseño fue confirmado.":
-                "Display 1 puede probarse manualmente, pero no "+
-                    "se abrirá con Boot al encender.",12,QUIET);
+                "Preferencia guardada para pruebas avanzadas. "+
+                    "BRIDGE TODAVÍA NO AUTOINICIA VENTANAS.":
+                "Display 1 sólo se puede ensayar manualmente "+
+                    "desde la sección LEGADA. Nunca al encender.",12,QUIET);
         }
         } // Las configuraciones antiguas sólo se abren por decisión explícita.
         text("INICIO AUTOMÁTICO DE BRIDGE · SÓLO XIAOMI",17,WHITE);
