@@ -93,7 +93,8 @@ public final class BootActivity extends Activity
             String key){
         if(p==linkPrefs()){
             if("qr_ticket".equals(key)||"qr_until".equals(key)||
-               "pair_status".equals(key)||"status".equals(key)||
+               "pair_status".equals(key)||"pair_port_status".equals(key)||
+               "status".equals(key)||
                "received".equals(key)||"last_route".equals(key))
                 runOnUiThread(()->{
                     if(qrImage!=null)renderQr();
@@ -261,8 +262,14 @@ public final class BootActivity extends Activity
         String payload=BootLinkService.qr(this);
         if(payload.isEmpty()){
             qrImage.setVisibility(View.GONE);
-            qrCaption.setText(linkPrefs().getString("pair_status",
-                "Creando QR (Jetour y Xiaomi en la misma red)…"));
+            qrCaption.setText(
+                "El QR aparecerá cuando ambos puertos estén LISTOS. "+
+                "Navegación: "+linkPrefs().getString("status",
+                    "iniciando")+
+                " · QR: "+linkPrefs().getString("pair_port_status",
+                    "iniciando")+
+                " · "+linkPrefs().getString("pair_status",
+                    "Conectá Jetour y Xiaomi a la misma red."));
             return;
         }
         try{
