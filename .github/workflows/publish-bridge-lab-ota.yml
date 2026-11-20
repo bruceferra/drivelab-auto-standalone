@@ -1,4 +1,4 @@
-name: Publish signed Bridge LAB independent OTA v8
+name: Publish signed Bridge LAB independent OTA v9
 # One-off, reviewed publication from the owner-maintained Bridge branch.
 # All Android Lint fatal checks remain active except the narrowly guarded
 # OEM private-API reflection in the parked-only Freeform experiment.
@@ -71,15 +71,15 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'bruceferra/drivelab-auto-standalone'
-          ! gh release view bridge-lab-v8 >/dev/null 2>&1
+          ! gh release view bridge-lab-v9 >/dev/null 2>&1
           gradle --no-daemon :boot:assembleLab
           apk=boot/build/outputs/apk/lab/boot-lab.apk
           test -s "$apk"
           aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
           signer="$ANDROID_HOME/build-tools/35.0.0/apksigner"
           "$aapt" dump badging "$apk" | grep -F "package: name='ar.com.rango5gps.drivelabauto.boot.lab'"
-          "$aapt" dump badging "$apk" | grep -F "versionCode='12'"
-          "$aapt" dump badging "$apk" | grep -F "versionName='0.1.11-lab.8'"
+          "$aapt" dump badging "$apk" | grep -F "versionCode='13'"
+          "$aapt" dump badging "$apk" | grep -F "versionName='0.1.12-lab.9'"
           "$signer" verify --print-certs "$apk"
           mkdir -p /tmp/bridge-old-boot dist
           gh release download v0.3.97 --pattern 'DriveLab-Boot-v0.1.3.apk' --dir /tmp/bridge-old-boot
@@ -87,20 +87,20 @@ jobs:
           oldcert=$("$signer" verify --print-certs /tmp/bridge-old-boot/DriveLab-Boot-v0.1.3.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
           newcert=$("$signer" verify --print-certs "$apk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
           test -n "$oldcert" && test "$oldcert" = "$newcert"
-          cp "$apk" dist/DriveLab-Bridge-LAB-v0.1.11-lab.8.apk
+          cp "$apk" dist/DriveLab-Bridge-LAB-v0.1.12-lab.9.apk
           sha256sum dist/*.apk > dist/bridge-lab.sha256
           python3 - <<'PY'
           import hashlib,json,os,pathlib
-          apk=pathlib.Path("dist/DriveLab-Bridge-LAB-v0.1.11-lab.8.apk")
+          apk=pathlib.Path("dist/DriveLab-Bridge-LAB-v0.1.12-lab.9.apk")
           manifest={
              "channel":"bridge-lab",
              "packageName":"ar.com.rango5gps.drivelabauto.boot.lab",
-             "versionName":"0.1.11-lab.8",
-             "versionCode":12,
-             "tag":"bridge-lab-v8",
+             "versionName":"0.1.12-lab.9",
+             "versionCode":13,
+             "tag":"bridge-lab-v9",
              "size":apk.stat().st_size,
              "sha256":hashlib.sha256(apk.read_bytes()).hexdigest(),
-             "apkUrl":f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/bridge-lab-v8/{apk.name}"
+             "apkUrl":f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/bridge-lab-v9/{apk.name}"
           }
           pathlib.Path("dist/bridge-lab.json").write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
           PY
@@ -108,13 +108,13 @@ jobs:
       - name: Publish LAB prerelease but NEVER replace stable latest
         run: |
           set -euo pipefail
-          gh release create bridge-lab-v8 \
-            dist/DriveLab-Bridge-LAB-v0.1.11-lab.8.apk \
+          gh release create bridge-lab-v9 \
+            dist/DriveLab-Bridge-LAB-v0.1.12-lab.9.apk \
             dist/bridge-lab.sha256 dist/bridge-lab.json \
             --target "$GITHUB_SHA" --prerelease \
-            --title 'DriveLab Bridge LAB 0.1.11 · prueba real de OTA desde 0.1.10' \
-            --notes 'Bridge LAB 0.1.11 is a separately signed newer version, versionCode 12, designed to physically exercise the Receiver-derived updater in Bridge LAB 0.1.10 code11. Install v0.1.10 from Android files if the old v0.1.9 updater cannot open installer, then request this v0.1.11 using Bridge OTA. SHA-256, identical permanent signing certificate and package enforced. Changes beyond the version number are NONE. Does not alter QR, vehicle controls, cluster, wheel or third-party data. An actual Jetour installation must be observed before claiming OTA success.'
-          gh release view bridge-lab-v8 --json isPrerelease --jq '.isPrerelease' | grep -Fx true
+            --title 'DriveLab Bridge LAB 0.1.12 · actualizador único arriba' \
+            --notes 'Bridge LAB 0.1.12 is the owner-requested UI cleanup following successful physical OTA 0.1.10 to 0.1.11 on Jetour. Exactly ONE BUSCAR ACTUALIZACION LAB OTA button directly beneath the app/version header, before Xiaomi and other sections; remove three redundant installer/retry/Android confirmation/fallback buttons and explanatory wall of text. Keep native Receiver-derived Android PackageInstaller pipeline and signature, unchanged Bridge package and stored QR key, no cluster or steering changes. IMPORTANT persistent Xiaomi QR also needs Sender v0.2.23 installed on the phone; Bridge OTA alone cannot update Sender.'
+          gh release view bridge-lab-v9 --json isPrerelease --jq '.isPrerelease' | grep -Fx true
           tag=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
           test "$tag" = v0.3.97
       - name: Point isolated OTA manifest to published signed asset LAST
@@ -133,12 +133,12 @@ jobs:
               -f message='ota(bridge-lab): publish verified signed LAB v2' -f content="$content" >/dev/null
           fi
           gh api "repos/$GITHUB_REPOSITORY/contents/bridge-lab.json?ref=bridge-lab-ota" --jq .content \
-            | base64 -d | grep -F '"versionCode": 12'
+            | base64 -d | grep -F '"versionCode": 13'
       - uses: actions/upload-artifact@v4
         with:
-          name: DriveLab-Bridge-LAB-0.1.11-PERMANENT-SIGNED-OTA
+          name: DriveLab-Bridge-LAB-0.1.12-PERMANENT-SIGNED-OTA
           path: |
-            dist/DriveLab-Bridge-LAB-v0.1.11-lab.8.apk
+            dist/DriveLab-Bridge-LAB-v0.1.12-lab.9.apk
             dist/bridge-lab.sha256
             dist/bridge-lab.json
           if-no-files-found: error
