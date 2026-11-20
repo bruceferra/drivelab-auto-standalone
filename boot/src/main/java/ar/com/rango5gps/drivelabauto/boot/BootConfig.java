@@ -14,6 +14,12 @@ final class BootConfig {
         return context.getSharedPreferences(PREFS,Context.MODE_PRIVATE);
     }
     static boolean enabled(Context context){
-        return prefs(context).getBoolean("enabled",false);
+        SharedPreferences p=prefs(context);
+        // Preserve explicit owner ON/OFF. For previous LAB versions that
+        // saved QR pairing but never configured auto-start, automatically
+        // resume ONLY the network listener from their existing own key.
+        if(p.contains("enabled"))return p.getBoolean("enabled",false);
+        String saved=BootLinkService.prefs(context).getString("secret","");
+        return saved!=null&&saved.matches("[A-Za-z0-9_-]{22}");
     }
 }
