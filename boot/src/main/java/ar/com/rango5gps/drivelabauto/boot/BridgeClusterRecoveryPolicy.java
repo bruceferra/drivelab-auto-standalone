@@ -78,7 +78,8 @@ final class BridgeClusterRecoveryPolicy {
         return found;
     }
     static String removeCommand(Task task){
-        if(task==null||task.taskId<=10||task.taskId>=10_000_000||
+        if(task==null||task.stackId<=10||task.stackId>=10_000_000||
+            task.taskId<=10||task.taskId>=10_000_000||
             (!"com.waze".equals(task.pkg)&&
              !"com.google.android.apps.maps".equals(task.pkg)))
             throw new SecurityException("No es una tarea de mapa verificable");
