@@ -1,6 +1,6 @@
-name: Publish signed Bridge LAB independent OTA v17
+name: Publish signed Bridge LAB independent OTA v18
 # One-off, reviewed publication from the owner-maintained Bridge branch.
-# LAB 0.1.20 requires an owner-only private Display Activity source contract.
+# LAB 0.1.21 requires an owner-only private Display Activity source contract.
 # All Android Lint fatal checks remain active except the narrowly guarded
 # OEM private-API reflection in the parked-only Freeform experiment.
 # NEVER change stable /releases/latest. The isolated LAB has its own package.
@@ -101,15 +101,15 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'bruceferra/drivelab-auto-standalone'
-          ! gh release view bridge-lab-v17 >/dev/null 2>&1
+          ! gh release view bridge-lab-v18 >/dev/null 2>&1
           gradle --no-daemon :boot:assembleLab
           apk=boot/build/outputs/apk/lab/boot-lab.apk
           test -s "$apk"
           aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
           signer="$ANDROID_HOME/build-tools/35.0.0/apksigner"
           "$aapt" dump badging "$apk" | grep -F "package: name='ar.com.rango5gps.drivelabauto.boot.lab'"
-          "$aapt" dump badging "$apk" | grep -F "versionCode='21'"
-          "$aapt" dump badging "$apk" | grep -F "versionName='0.1.20-lab.17'"
+          "$aapt" dump badging "$apk" | grep -F "versionCode='22'"
+          "$aapt" dump badging "$apk" | grep -F "versionName='0.1.21-lab.18'"
           "$signer" verify --print-certs "$apk"
           mkdir -p /tmp/bridge-old-boot dist
           gh release download v0.3.97 --pattern 'DriveLab-Boot-v0.1.3.apk' --dir /tmp/bridge-old-boot
@@ -117,20 +117,20 @@ jobs:
           oldcert=$("$signer" verify --print-certs /tmp/bridge-old-boot/DriveLab-Boot-v0.1.3.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
           newcert=$("$signer" verify --print-certs "$apk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
           test -n "$oldcert" && test "$oldcert" = "$newcert"
-          cp "$apk" dist/DriveLab-Bridge-LAB-v0.1.20-lab.17.apk
+          cp "$apk" dist/DriveLab-Bridge-LAB-v0.1.21-lab.18.apk
           sha256sum dist/*.apk > dist/bridge-lab.sha256
           python3 - <<'PY'
           import hashlib,json,os,pathlib
-          apk=pathlib.Path("dist/DriveLab-Bridge-LAB-v0.1.20-lab.17.apk")
+          apk=pathlib.Path("dist/DriveLab-Bridge-LAB-v0.1.21-lab.18.apk")
           manifest={
              "channel":"bridge-lab",
              "packageName":"ar.com.rango5gps.drivelabauto.boot.lab",
-             "versionName":"0.1.20-lab.17",
-             "versionCode":21,
-             "tag":"bridge-lab-v17",
+             "versionName":"0.1.21-lab.18",
+             "versionCode":22,
+             "tag":"bridge-lab-v18",
              "size":apk.stat().st_size,
              "sha256":hashlib.sha256(apk.read_bytes()).hexdigest(),
-             "apkUrl":f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/bridge-lab-v17/{apk.name}"
+             "apkUrl":f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/bridge-lab-v18/{apk.name}"
           }
           pathlib.Path("dist/bridge-lab.json").write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
           PY
@@ -138,13 +138,13 @@ jobs:
       - name: Publish LAB prerelease but NEVER replace stable latest
         run: |
           set -euo pipefail
-          gh release create bridge-lab-v17 \
-            dist/DriveLab-Bridge-LAB-v0.1.20-lab.17.apk \
+          gh release create bridge-lab-v18 \
+            dist/DriveLab-Bridge-LAB-v0.1.21-lab.18.apk \
             dist/bridge-lab.sha256 dist/bridge-lab.json \
             --target "$GITHUB_SHA" --prerelease \
-            --title 'DriveLab Bridge LAB 0.1.20 · Android Activity en Display virtual' \
-            --notes 'Bridge LAB 0.1.20 fixes the 0.1.19 SecurityException diagnosis: calls Android 11 ActivityManager.isActivityStartAllowedOnDisplay before trying to open only a Bridge-owned Activity on the private VirtualDisplay. If the ROM denies the launch or startActivity throws SecurityException, shows a clearly labelled, animated, noninteractive PRESENTATION fallback on the same Display1 lower-band surface, never claiming Android Activity or Waze runs. Reports PRECHECK_DENIED_PRIVATE_DISPLAY vs START_ACTIVITY_SECURITY_EXCEPTION, preserves timed resource cleanup, avoids any hidden permissions, ADB overrides, task moves or third-party map interference. Existing 12s Radio/Bluetooth coverage test and Sender QR/routing and Receiver remain untouched.'
-          gh release view bridge-lab-v17 --json isPrerelease --jq '.isPrerelease' | grep -Fx true
+            --title 'DriveLab Bridge LAB 0.1.21 · prueba opcional de display virtual público' \
+            --notes 'LAB 0.1.21 investigates Android 11 SecurityException on private virtual Activity: a separate manual 20-second, PUBLIC + OWN_CONTENT_ONLY + PRESENTATION virtual display mode launches exclusively Bridge-owned non-exported Activity after ActivityManager preflight, never Waze or other apps. The 12s proven private layer and 20s private Activity tests remain. Public mode is opt-in with warning that other apps may access a public display temporarily, Android launch denial falls back to visibly labeled animated Presentation, and diagnosis is persistent after timed cleanup. It does not mirror the center display, modify OEM, remove existing map tasks, touch QR/Sender/Receiver or auto-enable wheel. No claim of real map hosting until verified physically.'
+          gh release view bridge-lab-v18 --json isPrerelease --jq '.isPrerelease' | grep -Fx true
           tag=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
           test "$tag" = v0.3.97
       - name: Point isolated OTA manifest to published signed asset LAST
@@ -163,12 +163,12 @@ jobs:
               -f message='ota(bridge-lab): publish verified signed LAB v2' -f content="$content" >/dev/null
           fi
           gh api "repos/$GITHUB_REPOSITORY/contents/bridge-lab.json?ref=bridge-lab-ota" --jq .content \
-            | base64 -d | grep -F '"versionCode": 21'
+            | base64 -d | grep -F '"versionCode": 22'
       - uses: actions/upload-artifact@v4
         with:
-          name: DriveLab-Bridge-LAB-0.1.20-PERMANENT-SIGNED-OTA
+          name: DriveLab-Bridge-LAB-0.1.21-PERMANENT-SIGNED-OTA
           path: |
-            dist/DriveLab-Bridge-LAB-v0.1.20-lab.17.apk
+            dist/DriveLab-Bridge-LAB-v0.1.21-lab.18.apk
             dist/bridge-lab.sha256
             dist/bridge-lab.json
           if-no-files-found: error
