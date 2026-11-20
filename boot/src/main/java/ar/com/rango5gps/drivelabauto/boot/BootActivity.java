@@ -8,6 +8,10 @@ import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.graphics.Color;
+import android.graphics.Bitmap;
+import android.net.Uri;
+import android.provider.Settings;
+import android.widget.ImageView;
 import android.os.Bundle;
 import android.view.Gravity;
 import android.view.View;
@@ -22,8 +26,8 @@ import java.util.ArrayList;
 import java.util.Map;
 import java.util.TreeMap;
 
-/** Standalone DriveLab Boot: one touchscreen config page, not an OEM HOME.
- * The receiver app stays installed, owns ADB and its OEM/control services.
+/** Independent DriveLab Bridge: Xiaomi QR and updater are standalone.
+ * Legacy Receiver mosaics remain ONLY in opt-in diagnostics.
  */
 public final class BootActivity extends Activity
         implements SharedPreferences.OnSharedPreferenceChangeListener {
@@ -38,6 +42,9 @@ public final class BootActivity extends Activity
     private int mode,percent;
     private int activeDisplay=0;
     private boolean revealPending=false;
+    private boolean legacyAdvanced=false;
+    private ImageView qrImage;
+    private TextView qrCaption;
     private TextView statusLabel;
     private final String[] selected=new String[3];
     private boolean clusterEnabled,clusterConfirmed;
@@ -48,14 +55,15 @@ public final class BootActivity extends Activity
     private static final int BG=0xFF101B25,PANEL=0xFF23313C,
         WHITE=Color.WHITE,QUIET=0xFFBDCED8;
     private SharedPreferences prefs(){return BootConfig.prefs(this);}
+    private SharedPreferences linkPrefs(){return BootLinkService.prefs(this);}
     @Override protected void onCreate(Bundle state){
         super.onCreate(state);
         SharedPreferences p=prefs();
         mode=Math.min(4,Math.max(0,p.getInt("mode",3)));
-        percent=Math.min(99,Math.max(1,p.getInt("percent",50)));
+        percent=Math.min(99,Math.max(1,p.getInt("percent",65)));
         for(int i=0;i<3;i++)
             selected[i]=p.getString("pkg"+i,
-                i==0?BootConfig.RECEIVER:i==1?"com.spotify.music":"");
+                i==0?"com.google.android.apps.maps":i==1?"com.spotify.music":"");
         clusterEnabled=p.getBoolean("cluster_enabled",false);
         clusterConfirmed=p.getBoolean("cluster_confirmed",false);
         clusterCount=Math.min(2,Math.max(1,p.getInt("cluster_count",2)));
@@ -70,16 +78,28 @@ public final class BootActivity extends Activity
         super.onResume();
         bridgeUiVisible=true;
         prefs().registerOnSharedPreferenceChangeListener(this);
+        linkPrefs().registerOnSharedPreferenceChangeListener(this);
         if(content!=null)draw();
         onSharedPreferenceChanged(prefs(),"last_status");
     }
     @Override protected void onPause(){
         bridgeUiVisible=false;
         prefs().unregisterOnSharedPreferenceChangeListener(this);
+        linkPrefs().unregisterOnSharedPreferenceChangeListener(this);
         super.onPause();
     }
     @Override public void onSharedPreferenceChanged(SharedPreferences p,
             String key){
+        if(p==linkPrefs()){
+            if("qr_ticket".equals(key)||"qr_until".equals(key)||
+               "pair_status".equals(key)||"status".equals(key)||
+               "received".equals(key)||"last_route".equals(key))
+                runOnUiThread(()->{
+                    if(qrImage!=null)renderQr();
+                    if(statusLabel!=null)statusLabel.setText(bridgeStatus());
+                });
+            return;
+        }
         if(!"last_status".equals(key))return;
         String current=p.getString("last_status","Sin diagnóstico");
         runOnUiThread(()->{
@@ -137,7 +157,7 @@ public final class BootActivity extends Activity
     }
     private String labelFor(String pkg){
         if(pkg==null||pkg.isEmpty())return "SIN ELEGIR";
-        if(pkg.equals(BootConfig.RECEIVER))return "DriveLab T1 · Cockpit";
+        if(pkg.equals(BootConfig.RECEIVER))return "LEGADO · DriveLab Auto";
         try{
             PackageManager pm=getPackageManager();
             return pm.getApplicationLabel(pm.getApplicationInfo(pkg,0))
@@ -164,9 +184,7 @@ public final class BootActivity extends Activity
         PackageManager pm=getPackageManager();
         TreeMap<String,String> apps=new TreeMap<>(
             String.CASE_INSENSITIVE_ORDER);
-        try{pm.getPackageInfo(BootConfig.RECEIVER,0);
-            apps.put("DriveLab T1 · Cockpit",BootConfig.RECEIVER);
-        }catch(Exception ignored){}
+        // Never offer the large DriveLab Auto Cockpit as a new map tile.
         Intent query=new Intent(Intent.ACTION_MAIN)
             .addCategory(Intent.CATEGORY_LAUNCHER);
         for(ResolveInfo info:pm.queryIntentActivities(query,0)){
