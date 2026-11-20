@@ -40,7 +40,7 @@ public final class SenderQrPersistenceSourceTest {
            discovery.contains("SenderClient.localIpv4(ip)")&&
            !discovery.contains("192.168.1.1")&&
            !discovery.contains("Scan")&&
-           !discovery.contains("remote Internet"),
+           !discovery.contains("8.8.8.8"),
            "Sender searches current connected subnet with fresh MAC, no fixed-IP guesses");
         ok(bridge.contains("new Thread(this::listenDiscovery")&&
            bridge.contains("BridgeDiscoveryProof.acceptsRequest(")&&
