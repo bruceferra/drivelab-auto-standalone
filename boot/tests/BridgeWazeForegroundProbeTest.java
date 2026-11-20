@@ -65,9 +65,9 @@ public final class BridgeWazeForegroundProbeTest {
         String adb=file("BridgeLocalAdb.java");
         String receiver=file("BootLinkService.java");
         String ignition=file("BootReceiver.java");
-        ok(ui.contains("PROBAR ADB · WAZE AL FRENTE · DISPLAY 1")&&
-            ui.contains("BridgeWazeForegroundProbe.ask(this)"),
-            "Only manual owner-clicked probe UI");
+        ok(!ui.contains("PROBAR ADB · WAZE AL FRENTE · DISPLAY 1")&&
+            !ui.contains("BridgeWazeForegroundProbe.ask(this)"),
+            "Failed Waze task-move experiment no longer offered to owner");
         ok(probe.contains("new AlertDialog.Builder(owner)")&&
             probe.contains("PROBAR WAZE AL FRENTE")&&
             probe.contains("BridgeWazeForegroundPolicy.uniqueWaze(report)")&&
