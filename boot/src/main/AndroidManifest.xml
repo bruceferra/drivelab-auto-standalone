@@ -34,6 +34,9 @@
             <meta-data android:name="android.support.FILE_PROVIDER_PATHS"
                 android:resource="@xml/bridge_update_files" />
         </provider>
+        <!-- Installer completion/pending-owner-consent only, not exported. -->
+        <receiver android:name=".BridgeInstallResultReceiver"
+            android:exported="false" />
         <activity android:name=".BootActivity" android:exported="true"
             android:resizeableActivity="true"
             android:taskAffinity="${applicationId}.config"
