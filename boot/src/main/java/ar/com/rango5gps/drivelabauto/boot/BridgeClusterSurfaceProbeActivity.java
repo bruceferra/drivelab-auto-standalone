@@ -47,8 +47,11 @@ public final class BridgeClusterSurfaceProbeActivity extends Activity
         DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY|
         DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION;
     private final Handler main=new Handler(Looper.getMainLooper());
-    private final Runnable timeout=()->stop("PRUEBA FINALIZADA "+
-        "AUTOMÁTICAMENTE tras 12 segundos. Capa liberada.");
+    private final Runnable timeout=()->stop(activityProbe?
+        "PRUEBA DE ACTIVITY FINALIZADA tras 20 segundos. "+
+            "Actividad, superficie y capa liberadas.":
+        "PRUEBA FINALIZADA AUTOMÁTICAMENTE tras 12 segundos. "+
+            "Capa liberada.");
     private DisplayManager displays;
     private Display physical;
     private Presentation cluster,pattern;

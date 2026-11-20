@@ -45,6 +45,9 @@ on:
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWindowMath.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeVirtualProbeActivity.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeClusterSurfaceProbeActivity.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeVirtualSceneActivity.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeVirtualTaskLauncher.java'
+      - 'boot/tests/BridgeOwnedVirtualActivitySourceTest.java'
       - 'boot/tests/BridgeClusterSurfaceProbeSourceTest.java'
       - 'boot/tests/BridgeVirtualProbeContractTest.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWindowsPolicy.java'
@@ -180,6 +183,14 @@ jobs:
             boot/tests/BridgeClusterSurfaceProbeSourceTest.java
           java -cp /tmp/bridge-display1-proof \
             ar.com.rango5gps.drivelabauto.boot.BridgeClusterSurfaceProbeSourceTest
+      - name: Verify real owned Activity on private virtual display, not Waze
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-owned-scene
+          javac -encoding UTF-8 -d /tmp/bridge-owned-scene \
+            boot/tests/BridgeOwnedVirtualActivitySourceTest.java
+          java -cp /tmp/bridge-owned-scene \
+            ar.com.rango5gps.drivelabauto.boot.BridgeOwnedVirtualActivitySourceTest
       - name: Verify isolated private VirtualDisplay to TextureView proof (no maps or OEM)
         run: |
           set -euo pipefail
