@@ -230,8 +230,11 @@ public final class BootActivity extends Activity
     }
     private void startLink(String action){
         try{
-            startForegroundService(new Intent(this,BootLinkService.class)
-                .setAction(action));
+            Intent request=new Intent(this,BootLinkService.class)
+                .setAction(action);
+            if(BootLinkService.STOP.equals(action))
+                startService(request);
+            else startForegroundService(request);
             prefs().edit().putString("last_status",
                 "Solicitud local: "+action+" · esperando confirmación").apply();
         }catch(Exception ex){
