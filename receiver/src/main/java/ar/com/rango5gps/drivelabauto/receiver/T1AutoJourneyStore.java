@@ -460,11 +460,13 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
         writeLine(out,"sesion_id;fecha_epoch_ms;ready_1031;cable_1060;"+
             "marcha_1033;velocidad_kmh;soc;volt;amps;rpm;gps_lat;gps_lon;"+
             "precision_m;km_oem_acum;km_gps_acum;hv_salida_acum;"+
-            "hv_entrada_acum\n");
+            "hv_entrada_acum;soc_interno_1042;tanque_ci186_l;"+
+            "caida_tanque_candidata_l_acum\n");
         try(Cursor c=getReadableDatabase().rawQuery(
             "SELECT session_id,t_epoch_ms,raw_ready,raw_cable,raw_gear,"+
                 "speed_kmh,soc,volt,amps,rpm,gps_lat,gps_lon,"+
-                "gps_accuracy_m,km_oem_cum,km_gps_cum,hv_out_cum,hv_in_cum "+
+                "gps_accuracy_m,km_oem_cum,km_gps_cum,hv_out_cum,hv_in_cum,"+
+                "soc_internal,fuel_tank_l,fuel_drop_l_cum "+
                 "FROM samples WHERE t_epoch_ms>=? AND t_epoch_ms<? "+
                 "ORDER BY t_epoch_ms",
             new String[]{Long.toString(from),Long.toString(until)})){
@@ -492,11 +494,13 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
             writeLine(out,"sesion_id;fecha_epoch_ms;ready_1031;cable_1060;"+
                 "marcha_1033;velocidad_kmh;soc_1062;volt_1063;amps_1064;"+
                 "rpm_1035;gps_lat;gps_lon;gps_accuracy_m;km_oem_acum;"+
-                "km_gps_acum;hv_salida_kwh_acum;hv_entrada_kwh_acum\n");
+                "km_gps_acum;hv_salida_kwh_acum;hv_entrada_kwh_acum;"+
+                "soc_interno_1042;tanque_ci186_l;caida_tanque_candidata_l_acum\n");
             try(Cursor c=getReadableDatabase().rawQuery(
                 "SELECT session_id,t_epoch_ms,raw_ready,raw_cable,"+
                 "raw_gear,speed_kmh,soc,volt,amps,rpm,gps_lat,gps_lon,"+
-                "gps_accuracy_m,km_oem_cum,km_gps_cum,hv_out_cum,hv_in_cum "+
+                "gps_accuracy_m,km_oem_cum,km_gps_cum,hv_out_cum,hv_in_cum,"+
+                "soc_internal,fuel_tank_l,fuel_drop_l_cum "+
                 "FROM samples ORDER BY t_epoch_ms",null)){
                 while(c.moveToNext()){
                     StringBuilder line=new StringBuilder();
