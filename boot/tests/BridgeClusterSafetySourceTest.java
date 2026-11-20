@@ -20,17 +20,19 @@ public final class BridgeClusterSafetySourceTest {
         String adb=file(dir+"BridgeLocalAdb.java");
         String listener=file(dir+"BootLinkService.java");
         yes(window.contains("static boolean routeOnTablero(Context c,String pkg)")&&
-            window.contains("return false;")&&
-            window.contains("Display 1 BLOQUEADO")&&
-            window.contains("BridgeClusterRecovery.disableNewCluster(activity)")&&
-            !window.contains("BridgeWindowMath.display1("),
-            "Legacy direct Freeform Display1 must be disabled");
-        yes(ui.contains("BridgeClusterRecovery.disableNewCluster(this)")&&
+            window.contains("p.getBoolean(TAB_CONFIRMED,false)")&&
+            window.contains("p.getBoolean(TAB_ROUTE,false)")&&
+            window.contains("options.setLaunchDisplayId(1)")&&
+            !window.contains("BridgeWindowMath.display1(")&&
+            !window.contains("method.invoke(options,FREEFORM);\n        options.setLaunchDisplayId(1)"),
+            "Display1 manual fullscreen only, with no bounded/unsafe Freeform bounds");
+        yes(!ui.contains("BridgeClusterRecovery.disableNewCluster(this)")&&
+            ui.contains("BridgeWheelAccessibilityService.ENABLED,false")&&
             ui.contains("LIBERAR CLÚSTER")&&
-            !ui.contains("button(\"PROBAR MAPA TABLERO")&&
+            ui.contains("ACTIVAR DISPLAY 1 · PANTALLA COMPLETA 100%")&&
             !ui.contains("button(wheelOn?")&&
             !ui.contains("this::openWheelPermission"),
-            "No unsafe TAB launch, OEM wheel capture, or broken Jetour Settings button");
+            "Manual only Display1; wheel stays off; no Activity-open reset");
         yes(recovery.contains("BridgeWheelAccessibilityService.ENABLED,false")&&
             recovery.contains("BridgeStandaloneWindows.TAB_ROUTE,false")&&
             recovery.contains("BridgeStandaloneWindows.TAB_CONFIRMED,false")&&
@@ -54,8 +56,9 @@ public final class BridgeClusterSafetySourceTest {
             !adb.contains("am force-stop")&&
             !adb.contains("pm clear")&&
             !adb.contains("am display move-stack")&&
-            listener.contains("BridgeStandaloneWindows.routeOnTablero(this,pkg)"),
-            "Local ADB allowlist only, Sender routes safely on display 0");
-        System.out.println("PASS block direct Display1 Freeform; explicit validated map-only recovery, never OEM");
+            listener.contains("BridgeDualRoutePolicy.plan(")&&
+            listener.contains("options.setLaunchDisplayId(displayId)"),
+            "Local ADB allowlist unchanged, Senders route only approved Waze/Maps apps");
+        System.out.println("PASS manual fullscreen Display1, no Freeform, wheel OFF, recovery never OEM");
     }
 }
