@@ -5,6 +5,8 @@ on:
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeModeLayerDiff.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeAdbReadOnly.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeLayersActivity.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeLayerCaptureStore.java'
+      - 'boot/tests/BridgeLayerCapturePersistenceSourceTest.java'
       - 'boot/tests/BridgeModeLayerDiffTest.java'
       - 'boot/tests/BridgeIndependentBootContractTest.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BootActivity.java'
@@ -79,6 +81,14 @@ jobs:
             boot/tests/BridgeIndependentBootContractTest.java
           java -cp /tmp/jetour-bridge-contract \
             ar.com.rango5gps.drivelabauto.boot.BridgeIndependentBootContractTest
+      - name: Persist A/B Jetour layer snapshots across Activity closure and app restart
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-capture-persist
+          javac -encoding UTF-8 -d /tmp/bridge-capture-persist \
+            boot/tests/BridgeLayerCapturePersistenceSourceTest.java
+          java -cp /tmp/bridge-capture-persist \
+            ar.com.rango5gps.drivelabauto.boot.BridgeLayerCapturePersistenceSourceTest
       - name: Test A/B Jetour MODE overlay parser with fixture
         run: |
           set -euo pipefail
