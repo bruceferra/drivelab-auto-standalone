@@ -1,6 +1,7 @@
 package ar.com.rango5gps.drivelabauto.boot;
 
 import android.app.Activity;
+import android.os.SystemClock;
 import android.app.Presentation;
 import android.content.Context;
 import android.graphics.Color;
@@ -38,7 +39,9 @@ public final class BridgeClusterSurfaceProbeActivity extends Activity
         implements TextureView.SurfaceTextureListener {
     private static final int DPI=213;
     private int width,height,bandHeight;
+    static final String EXTRA_ACTIVITY_PROBE="bridge_owned_activity_probe";
     private static final long MAX_MS=12000L;
+    private static final long APP_MAX_MS=20000L;
     private static final String PREFS="bridge_display1_surface_probe_v1";
     private static final int FLAGS=
         DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY|
@@ -54,20 +57,35 @@ public final class BridgeClusterSurfaceProbeActivity extends Activity
     private Surface surface;
     private TextView status;
     private boolean closed,frame;
+    private boolean activityProbe,sceneVerified;
+    private long sceneToken;
+    private BridgeVirtualSceneActivity.Listener sceneListener;
 
     @Override protected void onCreate(Bundle saved){
         super.onCreate(saved);
+        activityProbe=getIntent()!=null&&
+            getIntent().getBooleanExtra(EXTRA_ACTIVITY_PROBE,false);
         BridgeImmersive.apply(this);
         LinearLayout body=new LinearLayout(this);
         body.setPadding(24,22,24,24);
         body.setOrientation(LinearLayout.VERTICAL);
         body.setBackgroundColor(0xFF101C27);
         TextView title=new TextView(this);
-        title.setText("BRIDGE · COMPROBAR CAPA REAL EN DISPLAY 1");
+        title.setText(activityProbe?
+            "BRIDGE · APP REAL EN PANTALLA VIRTUAL":
+            "BRIDGE · COMPROBAR CAPA REAL EN DISPLAY 1");
         title.setTextSize(19); title.setTextColor(0xFF42E3D0);
         body.addView(title);
         TextView instructions=new TextView(this);
-        instructions.setText("SÓLO CON LA JETOUR ESTACIONADA. Durante 12 segundos "+
+        instructions.setText(activityProbe?
+            "SÓLO ESTACIONADO. Durante 20 segundos Bridge intentará abrir "+
+            "una ACTIVIDAD ANDROID PROPIA (no Waze) en su Display virtual "+
+            "privado y mostrarla en el 65 % inferior del tablero, "+
+            "cubriendo Radio/Bluetooth sin pintar la franja superior. "+
+            "Si aparece el contador que cambia, es una actividad real. "+
+            "No toca rutas, tareas de terceros, OEM ni volante. "+
+            "La prueba se cierra sola. NO utilizar conduciendo.":
+            "SÓLO CON LA JETOUR ESTACIONADA. Durante 12 segundos "+
             "Bridge cubrirá TODO EL ANCHO Y LA ZONA INFERIOR del Display 1, "+
             "incluido Radio/Bluetooth a la derecha. La franja superior "+
             "se deja transparente para los avisos de seguridad. "+
@@ -92,7 +110,7 @@ public final class BridgeClusterSurfaceProbeActivity extends Activity
 
         // Owner has already confirmed that the Jetour is parked in
         // BootActivity. Never run from a receiver, boot or background.
-        main.postDelayed(timeout,MAX_MS);
+        main.postDelayed(timeout,activityProbe?APP_MAX_MS:MAX_MS);
         main.post(this::startProbe);
     }
 
@@ -183,6 +201,10 @@ public final class BridgeClusterSurfaceProbeActivity extends Activity
                (d.getFlags()&Display.FLAG_PRIVATE)==0)
                 throw new SecurityException(
                     "Pantalla virtual no está aislada");
+            if(activityProbe){
+                launchOwnActivity(d);
+                return;
+            }
             pattern=new Presentation(this,d);
             LinearLayout scene=new LinearLayout(pattern.getContext());
             scene.setOrientation(LinearLayout.VERTICAL);
@@ -205,9 +227,40 @@ public final class BridgeClusterSurfaceProbeActivity extends Activity
                 issue.getClass().getSimpleName());
         }
     }
+    private void launchOwnActivity(Display d){
+        // Only the display owner's own Activity, NEVER Waze on private VD.
+        sceneToken=SystemClock.elapsedRealtimeNanos();
+        final int requested=d.getDisplayId();
+        sceneListener=(token,actual,isVirtual)->{
+            if(closed||token!=sceneToken)return;
+            if(!isVirtual||actual!=requested){
+                stop("ERROR: la actividad NO llegó al Display virtual "+
+                    requested+" (real "+actual+"). No se movió Waze.");
+                return;
+            }
+            sceneVerified=true;
+            report("ACTIVIDAD BRIDGE EN DISPLAY VIRTUAL "+
+                actual+". ¿Ves el CONTADOR ANIMADO delante de Bluetooth? "+
+                "Pendiente confirmación visual.");
+        };
+        BridgeVirtualSceneActivity.setListener(sceneListener);
+        report("Solicitando Activity propia en Display virtual "+
+            requested+". Waze y Maps permanecen sin cambios.");
+        BridgeVirtualTaskLauncher.launchOwn(this,d,sceneToken);
+        main.postDelayed(()->{
+            if(!closed&&!sceneVerified)
+                stop("SIN CONFIRMACIÓN DE ACTIVITY VIRTUAL tras 8 s. "+
+                    "Android Jetour puede impedir esta operación.");
+        },8000L);
+    }
     @Override public void onSurfaceTextureUpdated(SurfaceTexture texture){
         if(closed||frame)return;
         frame=true;
+        if(activityProbe){
+            if(!sceneVerified)report("GPU recibió cuadro virtual. "+
+                "Aún no se verificó la Activity en su display.");
+            return;
+        }
         report("CUADRO VIRTUAL RECIBIDO EN DISPLAY 1. "+
             "Sólo la observación de la esquina inferior derecha "+
             "confirma si Radio/Bluetooth quedó detrás.");
@@ -222,6 +275,14 @@ public final class BridgeClusterSurfaceProbeActivity extends Activity
         if(closed)return;
         closed=true;
         main.removeCallbacks(timeout);
+        if(sceneListener!=null){
+            BridgeVirtualSceneActivity.clearListener(sceneListener);
+            sceneListener=null;
+        }
+        if(sceneToken!=0){
+            BridgeVirtualSceneActivity.finishSession(sceneToken);
+            sceneToken=0;
+        }
         if(pattern!=null){
             try{pattern.dismiss();}catch(Exception ignored){}
             pattern=null;

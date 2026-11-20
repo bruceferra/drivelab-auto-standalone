@@ -28,6 +28,13 @@
         <activity android:name=".BridgeClusterSurfaceProbeActivity"
             android:exported="false"
             android:resizeableActivity="false" />
+        <!-- Only our UID may start this on our private VirtualDisplay.
+             Separate temporary task, never HOME or externally exported. -->
+        <activity android:name=".BridgeVirtualSceneActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:resizeableActivity="true"
+            android:taskAffinity="${applicationId}.virtualprobe" />
         <activity android:name=".BridgeLayersActivity"
             android:exported="false"
             android:resizeableActivity="true" />

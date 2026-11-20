@@ -398,6 +398,23 @@ public final class BootActivity extends Activity
             })
             .setNegativeButton("CANCELAR",null).show();
     }
+    private void askRealVirtualActivityProbe(){
+        new AlertDialog.Builder(this)
+            .setTitle("LAB · APP REAL EN DISPLAY VIRTUAL")
+            .setMessage("SÓLO CON EL VEHÍCULO ESTACIONADO. Durante 20 segundos "+
+                "Bridge intentará abrir una actividad Android PROPIA "+
+                "en la pantalla virtual y mostrar un contador animado "+
+                "sobre Radio/Bluetooth. No es Waze. No toca tareas "+
+                "ajenas, mapas, volante ni controles Jetour. "+
+                "El 35 % superior del tablero no dibuja Bridge.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("PROBAR APP 20 S",(d,w)->
+                startActivity(new Intent(this,
+                    BridgeClusterSurfaceProbeActivity.class)
+                    .putExtra(BridgeClusterSurfaceProbeActivity.EXTRA_ACTIVITY_PROBE,
+                        true)))
+            .show();
+    }
     private void askRealClusterSurfaceProbe(){
         new AlertDialog.Builder(this)
             .setTitle("PRUEBA REAL DE SUPERFICIE · DISPLAY 1")
@@ -604,8 +621,10 @@ public final class BootActivity extends Activity
             "por Android.",12,QUIET);
         button("COMPROBAR CAPA INFERIOR COMPLETA · DISPLAY 1 · 12 S",
             this::askRealClusterSurfaceProbe);
-        text("CAPA REAL: "+BridgeClusterSurfaceProbeActivity.lastResult(this),
-            12,QUIET);
+        button("LAB · PROBAR APP REAL EN CAPA VIRTUAL · 20 S",
+            this::askRealVirtualActivityProbe);
+        text("RESULTADO CAPA / APP: "+
+            BridgeClusterSurfaceProbeActivity.lastResult(this),12,QUIET);
         button("LIBERAR CLÚSTER · SÓLO MAPAS VERIFICADOS",
             ()->BridgeClusterRecovery.ask(this));
         text("RECUPERACIÓN: "+BridgeClusterRecovery.status(this),12,QUIET);
