@@ -5,6 +5,7 @@ import android.app.NotificationChannel;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.app.Service;
+import android.app.ActivityOptions;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
@@ -265,24 +266,46 @@ public final class BootLinkService extends Service {
                 "una sola vez; el QR se conserva.");
             return false;
         }
-        String[] apps=BridgeRouteTarget.BOTH.equals(target)?
-            new String[]{"com.waze","com.google.android.apps.maps"}:
-            new String[]{BridgeRouteTarget.MAPS.equals(target)?
-                "com.google.android.apps.maps":"com.waze"};
+        // Sender's target is INDEPENDENT from where each app lives.
+        // BOTH means TWO separate route intents every time, including
+        // when one map was closed, backgrounded, or placed on Display 1.
+        BridgeDualRoutePolicy.Target[] plan=BridgeDualRoutePolicy.plan(
+            target,BridgeStandaloneWindows.tabMap(this),
+            BridgeStandaloneWindows.tableroEnabled(this));
+        if(plan.length==0)return false;
         int accepted=0;
-        for(String pkg:apps)
-            if(openMap(pkg,kind,packet.value))accepted++;
-        boolean all=accepted==apps.length;
-        prefs(this).edit().putString("last_route",
-            all?"DESTINO ENVIADO A "+accepted+" MAPA(S) · comprobar tablero":
-            "DESTINO PARCIAL: "+accepted+"/"+apps.length+
-                " mapa(s) recibieron solicitud; sin confirmación visual")
+        StringBuilder attempts=new StringBuilder();
+        for(int i=0;i<plan.length;i++){
+            BridgeDualRoutePolicy.Target selected=plan[i];
+            String result=openMap(selected.pkg,kind,packet.value,
+                selected.displayId);
+            if(i>0)attempts.append(" | ");
+            attempts.append(result);
+            if(result.startsWith("SOLICITUD "))accepted++;
+            // Without a short handoff Waze can be backgrounded by Maps
+            // before Android's onNewIntent has run. Still stay within
+            // the existing Sender's 4-second NAV response timeout.
+            if(i+1<plan.length){
+                try{Thread.sleep(350L);}
+                catch(InterruptedException interrupted){
+                    Thread.currentThread().interrupt();
+                }
+            }
+        }
+        boolean all=accepted==plan.length;
+        String status=(all?"ENVÍOS SOLICITADOS: ":"ENVÍO PARCIAL: ")+
+            accepted+"/"+plan.length+" · "+attempts+
+            ". Android recibió intents; inicio efectivo de rutas NO verificado.";
+        prefs(this).edit().putString("last_route",status)
             .putInt("received",prefs(this).getInt("received",0)+(all?1:0))
             .apply();
-        // Crucial: Sender ACK means all intents submitted, not visible.
+        // The encrypted ACK confirms that Android accepted every request,
+        // not that Waze/Google have drawn or begun navigation.
         return all;
     }
-    private boolean openMap(String pkg,String base,String destination){
+    private String openMap(String pkg,String base,String destination,
+                           int displayId){
+        String app="com.waze".equals(pkg)?"Waze":"Google Maps";
         try{
             Intent map;
             Uri uri;
@@ -293,33 +316,30 @@ public final class BootLinkService extends Service {
                 map=new Intent(Intent.ACTION_VIEW,uri).setPackage(pkg);
             }else if("com.google.android.apps.maps".equals(pkg)){
                 uri=Uri.parse("google.navigation:q="+
-                    Uri.encode(destination,"coord".equals(base)?",":"")+"&mode=d");
+                    Uri.encode(destination,"coord".equals(base)?",":"")+
+                    "&mode=d");
                 map=new Intent(Intent.ACTION_VIEW,uri).setPackage(pkg);
-            }else return false;
-            if(getPackageManager().resolveActivity(map,0)==null){
-                update("last_route","ANDROID NO ENCUENTRA "+
-                    ("com.waze".equals(pkg)?"WAZE":"GOOGLE MAPS")+
-                    " en la pantalla principal");
-                return false;
-            }
+            }else return "RECHAZADO: paquete no es mapa permitido";
+            if(getPackageManager().resolveActivity(map,0)==null)
+                return "NO INSTALADO/ENLACE NO DISPONIBLE: "+app;
+            if(displayId!=0&&displayId!=1)
+                return "RECHAZADO: pantalla inválida para "+app;
+            if(displayId==1&&
+               !BridgeStandaloneWindows.display1Available(this))
+                return "DISPLAY 1 NO DISPONIBLE: "+app+
+                    " (no se redirigió silenciosamente al central)";
             map.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|
                 Intent.FLAG_ACTIVITY_SINGLE_TOP);
-            // Bridge's own, user-confirmed destination. NEVER consult the
-            // legacy Receiver's cluster_enabled / cluster_display_id flags.
-            // Direct Sender-to-Display1 launch is disabled after the
-            // physical Jetour Freeform/volante failures. No display 1
-            // activity can be opened by an incoming Xiaomi destination.
-            if(BridgeStandaloneWindows.routeOnTablero(this,pkg))
-                throw new SecurityException("Tablero no habilitado");
-            startActivity(map); // Display 0 only until virtual host QA.
-            return true;
-        }catch(Exception blocked){
-            update("last_route","ANDROID RECHAZÓ ABRIR "+
-                ("com.waze".equals(pkg)?"WAZE":"GOOGLE MAPS")+
-                ": "+blocked.getClass().getSimpleName()+
-                " · permiso de segundo plano: "+
-                (BridgeBackgroundAccess.authorized(this)?"sí":"no"));
-            return false;
+            // Android's public launchDisplayId API, with no Freeform
+            // bounds or hidden OEM hooks. A closed map can be launched;
+            // an existing task receives an Android deep-link request.
+            ActivityOptions options=ActivityOptions.makeBasic();
+            options.setLaunchDisplayId(displayId);
+            startActivity(map,options.toBundle());
+            return "SOLICITUD "+app+" → Display "+displayId;
+        }catch(Exception denied){
+            return "ERROR "+app+" → Display "+displayId+
+                " ("+denied.getClass().getSimpleName()+")";
         }
     }
     private void listenPair(){
