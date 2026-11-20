@@ -41,7 +41,7 @@ public final class T1BootStandaloneSourceContractTest {
             !ui.contains("legacyAdvanced"),
             "Configuration and UI must not delegate maps or windows to Receiver");
         ok(ui.contains("PROBAR DOS VENTANAS · SÓLO BRIDGE")&&
-            ui.contains("PROBAR MAPA TABLERO · ESTACIONADO")&&
+            ui.contains("LIBERAR CLÚSTER")&&
             ui.contains("VINCULAR POR QR")&&
             ui.contains("RECONECTAR ACCESIBILIDAD · ADB LOCAL")&&
             windows.contains("static Result center(")&&
