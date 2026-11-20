@@ -37,7 +37,7 @@ public final class T1AutoJourneyActivity extends T1ImmersiveActivity {
         BG=0xFF101820,CARD=0xFF1F2F3A,WHITE=Color.WHITE,
         MUTED=0xFFBECDD6,BLUE=0xFF285A6B;
     private TextView overview,rangeStatus,reconciledHistorical;
-    private LinearLayout entries,rangeDays,rangeIgnitions;
+    private LinearLayout entries,rangeDays,rangeIgnitions,rangeTimeline;
     private EditText dateFrom,dateUntil;
     private final AtomicBoolean computingRange=new AtomicBoolean(false);
     private volatile long selectedFrom=0,selectedUntil=0;
@@ -75,13 +75,9 @@ public final class T1AutoJourneyActivity extends T1ImmersiveActivity {
             "Se crean sin tocar INICIAR. Independientes de Viaje 1, "+
             "Viaje 2 y Total. Datos locales con hora, SOC, GPS (si está "+
             "disponible) y energía HV de entrada/salida.",13,MUTED));
-        // One canonical external reconstruction, visible on the AUTO screen
-        // even if the original OEM SQLite sessions predate the import.
-        // Never overwrite raw OEM sessions with third-party values.
-        reconciledHistorical=label(
-            "18/11 · LEYENDO RECONSTRUCCIÓN T1LAUNCHER…",14,WHITE);
-        reconciledHistorical.setBackgroundColor(CARD);
-        root.addView(reconciledHistorical);
+        // Historic external reference belongs AFTER the selected date report,
+        // not above it: the previous screen made 18/11 appear to be the
+        // current selected period and confused the owner.
         LinearLayout controls=row(root);
         action(controls,"AUTO ON",()->setAuto(true));
         action(controls,"AUTO OFF",()->setAuto(false));
@@ -89,8 +85,8 @@ public final class T1AutoJourneyActivity extends T1ImmersiveActivity {
         LinearLayout csv=row(root);
         action(csv,"EXPORTAR SESIONES",()->save(false));
         action(csv,"EXPORTAR PUNTOS GPS",()->save(true));
-        root.addView(label("GENERADOR DE VIAJES · FECHA Y HORA EXACTAS",
-            17,WHITE));
+        root.addView(label("INFORME AUTOMÁTICO POR FECHAS · "+
+            "CONDUCCIÓN + CARGAS",17,WHITE));
         root.addView(label("Elegí DESDE y HASTA con fecha y hora, al minuto. "+
             "Ejemplo: sábado 19:00 a sábado 23:50. "+
             "También permite períodos de varios días desde las 00:00. "+
@@ -117,6 +113,9 @@ public final class T1AutoJourneyActivity extends T1ImmersiveActivity {
         action(process,"GENERAR DETALLE",this::generateRange);
         action(process,"EXPORTAR RESUMEN",()->exportRange(false));
         action(process,"EXPORTAR GPS FILTRADO",()->exportRange(true));
+        LinearLayout presets=row(root);
+        action(presets,"HOY · DESDE 00:00",()->presetRange(0));
+        action(presets,"ÚLTIMOS 7 DÍAS",()->presetRange(7));
         LinearLayout cutoffRow=row(root);
         action(cutoffRow,"DESDE 19/11/2026 08:00 · SIN INVENTAR KM",()->{
             dateFrom.setText("2026-11-19 08:00");
@@ -128,6 +127,13 @@ public final class T1AutoJourneyActivity extends T1ImmersiveActivity {
         rangeStatus.setBackgroundColor(CARD);root.addView(rangeStatus);
         rangeDays=rowList(root,"ESTADÍSTICAS POR DÍA");
         rangeIgnitions=rowList(root,"DESGLOSE POR CADA ENCENDIDO");
+        rangeTimeline=rowList(root,"CRONOLOGÍA · VIAJES Y CARGAS");
+        root.addView(label("REFERENCIA HISTÓRICA AJENA AL FILTRO · 18/11",
+            14,MUTED));
+        reconciledHistorical=label(
+            "18/11 · LEYENDO RECONSTRUCCIÓN T1LAUNCHER…",13,MUTED);
+        reconciledHistorical.setBackgroundColor(CARD);
+        root.addView(reconciledHistorical);
         overview=label("Leyendo base…",14,WHITE);
         overview.setBackgroundColor(CARD);root.addView(overview);
         root.addView(label("HISTORIAL POR ENCENDIDO",17,WHITE));
@@ -189,6 +195,22 @@ public final class T1AutoJourneyActivity extends T1ImmersiveActivity {
         },now.get(Calendar.YEAR),now.get(Calendar.MONTH),
           now.get(Calendar.DAY_OF_MONTH)).show();
     }
+    private void presetRange(int days){
+        Calendar start=Calendar.getInstance();
+        Calendar now=Calendar.getInstance();
+        if(days==0){
+            start.set(Calendar.HOUR_OF_DAY,0);
+            start.set(Calendar.MINUTE,0);
+            start.set(Calendar.SECOND,0);
+        }else{
+            start.add(Calendar.DAY_OF_YEAR,-days);
+        }
+        SimpleDateFormat fmt=new SimpleDateFormat(
+            "yyyy-MM-dd HH:mm",Locale.getDefault());
+        dateFrom.setText(fmt.format(start.getTime()));
+        dateUntil.setText(fmt.format(now.getTime()));
+        generateRange();
+    }
     private void generateRange(){
         if(!computingRange.compareAndSet(false,true)){
             note("Ya se está calculando un intervalo");return;
@@ -214,14 +236,23 @@ public final class T1AutoJourneyActivity extends T1ImmersiveActivity {
             " con puntos OEM/GPS, sin modificar sesiones…");
         new Thread(()->{
             T1AutoJourneyStore.RangeReport result=null;
+            T1AutoRangeTimeline.Result timeline=null;
             String error="";
-            try(T1AutoJourneyStore db=new T1AutoJourneyStore(this)){
+            try(T1AutoJourneyStore db=new T1AutoJourneyStore(this);
+                T1ChargeStore chargeDb=new T1ChargeStore(this)){
                 result=db.between(from,until);
+                float fuelPrice=getSharedPreferences(
+                    T1TripRecorderService.PREFS,MODE_PRIVATE)
+                    .getFloat(T1TripRecorderService.FUEL_PRICE,Float.NaN);
+                timeline=T1AutoRangeTimeline.build(result,
+                    db.overlapping(from,until),chargeDb.overlapping(from,until),
+                    from,until,fuelPrice);
             }catch(Exception ex){
                 error=ex.getClass().getSimpleName()+": "+
                     String.valueOf(ex.getMessage());
             }
             final T1AutoJourneyStore.RangeReport report=result;
+            final T1AutoRangeTimeline.Result merged=timeline;
             final String failure=error;
             runOnUiThread(()->{
                 computingRange.set(false);
@@ -231,7 +262,7 @@ public final class T1AutoJourneyActivity extends T1ImmersiveActivity {
                     return;
                 }
                 selectedFrom=from;selectedUntil=until;
-                rangeCsv=report.csv();
+                rangeCsv=merged==null?report.csv():merged.csv(report);
                 boolean includesReconstructed=from<=T1RebuiltMorning.FROM&&
                     until>=T1RebuiltMorning.UNTIL;
                 String sourceWarning=includesReconstructed?
@@ -243,17 +274,40 @@ public final class T1AutoJourneyActivity extends T1ImmersiveActivity {
                     " kWh REGENERADOS. No se suman a los datos OEM.\n":
                     "";
                 rangeStatus.setText(
-                    "VIAJE ESTADÍSTICO VIRTUAL · OEM ORIGINAL"+
+                    "INFORME HISTÓRICO POR RANGO · OEM + GPS + CARGAS"+
                     "\n"+dateFrom.getText()+" → "+dateUntil.getText()+
                     "\n"+sourceWarning+
-                    "\nOEM RAW (NO RECONCILIADO): "+
+                    "\nOEM OBSERVADO (SIN RECONCILIACIÓN): "+
                     report.total.describe()+
-                    "\nLos km y kWh OEM corresponden SOLO a puntos "+
-                    "observados en el intervalo. Si superponen "+
-                    "T1Launcher, no sumarlos ni confundir HV entrada "+
-                    "con regeneración de frenado.");
+                    (merged==null?"":"\n\n"+merged.describe())+
+                    "\nLos kilómetros OEM, kWh, niveles CI186 y cargas "+
+                    "corresponden sólo a lecturas registradas; no hay "+
+                    "reconstrucción de datos ausentes. El HV de entrada "+
+                    "durante conducción incluye generador térmico y frenadas.");
                 renderSlices(rangeDays,report.days.values());
                 renderSlices(rangeIgnitions,report.byIgnition.values());
+                rangeTimeline.removeAllViews();
+                if(merged!=null){
+                    int visible=0;
+                    for(T1AutoRangeTimeline.Event event:merged.events){
+                        if(visible>=200)break;
+                        TextView card=label(
+                            T1AutoRangeTimeline.description(event),13,WHITE);
+                        card.setBackgroundColor(CARD);
+                        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT,-2);
+                        lp.topMargin=8;rangeTimeline.addView(card,lp);
+                        visible++;
+                    }
+                    if(merged.events.size()>visible)
+                        rangeTimeline.addView(label(
+                            "Mostrando "+visible+" de "+merged.events.size()+
+                            " eventos; exportá CSV para verlos todos",13,MUTED));
+                    if(merged.events.isEmpty())
+                        rangeTimeline.addView(label(
+                            "Sin conducciones ni cargas observadas "+
+                            "en el intervalo",13,MUTED));
+                }
             });
         },"T1-Auto-Range-Background").start();
     }
