@@ -172,6 +172,11 @@ final class BridgeStandaloneWindows {
      * as the vendor display permits. Must be physically inspected.
      */
     static Result tablero(Activity activity){
+        // A new request is not proof that the previous map is still
+        // visible. Invalidate Sender routing before attempting it.
+        prefs(activity).edit()
+            .putBoolean(TAB_CONFIRMED,false)
+            .putBoolean(TAB_ROUTE,false).apply();
         String map=tabMap(activity);
         if(!BridgeWindowsPolicy.validMap(map))
             return reject(activity,"Display 1 sólo admite Waze o Google Maps");
