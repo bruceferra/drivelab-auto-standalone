@@ -347,6 +347,62 @@ public final class BootActivity extends Activity
                 ex.getClass().getSimpleName(),Toast.LENGTH_LONG).show();
         }
     }
+    /** Explicitly opt in to option navigation, never zoom. This can
+     * compete with T1Launcher's OEM hard-key callback, so owner approval
+     * is required and Bridge never enables it during auto-start.
+     */
+    private void toggleWheel(){
+        SharedPreferences p=BridgeWheelAccessibilityService.prefs(this);
+        if(p.getBoolean(BridgeWheelAccessibilityService.ENABLED,false)){
+            p.edit().putBoolean(BridgeWheelAccessibilityService.ENABLED,false)
+                .putString(BridgeWheelAccessibilityService.STATUS,
+                    "Volante Bridge desactivado por el propietario").apply();
+            draw();
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("VOLANTE · RECORRER OPCIONES DEL MAPA")
+            .setMessage("La rueda avanza o retrocede entre opciones "+
+                "visibles de Waze/Google Maps en Display 1. "+
+                "OK confirma y ATRÁS cancela. NO hace zoom.\n\n"+
+                "Antes de activarlo, desactivá VOLANTE → MAPA "+
+                "en T1Launcher: el Binder OEM puede permitir "+
+                "un solo controlador. Bridge no se activará "+
+                "automáticamente al encender ni tocará el sistema Jetour.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("ACTIVAR",(d,w)->{
+                p.edit().putBoolean(
+                    BridgeWheelAccessibilityService.ENABLED,true).apply();
+                draw();
+            }).show();
+    }
+    private void chooseWheelMap(){
+        SharedPreferences p=BridgeWheelAccessibilityService.prefs(this);
+        String current=p.getString(BridgeWheelAccessibilityService.TARGET,
+            BridgeWheelAccessibilityService.MAPS);
+        new AlertDialog.Builder(this)
+            .setTitle("VOLANTE · APP EN DISPLAY 1")
+            .setSingleChoiceItems(new String[]{"Google Maps","Waze"},
+                BridgeWheelAccessibilityService.WAZE.equals(current)?1:0,
+                (d,which)->{
+                    p.edit().putString(BridgeWheelAccessibilityService.TARGET,
+                        which==0?BridgeWheelAccessibilityService.MAPS:
+                            BridgeWheelAccessibilityService.WAZE).apply();
+                    d.dismiss();draw();
+                })
+            .setNegativeButton("CANCELAR",null).show();
+    }
+    private void openWheelPermission(){
+        try{
+            startActivity(new Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS));
+        }catch(Exception ex){
+            new AlertDialog.Builder(this)
+                .setTitle("ACCESIBILIDAD NO DISPONIBLE")
+                .setMessage("No pude abrir permisos de Android: "+
+                    ex.getClass().getSimpleName())
+                .setPositiveButton("ENTENDIDO",null).show();
+        }
+    }
     private void toggleLegacy(){
         if(legacyAdvanced){legacyAdvanced=false;draw();return;}
         new AlertDialog.Builder(this)
@@ -474,6 +530,27 @@ public final class BootActivity extends Activity
         button(Settings.canDrawOverlays(this)?
             "PERMISO VENTANAS CONCEDIDO · REVISAR":
             "AUTORIZAR VENTANAS EN SEGUNDO PLANO",this::requestOverlay);
+        text("VOLANTE · SELECCIÓN DE OPCIONES · SIN ZOOM",18,WHITE);
+        SharedPreferences wheel=BridgeWheelAccessibilityService.prefs(this);
+        boolean wheelOn=wheel.getBoolean(
+            BridgeWheelAccessibilityService.ENABLED,false);
+        String wheelTarget=wheel.getString(
+            BridgeWheelAccessibilityService.TARGET,
+            BridgeWheelAccessibilityService.MAPS);
+        button("MAPA DEL VOLANTE: "+
+            (BridgeWheelAccessibilityService.WAZE.equals(wheelTarget)?
+                "WAZE":"GOOGLE MAPS")+" · CAMBIAR",this::chooseWheelMap);
+        button(wheelOn?"VOLANTE OPCIONES: ACTIVADO · DESACTIVAR":
+            "VOLANTE OPCIONES: DESACTIVADO · ACTIVAR",this::toggleWheel);
+        button("AUTORIZAR ACCESIBILIDAD DE BRIDGE",
+            this::openWheelPermission);
+        text("RUEDA: siguiente/anterior opción. OK: confirmar. "+
+            "ATRÁS: cancelar dentro del mapa. Nunca zoom. "+
+            "Android debe autorizar accesibilidad. Desactivá primero "+
+            "el volante de T1Launcher: ambos no deben competir.",12,QUIET);
+        text("ÚLTIMO ESTADO VOLANTE: "+
+            wheel.getString(BridgeWheelAccessibilityService.STATUS,
+                "Sin prueba física"),12,QUIET);
         text("ACTUALIZADOR DE BRIDGE",18,WHITE);
         button("BUSCAR ACTUALIZACIÓN FIRMADA",()->
             BootUpdater.check(this,s->prefs().edit()
