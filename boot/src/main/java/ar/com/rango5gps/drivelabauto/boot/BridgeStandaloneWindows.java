@@ -1,5 +1,6 @@
 package ar.com.rango5gps.drivelabauto.boot;
 
+import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.app.ActivityOptions;
 import android.content.Context;
@@ -86,6 +87,10 @@ final class BridgeStandaloneWindows {
             throw new IllegalStateException("Pantalla sin geometría usable");
         return p;
     }
+    // Only the manually confirmed, parked-only Freeform probe uses this
+    // Android 11 OEM API. If Jetour blocks it, NO activity is launched.
+    // Narrow lint suppression; all other fatal Android Lint rules stay on.
+    @SuppressLint("BlockedPrivateApi")
     private static Method freeformMethod()throws Exception{
         // API hidden on stock Android 11. Fail before starting any app
         // if OEM policy blocks it, rather than opening fullscreen.
