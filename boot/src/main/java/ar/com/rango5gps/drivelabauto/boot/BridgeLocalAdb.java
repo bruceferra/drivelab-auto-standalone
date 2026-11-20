@@ -76,6 +76,27 @@ final class BridgeLocalAdb {
      * No Termux, remote IPs, system UI commands, OEM/vehicle operations.
      */
     static String shell(Context context,String command)throws Exception{
+        return shellInternal(context,command,false);
+    }
+    /**
+     * One exact ADB task move, only after a fresh independent Waze-only
+     * Display1 stack identification. This is NOT a generic shell whitelist:
+     * callers of shell() still cannot request arbitrary task movement.
+     */
+    static String bringVerifiedWazeToFront(Context context,
+            BridgeClusterRecoveryPolicy.Task wanted)throws Exception{
+        if(wanted==null)throw new SecurityException("Sin tarea Waze verificada");
+        String report=shell(context,"am stack list");
+        BridgeClusterRecoveryPolicy.Task now=
+            BridgeWazeForegroundPolicy.uniqueWaze(report);
+        if(!BridgeWazeForegroundPolicy.same(wanted,now))
+            throw new SecurityException(
+                "La pila de Waze cambió; no se ejecutó ningún comando");
+        String command=BridgeWazeForegroundPolicy.sameStackToTop(now);
+        return shellInternal(context,command,true);
+    }
+    private static String shellInternal(Context context,String command,
+            boolean verifiedWazeProbe)throws Exception{
         // These two additional commands are ONLY for a one-time,
         // owner-confirmed recovery of map-only stacks on Display 1.
         // "am stack remove" takes STACK ID, NOT task ID (Android 11).
@@ -90,7 +111,10 @@ final class BridgeLocalAdb {
         boolean overlayCommand=ownLab&&(
             ("appops get "+self+" SYSTEM_ALERT_WINDOW").equals(command)||
             ("appops set "+self+" SYSTEM_ALERT_WINDOW allow").equals(command));
-        if(!(overlayCommand||readStacks||removeValidatedStack||
+        boolean exactWazeMove=verifiedWazeProbe&&
+            command.matches("am stack move-task [1-9][0-9]{1,6} "+
+                            "[1-9][0-9]{1,6} true");
+        if(!(exactWazeMove||overlayCommand||readStacks||removeValidatedStack||
              "settings get secure enabled_accessibility_services".equals(command)||
              "settings get secure accessibility_enabled".equals(command)||
              "settings put secure accessibility_enabled 1".equals(command)||
