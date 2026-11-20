@@ -1,4 +1,4 @@
-name: Publish signed Bridge LAB independent OTA v1
+name: Publish signed Bridge LAB independent OTA v2
 # One-off, reviewed publication from the owner-maintained Bridge branch.
 # All Android Lint fatal checks remain active except the narrowly guarded
 # OEM private-API reflection in the parked-only Freeform experiment.
@@ -55,15 +55,15 @@ jobs:
         run: |
           set -euo pipefail
           test "$GITHUB_REPOSITORY" = 'bruceferra/drivelab-auto-standalone'
-          ! gh release view bridge-lab-v1 >/dev/null 2>&1
+          ! gh release view bridge-lab-v2 >/dev/null 2>&1
           gradle --no-daemon :boot:assembleLab
           apk=boot/build/outputs/apk/lab/boot-lab.apk
           test -s "$apk"
           aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
           signer="$ANDROID_HOME/build-tools/35.0.0/apksigner"
           "$aapt" dump badging "$apk" | grep -F "package: name='ar.com.rango5gps.drivelabauto.boot.lab'"
-          "$aapt" dump badging "$apk" | grep -F "versionCode='5'"
-          "$aapt" dump badging "$apk" | grep -F "versionName='0.1.4-lab.1'"
+          "$aapt" dump badging "$apk" | grep -F "versionCode='6'"
+          "$aapt" dump badging "$apk" | grep -F "versionName='0.1.5-lab.2'"
           "$signer" verify --print-certs "$apk"
           mkdir -p /tmp/bridge-old-boot dist
           gh release download v0.3.97 --pattern 'DriveLab-Boot-v0.1.3.apk' --dir /tmp/bridge-old-boot
@@ -71,20 +71,20 @@ jobs:
           oldcert=$("$signer" verify --print-certs /tmp/bridge-old-boot/DriveLab-Boot-v0.1.3.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
           newcert=$("$signer" verify --print-certs "$apk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
           test -n "$oldcert" && test "$oldcert" = "$newcert"
-          cp "$apk" dist/DriveLab-Bridge-LAB-v0.1.4-lab.1.apk
+          cp "$apk" dist/DriveLab-Bridge-LAB-v0.1.5-lab.2.apk
           sha256sum dist/*.apk > dist/bridge-lab.sha256
           python3 - <<'PY'
           import hashlib,json,os,pathlib
-          apk=pathlib.Path("dist/DriveLab-Bridge-LAB-v0.1.4-lab.1.apk")
+          apk=pathlib.Path("dist/DriveLab-Bridge-LAB-v0.1.5-lab.2.apk")
           manifest={
              "channel":"bridge-lab",
              "packageName":"ar.com.rango5gps.drivelabauto.boot.lab",
-             "versionName":"0.1.4-lab.1",
-             "versionCode":5,
-             "tag":"bridge-lab-v1",
+             "versionName":"0.1.5-lab.2",
+             "versionCode":6,
+             "tag":"bridge-lab-v2",
              "size":apk.stat().st_size,
              "sha256":hashlib.sha256(apk.read_bytes()).hexdigest(),
-             "apkUrl":f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/bridge-lab-v1/{apk.name}"
+             "apkUrl":f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/releases/download/bridge-lab-v2/{apk.name}"
           }
           pathlib.Path("dist/bridge-lab.json").write_text(json.dumps(manifest,indent=2)+"\n",encoding="utf-8")
           PY
@@ -92,13 +92,13 @@ jobs:
       - name: Publish LAB prerelease but NEVER replace stable latest
         run: |
           set -euo pipefail
-          gh release create bridge-lab-v1 \
-            dist/DriveLab-Bridge-LAB-v0.1.4-lab.1.apk \
+          gh release create bridge-lab-v2 \
+            dist/DriveLab-Bridge-LAB-v0.1.5-lab.2.apk \
             dist/bridge-lab.sha256 dist/bridge-lab.json \
             --target "$GITHUB_SHA" --prerelease \
-            --title 'DriveLab Bridge LAB 0.1.4 · OTA firmado separado (v1)' \
+            --title 'DriveLab Bridge LAB 0.1.5 · OTA firmado separado (v1)' \
             --notes 'Primer LAB con firma permanente del propietario y actualizador OTA LAB separado de Boot estable. La vieja LAB debug (certificado temporal) exige UNA migración por desinstalación sólo de LAB. No instalar sobre el Boot estable, no tocar OEM ni publicar como latest.'
-          gh release view bridge-lab-v1 --json isPrerelease --jq '.isPrerelease' | grep -Fx true
+          gh release view bridge-lab-v2 --json isPrerelease --jq '.isPrerelease' | grep -Fx true
           tag=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
           test "$tag" = v0.3.97
       - name: Point isolated OTA manifest to published signed asset LAST
@@ -110,19 +110,19 @@ jobs:
           if sha=$(gh api "repos/$GITHUB_REPOSITORY/contents/bridge-lab.json?ref=bridge-lab-ota" --jq .sha 2>/dev/null); then
             gh api -X PUT "repos/$GITHUB_REPOSITORY/contents/bridge-lab.json" \
               -f branch=bridge-lab-ota -f sha="$sha" \
-              -f message='ota(bridge-lab): publish verified signed LAB v1' -f content="$content" >/dev/null
+              -f message='ota(bridge-lab): publish verified signed LAB v2' -f content="$content" >/dev/null
           else
             gh api -X PUT "repos/$GITHUB_REPOSITORY/contents/bridge-lab.json" \
               -f branch=bridge-lab-ota \
-              -f message='ota(bridge-lab): publish verified signed LAB v1' -f content="$content" >/dev/null
+              -f message='ota(bridge-lab): publish verified signed LAB v2' -f content="$content" >/dev/null
           fi
           gh api "repos/$GITHUB_REPOSITORY/contents/bridge-lab.json?ref=bridge-lab-ota" --jq .content \
-            | base64 -d | grep -F '"versionCode": 5'
+            | base64 -d | grep -F '"versionCode": 6'
       - uses: actions/upload-artifact@v4
         with:
           name: DriveLab-Bridge-LAB-0.1.4-PERMANENT-SIGNED-OTA
           path: |
-            dist/DriveLab-Bridge-LAB-v0.1.4-lab.1.apk
+            dist/DriveLab-Bridge-LAB-v0.1.5-lab.2.apk
             dist/bridge-lab.sha256
             dist/bridge-lab.json
           if-no-files-found: error
