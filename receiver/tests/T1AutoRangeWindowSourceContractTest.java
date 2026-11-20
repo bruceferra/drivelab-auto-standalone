@@ -33,7 +33,12 @@ public final class T1AutoRangeWindowSourceContractTest{
             math.contains("current.out-previous.out")&&
             math.contains("current.in-previous.in"),
             "No whole ignition included and no invented unobserved energy");
-        yes(ui.contains("GENERADOR DE VIAJES · FECHA Y HORA EXACTAS")&&
+        yes(ui.contains("INFORME AUTOMÁTICO POR FECHAS")&&
+            ui.contains("ÚLTIMOS 7 DÍAS")&&
+            ui.contains("HOY · DESDE 00:00")&&
+            ui.contains("T1AutoRangeTimeline.build(")&&
+            ui.contains("chargeDb.overlapping(from,until)")&&
+            ui.contains("rangeTimeline")&&
             ui.contains("ELEGIR DESDE")&&ui.contains("ELEGIR HASTA")&&
             ui.contains("TimePickerDialog")&&
             ui.contains("DatePickerDialog")&&
