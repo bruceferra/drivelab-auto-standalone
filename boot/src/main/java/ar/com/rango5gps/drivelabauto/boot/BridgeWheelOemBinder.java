@@ -10,6 +10,7 @@ import android.os.IBinder;
 import android.os.Looper;
 import android.os.Parcel;
 import android.os.RemoteException;
+import android.os.SystemClock;
 
 /** Proprietary Jetour read-only wheel event subscription, no car writes.
  * Register/unregister are vendor interop transactions 1/2, event=3.
@@ -33,6 +34,7 @@ final class BridgeWheelOemBinder {
     private final Listener listener;
     private final Handler main=new Handler(Looper.getMainLooper());
     private volatile boolean requested,registered,bound;
+    private long requestAt;
     private IBinder server;
     private final IBinder callback=new Binder(){
         {attachInterface(null,CALLBACK_TOKEN);}
@@ -80,8 +82,15 @@ final class BridgeWheelOemBinder {
     }
     boolean active(){return requested&&registered&&bound;}
     void start(){
-        if(requested)return;
+        // Jetour may drop a registered vendor callback without completing
+        // a clean disconnect. Do not stay permanently in requested=true.
+        if(requested){
+            if(registered)return;
+            if(bound&&SystemClock.elapsedRealtime()-requestAt<6000L)return;
+            stop(); // stale unregistered connection; retry only after timeout
+        }
         requested=true;
+        requestAt=SystemClock.elapsedRealtime();
         Intent intent=new Intent().setComponent(
             new ComponentName(SERVICE_PKG,SERVICE_CLS));
         try{
