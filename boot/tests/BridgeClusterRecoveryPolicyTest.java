@@ -11,9 +11,9 @@ public final class BridgeClusterRecoveryPolicyTest {
             BridgeClusterRecoveryPolicy.onlyVerifiedMapTasks(OEM+MAP);
         ok(good.size()==1&&good.get(0).taskId==701&&
             good.get(0).stackId==99,"Only Waze on display1");
-        ok("am stack remove 701".equals(
+        ok("am stack remove 99".equals(
             BridgeClusterRecoveryPolicy.removeCommand(good.get(0))),
-            "Only validated map task id, no OEM stack");
+            "Only validated map-only stack id, never OEM stack");
         ok(BridgeClusterRecoveryPolicy.onlyVerifiedMapTasks(OEM).isEmpty(),
             "No OEM-only action");
         ok(BridgeClusterRecoveryPolicy.onlyVerifiedMapTasks(
