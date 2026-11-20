@@ -23,6 +23,7 @@ on:
       - 'boot/tests/BridgeWindowMathTest.java'
       - 'boot/tests/BridgeWindowsPolicyTest.java'
       - 'boot/tests/BridgeStandaloneWindowContractTest.java'
+      - 'boot/tests/BridgeSenderDisplayRoutingTest.java'
       - 'boot/src/main/AndroidManifest.xml'
       - '.github/workflows/bridge-mode-readonly.yml'
   workflow_dispatch:
@@ -75,13 +76,16 @@ jobs:
             boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWindowsPolicy.java \
             boot/tests/BridgeWindowMathTest.java \
             boot/tests/BridgeWindowsPolicyTest.java \
-            boot/tests/BridgeStandaloneWindowContractTest.java
+            boot/tests/BridgeStandaloneWindowContractTest.java \
+            boot/tests/BridgeSenderDisplayRoutingTest.java
           java -cp /tmp/jetour-bridge-windows \
             ar.com.rango5gps.drivelabauto.boot.BridgeWindowMathTest
           java -cp /tmp/jetour-bridge-windows \
             ar.com.rango5gps.drivelabauto.boot.BridgeWindowsPolicyTest
           java -cp /tmp/jetour-bridge-windows \
             ar.com.rango5gps.drivelabauto.boot.BridgeStandaloneWindowContractTest
+          java -cp /tmp/jetour-bridge-windows \
+            ar.com.rango5gps.drivelabauto.boot.BridgeSenderDisplayRoutingTest
       - name: No map data wipe or OEM window mutation in diagnostic
         run: |
           set -euo pipefail
