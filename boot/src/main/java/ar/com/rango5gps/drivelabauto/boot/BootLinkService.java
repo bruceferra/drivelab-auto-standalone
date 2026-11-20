@@ -328,6 +328,14 @@ public final class BootLinkService extends Service {
                !BridgeStandaloneWindows.display1Available(this))
                 return "DISPLAY 1 NO DISPONIBLE: "+app+
                     " (no se redirigió silenciosamente al central)";
+            // EXACT parity with Receiver T1NavigationTargets.send:
+            // ONLY a new authenticated destination to Maps arms a 12s
+            // replace-old-route / start-turn-by-turn one-shot transaction.
+            // Opening the map manually or switching visible tasks never
+            // arms it; no generic OK, no automation without a destination.
+            boolean requestedMaps="com.google.android.apps.maps".equals(pkg);
+            if(requestedMaps)
+                BridgeGoogleMapsReplacement.arm(this,displayId);
             map.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK|
                 Intent.FLAG_ACTIVITY_SINGLE_TOP);
             // Android's public launchDisplayId API, with no Freeform
@@ -335,9 +343,19 @@ public final class BootLinkService extends Service {
             // an existing task receives an Android deep-link request.
             ActivityOptions options=ActivityOptions.makeBasic();
             options.setLaunchDisplayId(displayId);
-            startActivity(map,options.toBundle());
+            try{
+                startActivity(map,options.toBundle());
+            }catch(Exception denied){
+                if(requestedMaps)BridgeGoogleMapsReplacement.cancel(this);
+                return "ERROR "+app+" → Display "+displayId+
+                    " ("+denied.getClass().getSimpleName()+")";
+            }
+            if(requestedMaps)
+                BridgeWheelAccessibilityService.navigationIntentArrived(this);
             return "SOLICITUD "+app+" → Display "+displayId;
         }catch(Exception denied){
+            if("com.google.android.apps.maps".equals(pkg))
+                BridgeGoogleMapsReplacement.cancel(this);
             return "ERROR "+app+" → Display "+displayId+
                 " ("+denied.getClass().getSimpleName()+")";
         }
