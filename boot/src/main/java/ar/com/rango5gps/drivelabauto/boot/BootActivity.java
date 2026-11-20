@@ -573,6 +573,9 @@ public final class BootActivity extends Activity
             "DISPLAY 1 SIN RUTAS. Los destinos se envían a Display 0. "+
             "Desactivar no cierra ni borra aplicaciones ya abiertas "+
             "por Android.",12,QUIET);
+        button("PROBAR ADB · WAZE AL FRENTE · DISPLAY 1",
+            ()->BridgeWazeForegroundProbe.ask(this));
+        text("PRUEBA ADB: "+BridgeWazeForegroundProbe.status(this),12,QUIET);
         button("LIBERAR CLÚSTER · SÓLO MAPAS VERIFICADOS",
             ()->BridgeClusterRecovery.ask(this));
         text("RECUPERACIÓN: "+BridgeClusterRecovery.status(this),12,QUIET);
