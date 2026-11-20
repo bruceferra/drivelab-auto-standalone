@@ -103,6 +103,11 @@ public final class BootLinkService extends Service {
     }
     @Override public IBinder onBind(Intent i){return null;}
     @Override public int onStartCommand(Intent intent,int flags,int id){
+        // Android may restart a START_STICKY service with null Intent.
+        // Never restart the listener if the owner has disabled Bridge AUTO.
+        if(intent==null&&!BootConfig.enabled(this)){
+            shutdown();stopSelf(id);return START_NOT_STICKY;
+        }
         String action=intent==null?START:intent.getAction();
         if(STOP.equals(action)){
             prefs(this).edit().putBoolean("auto_receive",false).apply();
@@ -151,7 +156,9 @@ public final class BootLinkService extends Service {
             }
             e.apply();
         }
-        return START_STICKY;
+        // A manually started QR/listener is NEVER persistent unless the
+        // owner explicitly opted into Bridge's independent auto-start.
+        return BootConfig.enabled(this)?START_STICKY:START_NOT_STICKY;
     }
     private static boolean privatePeer(InetAddress a){
         return a!=null&&(a.isSiteLocalAddress()||a.isLinkLocalAddress());
