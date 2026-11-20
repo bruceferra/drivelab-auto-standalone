@@ -44,6 +44,8 @@ on:
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeStandaloneWindows.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWindowMath.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeVirtualProbeActivity.java'
+      - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeClusterSurfaceProbeActivity.java'
+      - 'boot/tests/BridgeClusterSurfaceProbeSourceTest.java'
       - 'boot/tests/BridgeVirtualProbeContractTest.java'
       - 'boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWindowsPolicy.java'
       - 'boot/tests/BridgeWindowMathTest.java'
@@ -170,6 +172,14 @@ jobs:
             ar.com.rango5gps.drivelabauto.boot.BridgeStandaloneWindowContractTest
           java -cp /tmp/jetour-bridge-windows \
             ar.com.rango5gps.drivelabauto.boot.BridgeSenderDisplayRoutingTest
+      - name: Verify safe owner-confirmed physical Display1 compositor proof
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/bridge-display1-proof
+          javac -encoding UTF-8 -d /tmp/bridge-display1-proof \
+            boot/tests/BridgeClusterSurfaceProbeSourceTest.java
+          java -cp /tmp/bridge-display1-proof \
+            ar.com.rango5gps.drivelabauto.boot.BridgeClusterSurfaceProbeSourceTest
       - name: Verify isolated private VirtualDisplay to TextureView proof (no maps or OEM)
         run: |
           set -euo pipefail
