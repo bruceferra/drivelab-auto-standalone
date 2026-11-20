@@ -687,6 +687,18 @@ public final class BootActivity extends Activity
         button("BUSCAR ACTUALIZACIÓN · LAB OTA",()->
             BootUpdater.check(this,s->prefs().edit()
                 .putString("last_status",s).apply()));
+        text("PRUEBA DE ENCENDIDO / ACTUALIZACIÓN · CAPA JETOUR",17,WHITE);
+        text("Esta versión NO cambia el orden de ventanas al instalarse. "+
+            "Después de actualizar y comprobar físicamente el tablero "+
+            "con la Jetour ESTACIONADA, marcá sólo lo que ves. "+
+            "Así distinguimos si la actualización por sí misma "+
+            "hizo visible Google Maps o Bluetooth sigue adelante. "+
+            "No modifica mapas, rutas, ventanas ni controles.",12,QUIET);
+        text(BridgeOtaLayerTrial.describe(this),13,WHITE);
+        button("RESULTADO OTA · AHORA SE VE GOOGLE MAPS",
+            ()->{BridgeOtaLayerTrial.record(this,true);draw();});
+        button("RESULTADO OTA · SIGUE BLUETOOTH / JETOUR ENCIMA",
+            ()->{BridgeOtaLayerTrial.record(this,false);draw();});
         text("No abre la pantalla DriveLab Auto. No reemplaza "+
             "el firmware ni los avisos del Jetour.",13,QUIET);
         text("XIAOMI · CONEXIÓN DIRECTA",18,WHITE);
@@ -730,6 +742,15 @@ public final class BootActivity extends Activity
                 @Override public void onStopTrackingTouch(SeekBar bar){}
             });
         content.addView(bridgeRatio);
+        button("MOSAICO · PRESET 67% MAPA / 33% SEGUNDA APP",()->{
+            // Manual layout preference only; intentionally NO app launch.
+            BridgeStandaloneWindows.prefs(this).edit()
+                .putInt(BridgeStandaloneWindows.RATIO,67).apply();
+            draw();
+        });
+        text("Preset sólo para la PRÓXIMA apertura manual de dos "+
+            "ventanas. No crea todavía bordes redondeados ni el motor "+
+            "de APP 2 de T1Launcher; no redimensiona tareas activas.",12,QUIET);
         button("PROBAR DOS VENTANAS · SÓLO BRIDGE · ESTACIONADO",
             ()->askBridgeWindows(false));
         button("LAB · PROBAR PANTALLA VIRTUAL · SOLO CENTRAL",
