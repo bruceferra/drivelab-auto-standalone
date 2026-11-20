@@ -71,7 +71,7 @@ final class BridgeLocalAdb {
             "ADB no escucha en 127.0.0.1:5556 ni :5555"+
             (failure==null?"":" · "+failure.getMessage()));
     }
-    /** Strict whitelist: exactly one Android setting read/write at a time.
+    /** Strict whitelist: exactly one Android setting/appop read/write at a time.
      * The owner must approve this app's fresh RSA host key in Android ADB.
      * No Termux, remote IPs, system UI commands, OEM/vehicle operations.
      */
@@ -83,7 +83,14 @@ final class BridgeLocalAdb {
         boolean readStacks="am stack list".equals(command);
         boolean removeValidatedStack=command.matches(
             "am stack remove [1-9][0-9]{1,6}");
-        if(!(readStacks||removeValidatedStack||
+        // Owner-approved SYSTEM_ALERT_WINDOW for THIS installed Bridge LAB
+        // only. No generic appops commands or other package names.
+        String self=context.getPackageName();
+        boolean ownLab="ar.com.rango5gps.drivelabauto.boot.lab".equals(self);
+        boolean overlayCommand=ownLab&&(
+            ("appops get "+self+" SYSTEM_ALERT_WINDOW").equals(command)||
+            ("appops set "+self+" SYSTEM_ALERT_WINDOW allow").equals(command));
+        if(!(overlayCommand||readStacks||removeValidatedStack||
              "settings get secure enabled_accessibility_services".equals(command)||
              "settings get secure accessibility_enabled".equals(command)||
              "settings put secure accessibility_enabled 1".equals(command)||
