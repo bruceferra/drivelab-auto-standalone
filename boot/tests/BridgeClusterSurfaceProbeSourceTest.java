@@ -3,7 +3,7 @@ package ar.com.rango5gps.drivelabauto.boot;
 import java.nio.file.Files;
 import java.nio.file.Path;
 
-/** Physical Display1 probe is a bounded, manually triggered small window.
+/** Physical Display1 probe is a bounded, manually triggered full-width lower-band window.
  * A received frame is NOT proof of foreground Z or permission to hide OEM.
  */
 public final class BridgeClusterSurfaceProbeSourceTest {
@@ -30,8 +30,11 @@ public final class BridgeClusterSurfaceProbeSourceTest {
             test.contains("new Presentation(this,d)")&&
             test.contains("pattern.show()"),
             "Real Display1 Presentation must host separate, private virtual surface pipeline");
-        check(test.contains("MAX_MS=15000L")&&
-            test.contains("window.setLayout(WIDTH,HEIGHT)")&&
+        check(test.contains("MAX_MS=12000L")&&
+            test.contains("window.setLayout(width,height)")&&
+            test.contains("host.setGravity(Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL)")&&
+            test.contains("width,bandHeight")&&
+            test.contains("bandHeight=Math.round(height*0.65f)")&&
             test.contains("FLAG_NOT_FOCUSABLE")&&
             test.contains("FLAG_NOT_TOUCHABLE")&&
             test.contains("if((physical.getFlags()&Display.FLAG_PRIVATE)!=0)")&&
@@ -41,7 +44,7 @@ public final class BridgeClusterSurfaceProbeSourceTest {
             test.contains("@Override protected void onDestroy()")&&
             test.contains("virtual.release()")&&
             test.contains("surface.release()"),
-            "Probe must be small, noninteractive, self-terminating and fail closed");
+            "Probe must span all lower Display1, be noninteractive, self-terminating and fail closed");
         check(test.contains("NO es Waze")||test.contains("NO ES WAZE"),
             "Test must clearly disclose it is not live map routing");
         check(!test.contains("am force-stop")&&
@@ -53,7 +56,7 @@ public final class BridgeClusterSurfaceProbeSourceTest {
             !test.contains("SYSTEM_ALERT_WINDOW")&&
             !test.contains("addView(" + "toOEM"),
             "Never alter Android task stacks, arbitrary overlays or OEM display services");
-        check(ui.contains("COMPROBAR CAPA REAL · DISPLAY 1 · 15 SEGUNDOS")&&
+        check(ui.contains("COMPROBAR CAPA INFERIOR COMPLETA · DISPLAY 1 · 12 S")&&
             ui.contains("this::askRealClusterSurfaceProbe")&&
             ui.contains("startActivity(new Intent(this,")&&
             ui.contains("BridgeClusterSurfaceProbeActivity.class)")&&

@@ -58,6 +58,10 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
     private BridgeWheelOemBinder oem;
     private volatile boolean serviceReady=false;
     private static volatile boolean connectedNow=false;
+    // Process-local manual opt-in; never re-register OEM callback at ignition.
+    private static volatile boolean manuallyArmed=false;
+    static void setManuallyArmed(boolean value){manuallyArmed=value;}
+    static boolean isManuallyArmed(){return manuallyArmed;}
     static boolean isConnected(){return connectedNow;}
     private long lastKeyAt=0;
     private int lastKey=-1,selected=-1;
@@ -117,8 +121,8 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
             requestRefresh();
     }
     private String target(){
-        String result=prefs(this).getString(TARGET,MAPS);
-        return WAZE.equals(result)?WAZE:MAPS;
+        String result=prefs(this).getString(TARGET,WAZE);
+        return MAPS.equals(result)?MAPS:WAZE;
     }
     private static String normalized(String input){
         String s=Normalizer.normalize(input,Normalizer.Form.NFD)
@@ -198,7 +202,7 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
     }
     private void reconcileWheel(){
         if(oem==null)return;
-        boolean optIn=prefs(this).getBoolean(ENABLED,false);
+        boolean optIn=isManuallyArmed()&&prefs(this).getBoolean(ENABLED,false);
         MapWindow visible=optIn?visibleMap():null;
         if(!optIn||visible==null){
             if(oem.active())oem.stop();
@@ -210,7 +214,8 @@ public final class BridgeWheelAccessibilityService extends AccessibilityService
         if(!oem.active())oem.start();
     }
     private void onOemEvent(int code,int action){
-        if(!prefs(this).getBoolean(ENABLED,false))return;
+        if(!isManuallyArmed()||
+           !prefs(this).getBoolean(ENABLED,false))return;
         boolean reverse=prefs(this).getBoolean(REVERSE,false);
         int cmd=BridgeWheelPolicy.translate(code,action,reverse);
         if(cmd==BridgeWheelPolicy.NONE)return;

@@ -30,9 +30,10 @@ public final class BridgeClusterSafetySourceTest {
             ui.contains("BridgeWheelAccessibilityService.ENABLED,false")&&
             ui.contains("LIBERAR CLÚSTER")&&
             ui.contains("ACTIVAR DISPLAY 1 · PANTALLA COMPLETA 100%")&&
-            !ui.contains("button(wheelOn?")&&
+            ui.contains("this::toggleWheel")&&
+            ui.contains("isManuallyArmed()")&&
             !ui.contains("this::openWheelPermission"),
-            "Manual only Display1; wheel stays off; no Activity-open reset");
+            "Manual only Display1; wheel opt-in requires per-process arm");
         yes(recovery.contains("BridgeWheelAccessibilityService.ENABLED,false")&&
             recovery.contains("BridgeStandaloneWindows.TAB_ROUTE,false")&&
             recovery.contains("BridgeStandaloneWindows.TAB_CONFIRMED,false")&&

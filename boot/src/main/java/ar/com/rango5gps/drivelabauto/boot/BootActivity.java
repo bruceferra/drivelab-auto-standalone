@@ -52,8 +52,10 @@ public final class BootActivity extends Activity
         // Never auto-launch a map on ignition and NEVER capture OEM wheel.
         // Do not erase an owner's confirmed Display1 routing merely because
         // Bridge's configuration Activity is opened/resumed.
-        BridgeWheelAccessibilityService.prefs(this).edit()
-            .putBoolean(BridgeWheelAccessibilityService.ENABLED,false).apply();
+        if(!BridgeWheelAccessibilityService.isManuallyArmed()){
+            BridgeWheelAccessibilityService.prefs(this).edit()
+                .putBoolean(BridgeWheelAccessibilityService.ENABLED,false).apply();
+        }
         draw();
     }
     @Override protected void onResume(){
@@ -279,7 +281,9 @@ public final class BootActivity extends Activity
      */
     private void toggleWheel(){
         SharedPreferences p=BridgeWheelAccessibilityService.prefs(this);
-        if(p.getBoolean(BridgeWheelAccessibilityService.ENABLED,false)){
+        if(p.getBoolean(BridgeWheelAccessibilityService.ENABLED,false)&&
+                BridgeWheelAccessibilityService.isManuallyArmed()){
+            BridgeWheelAccessibilityService.setManuallyArmed(false);
             p.edit().putBoolean(BridgeWheelAccessibilityService.ENABLED,false)
                 .putString(BridgeWheelAccessibilityService.STATUS,
                     "Volante Bridge desactivado por el propietario").apply();
@@ -297,15 +301,18 @@ public final class BootActivity extends Activity
                 "automáticamente al encender ni tocará el sistema Jetour.")
             .setNegativeButton("CANCELAR",null)
             .setPositiveButton("ACTIVAR",(d,w)->{
-                p.edit().putBoolean(
-                    BridgeWheelAccessibilityService.ENABLED,true).apply();
+                BridgeWheelAccessibilityService.setManuallyArmed(true);
+                p.edit().putString(BridgeWheelAccessibilityService.TARGET,
+                    p.getString(BridgeWheelAccessibilityService.TARGET,
+                        BridgeWheelAccessibilityService.WAZE))
+                    .putBoolean(BridgeWheelAccessibilityService.ENABLED,true).apply();
                 draw();
             }).show();
     }
     private void chooseWheelMap(){
         SharedPreferences p=BridgeWheelAccessibilityService.prefs(this);
         String current=p.getString(BridgeWheelAccessibilityService.TARGET,
-            BridgeWheelAccessibilityService.MAPS);
+            BridgeWheelAccessibilityService.WAZE);
         new AlertDialog.Builder(this)
             .setTitle("VOLANTE · APP EN DISPLAY 1")
             .setSingleChoiceItems(new String[]{"Google Maps","Waze"},
@@ -395,18 +402,20 @@ public final class BootActivity extends Activity
         new AlertDialog.Builder(this)
             .setTitle("PRUEBA REAL DE SUPERFICIE · DISPLAY 1")
             .setMessage("Sólo con la Jetour COMPLETAMENTE ESTACIONADA. "+
-                "Durante 15 segundos Bridge mostrará un pequeño "+
-                "recuadro de diagnóstico, no un mapa, en el centro "+
-                "del tablero. Usará Presentation y VirtualDisplay "+
+                "Durante 12 segundos Bridge dibujará una banda de prueba "+
+                "en TODO EL ANCHO de la zona inferior del tablero, "+
+                "incluido Radio/Bluetooth. La zona superior de avisos "+
+                "quedará transparente. No es un mapa. "+
+                "Usará Presentation y VirtualDisplay "+
                 "propios sin ADB, ni tocar el firmware, ni modificar "+
                 "el orden de las superficies OEM. "+
                 "Se borrará al salir o automáticamente. "+
                 "NO uses esta prueba conduciendo. "+
-                "Si aparece delante de Radio/Bluetooth tendremos "+
-                "una prueba del mecanismo gráfico; si no, Android "+
+                "Si la banda cubre Radio/Bluetooth, la capa quedó delante; "+
+                "si Bluetooth sigue visible encima, el OEM domina. Android "+
                 "Jetour no deja superponer esta Presentation.")
             .setNegativeButton("CANCELAR",null)
-            .setPositiveButton("COMPROBAR 15 SEGUNDOS",(d,w)->
+            .setPositiveButton("COMPROBAR 12 SEGUNDOS",(d,w)->
                 startActivity(new Intent(this,
                     BridgeClusterSurfaceProbeActivity.class)))
             .show();
@@ -593,7 +602,7 @@ public final class BootActivity extends Activity
             "DISPLAY 1 SIN RUTAS. Los destinos se envían a Display 0. "+
             "Desactivar no cierra ni borra aplicaciones ya abiertas "+
             "por Android.",12,QUIET);
-        button("COMPROBAR CAPA REAL · DISPLAY 1 · 15 SEGUNDOS",
+        button("COMPROBAR CAPA INFERIOR COMPLETA · DISPLAY 1 · 12 S",
             this::askRealClusterSurfaceProbe);
         text("CAPA REAL: "+BridgeClusterSurfaceProbeActivity.lastResult(this),
             12,QUIET);
@@ -610,13 +619,20 @@ public final class BootActivity extends Activity
             BridgeWheelAccessibilityService.ENABLED,false);
         String wheelTarget=wheel.getString(
             BridgeWheelAccessibilityService.TARGET,
-            BridgeWheelAccessibilityService.MAPS);
+            BridgeWheelAccessibilityService.WAZE);
         button("MAPA DEL VOLANTE: "+
             (BridgeWheelAccessibilityService.WAZE.equals(wheelTarget)?
                 "WAZE":"GOOGLE MAPS")+" · CAMBIAR",this::chooseWheelMap);
-        text("VOLANTE MAPAS: DESACTIVADO. Accesibilidad puede estar "+
-            "conectada, pero no hay todavía un mapa en una superficie "+
-            "virtual verificada. No se captura la rueda OEM.",13,WHITE);
+        button(wheelOn&&BridgeWheelAccessibilityService.isManuallyArmed()?
+            "VOLANTE BRIDGE: ACTIVADO · DESACTIVAR":
+            "VOLANTE BRIDGE: DESACTIVADO · ACTIVAR",this::toggleWheel);
+        text(wheelOn&&BridgeWheelAccessibilityService.isManuallyArmed()?
+            "VOLANTE HABILITADO MANUALMENTE. Captura sólo cuando Waze/Maps "+
+            "es la ventana de aplicación superior verificable en Display 1. "+
+            "Rueda: opciones, OK: aceptar, Atrás: cancelar. Sin zoom.":
+            "VOLANTE APAGADO: no se registra la rueda OEM. "+
+            "Para probarlo, desactivá VOLANTE → MAPA en T1Launcher, "+
+            "elegí Waze y pulsá ACTIVAR. No se inicia solo.",13,WHITE);
         button("RECONECTAR ACCESIBILIDAD · ADB LOCAL · SIN TERMUX",
             ()->BridgeWheelAccessRecovery.ask(this));
         wheelRecoveryLabel=text(

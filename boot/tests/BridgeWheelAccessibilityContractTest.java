@@ -38,6 +38,10 @@ public final class BridgeWheelAccessibilityContractTest {
             !service.contains("BootConfig.assertReceiver("),
             "Wheel service must navigate app options ONLY, no zoom, independent and no OEM/global control");
         yes(activity.contains("BridgeWheelAccessibilityService")&&
+            activity.contains("this::toggleWheel")&&
+            activity.contains("setManuallyArmed(true)")&&
+            activity.contains("setManuallyArmed(false)")&&
+            service.contains("isManuallyArmed()&&prefs(this).getBoolean(ENABLED,false)")&&
             activity.contains("ACTION_ACCESSIBILITY_SETTINGS")&&
             manifest.contains("android.permission.BIND_ACCESSIBILITY_SERVICE")&&
             manifest.contains("bridge_wheel_accessibility"),

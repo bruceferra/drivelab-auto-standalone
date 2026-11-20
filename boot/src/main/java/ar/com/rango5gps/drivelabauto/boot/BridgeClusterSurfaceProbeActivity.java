@@ -27,23 +27,25 @@ import android.widget.TextView;
  * T1Launcher: VirtualDisplay -> SurfaceTexture -> TextureView hosted by a
  * Presentation on PHYSICAL Display 1.
  *
- * Draws only a tiny diagnostic test pattern; NEVER a map, never fullscreen.
+ * Draws a full-width lower-screen diagnostic band (covering Radio/Bluetooth)
+ * with upper warning area transparent; never a map or persistent overlay.
  * Does not modify/cover OEM windows, SystemUI, critical warnings or task
- * stacks. Foreground owner action ONLY, automatic release after 15 seconds,
+ * stacks. Foreground owner action ONLY, automatic release after 12 seconds,
  * onStop and display removal. A received frame proves transport, NOT Z-order:
  * the owner must confirm whether the small pattern appeared over MODE.
  */
 public final class BridgeClusterSurfaceProbeActivity extends Activity
         implements TextureView.SurfaceTextureListener {
-    private static final int WIDTH=480,HEIGHT=240,DPI=213;
-    private static final long MAX_MS=15000L;
+    private static final int DPI=213;
+    private int width,height,bandHeight;
+    private static final long MAX_MS=12000L;
     private static final String PREFS="bridge_display1_surface_probe_v1";
     private static final int FLAGS=
         DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY|
         DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION;
     private final Handler main=new Handler(Looper.getMainLooper());
     private final Runnable timeout=()->stop("PRUEBA FINALIZADA "+
-        "AUTOMÁTICAMENTE tras 15 segundos. Capa liberada.");
+        "AUTOMÁTICAMENTE tras 12 segundos. Capa liberada.");
     private DisplayManager displays;
     private Display physical;
     private Presentation cluster,pattern;
@@ -65,12 +67,13 @@ public final class BridgeClusterSurfaceProbeActivity extends Activity
         title.setTextSize(19); title.setTextColor(0xFF42E3D0);
         body.addView(title);
         TextView instructions=new TextView(this);
-        instructions.setText("SÓLO CON EL VEHÍCULO ESTACIONADO. "+
-            "Mostrará durante 15 segundos un recuadro pequeño de prueba "+
-            "en el centro de Display 1, sin tocar los controles ni el "+
-            "firmware Jetour. NO es Waze. NO cubre todo el tablero. "+
-            "Fijate si aparece por delante de Radio/Bluetooth. "+
-            "Se libera automáticamente al salir o al terminar.");
+        instructions.setText("SÓLO CON LA JETOUR ESTACIONADA. Durante 12 segundos "+
+            "Bridge cubrirá TODO EL ANCHO Y LA ZONA INFERIOR del Display 1, "+
+            "incluido Radio/Bluetooth a la derecha. La franja superior "+
+            "se deja transparente para los avisos de seguridad. "+
+            "No es Waze: sólo prueba si la capa Bridge queda por delante "+
+            "del panel OEM. Sin toques, sin controlar el vehículo, "+
+            "y se retira automáticamente.");
         instructions.setTextColor(Color.WHITE);
         instructions.setTextSize(15);
         instructions.setPadding(0,18,0,20);
@@ -120,17 +123,21 @@ public final class BridgeClusterSurfaceProbeActivity extends Activity
             if(p.x<1200||p.y<480)
                 throw new IllegalStateException(
                     "Pantalla no coincide con la del tablero");
+            width=p.x;
+            height=p.y;
+            bandHeight=Math.round(height*0.65f); // cubre esquina inferior derecha
+            if(bandHeight<260)throw new IllegalStateException("Zona inferior insuficiente");
             // Presentation uses Android's own TYPE_PRESENTATION for the
             // real Display 1. Never request overlay/system window types.
             cluster=new Presentation(this,physical);
             LinearLayout host=new LinearLayout(cluster.getContext());
             host.setBackgroundColor(Color.TRANSPARENT);
-            host.setGravity(Gravity.CENTER);
+            host.setGravity(Gravity.BOTTOM | Gravity.CENTER_HORIZONTAL);
             receiver=new TextureView(cluster.getContext());
             receiver.setOpaque(true);
             receiver.setSurfaceTextureListener(this);
             host.addView(receiver,new LinearLayout.LayoutParams(
-                WIDTH,HEIGHT));
+                width,bandHeight));
             cluster.setContentView(host);
             configureWindow(cluster);
             cluster.setOnDismissListener(dialog->{
@@ -149,7 +156,7 @@ public final class BridgeClusterSurfaceProbeActivity extends Activity
                 ". Jetour puede restringir sus capas OEM.");
         }
     }
-    private static void configureWindow(Presentation p){
+    private void configureWindow(Presentation p){
         Window window=p.getWindow();
         if(window==null)return;
         window.setBackgroundDrawableResource(
@@ -158,17 +165,17 @@ public final class BridgeClusterSurfaceProbeActivity extends Activity
         window.addFlags(WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE|
             WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE|
             WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL);
-        window.setGravity(Gravity.CENTER);
-        window.setLayout(WIDTH,HEIGHT);
+        window.setGravity(Gravity.TOP | Gravity.LEFT);
+        window.setLayout(width,height);
     }
     @Override public void onSurfaceTextureAvailable(
             SurfaceTexture texture,int width,int height){
         if(closed||virtual!=null)return;
         try{
-            texture.setDefaultBufferSize(WIDTH,HEIGHT);
+            texture.setDefaultBufferSize(width,bandHeight);
             surface=new Surface(texture);
             virtual=displays.createVirtualDisplay("BridgeDisplay1LayerProbe",
-                WIDTH,HEIGHT,DPI,surface,FLAGS);
+                width,bandHeight,DPI,surface,FLAGS);
             if(virtual==null||virtual.getDisplay()==null)
                 throw new IllegalStateException("VirtualDisplay no creado");
             Display d=virtual.getDisplay();
@@ -182,15 +189,17 @@ public final class BridgeClusterSurfaceProbeActivity extends Activity
             scene.setGravity(Gravity.CENTER);
             scene.setBackgroundColor(0xFF145E70);
             TextView label=new TextView(pattern.getContext());
-            label.setText("BRIDGE · CAPA DE PRUEBA\n15 s · NO ES WAZE");
+            label.setText("BRIDGE · PRUEBA ANCHO COMPLETO\n"+
+                "ZONA INFERIOR · RADIO/BLUETOOTH\n"+
+                "12 SEGUNDOS · NO ES WAZE");
             label.setGravity(Gravity.CENTER);
             label.setTextColor(Color.WHITE);label.setTextSize(19);
             scene.addView(label);
             pattern.setContentView(scene);
             pattern.show();
-            report("Presentaciones real y virtual creadas; "+
-                "esperando cuadro. Comprobá si se ve el recuadro "+
-                "sobre Radio/Bluetooth.");
+            report("Superficie inferior "+width+"×"+bandHeight+
+                " de "+width+"×"+height+" en Display 1. "+
+                "Comprobá si tapa Radio/Bluetooth de la esquina inferior.");
         }catch(Exception issue){
             stop("Jetour bloqueó la superficie virtual: "+
                 issue.getClass().getSimpleName());
@@ -200,8 +209,8 @@ public final class BridgeClusterSurfaceProbeActivity extends Activity
         if(closed||frame)return;
         frame=true;
         report("CUADRO VIRTUAL RECIBIDO EN DISPLAY 1. "+
-            "La GPU entregó píxeles, pero sólo VOS podés "+
-            "confirmar si Radio/Bluetooth quedó detrás.");
+            "Sólo la observación de la esquina inferior derecha "+
+            "confirma si Radio/Bluetooth quedó detrás.");
     }
     @Override public void onSurfaceTextureSizeChanged(
         SurfaceTexture texture,int width,int height){}
