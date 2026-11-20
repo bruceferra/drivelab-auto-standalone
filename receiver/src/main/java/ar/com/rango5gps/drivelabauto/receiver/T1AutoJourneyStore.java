@@ -25,11 +25,13 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
     static final long GAP_MS=90000L;
     static final String SESSION_COLS="_id,start_ms,end_ms,last_ms,last_elapsed,"+
         "start_soc,end_soc,km_oem,km_gps,hv_out,hv_in,n_samples,"+
-        "is_open,closed_reason,start_lat,start_lon,end_lat,end_lon";
+        "is_open,closed_reason,start_lat,start_lon,end_lat,end_lon,"+
+        "fuel_low_l,fuel_last_l,fuel_l_candidate,fuel_samples";
     static final class Journey {
         long id,start,end,last,lastElapsed;
         double soc0,soc1,km,kmGps,hvOut,hvIn,lat0,lon0,lat1,lon1;
-        int samples,open;
+        double fuelLow,fuelLast,fuelCandidateL;
+        int fuelSamples,samples,open;
         String reason;
         double net(){return hvOut-hvIn;}
         String describe(){
@@ -39,6 +41,9 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
                 " · "+(open==1?"AUTO ACTIVA":"FINALIZADA")+
                 "\n"+fmt(km,2)+" km OEM · GPS "+fmt(kmGps,2)+
                 " km · "+samples+" muestras"+
+                (fuelSamples>1?"\nCI186 caída mínima de tanque ~"+
+                    fmt(fuelCandidateL,2)+" L (CANDIDATO, no litros medidos)":
+                    "\nNafta: SIN NIVEL CI186 COMPARABLE")+
                 "\nSOC "+fmt(soc0,1)+" % → "+fmt(soc1,1)+" % ("+
                 (Double.isFinite(soc0)&&Double.isFinite(soc1)?
                   fmt(soc1-soc0,1)+" pp":"sin lectura")+")"+
@@ -49,21 +54,23 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
         }
     }
     static final class Summary {
-        int trips;
+        int trips,hvVerifiedSamples;
         double km,kmGps,out,in;
         double net(){return out-in;}
         String describe(String title){
             return title+" · "+trips+" sesiones"+
                 "\n"+fmt(km,1)+" km OEM (GPS "+fmt(kmGps,1)+")"+
-                "\nHV salido "+fmt(out,3)+" kWh · HV entrado "+
-                fmt(in,3)+" kWh · NETO "+fmt(net(),3)+" kWh";
+                (hvVerifiedSamples<=0?"\nHV: SIN LECTURAS VERIFICADAS":
+                    "\nHV salido "+fmt(out,3)+" kWh · HV entrado "+
+                    fmt(in,3)+" kWh · NETO "+fmt(net(),3)+
+                    " kWh (muestras HV válidas: "+hvVerifiedSamples+")");
         }
     }
     static String fmt(double n,int d){
         return Double.isFinite(n)?
             String.format(Locale.getDefault(),"%."+d+"f",n):"—";
     }
-    T1AutoJourneyStore(Context c){super(c,DB,null,1);}
+    T1AutoJourneyStore(Context c){super(c,DB,null,2);}
     @Override public void onCreate(SQLiteDatabase db){
         db.execSQL("CREATE TABLE sessions ("+
             "_id INTEGER PRIMARY KEY AUTOINCREMENT,"+
@@ -74,18 +81,35 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
             "hv_out REAL NOT NULL DEFAULT 0,hv_in REAL NOT NULL DEFAULT 0,"+
             "n_samples INTEGER NOT NULL DEFAULT 0,"+
             "is_open INTEGER NOT NULL DEFAULT 1,closed_reason TEXT DEFAULT '',"+
-            "start_lat REAL,start_lon REAL,end_lat REAL,end_lon REAL)");
+            "start_lat REAL,start_lon REAL,end_lat REAL,end_lon REAL,"+
+            "fuel_low_l REAL,fuel_last_l REAL,"+
+            "fuel_l_candidate REAL NOT NULL DEFAULT 0,"+
+            "fuel_samples INTEGER NOT NULL DEFAULT 0)");
         db.execSQL("CREATE TABLE samples ("+
             "_id INTEGER PRIMARY KEY AUTOINCREMENT,"+
             "session_id INTEGER NOT NULL,t_epoch_ms INTEGER NOT NULL,"+
             "raw_ready INTEGER,raw_cable INTEGER,raw_gear INTEGER,"+
             "speed_kmh REAL,soc REAL,volt REAL,amps REAL,rpm REAL,"+
             "gps_lat REAL,gps_lon REAL,gps_accuracy_m REAL,"+
-            "km_oem_cum REAL,km_gps_cum REAL,hv_out_cum REAL,hv_in_cum REAL)");
+            "km_oem_cum REAL,km_gps_cum REAL,hv_out_cum REAL,hv_in_cum REAL,"+
+            "fuel_tank_l REAL,soc_internal REAL,"+
+            "fuel_drop_l_cum REAL NOT NULL DEFAULT 0,hv_source TEXT)");
         db.execSQL("CREATE INDEX ix_auto_time ON sessions(start_ms)");
         db.execSQL("CREATE INDEX ix_auto_sample ON samples(session_id,t_epoch_ms)");
     }
-    @Override public void onUpgrade(SQLiteDatabase db,int from,int to){}
+    @Override public void onUpgrade(SQLiteDatabase db,int from,int to){
+        if(from<2){
+            // Non-destructive migration: never rewrite old sessions or GPS.
+            db.execSQL("ALTER TABLE sessions ADD COLUMN fuel_low_l REAL");
+            db.execSQL("ALTER TABLE sessions ADD COLUMN fuel_last_l REAL");
+            db.execSQL("ALTER TABLE sessions ADD COLUMN fuel_l_candidate REAL NOT NULL DEFAULT 0");
+            db.execSQL("ALTER TABLE sessions ADD COLUMN fuel_samples INTEGER NOT NULL DEFAULT 0");
+            db.execSQL("ALTER TABLE samples ADD COLUMN fuel_tank_l REAL");
+            db.execSQL("ALTER TABLE samples ADD COLUMN soc_internal REAL");
+            db.execSQL("ALTER TABLE samples ADD COLUMN fuel_drop_l_cum REAL NOT NULL DEFAULT 0");
+            db.execSQL("ALTER TABLE samples ADD COLUMN hv_source TEXT");
+        }
+    }
     private static double nullable(Cursor c,int index){
         return c.isNull(index)?Double.NaN:c.getDouble(index);
     }
@@ -99,6 +123,8 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
         r.samples=c.getInt(11);r.open=c.getInt(12);r.reason=c.getString(13);
         r.lat0=nullable(c,14);r.lon0=nullable(c,15);
         r.lat1=nullable(c,16);r.lon1=nullable(c,17);
+        r.fuelLow=nullable(c,18);r.fuelLast=nullable(c,19);
+        r.fuelCandidateL=c.getDouble(20);r.fuelSamples=c.getInt(21);
         return r;
     }
     synchronized Journey openJourney(){
@@ -122,6 +148,8 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
         row.put("start_ms",p.wallMs);row.put("last_ms",p.wallMs);
         row.put("last_elapsed",p.elapsedMs);
         real(row,"start_soc",p.soc);real(row,"end_soc",p.soc);
+        real(row,"fuel_low_l",p.fuelRemainingLiters);
+        real(row,"fuel_last_l",p.fuelRemainingLiters);
         geo(row,fix,"start_lat","start_lon");
         geo(row,fix,"end_lat","end_lon");
         long id=getWritableDatabase().insertOrThrow("sessions",null,row);
@@ -142,6 +170,8 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
             // Power cut and process restart can reset elapsedRealtime.
             if(p.wallMs<=old.last||dt<0)dt=0;
             double[] incr=T1AutoDrivePolicy.integrate(p.volt,p.amps,p.speed,(long)dt);
+            T1AutoFuelLevelMath.Delta fuel=T1AutoFuelLevelMath.step(
+                old.fuelLow,p.fuelRemainingLiters,(long)dt);
             double gpsKm=0;
             if(gps!=null && Double.isFinite(old.lat1)&&
                Double.isFinite(old.lon1)&&
@@ -161,6 +191,13 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
             v.put("hv_out",old.hvOut+incr[0]);
             v.put("hv_in",old.hvIn+incr[1]);
             v.put("n_samples",old.samples+1);
+            if(T1AutoFuelLevelMath.valid(p.fuelRemainingLiters)){
+                real(v,"fuel_low_l",fuel.low);
+                real(v,"fuel_last_l",p.fuelRemainingLiters);
+                v.put("fuel_samples",old.fuelSamples+1);
+            }
+            v.put("fuel_l_candidate",
+                old.fuelCandidateL+fuel.consumedCandidate);
             geo(v,gps,"end_lat","end_lon");
             db.update("sessions",v,"_id=?",new String[]{Long.toString(id)});
             ContentValues raw=new ContentValues();
@@ -170,6 +207,11 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
             real(raw,"speed_kmh",p.speed);real(raw,"soc",p.soc);
             real(raw,"volt",p.volt);real(raw,"amps",p.amps);
             real(raw,"rpm",p.rpm);
+            real(raw,"soc_internal",p.socInternal);
+            real(raw,"fuel_tank_l",p.fuelRemainingLiters);
+            raw.put("fuel_drop_l_cum",
+                old.fuelCandidateL+fuel.consumedCandidate);
+            if(p.voltageSource!=null)raw.put("hv_source",p.voltageSource);
             if(gps!=null){
                 geo(raw,gps,"gps_lat","gps_lon");
                 if(gps.hasAccuracy())raw.put("gps_accuracy_m",gps.getAccuracy());
@@ -201,6 +243,21 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
         }
         return all;
     }
+    /** Every ignition crossing the selected interval, not merely the
+     * last N sessions. Returned data remains raw, without retrofilling.
+     */
+    synchronized ArrayList<Journey> overlapping(long from,long until){
+        if(from<=0||until<=from)throw new IllegalArgumentException("Rango");
+        ArrayList<Journey> rows=new ArrayList<>();
+        try(Cursor c=getReadableDatabase().rawQuery(
+            "SELECT "+SESSION_COLS+" FROM sessions WHERE start_ms<? "+
+            "AND last_ms>? ORDER BY start_ms LIMIT 10000",
+            new String[]{Long.toString(until),Long.toString(from)})){
+            while(c.moveToNext())rows.add(journey(c));
+        }
+        return rows;
+    }
+
     synchronized Summary since(long epoch){
         Summary out=new Summary();
         try(Cursor c=getReadableDatabase().rawQuery(
@@ -214,6 +271,13 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
                 out.in=c.getDouble(4);
             }
         }
+        try(Cursor c=getReadableDatabase().rawQuery(
+            "SELECT COUNT(*) FROM samples WHERE t_epoch_ms>=? "+
+            "AND volt BETWEEN 100 AND 1000 "+
+            "AND amps BETWEEN -1000 AND 1000",
+            new String[]{Long.toString(epoch)})){
+            if(c.moveToFirst())out.hvVerifiedSamples=c.getInt(0);
+        }
         return out;
     }
 
@@ -225,29 +289,44 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
         final String title;
         final long from,until;
         int sessions;
-        double km,gps,out,in;
-        long sampledMs;
+        double km,gps,out,in,fuelCandidate;
+        long sampledMs,hvMeasuredMs,fuelObservedMs;
         private final java.util.HashSet<Long> ids=new java.util.HashSet<>();
         Slice(String title,long from,long until){
             this.title=title;this.from=from;this.until=until;
         }
-        void add(long sessionId,T1AutoRangeMath.Delta delta){
+        void add(long sessionId,T1AutoRangeMath.Delta delta,
+                 boolean hvValid,boolean fuelValid){
             if(delta.observedMs<=0)return;
             ids.add(sessionId);sessions=ids.size();
             km+=delta.distanceKm;gps+=delta.gpsKm;
             out+=delta.hvOutKwh;in+=delta.hvInKwh;
+            fuelCandidate+=delta.fuelCandidateL;
             sampledMs+=delta.observedMs;
+            if(hvValid)hvMeasuredMs+=delta.observedMs;
+            if(fuelValid)fuelObservedMs+=delta.observedMs;
         }
         double net(){return out-in;}
         String describe(){
             return title+" · "+sessions+" encendidos"+
                 "\n"+fmt(km,2)+" km OEM · "+fmt(gps,2)+" km GPS"+
-                "\nBatería: SALIDA "+fmt(out,3)+" kWh; ENTRADA "+
-                fmt(in,3)+" kWh; NETA "+fmt(net(),3)+" kWh"+
+                "\nBatería: SALIDA "+
+                (hvMeasuredMs>0?fmt(out,3)+" kWh":"— SIN HV VERIFICADO")+
+                "; ENTRADA "+
+                (hvMeasuredMs>0?fmt(in,3)+" kWh":"— SIN HV VERIFICADO")+
+                "; NETA "+
+                (hvMeasuredMs>0?fmt(net(),3)+" kWh":"—")+
+                "\nCI186 (mínima caída de nivel de tanque): "+
+                (fuelObservedMs>0?fmt(fuelCandidate,2)+" L CANDIDATO":
+                    "— SIN MUESTRAS CI186")+"; no es medición exacta"+
                 "\nTiempo con telemetría: "+
                 fmt(sampledMs/60000.0,1)+" minutos"+
                 "\nENTRADA = regeneración + generador térmico, "+
-                "no solo frenado. Nafta: SIN LITROS OEM VALIDADOS.";
+                "no solo frenado. HV validado "+
+                fmt(hvMeasuredMs/60000d,1)+" de "+
+                fmt(sampledMs/60000d,1)+" min. "+
+                "Nivel CI186 observado "+fmt(fuelObservedMs/60000d,1)+
+                " min (NO implica litros consumidos exactos).";
         }
     }
     static final class RangeReport {
@@ -280,14 +359,15 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
                 long end=Math.min(toMs,cal.getTimeInMillis());
                 T1AutoRangeMath.Delta delta=T1AutoRangeMath.clip(
                     previous,current,part,end);
-                total.add(id,delta);
+                total.add(id,delta,current.hvValid,current.fuelValid);
                 days.computeIfAbsent(key,x->new Slice(x,from,until))
-                    .add(id,delta);
+                    .add(id,delta,current.hvValid,current.fuelValid);
                 String label="ENCENDIDO #"+id+" · "+
                     new java.text.SimpleDateFormat("dd/MM HH:mm",
                         Locale.getDefault()).format(new Date(sessionStart));
                 byIgnition.computeIfAbsent(id,
-                    x->new Slice(label,from,until)).add(id,delta);
+                    x->new Slice(label,from,until))
+                    .add(id,delta,current.hvValid,current.fuelValid);
                 part=end;
             }
         }
@@ -295,7 +375,8 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
             StringBuilder s=new StringBuilder(
                 "nivel;nombre;desde_epoch_ms;hasta_epoch_ms;encendidos;"+
                 "km_oem;km_gps;hv_salida_kwh;hv_entrada_kwh;hv_neto_kwh;"+
-                "minutos_con_telemetria\n");
+                "minutos_con_telemetria;fuel_ci186_candidato_l;"+
+                "minutos_hv_verificados;minutos_nivel_tanque\n");
             csvRow(s,"TOTAL",total);
             for(Slice slice:days.values())csvRow(s,"DIA",slice);
             for(Slice slice:byIgnition.values())csvRow(s,"ENCENDIDO",slice);
@@ -311,14 +392,21 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
                 .append(fmtCsv(row.out)).append(';')
                 .append(fmtCsv(row.in)).append(';')
                 .append(fmtCsv(row.net())).append(';')
-                .append(fmtCsv(row.sampledMs/60000.0))
+                .append(fmtCsv(row.sampledMs/60000.0)).append(';')
+                .append(fmtCsv(row.fuelCandidate)).append(';')
+                .append(fmtCsv(row.hvMeasuredMs/60000.0)).append(';')
+                .append(fmtCsv(row.fuelObservedMs/60000.0))
                 .append('\n');
         }
     }
     private static T1AutoRangeMath.Cumulative point(Cursor c){
+        double volts=nullable(c,6),amps=nullable(c,7),
+            tank=nullable(c,8);
         return new T1AutoRangeMath.Cumulative(
             c.getLong(0),c.getDouble(1),c.getDouble(2),
-            c.getDouble(3),c.getDouble(4));
+            c.getDouble(3),c.getDouble(4),c.getDouble(5),
+            T1AutoDrivePolicy.validHv(volts,amps),
+            T1AutoFuelLevelMath.valid(tank));
     }
     /**
      * Per-session cumulative baselines: fetch last sample at/before FROM,
@@ -342,7 +430,8 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
                 T1AutoRangeMath.Cumulative previous=null;
                 try(Cursor base=db.rawQuery(
                     "SELECT t_epoch_ms,km_oem_cum,km_gps_cum,"+
-                    "hv_out_cum,hv_in_cum FROM samples "+
+                    "hv_out_cum,hv_in_cum,fuel_drop_l_cum,"+
+                    "volt,amps,fuel_tank_l FROM samples "+
                     "WHERE session_id=? AND t_epoch_ms<=? "+
                     "ORDER BY t_epoch_ms DESC LIMIT 1",
                     new String[]{id,Long.toString(from)})){
@@ -351,7 +440,8 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
                 long firstAfter=previous==null?from-1:previous.at;
                 try(Cursor rows=db.rawQuery(
                     "SELECT t_epoch_ms,km_oem_cum,km_gps_cum,"+
-                    "hv_out_cum,hv_in_cum FROM samples "+
+                    "hv_out_cum,hv_in_cum,fuel_drop_l_cum,"+
+                    "volt,amps,fuel_tank_l FROM samples "+
                     "WHERE session_id=? AND t_epoch_ms>? "+
                     "ORDER BY t_epoch_ms",
                     new String[]{id,Long.toString(firstAfter)})){
@@ -373,11 +463,13 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
         writeLine(out,"sesion_id;fecha_epoch_ms;ready_1031;cable_1060;"+
             "marcha_1033;velocidad_kmh;soc;volt;amps;rpm;gps_lat;gps_lon;"+
             "precision_m;km_oem_acum;km_gps_acum;hv_salida_acum;"+
-            "hv_entrada_acum\n");
+            "hv_entrada_acum;soc_interno_1042;tanque_ci186_l;"+
+            "caida_tanque_candidata_l_acum;fuente_hv\n");
         try(Cursor c=getReadableDatabase().rawQuery(
             "SELECT session_id,t_epoch_ms,raw_ready,raw_cable,raw_gear,"+
                 "speed_kmh,soc,volt,amps,rpm,gps_lat,gps_lon,"+
-                "gps_accuracy_m,km_oem_cum,km_gps_cum,hv_out_cum,hv_in_cum "+
+                "gps_accuracy_m,km_oem_cum,km_gps_cum,hv_out_cum,hv_in_cum,"+
+                "soc_internal,fuel_tank_l,fuel_drop_l_cum,hv_source "+
                 "FROM samples WHERE t_epoch_ms>=? AND t_epoch_ms<? "+
                 "ORDER BY t_epoch_ms",
             new String[]{Long.toString(from),Long.toString(until)})){
@@ -385,7 +477,8 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
                 StringBuilder row=new StringBuilder();
                 for(int i=0;i<c.getColumnCount();i++){
                     if(i>0)row.append(';');
-                    if(!c.isNull(i))row.append(i<=4?
+                    if(!c.isNull(i))row.append(i>=20?
+                        safeCell(c.getString(i)):i<=4?
                         Long.toString(c.getLong(i)):fmtCsv(c.getDouble(i)));
                 }
                 writeLine(out,row.append('\n').toString());
@@ -394,6 +487,10 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
         out.flush();
     }
 
+    private static String safeCell(String s){
+        return s==null?"":s.replace(';',',').replace('\n',' ')
+            .replace('\r',' ');
+    }
     private static String fmtCsv(double x){
         return Double.isFinite(x)?String.format(Locale.ROOT,"%.6f",x):"";
     }
@@ -405,18 +502,22 @@ final class T1AutoJourneyStore extends SQLiteOpenHelper {
             writeLine(out,"sesion_id;fecha_epoch_ms;ready_1031;cable_1060;"+
                 "marcha_1033;velocidad_kmh;soc_1062;volt_1063;amps_1064;"+
                 "rpm_1035;gps_lat;gps_lon;gps_accuracy_m;km_oem_acum;"+
-                "km_gps_acum;hv_salida_kwh_acum;hv_entrada_kwh_acum\n");
+                "km_gps_acum;hv_salida_kwh_acum;hv_entrada_kwh_acum;"+
+                "soc_interno_1042;tanque_ci186_l;"+
+                "caida_tanque_candidata_l_acum;fuente_hv\n");
             try(Cursor c=getReadableDatabase().rawQuery(
                 "SELECT session_id,t_epoch_ms,raw_ready,raw_cable,"+
                 "raw_gear,speed_kmh,soc,volt,amps,rpm,gps_lat,gps_lon,"+
-                "gps_accuracy_m,km_oem_cum,km_gps_cum,hv_out_cum,hv_in_cum "+
+                "gps_accuracy_m,km_oem_cum,km_gps_cum,hv_out_cum,hv_in_cum,"+
+                "soc_internal,fuel_tank_l,fuel_drop_l_cum,hv_source "+
                 "FROM samples ORDER BY t_epoch_ms",null)){
                 while(c.moveToNext()){
                     StringBuilder line=new StringBuilder();
                     for(int i=0;i<c.getColumnCount();i++){
                         if(i>0)line.append(';');
                         if(!c.isNull(i))
-                            line.append(i<=4?Long.toString(c.getLong(i)):
+                            line.append(i>=20?safeCell(c.getString(i)):
+                                i<=4?Long.toString(c.getLong(i)):
                                 fmtCsv(c.getDouble(i)));
                     }
                     writeLine(out,line.append('\n').toString());

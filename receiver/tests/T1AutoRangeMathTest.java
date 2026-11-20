@@ -22,6 +22,15 @@ public final class T1AutoRangeMathTest {
         T1AutoRangeMath.Cumulative far=new T1AutoRangeMath.Cumulative(
             19000,5,3,8,2);
         eq(T1AutoRangeMath.clip(b,far,5000,20000).distanceKm,0);
+        T1AutoRangeMath.Cumulative fuelA=
+            new T1AutoRangeMath.Cumulative(
+                1000,2,1.6,5,0.8,0.1,true,true);
+        T1AutoRangeMath.Cumulative fuelB=
+            new T1AutoRangeMath.Cumulative(
+                5000,2.04,1.63,5.02,0.82,0.3,true,true);
+        eq(T1AutoRangeMath.clip(fuelA,fuelB,3000,7000)
+            .fuelCandidateL,0.1);
+        yes(fuelB.hvValid&&fuelB.fuelValid);
         System.out.println("PASS exact user-selected minute interval with no unmeasured gap fill");
     }
 }

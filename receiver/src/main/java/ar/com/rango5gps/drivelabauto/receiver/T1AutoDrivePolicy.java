@@ -18,13 +18,20 @@ final class T1AutoDrivePolicy {
             Double.isFinite(kmh) && kmh>=0 && kmh<0.6);
     }
     static double[] integrate(double volts,double amps,double kmh,long dtMs){
-        if(dtMs<=0||dtMs>MAX_INTEGRATION_MS||
-            !Double.isFinite(volts)||volts<100||volts>1000||
-            !Double.isFinite(amps)||Math.abs(amps)>1000)
+        if(dtMs<=0||dtMs>MAX_INTEGRATION_MS)
             return new double[]{0,0,0};
-        double kwh=volts*amps*dtMs/3600000000d;
+        // Distance is independent of HV telemetry. The previous
+        // implementation silently reset OEM km to zero whenever the
+        // unreliable Vehicle 1063 voltage getter failed.
         double km=Double.isFinite(kmh)&&kmh>=0&&kmh<220?
             kmh*dtMs/3600000d:0;
+        if(!validHv(volts,amps))
+            return new double[]{0,0,km};
+        double kwh=volts*amps*dtMs/3600000000d;
         return new double[]{Math.max(0,kwh),Math.max(0,-kwh),km};
+    }
+    static boolean validHv(double volts,double amps){
+        return Double.isFinite(volts)&&volts>=100&&volts<=1000&&
+            Double.isFinite(amps)&&Math.abs(amps)<=1000;
     }
 }

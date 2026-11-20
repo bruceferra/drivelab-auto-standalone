@@ -258,6 +258,24 @@ final class T1ChargeStore extends SQLiteOpenHelper {
         }
     }
 
+    /** Sessions overlapping [from,until), including an active plug.
+     * No interpolation of kWh inside partly overlapping charge sessions.
+     * Use raw battery kWh only, never call it a grid-meter reading.
+     */
+    synchronized ArrayList<Record> overlapping(long from,long until){
+        if(from<=0||until<=from)throw new IllegalArgumentException("Rango");
+        ArrayList<Record> list=new ArrayList<>();
+        try(Cursor c=getReadableDatabase().rawQuery(
+            "SELECT "+COLS+" FROM sessions WHERE start_ms<? AND "+
+            "(CASE WHEN end_ms>0 THEN end_ms "+
+            "WHEN last_ms>0 THEN last_ms ELSE start_ms END)>=? "+
+            "ORDER BY start_ms LIMIT 10000",
+            new String[]{Long.toString(until),Long.toString(from)})){
+            while(c.moveToNext())list.add(parse(c));
+        }
+        return list;
+    }
+
     synchronized ArrayList<Record> latest(int max){
         ArrayList<Record> out=new ArrayList<>();
         try(Cursor c=getReadableDatabase().rawQuery(

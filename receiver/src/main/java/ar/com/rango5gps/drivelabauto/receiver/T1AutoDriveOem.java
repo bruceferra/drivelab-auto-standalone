@@ -21,11 +21,13 @@ final class T1AutoDriveOem implements AutoCloseable {
     static final class Point{
         long wallMs,elapsedMs;
         int ready,gear,cable;
-        double speed,soc,volt,amps,rpm;
+        double speed,soc,socInternal,volt,amps,rpm,fuelRemainingLiters;
+        String voltageSource;
     }
     private final Context app;
     private IBinder binder;
     private ServiceConnection connection;
+    private T1AutoReadOnlySignals extra;
     private boolean bound;
     T1AutoDriveOem(Context context)throws Exception{
         app=context.getApplicationContext();
@@ -49,6 +51,9 @@ final class T1AutoDriveOem implements AutoCloseable {
                !TOKEN.equals(binder.getInterfaceDescriptor()))
                 throw new SecurityException("OEM interfaz distinta");
         }catch(Exception e){close();throw e;}
+        // Two optional, read-only references. Driving must keep recording
+        // even if the vehicle denies either vendor binder.
+        extra=new T1AutoReadOnlySignals(app);
     }
     private int intValue(int id)throws Exception{
         if(binder==null||!binder.isBinderAlive())
@@ -88,13 +93,26 @@ final class T1AutoDriveOem implements AutoCloseable {
         p.speed=f(2148);
         if(!Double.isFinite(p.speed)||p.speed<0||p.speed>220)
             p.speed=i(1089);
-        p.soc=f(1062);p.volt=f(1063);p.amps=f(1064);
+        p.soc=f(1062);p.socInternal=f(1042);
+        p.volt=f(1063);p.amps=f(1064);
+        p.voltageSource=T1AutoDrivePolicy.validHv(p.volt,p.amps)?
+            "Vehicle 1063/1064":"SIN HV VERIFICADO";
+        T1AutoReadOnlySignals.Extra more=extra==null?
+            new T1AutoReadOnlySignals.Extra():extra.read();
+        p.fuelRemainingLiters=more.tankLiters;
+        if(!T1AutoDrivePolicy.validHv(p.volt,p.amps)&&
+           more.halVolts>=100&&more.halVolts<=1000&&
+           T1AutoReadOnlySignals.currentAgrees(p.amps,more.halAmps)){
+            p.volt=more.halVolts;
+            p.voltageSource="HAL 559940910 confirmado con 559940911";
+        }
         p.rpm=f(1035);
         p.wallMs=System.currentTimeMillis();
         p.elapsedMs=SystemClock.elapsedRealtime();
         return p;
     }
     @Override public void close(){
+        if(extra!=null){extra.close();extra=null;}
         if(bound){
             bound=false;try{app.unbindService(connection);}catch(Exception ignored){}
         }
