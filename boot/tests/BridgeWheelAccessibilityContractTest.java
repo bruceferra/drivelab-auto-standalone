@@ -21,7 +21,12 @@ public final class BridgeWheelAccessibilityContractTest {
         yes(service.contains("getWindowsOnAllDisplays()")&&
             service.contains("window.getDisplayId()!=1")&&
             service.contains("BridgeWheelPolicy.translate(")&&
-            service.contains("setDisplayId(visible.displayId)")&&
+            service.contains("case BridgeWheelPolicy.NEXT:")&&
+            service.contains("case BridgeWheelPolicy.PREVIOUS:")&&
+            service.contains("ACTION_ACCESSIBILITY_FOCUS")&&
+            !service.contains("dispatchGesture(")&&
+            !service.contains("GestureDescription")&&
+            !service.contains("ZOOM_IN")&&
             service.contains("AccessibilityNodeInfo.ACTION_CLICK")&&
             service.contains("onKeyEvent(KeyEvent event)")&&
             service.contains("return false;")&&
@@ -31,7 +36,7 @@ public final class BridgeWheelAccessibilityContractTest {
             !service.contains("settings put")&&
             !service.contains("T1WazeWheelService")&&
             !service.contains("BootConfig.assertReceiver("),
-            "Wheel service must be independent, display-scoped and no OEM/global control");
+            "Wheel service must navigate app options ONLY, no zoom, independent and no OEM/global control");
         yes(activity.contains("BridgeWheelAccessibilityService")&&
             activity.contains("ACTION_ACCESSIBILITY_SETTINGS")&&
             manifest.contains("android.permission.BIND_ACCESSIBILITY_SERVICE")&&
