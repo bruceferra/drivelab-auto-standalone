@@ -39,6 +39,7 @@ public final class BootActivity extends Activity
     private TextView qrCaption;
     private TextView statusLabel;
     private TextView wheelRecoveryLabel;
+    private TextView backgroundStatusLabel;
     private LinearLayout content;
     private TextView percentLabel;
     private static final int BG=0xFF101B25,PANEL=0xFF23313C,
@@ -107,8 +108,12 @@ public final class BootActivity extends Activity
                 });
             return;
         }
-        if(!"last_status".equals(key))return;
+        if(!"last_status".equals(key)&&
+           !BridgeBackgroundAccess.STATUS.equals(key))return;
         runOnUiThread(()->{
+            if(backgroundStatusLabel!=null)
+                backgroundStatusLabel.setText(
+                    BridgeBackgroundAccess.describe(this));
             if(statusLabel!=null)statusLabel.setText(bridgeStatus()+
                 "\\n\\nÚLTIMA ACCIÓN:\\n"+prefs().getString("last_status",""));
         });
@@ -507,7 +512,8 @@ public final class BootActivity extends Activity
         button(BridgeBackgroundAccess.authorized(this)?
             "SEGUNDO PLANO: AUTORIZADO · REVISAR":
             "HABILITAR SEGUNDO PLANO · ADB LOCAL",this::requestOverlay);
-        text(BridgeBackgroundAccess.describe(this),12,QUIET);
+        backgroundStatusLabel=text(
+            BridgeBackgroundAccess.describe(this),12,QUIET);
         text("PANTALLA CENTRAL · DISPLAY 0 · BRIDGE",18,WHITE);
         text("Panel izquierdo ancho + panel derecho vertical "+
             "(Spotify tipo celular). Para pruebas también podés "+
