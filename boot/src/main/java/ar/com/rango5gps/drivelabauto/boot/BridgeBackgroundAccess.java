@@ -41,13 +41,37 @@ final class BridgeBackgroundAccess {
         BootConfig.prefs(c).edit().putString(STATUS,value)
             .putString("last_status",value).apply();
     }
+    /** Always report a final outcome in the FOREGROUND where owner tapped,
+     * not only in a preference line far below the scrolling Bridge screen.
+     * The actual Android permission is checked again for the report.
+     */
+    private static void finish(Activity owner,Context app,String outcome){
+        note(app,outcome);
+        owner.runOnUiThread(()->{
+            if(owner.isFinishing()||owner.isDestroyed())return;
+            boolean verified=authorized(owner);
+            new AlertDialog.Builder(owner)
+                .setTitle(verified?
+                    "SEGUNDO PLANO · PERMISO ANDROID ACTIVO":
+                    "SEGUNDO PLANO · PERMISO ANDROID BLOQUEADO")
+                .setMessage(outcome+"\n\n"+
+                    (verified?"Android confirma ventanas superpuestas.":
+                        "Bridge NO tiene permiso para abrir Waze oculto. "+
+                        "No se modificó el QR ni ninguna otra aplicación."))
+                .setPositiveButton("ENTENDIDO",null).show();
+        });
+    }
     static void ask(Activity owner){
         if(!LAB.equals(owner.getPackageName())){
             note(owner,"Este permiso sólo se gestiona en Bridge LAB");
             return;
         }
         if(BUSY.get()){
-            note(owner,"La autorización anterior sigue ejecutándose");
+            new AlertDialog.Builder(owner)
+                .setTitle("ADB LOCAL · OPERACIÓN EN CURSO")
+                .setMessage("Bridge todavía está verificando Android. "+
+                    "El resultado aparecerá en esta pantalla.")
+                .setPositiveButton("ENTENDIDO",null).show();
             return;
         }
         new AlertDialog.Builder(owner)
@@ -74,7 +98,7 @@ final class BridgeBackgroundAccess {
     private static void grant(Activity owner){
         Context app=owner.getApplicationContext();
         if(!BUSY.compareAndSet(false,true))return;
-        note(app,"Comprobando permiso Android de Bridge…");
+        note(app,"ADB LOCAL: verificando conexión y permiso de Bridge…");
         new Thread(()->{
             try{
                 if(!LAB.equals(app.getPackageName()))
@@ -93,9 +117,10 @@ final class BridgeBackgroundAccess {
                     Thread.sleep(400L);
                 }
                 if(!authorized(app)){
-                    note(app,"ADB respondió, pero Android Jetour todavía "+
-                        "NO concede ventanas superpuestas. No se puede "+
-                        "garantizar navegación desde segundo plano.");
+                    finish(owner,app,
+                        "ADB respondió, pero Android Jetour todavía "+
+                        "NO concede ventanas superpuestas. Verificación "+
+                        "Settings.canDrawOverlays() = false.");
                     return;
                 }
                 boolean saved=BootConfig.prefs(app).edit()
@@ -106,11 +131,12 @@ final class BridgeBackgroundAccess {
                 // listens for phone navigation when Bridge UI is closed.
                 app.startForegroundService(new Intent(app,BootLinkService.class)
                     .setAction(BootLinkService.START));
-                note(app,"SEGUNDO PLANO AUTORIZADO POR ANDROID · "+
+                finish(owner,app,
+                    "SEGUNDO PLANO AUTORIZADO POR ANDROID · "+
                     "autoinicio del receptor Xiaomi activado. "+
                     "No abre ningún mapa hasta que Xiaomi envíe una ruta.");
             }catch(Exception problem){
-                note(app,"SEGUNDO PLANO NO HABILITADO: "+
+                finish(owner,app,"SEGUNDO PLANO NO HABILITADO: "+
                     BridgeLocalAdb.hint(problem)+
                     ". Conservé el QR; no toqué OEM ni otros permisos.");
             }finally{BUSY.set(false);}
