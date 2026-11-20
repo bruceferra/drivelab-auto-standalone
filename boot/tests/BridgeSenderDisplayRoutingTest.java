@@ -23,10 +23,10 @@ public final class BridgeSenderDisplayRoutingTest {
             "Sender routes must be Bridge-owned, not old Receiver flags");
         check(prefs.contains("TAB_CONFIRMED")&&
             prefs.contains("TAB_ROUTE")&&
-            prefs.contains("TAB_CONFIRMED,false")&&
-            prefs.contains("TAB_ROUTE,false")&&
-            prefs.contains("return false;"),
-            "Display1 route must require owner visual confirmation and exact app");
+            prefs.contains("static boolean routeOnTablero(Context c,String pkg)")&&
+            prefs.contains("return false;")&&
+            prefs.contains("Display 1 BLOQUEADO"),
+            "All Sender Display1 routing must fail closed after real Jetour failure");
         check(ui.contains("LIBERAR CLÚSTER")&&
             ui.contains("SENDER → TABLERO: DESACTIVADO")&&
             !ui.contains("button(\"PROBAR MAPA TABLERO")&&
