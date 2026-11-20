@@ -95,8 +95,40 @@ final class BridgeLocalAdb {
         String command=BridgeWazeForegroundPolicy.sameStackToTop(now);
         return shellInternal(context,command,true);
     }
+    /** An explicit Xiaomi Sender request may update ONLY an already-running
+     * Maps Activity in an isolated virtual display (never physical Display 1).
+     * Re-read root/task identity immediately before starting; no task moves,
+     * no package kills, no generic shell and no Jetour window mutations.
+     */
+    static String deliverToExistingT1Maps(Context context,String navigationUri)
+            throws Exception{
+        String first=shell(context,"am stack list");
+        BridgeT1LauncherRoutePolicy.Target expected=
+            BridgeT1LauncherRoutePolicy.find(first);
+        if(expected==null)
+            throw new SecurityException("Google Maps de T1Launcher no aparece "+
+                "como tarea ÚNICA en display virtual; NO se abrió otro Maps");
+        String second=shell(context,"am stack list");
+        BridgeT1LauncherRoutePolicy.Target now=
+            BridgeT1LauncherRoutePolicy.find(second);
+        if(!BridgeT1LauncherRoutePolicy.same(expected,now))
+            throw new SecurityException("La tarea virtual cambió; "+
+                "NO se abrió una nueva sesión de Maps");
+        String command=BridgeT1LauncherRoutePolicy.command(now,navigationUri);
+        String response=shellInternal(context,command,false,true);
+        return BridgeT1LauncherRoutePolicy.deliveredToExistingTop(response)?
+            "ENTREGADO AL GOOGLE MAPS YA ABIERTO EN T1LAUNCHER (Android reported delivered-to-top)":
+            "ANDROID NO CONFIRMÓ ENTREGA A LA INSTANCIA EXISTENTE. "+
+            "No se realizó un segundo intento ni se movió la tarea; "+
+            "revisá el mosaico. Respuesta: "+
+            (response.length()>160?response.substring(0,160):response);
+    }
     private static String shellInternal(Context context,String command,
             boolean verifiedWazeProbe)throws Exception{
+        return shellInternal(context,command,verifiedWazeProbe,false);
+    }
+    private static String shellInternal(Context context,String command,
+            boolean verifiedWazeProbe,boolean verifiedT1)throws Exception{
         // These two additional commands are ONLY for a one-time,
         // owner-confirmed recovery of map-only stacks on Display 1.
         // "am stack remove" takes STACK ID, NOT task ID (Android 11).
@@ -114,7 +146,14 @@ final class BridgeLocalAdb {
         boolean exactWazeMove=verifiedWazeProbe&&
             command.matches("am stack move-task [1-9][0-9]{1,6} "+
                             "[1-9][0-9]{1,6} true");
-        if(!(exactWazeMove||overlayCommand||readStacks||removeValidatedStack||
+        boolean exactT1MapDelivery=verifiedT1&&
+            command.matches("am start --display (?:[2-9]|[1-9][0-9]) "+
+                "--task [1-9][0-9]{1,6} --activity-single-top "+
+                "-a android\\.intent\\.action\\.VIEW "+
+                "-d 'google\\.navigation:q=[A-Za-z0-9%.,_:+\\-]+&mode=d' "+
+                "-n com\\.google\\.android\\.apps\\.maps/"+
+                "[A-Za-z_][A-Za-z0-9_.$]+");
+        if(!(exactWazeMove||exactT1MapDelivery||overlayCommand||readStacks||removeValidatedStack||
              "settings get secure enabled_accessibility_services".equals(command)||
              "settings get secure accessibility_enabled".equals(command)||
              "settings put secure accessibility_enabled 1".equals(command)||
