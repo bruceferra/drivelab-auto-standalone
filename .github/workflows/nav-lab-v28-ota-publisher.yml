@@ -19,8 +19,8 @@ jobs:
     timeout-minutes: 25
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      SOURCE_RUN: '44931096094'
-      SOURCE_SHA: 'd523319658b44dc516eb5ca5e1b228080b5ad17e'
+      SOURCE_RUN: '44931203151'
+      SOURCE_SHA: 'a6aab4441fb4fa25f4d3bf359c799c89c251fa80'
       TAG: 'bridge-lab-v28'
       APK: 'DriveLab-Bridge-LAB-v0.1.30-lab.28.apk'
     steps:
@@ -36,8 +36,8 @@ jobs:
           data=json.load(open('nav-release-v28/APPROVE_OTA_LAB28.json',encoding='utf-8'))
           assert data=={
             'approval':'PUBLICAR_NAV_LAB28_SOLO_JETOUR',
-            'sourceRunId':44931096094,
-            'sourceCommit':'d523319658b44dc516eb5ca5e1b228080b5ad17e',
+            'sourceRunId':44931203151,
+            'sourceCommit':'a6aab4441fb4fa25f4d3bf359c799c89c251fa80',
             'tag':'bridge-lab-v28',
             'versionName':'0.1.30-lab.28',
             'versionCode':32,
