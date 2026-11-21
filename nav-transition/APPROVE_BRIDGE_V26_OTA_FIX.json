@@ -1,0 +1,9 @@
+{
+  "approval": "REPARAR_OTA_NAV_DESDE_BRIDGE_LAB_24",
+  "sourceRunId": 44914511497,
+  "sourceCommit": "e1649ef0ee41b6b4be398abb898c7586a4e2e071",
+  "targetTag": "bridge-lab-v26",
+  "versionName": "0.1.28-lab.26",
+  "versionCode": 30,
+  "senderUnchanged": true
+}
