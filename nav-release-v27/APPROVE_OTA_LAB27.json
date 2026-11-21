@@ -1,0 +1,10 @@
+{
+  "approval": "PUBLICAR_NAV_LAB27_PARA_PRUEBA_JETOUR",
+  "sourceRunId": 44924320577,
+  "sourceCommit": "19df4bb84ce7ef6b588fb0d4166e344d6db7b852",
+  "targetTag": "bridge-lab-v27",
+  "versionName": "0.1.29-lab.27",
+  "versionCode": 31,
+  "senderUnchanged": true,
+  "publishBridgeLabChannel": true
+}
