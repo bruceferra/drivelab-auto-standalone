@@ -1,0 +1,141 @@
+name: Repair NAV LAB27 OTA APK filename — exact owner-approved, no new signing
+on:
+  push:
+    branches: [release/nav-lab-v27-20261121]
+    paths: ['nav-release-v27/APPROVE_OTA_LAB27_FILENAME_REPAIR.json']
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: drivelab-nav-lab-v27-ota-repair
+  cancel-in-progress: false
+
+jobs:
+  repair-ota-filename-only:
+    if: github.repository == 'bruceferra/drivelab-auto-standalone' && github.ref == 'refs/heads/release/nav-lab-v27-20261121'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      TAG: bridge-lab-v27
+      BAD: DriveLab-NAV-LAB-v0.1.29-lab.27.apk
+      GOOD: DriveLab-Bridge-LAB-v0.1.29-lab.27.apk
+      HASH: 7e051f6efa3089bbd06e632ca91229352b0d70fd8b3048d9ec99876a163fe3bc
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify exact owner's requested OTA filename repair and existing broken pointer
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          p='nav-release-v27/APPROVE_OTA_LAB27_FILENAME_REPAIR.json'
+          j=json.load(open(p,encoding='utf-8'))
+          expected={
+            'approval':'REPARAR_NOMBRE_APK_OTA_NAV_LAB27_SIN_CAMBIAR_FIRMA',
+            'sourceTag':'bridge-lab-v27',
+            'versionName':'0.1.29-lab.27',
+            'versionCode':31,
+            'expectedSha256':'7e051f6efa3089bbd06e632ca91229352b0d70fd8b3048d9ec99876a163fe3bc',
+            'senderUnchanged':True
+          }
+          assert j==expected, 'BLOCKED: approval scope mismatch'
+          PY
+          gh api "repos/$GITHUB_REPOSITORY/contents/bridge-lab.json?ref=bridge-lab-ota" > before-response.json
+          jq -r .content before-response.json | base64 -d > before.json
+          python3 - <<'PY'
+          import json
+          j=json.load(open('before.json',encoding='utf-8'))
+          assert j == {
+            'channel':'bridge-lab',
+            'packageName':'ar.com.rango5gps.drivelabauto.boot.lab',
+            'versionName':'0.1.29-lab.27',
+            'versionCode':31,
+            'tag':'bridge-lab-v27',
+            'size':5024565,
+            'sha256':'7e051f6efa3089bbd06e632ca91229352b0d70fd8b3048d9ec99876a163fe3bc',
+            'apkUrl':'https://github.com/bruceferra/drivelab-auto-standalone/releases/download/bridge-lab-v27/DriveLab-NAV-LAB-v0.1.29-lab.27.apk'
+          }, 'BLOCKED: OTA pointer no longer matches known filename bug'
+          print('PASS proven OTA failure: BootUpdater.labOffer requires DriveLab-Bridge-LAB-v<VERSION>.apk, but current manifest uses DriveLab-NAV-LAB-v<VERSION>.apk')
+          PY
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.97
+          gh release view "$TAG" --json isPrerelease,isDraft --jq '(.isPrerelease == true) and (.isDraft == false)' | grep -Fx true
+          ! gh release view "$TAG" --json assets --jq '.assets[].name' | grep -Fx "$GOOD" || {
+            echo 'BLOCKED: expected fixed alias already exists'; exit 20;
+          }
+      - name: Download SAME signed APK and verify immutable original certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist original stable-before
+          gh release download "$TAG" --pattern "$BAD" --dir dist
+          cp "dist/$BAD" "dist/$GOOD"
+          printf '%s  %s\n' "$HASH" "dist/$BAD" | sha256sum -c -
+          printf '%s  %s\n' "$HASH" "dist/$GOOD" | sha256sum -c -
+          test "$(stat -c %s "dist/$GOOD")" -eq 5024565
+          gh release download bridge-lab-v26 --pattern DriveLab-Bridge-LAB-v0.1.28-lab.26.apk --dir original
+          echo '656381c35f88347812e1b8be3b68808a7a36f33b029c48a0737df3cb5caf5648  original/DriveLab-Bridge-LAB-v0.1.28-lab.26.apk' | sha256sum -c -
+          m=$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)
+          "$m" 'platforms;android-35' 'build-tools;35.0.0' >/dev/null
+          signer="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          "$signer" verify --print-certs "dist/$GOOD" >/dev/null
+          "$aapt" dump badging "dist/$GOOD" | grep -F "package: name='ar.com.rango5gps.drivelabauto.boot.lab' versionCode='31' versionName='0.1.29-lab.27'"
+          cert(){ "$signer" verify --print-certs "$1" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF;exit}'; }
+          test -n "$(cert "dist/$GOOD")"
+          test "$(cert "dist/$GOOD")" = "$(cert original/DriveLab-Bridge-LAB-v0.1.28-lab.26.apk)" || {
+            echo 'BLOCKED: signed certificate differs from LAB26 installed'; exit 21;
+          }
+          gh release download v0.3.97 --pattern sender.json --dir stable-before
+          gh release download v0.3.97 --pattern receiver.json --dir stable-before
+          echo 'PASS identical original signed APK bytes, v26 signer, old Sender and Receiver manifest snapshots' >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish corrected filename alias of EXACT SAME APK (no rebuild or resign)
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release upload "$TAG" "dist/$GOOD"
+          mkdir -p verified
+          gh release download "$TAG" --pattern "$GOOD" --dir verified
+          printf '%s  %s\n' "$HASH" "verified/$GOOD" | sha256sum -c -
+          cmp "dist/$BAD" "verified/$GOOD"
+          echo 'PASS OTA-reachable APK asset with BootUpdater-required Bridge-LAB filename' >> "$GITHUB_STEP_SUMMARY"
+      - name: Update ONLY manifest filename, then published release manifest, then existing OTA branch pointer
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,pathlib
+          p=pathlib.Path('before.json')
+          data=json.loads(p.read_text(encoding='utf-8'))
+          previous=data['apkUrl']
+          data['apkUrl']=previous.replace(
+            '/DriveLab-NAV-LAB-v0.1.29-lab.27.apk',
+            '/DriveLab-Bridge-LAB-v0.1.29-lab.27.apk')
+          assert data['apkUrl'] != previous
+          assert data['versionCode']==31 and data['size']==5024565
+          assert data['sha256']=='7e051f6efa3089bbd06e632ca91229352b0d70fd8b3048d9ec99876a163fe3bc'
+          pathlib.Path('bridge-lab.json').write_text(json.dumps(data,indent=2)+'\n',encoding='utf-8')
+          PY
+          gh release upload "$TAG" bridge-lab.json --clobber
+          mkdir -p verified-release
+          gh release download "$TAG" --pattern bridge-lab.json --dir verified-release
+          cmp bridge-lab.json verified-release/bridge-lab.json
+          old_sha=$(jq -r .sha before-response.json)
+          payload=$(base64 -w0 bridge-lab.json)
+          gh api -X PUT "repos/$GITHUB_REPOSITORY/contents/bridge-lab.json" \
+            -f branch=bridge-lab-ota -f sha="$old_sha" \
+            -f message="fix(ota): NAV LAB27 manifest uses EXACT BootUpdater Bridge-LAB APK filename" \
+            -f content="$payload" >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/contents/bridge-lab.json?ref=bridge-lab-ota" --jq .content | base64 -d > after.json
+          cmp bridge-lab.json after.json
+          mkdir -p stable-after
+          gh release download v0.3.97 --pattern sender.json --dir stable-after
+          gh release download v0.3.97 --pattern receiver.json --dir stable-after
+          cmp stable-before/sender.json stable-after/sender.json
+          cmp stable-before/receiver.json stable-after/receiver.json
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.97
+          echo 'PASS FIXED NAV LAB27 OTA: existing code31 version, identical signed APK, expected Bridge-LAB filename, published release asset and OTA pointer in sync. Sender/Receiver untouched.' >> "$GITHUB_STEP_SUMMARY"
