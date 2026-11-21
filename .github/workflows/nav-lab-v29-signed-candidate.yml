@@ -3,7 +3,7 @@ on:
   push:
     branches: [release/nav-lab-v29-20261121]
     paths:
-      - '.github/workflows/nav-lab-v28-signed-candidate.yml'
+      - '.github/workflows/nav-lab-v29-signed-candidate.yml'
       - 'nav-release-v29/apps/**'
       - 'nav-release-v29/tools/**'
       - 'nav-release-v29/SOURCE_SNAPSHOT.json'
