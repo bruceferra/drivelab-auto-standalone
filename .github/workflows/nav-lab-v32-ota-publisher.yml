@@ -124,7 +124,7 @@ jobs:
           set -euo pipefail
           gh release create "$TAG" "dist/nav32/$APK" dist/nav32/bridge-lab.json \
             --target "$SOURCE_SHA" --prerelease \
-            --title 'DriveLab NAV LAB 29 · Hotfix Cluster Waze seguro, mosaico Maps + Spotify intacto' \
+            --title 'DriveLab NAV LAB 32 · Hotfix Cluster Waze seguro, mosaico Maps + Spotify intacto' \
             --notes 'Owner LAB test ONLY while parked. LAB31 field test showed independent Cluster Waze via a third virtual display disrupts Android Maps and Spotify tasks: central apps lost their original split layout. LAB32 disables the separate Waze entry, rejects that mode BEFORE any presentation or third virtual display, and removes its ADB launch authorization. Preserves working LAB31 touch and existing central Maps+Spotify mosaic and same-map Cluster surface, with original Jetour OEM display safety. Waze independent remains unsupported, wheel disabled. No root, third-party task moves, or changes to Sender/T1Launcher/OEM. No root, force-stop, task movement, OEM control or installation without Android consent. Existing original Bridge LAB certificate, package, QR, Sender Xiaomi 0.2.0, T1Launcher and stable Receiver unchanged. Cluster visibility and wheel remain experimental; do not test during driving.'
           mkdir -p verify
           gh release download "$TAG" --pattern "$APK" --dir verify
