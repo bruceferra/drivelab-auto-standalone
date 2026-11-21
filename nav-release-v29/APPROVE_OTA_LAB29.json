@@ -1,0 +1,10 @@
+{
+  "approval": "PUBLICAR_NAV_LAB29_SOLO_JETOUR",
+  "sourceRunId": 44934720603,
+  "sourceCommit": "b2b4e7236833511180d20c983e97df34223abd2b",
+  "tag": "bridge-lab-v29",
+  "versionName": "0.1.31-lab.29",
+  "versionCode": 33,
+  "senderUnchanged": true,
+  "publishLabChannel": true
+}
