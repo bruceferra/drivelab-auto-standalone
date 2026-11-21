@@ -133,6 +133,64 @@ assert 'android:label="DriveLab NAV Sender"' in sender_manifest
 assert 'android:scheme="drivelabauto"' in sender_manifest
 assert 'title(body,"DRIVELAB NAV · SENDER",24);' in sender_activity
 
+# Complete the *visible* rebrand. Android technical identifiers remain
+# untouched: filename allowlists, updater channel, internal thread names, etc.
+# Only Java string literals from these audited UI/status source files change.
+import re
+VISIBLE_SOURCES = (
+    "boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BootActivity.java",
+    "boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BootUpdater.java",
+    "boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeWheelAccessibilityService.java",
+    "boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeInstallResultReceiver.java",
+    "boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeStandaloneWindows.java",
+)
+STRING_LITERAL = re.compile(r'"(?:\\.|[^"\\])*"')
+PRESERVE_TECHNICAL_PREFIXES = (
+    '"DriveLab-Bridge-', '"Bridge-', '"DriveLab-Boot-', '"Boot-',
+)
+
+for relative in VISIBLE_SOURCES:
+    p = root / relative
+    src = p.read_text(encoding="utf-8")
+    changed = [0]
+    def label(match):
+        original = match.group(0)
+        if original.startswith(PRESERVE_TECHNICAL_PREFIXES):
+            return original
+        if "Bridge" not in original and "BRIDGE" not in original:
+            return original
+        new = (original
+            .replace("DRIVELAB BRIDGE", "DRIVELAB NAV")
+            .replace("DRIVE LAB BRIDGE", "DRIVE LAB NAV")
+            .replace("DriveLab Bridge", "DriveLab NAV")
+            .replace("Bridge LAB", "NAV")
+            .replace("BRIDGE", "NAV")
+            .replace("Bridge", "NAV"))
+        if new != original:
+            changed[0] += 1
+        return new
+    out = STRING_LITERAL.sub(label, src)
+    if relative.endswith("BootActivity.java"):
+        out = out.replace(
+            '"El motor Freeform de NAV está separado de Receiver. "',
+            '"El motor Freeform de NAV es independiente de AUTO. "'
+        )
+    if relative.endswith("BridgeStandaloneWindows.java"):
+        out = out.replace(
+            '"Sin Receiver; sin detener ni borrar aplicaciones."',
+            '"Sin intervenir AUTO; sin detener ni borrar aplicaciones."'
+        )
+    if changed[0] < 1:
+        raise SystemExit("ABORT: expected legacy visual labels in " + relative)
+    for lit in STRING_LITERAL.findall(out):
+        if lit.startswith(PRESERVE_TECHNICAL_PREFIXES):
+            continue
+        if "Bridge" in lit or "BRIDGE" in lit:
+            raise SystemExit("ABORT: Bridge legacy visible label still present in " + relative)
+    p.write_text(out, encoding="utf-8")
+    print("NAV_LABELS", relative, changed[0])
+
+
 gradle = (root / "boot/build.gradle").read_text(encoding="utf-8")
 updater = (root / "boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BootUpdater.java").read_text(encoding="utf-8")
 activity = (root / "boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BootActivity.java").read_text(encoding="utf-8")
