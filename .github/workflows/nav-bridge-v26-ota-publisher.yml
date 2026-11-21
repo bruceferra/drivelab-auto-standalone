@@ -1,0 +1,153 @@
+name: Repair DriveLab NAV Bridge LAB v24 OTA compatibility — APPROVAL ONLY
+# Replaces the unreadable NAV 0.2.0-lab.25 pointer with a signed 0.1.28-lab.26
+# accepted by the *installed* Bridge LAB v24 allowlist. Sender untouched.
+on:
+  push:
+    branches: [chore/nav-signed-transition-20261121]
+    paths: ['nav-transition/APPROVE_BRIDGE_V26_OTA_FIX.json']
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: bridge-nav-v26-ota-compat-repair
+  cancel-in-progress: false
+
+jobs:
+  publish-bridge-only:
+    if: github.repository == 'bruceferra/drivelab-auto-standalone' && github.ref == 'refs/heads/chore/nav-signed-transition-20261121'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      SOURCE_RUN: '44914511497'
+      SOURCE_SHA: 'e1649ef0ee41b6b4be398abb898c7586a4e2e071'
+      BRIDGE_TAG: bridge-lab-v26
+      BRIDGE_APK: DriveLab-Bridge-LAB-v0.1.28-lab.26.apk
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Confirm this exact OTA repair was approved and source candidate passed
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          p='nav-transition/APPROVE_BRIDGE_V26_OTA_FIX.json'
+          j=json.load(open(p))
+          expected={
+            "approval":"REPARAR_OTA_NAV_DESDE_BRIDGE_LAB_24",
+            "sourceRunId":44914511497,
+            "sourceCommit":"e1649ef0ee41b6b4be398abb898c7586a4e2e071",
+            "targetTag":"bridge-lab-v26",
+            "versionName":"0.1.28-lab.26",
+            "versionCode":30,
+            "senderUnchanged":True
+          }
+          assert j==expected, 'BLOCKED: repair approval not exact'
+          PY
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" --jq .conclusion)" = success || {
+            echo 'BLOCKED: signed v26 candidate CI did not pass'; exit 21;
+          }
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" --jq .head_sha)" = "$SOURCE_SHA" || {
+            echo 'BLOCKED: source commit mismatch'; exit 22;
+          }
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.97 || {
+            echo 'BLOCKED: stable latest changed'; exit 23;
+          }
+          ! gh release view "$BRIDGE_TAG" >/dev/null 2>&1 || {
+            echo 'BLOCKED: target release already exists'; exit 24;
+          }
+      - name: Verify OTA manifest is accepted by LAB v24 and signed APK is authentic
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/nav
+          gh run download "$SOURCE_RUN" --name DriveLab-NAV-v26-BRIDGE-COMPAT-SIGNED-CANDIDATES-NO-PUBLICAR --dir dist/nav
+          (cd dist/nav; sha256sum -c SHA256SUMS)
+          python3 - <<'PY'
+          import json, re, pathlib, hashlib
+          d=pathlib.Path('dist/nav')
+          m=json.loads((d/'bridge-lab.json').read_text('utf-8'))
+          apk=d/'DriveLab-Bridge-LAB-v0.1.28-lab.26.apk'
+          data=apk.read_bytes()
+          assert m=={
+            "channel":"bridge-lab",
+            "packageName":"ar.com.rango5gps.drivelabauto.boot.lab",
+            "versionName":"0.1.28-lab.26",
+            "versionCode":30,
+            "tag":"bridge-lab-v26",
+            "size":len(data),
+            "sha256":hashlib.sha256(data).hexdigest(),
+            "apkUrl":"https://github.com/bruceferra/drivelab-auto-standalone/releases/download/bridge-lab-v26/DriveLab-Bridge-LAB-v0.1.28-lab.26.apk"
+          }, 'BLOCKED: unexpected Bridge v26 manifest'
+          assert re.fullmatch(r'0\.1\.[0-9]+-lab\.[0-9]+',m['versionName']), 'BLOCKED: v24 updater disallows version'
+          assert m['versionCode']>28, 'BLOCKED: no forward upgrade from v24'
+          print('PASS: exact legacy-v24-compatible Bridge manifest and signed artifact hash')
+          PY
+          manager=$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)
+          test -x "$manager"
+          "$manager" 'build-tools;35.0.0' 'platforms;android-35' >/dev/null
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          signer="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          nav="dist/nav/$BRIDGE_APK"
+          "$aapt" dump badging "$nav" | grep -F "package: name='ar.com.rango5gps.drivelabauto.boot.lab' versionCode='30' versionName='0.1.28-lab.26'"
+          "$aapt" dump badging "$nav" | grep -F "application-label:'DriveLab NAV'"
+          "$signer" verify --print-certs "$nav"
+          mkdir -p prev
+          gh release download bridge-lab-v24 --pattern DriveLab-Bridge-LAB-v0.1.27-lab.24.apk --dir prev
+          echo '5aa297d1704d326c64d4a6c55224a0351d1564cd3d5c1d5b58829aa5265c894a  prev/DriveLab-Bridge-LAB-v0.1.27-lab.24.apk' | sha256sum -c -
+          cert(){ "$signer" verify --print-certs "$1" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF;exit}'; }
+          test -n "$(cert "$nav")"
+          test "$(cert "$nav")" = "$(cert prev/DriveLab-Bridge-LAB-v0.1.27-lab.24.apk)" || {
+            echo 'BLOCKED: original Bridge signing certificate mismatch'; exit 25;
+          }
+          echo 'PASS exact original LAB signing certificate, Android package, version code30, NAV label and v24 updater format' >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve Sender and Receiver manifest snapshots, assert current pointer v25
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/contents/bridge-lab.json?ref=bridge-lab-ota" > bridge-before-response.json
+          jq -r .content bridge-before-response.json | base64 -d > bridge-before.json
+          python3 - <<'PY'
+          import json
+          b=json.load(open('bridge-before.json'))
+          assert b['channel']=='bridge-lab' and b['packageName']=='ar.com.rango5gps.drivelabauto.boot.lab'
+          assert b['versionName']=='0.2.0-lab.25' and b['versionCode']==29 and b['tag']=='bridge-lab-v25'
+          PY
+          gh release download v0.3.97 --pattern sender.json --dir prev
+          gh release download v0.3.97 --pattern receiver.json --dir prev
+      - name: Publish isolated signed NAV Bridge v26 prerelease
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "$BRIDGE_TAG" "dist/nav/$BRIDGE_APK" dist/nav/bridge-lab.json \
+            --target "$SOURCE_SHA" --prerelease \
+            --title 'DriveLab NAV · Bridge OTA compatible con LAB 24 · v26' \
+            --notes 'Fixes the existing Bridge LAB v24 OTA version-name allowlist (only 0.1.x-lab.N). Version 0.1.28-lab.26, versionCode30, visible DriveLab NAV. Same Bridge package and permanently verified signer. Existing Sender, Receiver, T1Launcher, OEM and private data untouched. Install only by explicit user confirmation while the vehicle is parked.'
+          mkdir -p verify
+          gh release download "$BRIDGE_TAG" --pattern "$BRIDGE_APK" --dir verify
+          cmp "dist/nav/$BRIDGE_APK" "verify/$BRIDGE_APK"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.97
+      - name: Activate ONLY Bridge LAB v24-compatible pointer, verify Sender untouched
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha=$(jq -r .sha bridge-before-response.json)
+          body=$(base64 -w0 dist/nav/bridge-lab.json)
+          test -n "$sha"
+          gh api -X PUT "repos/$GITHUB_REPOSITORY/contents/bridge-lab.json" \
+            -f branch=bridge-lab-ota -f sha="$sha" \
+            -f message='fix(ota): Bridge LAB v24 can discover signed NAV v26 via 0.1.28-lab.26' \
+            -f content="$body" >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/contents/bridge-lab.json?ref=bridge-lab-ota" --jq .content | base64 -d > bridge-after.json
+          cmp bridge-after.json dist/nav/bridge-lab.json
+          mkdir -p current
+          gh release download v0.3.97 --pattern sender.json --dir current
+          gh release download v0.3.97 --pattern receiver.json --dir current
+          cmp prev/sender.json current/sender.json
+          cmp prev/receiver.json current/receiver.json
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.97
+          echo 'PUBLISHED: NAV v26 Bridge-only OTA repair, source LAB24 version allowlist confirmed. Sender and Receiver unchanged. No remote installation.' >> "$GITHUB_STEP_SUMMARY"
