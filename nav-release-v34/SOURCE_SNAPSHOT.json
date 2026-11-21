@@ -1,0 +1,93 @@
+{
+  "sourceRepository": "bruceferra/drivelab",
+  "sourceBranch": "chore/unificacion-cloud-20261120",
+  "releaseBranch": "release/nav-lab-v34-20261121",
+  "versionName": "0.1.36-lab.34",
+  "versionCode": 38,
+  "files": [
+    {
+      "path": "nav-release-v34/apps/nav/bridge-runtime-overlay/NavVirtualMosaicActivity.java",
+      "gitBlob": "dd3115b26a5d9c6602d2b30bb27b464bfd741a43"
+    },
+    {
+      "path": "nav-release-v34/apps/nav/bridge-runtime-overlay/NavMosaicSessionRegistry.java",
+      "gitBlob": "fdbbe301132653e7569a8c484b6b077fb9a06a7f"
+    },
+    {
+      "path": "nav-release-v34/apps/nav/bridge-runtime-overlay/NavMosaicTouchService.java",
+      "gitBlob": "de3f1d11b1554b2ba622b1e26dbe512f7206b4d6"
+    },
+    {
+      "path": "nav-release-v34/apps/nav/bridge-runtime-overlay/NavMosaicTouchRecovery.java",
+      "gitBlob": "0944abd7ed870ebc33bdc09e2e25ee0d9bdb4f68"
+    },
+    {
+      "path": "nav-release-v34/apps/nav/bridge-runtime-overlay/nav_mosaic_touch_accessibility.xml",
+      "gitBlob": "5890b14f93c0e535655d772d4c03c9fba38ef901"
+    },
+    {
+      "path": "nav-release-v34/apps/nav/bridge-runtime-overlay/NavClusterTaskInventory.java",
+      "gitBlob": "1d682404e030f118b9847f605ceea0b6c8be0cb1"
+    },
+    {
+      "path": "nav-release-v34/apps/nav/bridge-runtime-overlay/NavClusterReadOnlyProbe.java",
+      "gitBlob": "3c8d8cc5b1e8d97e7e1e8f9b8e5ac2d510ce3858"
+    },
+    {
+      "path": "nav-release-v34/apps/nav/bridge-runtime-overlay/NavClusterTaskInventoryTest.java",
+      "gitBlob": "4b49b6cda70a7a65ded247b0af9fcb85ddcad499"
+    },
+    {
+      "path": "nav-release-v34/apps/nav/core/src/main/java/ar/com/rango5gps/drivelabnav/core/NavMosaicTaskPolicy.java",
+      "gitBlob": "e5746ff2aedf4e2a625585382c9cd4dae6d5dab4"
+    },
+    {
+      "path": "nav-release-v34/apps/nav/core/src/test/java/ar/com/rango5gps/drivelabnav/core/NavMosaicTaskPolicyTest.java",
+      "gitBlob": "3c35dd08d233d5082ba2d2bfca3768099bc6394a"
+    },
+    {
+      "path": "nav-release-v34/tools/nav-virtual-mosaic-stage.py",
+      "gitBlob": "17f82fb811f66edb2d08fd0543e7cbf0480e548b"
+    },
+    {
+      "path": "nav-release-v34/tools/nav-mosaic-route-stage.py",
+      "gitBlob": "17b6eb3b7f22e81cf4ae25b0153757ff18fab5fb"
+    },
+    {
+      "path": "nav-release-v34/tools/nav-mosaic-wheel-stage.py",
+      "gitBlob": "3d20f2e85c70c6c3234d52795a62de1ca95daa12"
+    },
+    {
+      "path": "nav-release-v34/tools/nav-mosaic-adb-launch-stage.py",
+      "gitBlob": "d735fce351d0b0eec03b6ed48202c5b74ce74f4e"
+    },
+    {
+      "path": "nav-release-v34/tools/nav-v27-stage.py",
+      "gitBlob": "aa0f499a59bc23d9faf55b88cd51591fd01c91bb"
+    },
+    {
+      "path": "nav-release-v34/tools/nav-v28-stage.py",
+      "gitBlob": "d6e56cf86a204cfed9abd3eaeea46aa45b5a7ad0"
+    },
+    {
+      "path": "nav-release-v34/tools/nav-v29-stage.py",
+      "gitBlob": "435f04544d7cdfc516dc9886d01540cb2b6973eb"
+    },
+    {
+      "path": "nav-release-v34/tools/nav-v30-stage.py",
+      "gitBlob": "7bc77fa1dd9780e8ba957268c8f842edf6345885"
+    },
+    {
+      "path": "nav-release-v34/tools/nav-v31-stage.py",
+      "gitBlob": "eefb1dcfa924bb6ddc7cd2061c49c5e7fa627d31"
+    },
+    {
+      "path": "nav-release-v34/tools/nav-v32-stage.py",
+      "gitBlob": "018de76a641dcc0cca23c4e0120473632a9df65c"
+    },
+    {
+      "path": "nav-release-v34/tools/nav-v34-stage.py",
+      "gitBlob": "382680f621d2724baa042b456bd2e96802960f38"
+    }
+  ]
+}
