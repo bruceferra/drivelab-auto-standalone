@@ -113,7 +113,7 @@ jobs:
           cp nav-transition/BridgeNavCorePreview.java "$target/"
           python3 nav-transition/bridge-nav-preview-patch.py "$target/BootActivity.java"
           python3 "$root/tools/nav-virtual-mosaic-stage.py" "$stage" "$root"
-          python3 "$root/tools/nav-mosaic-route-stage.py" "$stage"
+          python3 "$root/tools/nav-mosaic-route-stage.py" "$stage" "$root"
           python3 "$root/tools/nav-mosaic-adb-launch-stage.py" "$stage"
           python3 "$root/tools/nav-mosaic-wheel-stage.py" "$stage"
           (
