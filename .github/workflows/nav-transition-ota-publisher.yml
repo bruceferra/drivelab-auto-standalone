@@ -1,0 +1,168 @@
+name: Publish DriveLab NAV + NAV Sender 0.2.0 OTA — OWNER APPROVAL REQUIRED
+# This workflow is inert unless an EXPLICIT approval file is committed.
+# Do not create nav-transition/APPROVE_OTA_0_2_0.json without owner's
+# authorization to distribute. No launch on regular build/source changes.
+on:
+  push:
+    branches: [chore/nav-signed-transition-20261121]
+    paths: ['nav-transition/APPROVE_OTA_0_2_0.json']
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: nav-dual-ota-publication-20261121
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    if: github.repository == 'bruceferra/drivelab-auto-standalone' && github.ref == 'refs/heads/chore/nav-signed-transition-20261121'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      SOURCE_RUN: '44912543584'
+      SOURCE_SHA: 'ed1f8c62e309abe259eb0627e0330e12429e5814'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify explicit owner approval of this precise verified candidate
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,pathlib,os
+          p=pathlib.Path('nav-transition/APPROVE_OTA_0_2_0.json')
+          data=json.loads(p.read_text('utf-8'))
+          expected={
+            "approval":"PUBLICAR_NAV_Y_SENDER_0_2_0",
+            "sourceRunId":44912543584,
+            "sourceCommit":"ed1f8c62e309abe259eb0627e0330e12429e5814",
+            "publishBridgeLabChannel":True,
+            "publishSenderChannel":True
+          }
+          if data != expected:
+            raise SystemExit('BLOCKED: OTA owner approval file does not exactly match the validated candidate')
+          PY
+          result=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" --jq .conclusion)
+          test "$result" = success || { echo 'BLOCKED: source signed CI not green'; exit 21; }
+          run_sha=$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" --jq .head_sha)
+          test "$run_sha" = "$SOURCE_SHA" || { echo 'BLOCKED: source CI SHA changed'; exit 22; }
+          current_latest=$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)
+          test "$current_latest" = v0.3.97 || { echo 'BLOCKED: stable latest release changed'; exit 23; }
+          ! gh release view bridge-lab-v25 >/dev/null 2>&1 || { echo 'BLOCKED: Bridge v25 already published'; exit 24; }
+          ! gh release view sender-v0.2.0 >/dev/null 2>&1 || { echo 'BLOCKED: Sender v0.2.0 already published'; exit 25; }
+      - name: Download and verify exact permanently signed CI artifacts
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh run download "$SOURCE_RUN" --name 'DriveLab-NAV-and-NAV-Sender-0.2.0-SIGNED-CANDIDATES-NO-PUBLICAR' --dir dist/nav
+          (
+            cd dist/nav
+            sha256sum -c SHA256SUMS
+          )
+          python3 - <<'PY'
+          import pathlib,json,hashlib
+          d=pathlib.Path('dist/nav')
+          specs=[
+            ('bridge-lab.json','DriveLab-Bridge-LAB-v0.2.0-lab.25.apk','ar.com.rango5gps.drivelabauto.boot.lab','0.2.0-lab.25','bridge-lab-v25'),
+            ('sender.json','DriveLab-Auto-Sender-v0.2.0.apk','ar.com.rango5gps.drivelabauto.sender','0.2.0','sender-v0.2.0')
+          ]
+          for mf,ap,pkg,ver,tag in specs:
+            m=json.loads((d/mf).read_text('utf-8'))
+            b=(d/ap).read_bytes()
+            assert m['packageName']==pkg and m['versionName']==ver and m['versionCode']==29
+            assert m['sha256']==hashlib.sha256(b).hexdigest()
+            assert m['apkUrl']=='https://github.com/bruceferra/drivelab-auto-standalone/releases/download/'+tag+'/'+ap
+            if mf=='bridge-lab.json':
+              assert m['channel']=='bridge-lab' and m['tag']==tag and m['size']==len(b)
+          print('PASS pinned manifests, original-package URLs, code29, and exact signed bytes')
+          PY
+          manager=$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)
+          test -x "$manager"
+          "$manager" 'build-tools;35.0.0' 'platforms;android-35' >/dev/null
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          signer="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          nav=dist/nav/DriveLab-Bridge-LAB-v0.2.0-lab.25.apk
+          sender=dist/nav/DriveLab-Auto-Sender-v0.2.0.apk
+          "$aapt" dump badging "$nav" | grep -F "package: name='ar.com.rango5gps.drivelabauto.boot.lab' versionCode='29' versionName='0.2.0-lab.25'"
+          "$aapt" dump badging "$nav" | grep -F "application-label:'DriveLab NAV'"
+          "$aapt" dump badging "$sender" | grep -F "package: name='ar.com.rango5gps.drivelabauto.sender' versionCode='29' versionName='0.2.0'"
+          "$aapt" dump badging "$sender" | grep -F "application-label:'DriveLab NAV Sender'"
+          mkdir -p prev
+          gh release download bridge-lab-v24 --pattern 'DriveLab-Bridge-LAB-v0.1.27-lab.24.apk' --dir prev
+          gh release download sender-v0.2.24 --pattern 'DriveLab-Auto-Sender-v0.2.24.apk' --dir prev
+          echo '5aa297d1704d326c64d4a6c55224a0351d1564cd3d5c1d5b58829aa5265c894a  prev/DriveLab-Bridge-LAB-v0.1.27-lab.24.apk' | sha256sum -c -
+          cert() { "$signer" verify --print-certs "$1" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF;exit}'; }
+          test -n "$(cert "$nav")" && test "$(cert "$nav")" = "$(cert prev/DriveLab-Bridge-LAB-v0.1.27-lab.24.apk)" || { echo 'BLOCKED Bridge cert mismatch'; exit 26; }
+          test -n "$(cert "$sender")" && test "$(cert "$sender")" = "$(cert prev/DriveLab-Auto-Sender-v0.2.24.apk)" || { echo 'BLOCKED Sender cert mismatch'; exit 27; }
+          echo 'PASS: both permanent certs and package/versions revalidated before distribution' >> "$GITHUB_STEP_SUMMARY"
+      - name: Prepare existing OTA manifests for LAST-only update
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/contents/bridge-lab.json?ref=bridge-lab-ota" > bridge-old-response.json
+          jq -r .content bridge-old-response.json | base64 -d > bridge-previous.json
+          python3 - <<'PY'
+          import json
+          d=json.load(open('bridge-previous.json'))
+          assert d['channel']=='bridge-lab'
+          assert d['packageName']=='ar.com.rango5gps.drivelabauto.boot.lab'
+          assert d['versionCode']==28
+          PY
+          gh release download v0.3.97 --pattern 'sender.json' --dir prev
+          gh release download v0.3.97 --pattern 'receiver.json' --dir prev
+          sha256sum prev/receiver.json > receiver-before.sha256
+          python3 - <<'PY'
+          import json
+          d=json.load(open('prev/sender.json'))
+          assert d['packageName']=='ar.com.rango5gps.drivelabauto.sender'
+          assert d['versionCode']<=25, 'BLOCKED: Sender stable pointer moved beyond known v0.2.24'
+          PY
+      - name: Publish two isolated prereleases (do not replace stable latest)
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create bridge-lab-v25 \
+            dist/nav/DriveLab-Bridge-LAB-v0.2.0-lab.25.apk dist/nav/bridge-lab.json \
+            --target "$SOURCE_SHA" --prerelease \
+            --title 'DriveLab NAV 0.2.0-lab.25 · continuidad Bridge LAB' \
+            --notes 'Signed in-place transition of Jetour Bridge LAB package to DriveLab NAV. Same original signing certificate, QR, encrypted Sender, OTA channel, T1Launcher, Cluster and windows. Manual vehicle test only while parked.'
+          gh release create sender-v0.2.0 \
+            dist/nav/DriveLab-Auto-Sender-v0.2.0.apk dist/nav/sender.json \
+            --target "$SOURCE_SHA" --prerelease \
+            --title 'DriveLab NAV Sender 0.2.0 · Xiaomi' \
+            --notes 'Signed in-place Sender upgrade with original Sender certificate and pairing data. Connects to the existing NAV/Bridge endpoint. User confirmation required on Android.'
+          mkdir -p verify
+          gh release download bridge-lab-v25 --pattern 'DriveLab-Bridge-LAB-v0.2.0-lab.25.apk' --dir verify
+          gh release download sender-v0.2.0 --pattern 'DriveLab-Auto-Sender-v0.2.0.apk' --dir verify
+          cmp dist/nav/DriveLab-Bridge-LAB-v0.2.0-lab.25.apk verify/DriveLab-Bridge-LAB-v0.2.0-lab.25.apk
+          cmp dist/nav/DriveLab-Auto-Sender-v0.2.0.apk verify/DriveLab-Auto-Sender-v0.2.0.apk
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.97
+      - name: Switch ONLY existing Bridge and Sender OTA pointers AFTER published assets verified
+        shell: bash
+        run: |
+          set -euo pipefail
+          body=$(base64 -w0 dist/nav/bridge-lab.json)
+          sha=$(jq -r .sha bridge-old-response.json)
+          test -n "$sha"
+          gh api -X PUT "repos/$GITHUB_REPOSITORY/contents/bridge-lab.json" \
+            -f branch=bridge-lab-ota -f sha="$sha" \
+            -f message='ota(nav): Bridge LAB clients upgrade in place to signed NAV v25' \
+            -f content="$body" >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/contents/bridge-lab.json?ref=bridge-lab-ota" --jq .content \
+            | base64 -d > bridge-current.json
+          cmp bridge-current.json dist/nav/bridge-lab.json
+          # Stable Receiver APK + receiver.json remain unmodified. Sender's
+          # currently-installed updater reads the sender.json on latest.
+          gh release upload v0.3.97 dist/nav/sender.json --clobber
+          mkdir -p current
+          gh release download v0.3.97 --pattern 'sender.json' --dir current
+          gh release download v0.3.97 --pattern 'receiver.json' --dir current
+          cmp current/sender.json dist/nav/sender.json
+          sha256sum -c receiver-before.sha256
+          cmp prev/receiver.json current/receiver.json
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.97
+          echo 'PUBLISHED: signed NAV + NAV Sender OTA, existing package identifiers, no remote installation, stable Receiver untouched' >> "$GITHUB_STEP_SUMMARY"
