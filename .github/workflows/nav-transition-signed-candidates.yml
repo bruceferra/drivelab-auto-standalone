@@ -1,4 +1,4 @@
-name: DriveLab NAV + NAV Sender — signed transition candidates, NO OTA
+name: DriveLab NAV v26 Bridge OTA-compat — signed candidates, NO OTA
 on:
   push:
     branches: [chore/nav-signed-transition-20261121]
@@ -111,6 +111,7 @@ jobs:
             java -cp .contract-classes ar.com.rango5gps.drivelabauto.sender.SenderT1LauncherTrialSourceTest
           )
           python3 nav-transition/nav-transition-branding.py "$stage"
+          python3 nav-transition/bridge-v26-ota-compat.py "$stage"
           gradle --no-daemon -p "$stage" :navCore:classes :boot:assembleLab :sender:assembleRelease
       - name: Prove in-place package, version, labels, and BOTH unchanged signing certificates
         shell: bash
@@ -122,7 +123,7 @@ jobs:
           boot="$stage/boot/build/outputs/apk/lab/boot-lab.apk"
           sender="$stage/sender/build/outputs/apk/release/sender-release.apk"
           test -s "$boot" && test -s "$sender"
-          "$aapt" dump badging "$boot" | grep -F "package: name='ar.com.rango5gps.drivelabauto.boot.lab' versionCode='29' versionName='0.2.0-lab.25'"
+          "$aapt" dump badging "$boot" | grep -F "package: name='ar.com.rango5gps.drivelabauto.boot.lab' versionCode='30' versionName='0.1.28-lab.26'"
           "$aapt" dump badging "$boot" | grep -F "application-label:'DriveLab NAV'"
           "$aapt" dump badging "$sender" | grep -F "package: name='ar.com.rango5gps.drivelabauto.sender' versionCode='29' versionName='0.2.0'"
           "$aapt" dump badging "$sender" | grep -F "application-label:'DriveLab NAV Sender'"
@@ -144,7 +145,7 @@ jobs:
             echo 'BLOCKED: Sender certificate mismatch'; exit 16;
           }
           mkdir -p dist/nav-transition
-          cp "$boot" dist/nav-transition/DriveLab-Bridge-LAB-v0.2.0-lab.25.apk
+          cp "$boot" dist/nav-transition/DriveLab-Bridge-LAB-v0.1.28-lab.26.apk
           cp "$sender" dist/nav-transition/DriveLab-Auto-Sender-v0.2.0.apk
           (
             cd dist/nav-transition
@@ -153,15 +154,15 @@ jobs:
           python3 - <<'PY'
           import hashlib, json, pathlib
           d=pathlib.Path('dist/nav-transition')
-          bridge=d/'DriveLab-Bridge-LAB-v0.2.0-lab.25.apk'
+          bridge=d/'DriveLab-Bridge-LAB-v0.1.28-lab.26.apk'
           sender=d/'DriveLab-Auto-Sender-v0.2.0.apk'
           (d/'bridge-lab.json').write_text(json.dumps({
              "channel":"bridge-lab",
              "packageName":"ar.com.rango5gps.drivelabauto.boot.lab",
-             "versionName":"0.2.0-lab.25","versionCode":29,
-             "tag":"bridge-lab-v25","size":bridge.stat().st_size,
+             "versionName":"0.1.28-lab.26","versionCode":30,
+             "tag":"bridge-lab-v26","size":bridge.stat().st_size,
              "sha256":hashlib.sha256(bridge.read_bytes()).hexdigest(),
-             "apkUrl":"https://github.com/bruceferra/drivelab-auto-standalone/releases/download/bridge-lab-v25/"+bridge.name
+             "apkUrl":"https://github.com/bruceferra/drivelab-auto-standalone/releases/download/bridge-lab-v26/"+bridge.name
           },indent=2)+"\n")
           (d/'sender.json').write_text(json.dumps({
              "packageName":"ar.com.rango5gps.drivelabauto.sender",
@@ -170,11 +171,11 @@ jobs:
              "apkUrl":"https://github.com/bruceferra/drivelab-auto-standalone/releases/download/sender-v0.2.0/"+sender.name
           },indent=2)+"\n")
           PY
-          echo 'PASS both release certificates match published installed-channel references, candidate artifacts prepared; NO OTA PUBLICATION.' >> "$GITHUB_STEP_SUMMARY"
+          echo 'PASS Bridge v26 OTA-compatible with installed v24 and original signing, Sender unchanged; NO OTA PUBLICATION.' >> "$GITHUB_STEP_SUMMARY"
       - name: Store signed candidate APKs only; never publish GitHub releases or OTA manifests
         uses: actions/upload-artifact@v4
         with:
-          name: DriveLab-NAV-and-NAV-Sender-0.2.0-SIGNED-CANDIDATES-NO-PUBLICAR
+          name: DriveLab-NAV-v26-BRIDGE-COMPAT-SIGNED-CANDIDATES-NO-PUBLICAR
           path: dist/nav-transition/
           if-no-files-found: error
           retention-days: 14
