@@ -1,0 +1,4 @@
+// Pure Java NAV policy: portable between Sender/Receiver and independent of OEM APIs.
+// Not linked into installed APKs until task reuse is verified on stationary T1.
+plugins { id 'java-library' }
+java { toolchain { languageVersion = JavaLanguageVersion.of(17) } }
