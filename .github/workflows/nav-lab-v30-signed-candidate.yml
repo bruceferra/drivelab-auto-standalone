@@ -1,0 +1,186 @@
+name: DriveLab NAV LAB 30 — ORIGINAL signed APK candidate (NO OTA)
+on:
+  push:
+    branches: [release/nav-lab-v30-20261121]
+    paths:
+      - '.github/workflows/nav-lab-v30-signed-candidate.yml'
+      - 'nav-release-v30/apps/**'
+      - 'nav-release-v30/tools/**'
+      - 'nav-release-v30/SOURCE_SNAPSHOT.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: drivelab-nav-v30-original-sign-20261121
+  cancel-in-progress: true
+
+jobs:
+  sign-and-verify:
+    if: github.repository == 'bruceferra/drivelab-auto-standalone' && github.ref == 'refs/heads/release/nav-lab-v30-20261121'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RECEIVER_STORE_PASSWORD: ${{ secrets.RECEIVER_STORE_PASSWORD }}
+      RECEIVER_KEY_ALIAS: ${{ secrets.RECEIVER_KEY_ALIAS }}
+      RECEIVER_KEY_PASSWORD: ${{ secrets.RECEIVER_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify ONLY original Bridge LAB v24 source and private NAV mirror
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse bridge-lab-v24^{commit})" = 64282656f61e9287d8de8faa655b6a5f56b4432d
+          git diff --exit-code bridge-lab-v24 HEAD -- boot sender common settings.gradle build.gradle gradle.properties
+          python3 - <<'PY'
+          import json,pathlib,subprocess
+          p=pathlib.Path('nav-release-v30/SOURCE_SNAPSHOT.json')
+          j=json.loads(p.read_text(encoding='utf8'))
+          assert j['sourceRepository']=='bruceferra/drivelab'
+          assert j['sourceBranch']=='chore/unificacion-cloud-20261120'
+          assert j['versionName']=='0.1.32-lab.30' and j['versionCode']==34
+          assert len(j['files'])==15
+          paths=set()
+          for item in j['files']:
+            name=item['path']
+            assert name.startswith('nav-release-v30/') and name not in paths
+            paths.add(name)
+            sha=subprocess.check_output(['git','hash-object',name],text=True).strip()
+            assert sha==item['gitBlob'],f'BLOCKED private canonical source mirror mismatch: {name}'
+          print('PASS: exact immutable Bridge v24 and mirrored private NAV v30 source blobs')
+          PY
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Android SDK 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          m=$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)
+          test -x "$m"
+          "$m" 'platforms;android-35' 'build-tools;35.0.0' >/dev/null
+      - name: Recover ORIGINAL Jetour Bridge LAB signing key (no new certificates)
+        shell: bash
+        env:
+          RECEIVER_KEYSTORE_B64: ${{ secrets.RECEIVER_KEYSTORE_B64 }}
+        run: |
+          set -euo pipefail
+          test -n "$RECEIVER_KEYSTORE_B64" &&
+          test -n "$RECEIVER_STORE_PASSWORD" &&
+          test -n "$RECEIVER_KEY_ALIAS" &&
+          test -n "$RECEIVER_KEY_PASSWORD" || {
+            echo 'BLOCKED: Original signed NAV Bridge LAB keystore unavailable'; exit 41;
+          }
+          printf '%s' "$RECEIVER_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/nav-original-bridge.p12"
+          chmod 600 "$RUNNER_TEMP/nav-original-bridge.p12"
+          echo "RECEIVER_KEYSTORE=$RUNNER_TEMP/nav-original-bridge.p12" >> "$GITHUB_ENV"
+      - name: Compile only NAV Jetour LAB 30 and strict sender-to-existing-maps tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$GITHUB_WORKSPACE/nav-release-v30"
+          stage="$RUNNER_TEMP/nav-v30-boot"
+          mkdir -p "$stage/.github/workflows"
+          cp -a boot sender common build.gradle settings.gradle gradle.properties "$stage/"
+          cp .github/workflows/publish-bridge-lab-ota.yml "$stage/.github/workflows/"
+          cp -a nav-transition/navCore "$stage/navCore"
+          mkdir -p "$stage/navCore/src/main/java/ar/com/rango5gps/drivelabnav/core"
+          cp "$root/apps/nav/core/src/main/java/ar/com/rango5gps/drivelabnav/core/NavMosaicTaskPolicy.java" "$stage/navCore/src/main/java/ar/com/rango5gps/drivelabnav/core/"
+          mkdir -p "$stage/.nav-qa-classes"
+          javac -encoding UTF-8 -d "$stage/.nav-qa-classes" \
+            "$root/apps/nav/core/src/main/java/ar/com/rango5gps/drivelabnav/core/NavMosaicTaskPolicy.java" \
+            "$root/apps/nav/core/src/test/java/ar/com/rango5gps/drivelabnav/core/NavMosaicTaskPolicyTest.java"
+          java -cp "$stage/.nav-qa-classes" ar.com.rango5gps.drivelabnav.core.NavMosaicTaskPolicyTest
+          python3 - "$stage/settings.gradle" <<'PY'
+          import pathlib,sys
+          p=pathlib.Path(sys.argv[1]);s=p.read_text()
+          before="include ':common', ':sender', ':receiver', ':boot'"
+          assert s.count(before)==1
+          p.write_text(s.replace(before,"include ':common', ':sender', ':boot', ':navCore'"))
+          PY
+          cat >> "$stage/boot/build.gradle" <<'GRADLE'
+          dependencies { implementation project(':navCore') }
+          GRADLE
+          target="$stage/boot/src/main/java/ar/com/rango5gps/drivelabauto/boot"
+          cp nav-transition/BridgeNavCorePreview.java "$target/"
+          python3 nav-transition/bridge-nav-preview-patch.py "$target/BootActivity.java"
+          python3 "$root/tools/nav-virtual-mosaic-stage.py" "$stage" "$root"
+          python3 "$root/tools/nav-mosaic-route-stage.py" "$stage" "$root"
+          python3 "$root/tools/nav-mosaic-adb-launch-stage.py" "$stage"
+          python3 "$root/tools/nav-mosaic-wheel-stage.py" "$stage"
+          (
+            cd "$stage"
+            mkdir -p .qa_classes
+            javac -encoding UTF-8 -d .qa_classes boot/tests/BridgeLabOtaSourceContractTest.java
+            java -cp .qa_classes ar.com.rango5gps.drivelabauto.boot.BridgeLabOtaSourceContractTest
+          )
+          python3 nav-transition/nav-transition-branding.py "$stage"
+          python3 nav-transition/bridge-v26-ota-compat.py "$stage"
+          python3 "$root/tools/nav-v27-stage.py" "$stage"
+          python3 "$root/tools/nav-v28-stage.py" "$stage"
+          python3 "$root/tools/nav-v29-stage.py" "$stage"
+          python3 "$root/tools/nav-v30-stage.py" "$stage"
+          gradle --no-daemon -p "$stage" :navCore:classes :boot:assembleLab
+      - name: Verify exact original certificate, package and v30 Android build; generate metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          stage="$RUNNER_TEMP/nav-v30-boot"
+          signed="$stage/boot/build/outputs/apk/lab/boot-lab.apk"
+          test -s "$signed"
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          signer="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          "$aapt" dump badging "$signed" | grep -F "package: name='ar.com.rango5gps.drivelabauto.boot.lab' versionCode='34' versionName='0.1.32-lab.30'"
+          "$aapt" dump badging "$signed" | grep -F "application-label:'DriveLab NAV'"
+          "$signer" verify --print-certs "$signed" >/dev/null
+          mkdir -p original
+          gh release download bridge-lab-v27 -R bruceferra/drivelab-auto-standalone --pattern 'DriveLab-Bridge-LAB-v0.1.29-lab.27.apk' --dir original
+          echo '7e051f6efa3089bbd06e632ca91229352b0d70fd8b3048d9ec99876a163fe3bc  original/DriveLab-Bridge-LAB-v0.1.29-lab.27.apk' | sha256sum -c -
+          cert(){ "$signer" verify --print-certs "$1" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF;exit}'; }
+          test -n "$(cert "$signed")"
+          test "$(cert "$signed")" = "$(cert original/DriveLab-Bridge-LAB-v0.1.29-lab.27.apk)" || {
+            echo 'BLOCKED: wrong Android permanent certificate; DO NOT publish'; exit 42;
+          }
+          mkdir -p dist/nav30
+          cp "$signed" dist/nav30/DriveLab-Bridge-LAB-v0.1.32-lab.30.apk
+          (
+            cd dist/nav30
+            sha256sum *.apk > SHA256SUMS
+          )
+          python3 - <<'PY'
+          import pathlib,json,hashlib
+          d=pathlib.Path('dist/nav30')
+          apk=d/'DriveLab-Bridge-LAB-v0.1.32-lab.30.apk'
+          m={
+            'channel':'bridge-lab',
+            'packageName':'ar.com.rango5gps.drivelabauto.boot.lab',
+            'versionName':'0.1.32-lab.30',
+            'versionCode':34,
+            'tag':'bridge-lab-v30',
+            'size':apk.stat().st_size,
+            'sha256':hashlib.sha256(apk.read_bytes()).hexdigest(),
+            'apkUrl':'https://github.com/bruceferra/drivelab-auto-standalone/releases/download/bridge-lab-v30/'+apk.name
+          }
+          # Fail if APK name is not EXACT installed BootUpdater LAB policy.
+          legacy='DriveLab-Bridge-LAB-v'+m['versionName']+'.apk'
+          assert apk.name==legacy, 'BLOCKED: legacy OTA APK filename mismatch'
+          assert m['apkUrl'].endswith('/'+legacy), 'BLOCKED: legacy OTA URL mismatch'
+          assert m['tag']=='bridge-lab-v30' and m['versionCode']==34
+          (d/'bridge-lab.json').write_text(json.dumps(m,indent=2)+'\n',encoding='utf8')
+          PY
+          echo 'PASS original installed certificate, NAV package, version 34 and signed LAB 30 candidate. NO OTA released. Sender unchanged.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve verified signed APK as private-run artifact — NOT release yet
+        uses: actions/upload-artifact@v4
+        with:
+          name: DriveLab-NAV-LAB30-SIGNED-CANDIDATE-NO-OTA
+          path: dist/nav30/
+          if-no-files-found: error
+          retention-days: 14
