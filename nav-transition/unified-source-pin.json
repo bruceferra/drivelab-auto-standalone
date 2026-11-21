@@ -1,0 +1,17 @@
+{
+  "sourceRepository": "bruceferra/drivelab",
+  "sourceBranch": "chore/unificacion-cloud-20261120",
+  "sourceCommit": "6808ebe377fe7281ec2d00661f6da3a0d054aa99",
+  "referenceTag": "bridge-lab-v24",
+  "purpose": "SIGN_AND_VERIFY_ONLY_NO_OTA",
+  "bridgeTarget": {
+    "packageName": "ar.com.rango5gps.drivelabauto.boot.lab",
+    "versionName": "0.1.28-lab.26",
+    "versionCode": 30
+  },
+  "senderTarget": {
+    "packageName": "ar.com.rango5gps.drivelabauto.sender",
+    "versionName": "0.2.0",
+    "versionCode": 29
+  }
+}
