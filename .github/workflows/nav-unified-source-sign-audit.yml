@@ -3,8 +3,8 @@ on:
   push:
     branches: [chore/nav-signed-transition-20261121]
     paths:
-      - '.github/workflows/nav-unified-source-sign-audit.yml'
       - 'nav-transition/unified-source-pin.json'
+  workflow_dispatch:
 permissions:
   contents: read
 concurrency:
@@ -44,10 +44,17 @@ jobs:
           assert j['senderTarget']==dict(packageName='ar.com.rango5gps.drivelabauto.sender',versionName='0.2.0',versionCode=29)
           with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('sha='+j['sourceCommit']+'\n')
           PY
+      - name: Require a read-only token for the PRIVATE unified source (no public export)
+        env:
+          NAV_UNIFIED_READ_TOKEN: ${{ secrets.NAV_UNIFIED_READ_TOKEN }}
+        shell: bash
+        run: |
+          test -n "$NAV_UNIFIED_READ_TOKEN" || { echo 'BLOCKED: configure NAV_UNIFIED_READ_TOKEN with Contents: read permission on private bruceferra/drivelab'; exit 44; }
       - uses: actions/checkout@v4
         with:
           repository: bruceferra/drivelab
           ref: ${{ steps.pin.outputs.sha }}
+          token: ${{ secrets.NAV_UNIFIED_READ_TOKEN }}
           path: unified
           persist-credentials: false
       - name: Validate 115 authentic Bridge LAB v24 blobs in unified repository
