@@ -1,0 +1,166 @@
+name: NAV — audit signed builds from unified repository (NO OTA)
+on:
+  push:
+    branches: [chore/nav-signed-transition-20261121]
+    paths:
+      - '.github/workflows/nav-unified-source-sign-audit.yml'
+      - 'nav-transition/unified-source-pin.json'
+permissions:
+  contents: read
+concurrency:
+  group: nav-unified-sign-audit
+  cancel-in-progress: true
+jobs:
+  audit:
+    if: github.repository == 'bruceferra/drivelab-auto-standalone' && github.ref == 'refs/heads/chore/nav-signed-transition-20261121'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RECEIVER_STORE_PASSWORD: ${{ secrets.RECEIVER_STORE_PASSWORD }}
+      RECEIVER_KEY_ALIAS: ${{ secrets.RECEIVER_KEY_ALIAS }}
+      RECEIVER_KEY_PASSWORD: ${{ secrets.RECEIVER_KEY_PASSWORD }}
+      SENDER_STORE_PASSWORD: ${{ secrets.SENDER_STORE_PASSWORD }}
+      SENDER_KEY_ALIAS: ${{ secrets.SENDER_KEY_ALIAS }}
+      SENDER_KEY_PASSWORD: ${{ secrets.SENDER_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Validate explicit source pin and known installed package versions
+        id: pin
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json,re,os
+          j=json.load(open('nav-transition/unified-source-pin.json'))
+          assert j['sourceRepository']=='bruceferra/drivelab'
+          assert j['sourceBranch']=='chore/unificacion-cloud-20261120'
+          assert re.fullmatch('[0-9a-f]{40}',j['sourceCommit'])
+          assert j['referenceTag']=='bridge-lab-v24'
+          assert j['purpose']=='SIGN_AND_VERIFY_ONLY_NO_OTA'
+          assert j['bridgeTarget']==dict(packageName='ar.com.rango5gps.drivelabauto.boot.lab',versionName='0.1.28-lab.26',versionCode=30)
+          assert j['senderTarget']==dict(packageName='ar.com.rango5gps.drivelabauto.sender',versionName='0.2.0',versionCode=29)
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('sha='+j['sourceCommit']+'\n')
+          PY
+      - uses: actions/checkout@v4
+        with:
+          repository: bruceferra/drivelab
+          ref: ${{ steps.pin.outputs.sha }}
+          path: unified
+          persist-credentials: false
+      - name: Validate 115 authentic Bridge LAB v24 blobs in unified repository
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C unified rev-parse HEAD)" = "${{ steps.pin.outputs.sha }}"
+          python3 - <<'PY'
+          import pathlib,json,subprocess
+          root=pathlib.Path('unified')
+          j=json.loads((root/'apps/nav/bridge-lab-v24/SOURCE_INDEX.json').read_text())
+          assert j['sourceCommit']=='64282656f61e9287d8de8faa655b6a5f56b4432d'
+          assert len(j['files'])==j['fileCount']==115
+          for f in j['files']:
+            p=root/f['destination']
+            assert p.is_file(),str(p)
+            h=subprocess.check_output(['git','hash-object',str(p)],text=True).strip()
+            assert h==f['gitBlobSha'],str(p)
+          print('PASS 115 authentic source blobs')
+          PY
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Android SDK
+        run: |
+          set -euo pipefail
+          m=$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)
+          "$m" 'platforms;android-35' 'build-tools;35.0.0' >/dev/null
+      - name: Restore original keys ONLY in ephemeral runner
+        shell: bash
+        env:
+          RECEIVER_KEYSTORE_B64: ${{ secrets.RECEIVER_KEYSTORE_B64 }}
+          SENDER_KEYSTORE_B64: ${{ secrets.SENDER_KEYSTORE_B64 }}
+        run: |
+          set -euo pipefail
+          test -n "$RECEIVER_KEYSTORE_B64" && test -n "$RECEIVER_STORE_PASSWORD" && test -n "$RECEIVER_KEY_ALIAS" && test -n "$RECEIVER_KEY_PASSWORD"
+          test -n "$SENDER_KEYSTORE_B64" && test -n "$SENDER_STORE_PASSWORD" && test -n "$SENDER_KEY_ALIAS" && test -n "$SENDER_KEY_PASSWORD"
+          printf '%s' "$RECEIVER_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/lab.p12"
+          printf '%s' "$SENDER_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/sender.p12"
+          chmod 600 "$RUNNER_TEMP/lab.p12" "$RUNNER_TEMP/sender.p12"
+          echo "RECEIVER_KEYSTORE=$RUNNER_TEMP/lab.p12" >> "$GITHUB_ENV"
+          echo "SENDER_KEYSTORE=$RUNNER_TEMP/sender.p12" >> "$GITHUB_ENV"
+      - name: Build staged NAV and Sender entirely from unified source
+        shell: bash
+        run: |
+          set -euo pipefail
+          stage="$RUNNER_TEMP/nav-stage"
+          mkdir -p "$stage"
+          cp -a unified/apps/nav/bridge-lab-v24/. "$stage/"
+          cp -a unified/apps/nav/core "$stage/navCore"
+          mkdir -p "$stage/.github/workflows"
+          cp "$stage/reference/original-publish-bridge-lab-ota.yml" "$stage/.github/workflows/publish-bridge-lab-ota.yml"
+          python3 - "$stage/settings.gradle" <<'PY'
+          import pathlib,sys
+          p=pathlib.Path(sys.argv[1]);s=p.read_text()
+          a="include ':common', ':sender', ':receiver', ':boot'"
+          assert s.count(a)==1
+          p.write_text(s.replace(a,"include ':common', ':sender', ':boot', ':navCore'"))
+          PY
+          cat >> "$stage/boot/build.gradle" <<'GRADLE'
+          // Only the pure NAV Java layout policy; not Receiver/OEM.
+          dependencies { implementation project(':navCore') }
+          GRADLE
+          target="$stage/boot/src/main/java/ar/com/rango5gps/drivelabauto/boot"
+          cp unified/apps/nav/bridge-runtime-overlay/BridgeNavCorePreview.java "$target/"
+          python3 unified/tools/bridge-nav-preview-patch.py "$target/BootActivity.java"
+          (
+            cd "$stage"
+            mkdir -p .classes
+            javac -encoding UTF-8 -d .classes boot/tests/BridgeLabOtaSourceContractTest.java
+            java -cp .classes ar.com.rango5gps.drivelabauto.boot.BridgeLabOtaSourceContractTest
+            javac -encoding UTF-8 -d .classes sender/tests/SenderQrPersistenceSourceTest.java sender/tests/SenderT1LauncherTrialSourceTest.java
+            java -cp .classes ar.com.rango5gps.drivelabauto.sender.SenderQrPersistenceSourceTest
+            java -cp .classes ar.com.rango5gps.drivelabauto.sender.SenderT1LauncherTrialSourceTest
+          )
+          python3 unified/tools/nav-transition-branding.py "$stage"
+          python3 unified/tools/bridge-v26-ota-compat.py "$stage"
+          gradle --no-daemon -p "$stage" :navCore:classes :boot:assembleLab :sender:assembleRelease
+      - name: Verify installed packages, code, labels and both ORIGINAL signer certs
+        shell: bash
+        run: |
+          set -euo pipefail
+          d="$RUNNER_TEMP/nav-stage"
+          lab="$d/boot/build/outputs/apk/lab/boot-lab.apk"
+          sender="$d/sender/build/outputs/apk/release/sender-release.apk"
+          test -s "$lab" && test -s "$sender"
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          sign="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          "$aapt" dump badging "$lab" | grep -F "package: name='ar.com.rango5gps.drivelabauto.boot.lab' versionCode='30' versionName='0.1.28-lab.26'"
+          "$aapt" dump badging "$lab" | grep -F "application-label:'DriveLab NAV'"
+          "$aapt" dump badging "$sender" | grep -F "package: name='ar.com.rango5gps.drivelabauto.sender' versionCode='29' versionName='0.2.0'"
+          "$aapt" dump badging "$sender" | grep -F "application-label:'DriveLab NAV Sender'"
+          "$sign" verify --print-certs "$lab" >/dev/null
+          "$sign" verify --print-certs "$sender" >/dev/null
+          mkdir -p "$RUNNER_TEMP/reference"
+          gh release download bridge-lab-v26 --pattern DriveLab-Bridge-LAB-v0.1.28-lab.26.apk --dir "$RUNNER_TEMP/reference"
+          gh release download sender-v0.2.0 --pattern DriveLab-Auto-Sender-v0.2.0.apk --dir "$RUNNER_TEMP/reference"
+          cert() { "$sign" verify --print-certs "$1" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF;exit}'; }
+          test -n "$(cert "$lab")"
+          test "$(cert "$lab")" = "$(cert "$RUNNER_TEMP/reference/DriveLab-Bridge-LAB-v0.1.28-lab.26.apk")"
+          test -n "$(cert "$sender")"
+          test "$(cert "$sender")" = "$(cert "$RUNNER_TEMP/reference/DriveLab-Auto-Sender-v0.2.0.apk")"
+          echo 'PASS verified two independent original Android certificates from immutable unified source; NO OTA PUBLISHED.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Retain signed candidate evidence ONLY; never publish or install
+        uses: actions/upload-artifact@v4
+        with:
+          name: NAV-UNIFIED-SOURCE-SIGNATURE-AUDIT-NO-OTA
+          path: |
+            ${{ runner.temp }}/nav-stage/boot/build/outputs/apk/lab/boot-lab.apk
+            ${{ runner.temp }}/nav-stage/sender/build/outputs/apk/release/sender-release.apk
+          if-no-files-found: error
+          retention-days: 3
