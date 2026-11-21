@@ -114,7 +114,7 @@ jobs:
           python3 nav-transition/bridge-nav-preview-patch.py "$target/BootActivity.java"
           python3 "$root/tools/nav-virtual-mosaic-stage.py" "$stage" "$root"
           python3 "$root/tools/nav-mosaic-route-stage.py" "$stage"
-          python3 "$root/tools/nav-mosaic-adb-launch-stage.py" "$stage" "$root"
+          python3 "$root/tools/nav-mosaic-adb-launch-stage.py" "$stage"
           python3 "$root/tools/nav-mosaic-wheel-stage.py" "$stage"
           (
             cd "$stage"
@@ -140,7 +140,7 @@ jobs:
           "$aapt" dump badging "$signed" | grep -F "application-label:'DriveLab NAV'"
           "$signer" verify --print-certs "$signed" >/dev/null
           mkdir -p original
-          gh release download bridge-lab-v26 -R bruceferra/drivelab-auto-standalone --pattern 'DriveLab-Bridge-LAB-v0.1.29-lab.27.apk' --dir original
+          gh release download bridge-lab-v27 -R bruceferra/drivelab-auto-standalone --pattern 'DriveLab-Bridge-LAB-v0.1.29-lab.27.apk' --dir original
           echo '7e051f6efa3089bbd06e632ca91229352b0d70fd8b3048d9ec99876a163fe3bc  original/DriveLab-Bridge-LAB-v0.1.29-lab.27.apk' | sha256sum -c -
           cert(){ "$signer" verify --print-certs "$1" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF;exit}'; }
           test -n "$(cert "$signed")"
