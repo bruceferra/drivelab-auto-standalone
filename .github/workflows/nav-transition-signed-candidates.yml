@@ -1,0 +1,180 @@
+name: DriveLab NAV + NAV Sender — signed transition candidates, NO OTA
+on:
+  push:
+    branches: [chore/nav-signed-transition-20261121]
+    paths:
+      - '.github/workflows/nav-transition-signed-candidates.yml'
+      - 'nav-transition/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: drivelab-nav-signed-candidates
+  cancel-in-progress: true
+
+jobs:
+  signed-candidates:
+    if: github.repository == 'bruceferra/drivelab-auto-standalone' && github.ref == 'refs/heads/chore/nav-signed-transition-20261121'
+    name: Verify two permanent certs + build NAV and Sender (no release)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 50
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RECEIVER_STORE_PASSWORD: ${{ secrets.RECEIVER_STORE_PASSWORD }}
+      RECEIVER_KEY_ALIAS: ${{ secrets.RECEIVER_KEY_ALIAS }}
+      RECEIVER_KEY_PASSWORD: ${{ secrets.RECEIVER_KEY_PASSWORD }}
+      SENDER_STORE_PASSWORD: ${{ secrets.SENDER_STORE_PASSWORD }}
+      SENDER_KEY_ALIAS: ${{ secrets.SENDER_KEY_ALIAS }}
+      SENDER_KEY_PASSWORD: ${{ secrets.SENDER_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify original Bridge LAB v24 remains immutable
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse bridge-lab-v24^{commit})" = 64282656f61e9287d8de8faa655b6a5f56b4432d
+          git diff --exit-code bridge-lab-v24 HEAD -- boot sender common build.gradle settings.gradle gradle.properties
+          echo 'PASS Bridge v24 111 original module blobs and Gradle files untouched' >> "$GITHUB_STEP_SUMMARY"
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Android SDK 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          manager=$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)
+          test -x "$manager"
+          "$manager" 'platforms;android-35' 'build-tools;35.0.0' >/dev/null
+      - name: Restore only the original permanent signing keys (never print or upload)
+        shell: bash
+        env:
+          RECEIVER_KEYSTORE_B64: ${{ secrets.RECEIVER_KEYSTORE_B64 }}
+          SENDER_KEYSTORE_B64: ${{ secrets.SENDER_KEYSTORE_B64 }}
+        run: |
+          set -euo pipefail
+          test -n "$RECEIVER_KEYSTORE_B64" && test -n "$RECEIVER_STORE_PASSWORD" &&
+            test -n "$RECEIVER_KEY_ALIAS" && test -n "$RECEIVER_KEY_PASSWORD" || {
+              echo 'BLOCKED: missing permanent Bridge LAB signing credentials'; exit 13;
+            }
+          test -n "$SENDER_KEYSTORE_B64" && test -n "$SENDER_STORE_PASSWORD" &&
+            test -n "$SENDER_KEY_ALIAS" && test -n "$SENDER_KEY_PASSWORD" || {
+              echo 'BLOCKED: missing permanent Sender signing credentials'; exit 14;
+            }
+          printf %s "$RECEIVER_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/nav-original-bridge.p12"
+          printf %s "$SENDER_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/nav-original-sender.p12"
+          chmod 600 "$RUNNER_TEMP/nav-original-bridge.p12" "$RUNNER_TEMP/nav-original-sender.p12"
+          echo "RECEIVER_KEYSTORE=$RUNNER_TEMP/nav-original-bridge.p12" >> "$GITHUB_ENV"
+          echo "SENDER_KEYSTORE=$RUNNER_TEMP/nav-original-sender.p12" >> "$GITHUB_ENV"
+      - name: Build isolated v24 source copy + NAV overlay, keep protocol unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          stage="$RUNNER_TEMP/nav-v25-stage"
+          mkdir -p "$stage"
+          cp -a boot sender common build.gradle settings.gradle gradle.properties "$stage/"
+          mkdir -p "$stage/.github/workflows"
+          cp .github/workflows/publish-bridge-lab-ota.yml "$stage/.github/workflows/"
+          cp -a nav-transition/navCore "$stage/navCore"
+          python3 - "$stage/settings.gradle" <<'PY'
+          import pathlib,sys
+          p=pathlib.Path(sys.argv[1])
+          s=p.read_text()
+          before="include ':common', ':sender', ':receiver', ':boot'"
+          assert s.count(before)==1
+          p.write_text(s.replace(before,"include ':common', ':sender', ':boot', ':navCore'"))
+          PY
+          cat >> "$stage/boot/build.gradle" <<'GRADLE'
+          // NAV Java policies only; no Receiver or OEM code included.
+          dependencies { implementation project(':navCore') }
+          GRADLE
+          target="$stage/boot/src/main/java/ar/com/rango5gps/drivelabauto/boot"
+          cp nav-transition/BridgeNavCorePreview.java "$target/"
+          python3 nav-transition/bridge-nav-preview-patch.py "$target/BootActivity.java"
+          (
+            cd "$stage"
+            mkdir -p .contract-classes
+            javac -encoding UTF-8 -d .contract-classes boot/tests/BridgeLabOtaSourceContractTest.java
+            java -cp .contract-classes ar.com.rango5gps.drivelabauto.boot.BridgeLabOtaSourceContractTest
+            javac -encoding UTF-8 -d .contract-classes boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BridgeT1LauncherRoutePolicy.java boot/tests/BridgeT1LauncherRoutePolicyTest.java
+            java -cp .contract-classes ar.com.rango5gps.drivelabauto.boot.BridgeT1LauncherRoutePolicyTest
+            javac -encoding UTF-8 -d .contract-classes sender/tests/SenderQrPersistenceSourceTest.java sender/tests/SenderT1LauncherTrialSourceTest.java
+            java -cp .contract-classes ar.com.rango5gps.drivelabauto.sender.SenderQrPersistenceSourceTest
+            java -cp .contract-classes ar.com.rango5gps.drivelabauto.sender.SenderT1LauncherTrialSourceTest
+          )
+          python3 nav-transition/nav-transition-branding.py "$stage"
+          gradle --no-daemon -p "$stage" :navCore:classes :boot:assembleLab :sender:assembleRelease
+      - name: Prove in-place package, version, labels, and BOTH unchanged signing certificates
+        shell: bash
+        run: |
+          set -euo pipefail
+          stage="$RUNNER_TEMP/nav-v25-stage"
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          signer="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          boot="$stage/boot/build/outputs/apk/lab/boot-lab.apk"
+          sender="$stage/sender/build/outputs/apk/release/sender-release.apk"
+          test -s "$boot" && test -s "$sender"
+          "$aapt" dump badging "$boot" | grep -F "package: name='ar.com.rango5gps.drivelabauto.boot.lab' versionCode='29' versionName='0.2.0-lab.25'"
+          "$aapt" dump badging "$boot" | grep -F "application-label:'DriveLab NAV'"
+          "$aapt" dump badging "$sender" | grep -F "package: name='ar.com.rango5gps.drivelabauto.sender' versionCode='29' versionName='0.2.0'"
+          "$aapt" dump badging "$sender" | grep -F "application-label:'DriveLab NAV Sender'"
+          "$signer" verify --print-certs "$boot" >/dev/null
+          "$signer" verify --print-certs "$sender" >/dev/null
+          mkdir -p "$RUNNER_TEMP/nav-original-apks"
+          gh release download bridge-lab-v24 --pattern 'DriveLab-Bridge-LAB-v0.1.27-lab.24.apk' --dir "$RUNNER_TEMP/nav-original-apks"
+          gh release download sender-v0.2.24 --pattern 'DriveLab-Auto-Sender-v0.2.24.apk' --dir "$RUNNER_TEMP/nav-original-apks"
+          echo "5aa297d1704d326c64d4a6c55224a0351d1564cd3d5c1d5b58829aa5265c894a  $RUNNER_TEMP/nav-original-apks/DriveLab-Bridge-LAB-v0.1.27-lab.24.apk" | sha256sum -c -
+          cert() {
+            "$signer" verify --print-certs "$1" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF; exit}'
+          }
+          test -n "$(cert "$boot")"
+          test "$(cert "$boot")" = "$(cert "$RUNNER_TEMP/nav-original-apks/DriveLab-Bridge-LAB-v0.1.27-lab.24.apk")" || {
+            echo 'BLOCKED: Bridge certificate mismatch'; exit 15;
+          }
+          test -n "$(cert "$sender")"
+          test "$(cert "$sender")" = "$(cert "$RUNNER_TEMP/nav-original-apks/DriveLab-Auto-Sender-v0.2.24.apk")" || {
+            echo 'BLOCKED: Sender certificate mismatch'; exit 16;
+          }
+          mkdir -p dist/nav-transition
+          cp "$boot" dist/nav-transition/DriveLab-Bridge-LAB-v0.2.0-lab.25.apk
+          cp "$sender" dist/nav-transition/DriveLab-Auto-Sender-v0.2.0.apk
+          (
+            cd dist/nav-transition
+            sha256sum *.apk > SHA256SUMS
+          )
+          python3 - <<'PY'
+          import hashlib, json, pathlib
+          d=pathlib.Path('dist/nav-transition')
+          bridge=d/'DriveLab-Bridge-LAB-v0.2.0-lab.25.apk'
+          sender=d/'DriveLab-Auto-Sender-v0.2.0.apk'
+          (d/'bridge-lab.json').write_text(json.dumps({
+             "channel":"bridge-lab",
+             "packageName":"ar.com.rango5gps.drivelabauto.boot.lab",
+             "versionName":"0.2.0-lab.25","versionCode":29,
+             "tag":"bridge-lab-v25","size":bridge.stat().st_size,
+             "sha256":hashlib.sha256(bridge.read_bytes()).hexdigest(),
+             "apkUrl":"https://github.com/bruceferra/drivelab-auto-standalone/releases/download/bridge-lab-v25/"+bridge.name
+          },indent=2)+"\n")
+          (d/'sender.json').write_text(json.dumps({
+             "packageName":"ar.com.rango5gps.drivelabauto.sender",
+             "versionName":"0.2.0","versionCode":29,
+             "sha256":hashlib.sha256(sender.read_bytes()).hexdigest(),
+             "apkUrl":"https://github.com/bruceferra/drivelab-auto-standalone/releases/download/sender-v0.2.0/"+sender.name
+          },indent=2)+"\n")
+          PY
+          echo 'PASS both release certificates match published installed-channel references, candidate artifacts prepared; NO OTA PUBLICATION.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Store signed candidate APKs only; never publish GitHub releases or OTA manifests
+        uses: actions/upload-artifact@v4
+        with:
+          name: DriveLab-NAV-and-NAV-Sender-0.2.0-SIGNED-CANDIDATES-NO-PUBLICAR
+          path: dist/nav-transition/
+          if-no-files-found: error
+          retention-days: 14
