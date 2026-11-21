@@ -1,0 +1,145 @@
+name: Publish signed DriveLab NAV LAB 27 OTA — explicit owner approval, Jetour ONLY
+on:
+  push:
+    branches: [release/nav-lab-v27-20261121]
+    paths: ['nav-release-v27/APPROVE_OTA_LAB27.json']
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: drivelab-nav-lab-v27-ota-publisher
+  cancel-in-progress: false
+
+jobs:
+  publish-nav-only:
+    if: github.repository == 'bruceferra/drivelab-auto-standalone' && github.ref == 'refs/heads/release/nav-lab-v27-20261121'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      SOURCE_RUN: '44924320577'
+      SOURCE_SHA: '19df4bb84ce7ef6b588fb0d4166e344d6db7b852'
+      TAG: 'bridge-lab-v27'
+      APK: 'DriveLab-NAV-LAB-v0.1.29-lab.27.apk'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify exact explicit approval and passing ORIGINAL-signed candidate run
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          p='nav-release-v27/APPROVE_OTA_LAB27.json'
+          j=json.load(open(p,encoding='utf-8'))
+          assert j=={
+            'approval':'PUBLICAR_NAV_LAB27_PARA_PRUEBA_JETOUR',
+            'sourceRunId':44924320577,
+            'sourceCommit':'19df4bb84ce7ef6b588fb0d4166e344d6db7b852',
+            'targetTag':'bridge-lab-v27',
+            'versionName':'0.1.29-lab.27',
+            'versionCode':31,
+            'senderUnchanged':True,
+            'publishBridgeLabChannel':True
+          },'BLOCKED: owner approval is not exact'
+          PY
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" --jq .conclusion)" = success || {
+            echo 'BLOCKED: original-key candidate did not pass'; exit 20;
+          }
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" --jq .head_sha)" = "$SOURCE_SHA" || {
+            echo 'BLOCKED: candidate revision mismatch'; exit 21;
+          }
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.97 || {
+            echo 'BLOCKED: stable latest changed'; exit 22;
+          }
+          ! gh release view "$TAG" >/dev/null 2>&1 || {
+            echo 'BLOCKED: LAB27 release already exists'; exit 23;
+          }
+      - name: Download immutable candidate, check SHA256, package, certificate and old OTA pointer
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/nav27 originals
+          gh run download "$SOURCE_RUN" --name DriveLab-NAV-LAB27-SIGNED-CANDIDATE-NO-OTA --dir dist/nav27
+          (cd dist/nav27; sha256sum -c SHA256SUMS)
+          python3 - <<'PY'
+          import hashlib,json,pathlib,re
+          d=pathlib.Path('dist/nav27')
+          m=json.loads((d/'bridge-lab.json').read_text(encoding='utf-8'))
+          apk=d/'DriveLab-NAV-LAB-v0.1.29-lab.27.apk'
+          expected={
+            'channel':'bridge-lab',
+            'packageName':'ar.com.rango5gps.drivelabauto.boot.lab',
+            'versionName':'0.1.29-lab.27',
+            'versionCode':31,
+            'tag':'bridge-lab-v27',
+            'size':apk.stat().st_size,
+            'sha256':hashlib.sha256(apk.read_bytes()).hexdigest(),
+            'apkUrl':'https://github.com/bruceferra/drivelab-auto-standalone/releases/download/bridge-lab-v27/DriveLab-NAV-LAB-v0.1.29-lab.27.apk'
+          }
+          assert m==expected,'BLOCKED: signed NAV candidate manifest mismatch'
+          assert re.fullmatch(r'0\.(?:1|2)\.[0-9]+-lab\.[0-9]+',m['versionName'])
+          PY
+          m=$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)
+          test -x "$m"
+          "$m" 'platforms;android-35' 'build-tools;35.0.0' >/dev/null
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          signer="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          apk="dist/nav27/$APK"
+          "$aapt" dump badging "$apk" | grep -F "package: name='ar.com.rango5gps.drivelabauto.boot.lab' versionCode='31' versionName='0.1.29-lab.27'"
+          "$aapt" dump badging "$apk" | grep -F "application-label:'DriveLab NAV'"
+          "$signer" verify --print-certs "$apk" >/dev/null
+          gh release download bridge-lab-v26 --pattern DriveLab-Bridge-LAB-v0.1.28-lab.26.apk --dir originals
+          echo '656381c35f88347812e1b8be3b68808a7a36f33b029c48a0737df3cb5caf5648  originals/DriveLab-Bridge-LAB-v0.1.28-lab.26.apk' | sha256sum -c -
+          cert(){ "$signer" verify --print-certs "$1" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF;exit}'; }
+          test -n "$(cert "$apk")"
+          test "$(cert "$apk")" = "$(cert originals/DriveLab-Bridge-LAB-v0.1.28-lab.26.apk)" || {
+            echo 'BLOCKED: original installed Android certificate mismatch'; exit 24;
+          }
+          gh api "repos/$GITHUB_REPOSITORY/contents/bridge-lab.json?ref=bridge-lab-ota" > old-pointer-response.json
+          jq -r .content old-pointer-response.json | base64 -d > old-pointer.json
+          python3 - <<'PY'
+          import json
+          j=json.load(open('old-pointer.json'))
+          assert j['channel']=='bridge-lab' and j['packageName']=='ar.com.rango5gps.drivelabauto.boot.lab'
+          assert j['versionCode']==30 and j['versionName']=='0.1.28-lab.26'
+          assert j['tag']=='bridge-lab-v26','BLOCKED: current user OTA channel moved'
+          PY
+          gh release download v0.3.97 --pattern sender.json --dir originals
+          gh release download v0.3.97 --pattern receiver.json --dir originals
+          echo 'PASS original installed signer, NAV identity, v26 channel state, immutable Sender/Receiver snapshots' >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish ONLY Jetour DriveLab NAV LAB27 prerelease, verify artifact bytes
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" "dist/nav27/$APK" dist/nav27/bridge-lab.json \
+            --target "$SOURCE_SHA" --prerelease \
+            --title 'DriveLab NAV LAB 27 · Mosaico y Cluster propio, prueba estacionado' \
+            --notes 'LAB for owner evaluation ONLY while vehicle is fully parked. Signed with ORIGINAL Bridge LAB certificate, same package/QR/paired Sender and updater, code31. Independent central Maps/Waze+Spotify virtual-display mosaic; bounded 20s Cluster surface handoff; optional separately consented Maps-only wheel and touch accessibility. Jetour OEM Z-order, multi-display tasks and steering controls require field verification. Do not enable two OEM wheel controllers simultaneously. No Receiver/T1Launcher modification, no vehicle controls, no automatic foreground takeover. Sender remains v0.2.0, unchanged.'
+          mkdir -p verify
+          gh release download "$TAG" --pattern "$APK" --dir verify
+          cmp "dist/nav27/$APK" "verify/$APK"
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.97
+      - name: Switch only Bridge NAV LAB pointer AFTER published asset and original signer verified
+        shell: bash
+        run: |
+          set -euo pipefail
+          old_sha=$(jq -r .sha old-pointer-response.json)
+          test -n "$old_sha"
+          payload=$(base64 -w0 dist/nav27/bridge-lab.json)
+          gh api -X PUT "repos/$GITHUB_REPOSITORY/contents/bridge-lab.json" \
+            -f branch=bridge-lab-ota -f sha="$old_sha" \
+            -f message='ota(nav): installed original-signed LAB26 can manually upgrade to NAV LAB27 code31' \
+            -f content="$payload" >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/contents/bridge-lab.json?ref=bridge-lab-ota" --jq .content | base64 -d > current-bridge.json
+          cmp current-bridge.json dist/nav27/bridge-lab.json
+          mkdir -p current
+          gh release download v0.3.97 --pattern sender.json --dir current
+          gh release download v0.3.97 --pattern receiver.json --dir current
+          cmp originals/sender.json current/sender.json
+          cmp originals/receiver.json current/receiver.json
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.97
+          echo 'PUBLISHED owner-approved signed NAV LAB27 in-place OTA pointer ONLY; Xiaomi Sender, stable latest, Receiver and OEM unchanged. NOT remotely installed on vehicle.' >> "$GITHUB_STEP_SUMMARY"
