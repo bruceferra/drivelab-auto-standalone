@@ -91,18 +91,19 @@ final class NavOwnClusterWazePolicy {
         return new State(true,"identidad estable",cluster,
             wazeTask,wazeStack,wazeComponent);
     }
-    // From a real LAB41 task trace: the launcher activity
-    // com.waze.FreeMapAppActivity starts on the Cluster VD but internally
-    // creates a *different* com.waze.MainActivity task on physical d0.
-    // Directly testing the observed final Activity is the smallest
-    // isolated experiment. Only THIS exact component is authorized;
-    // no exported-assumption, no task move or global force-stop.
-    static final String MAIN="com.waze/com.waze.MainActivity";
     static String startCommand(int own,int map,int media,String component){
-        if(!ownedIds(own,map,media)||!MAIN.equals(component))
-            throw new SecurityException(
-                "No autorizado iniciar una Activity ajena al Main de Waze");
-        return "am start --display "+own+" -n "+MAIN;
+        if(!ownedIds(own,map,media)||component==null||
+           !component.matches("com\\.waze/\\.?[A-Za-z_][A-Za-z0-9_.$]{0,200}"))
+            throw new SecurityException("Destino/componente Waze no autorizado");
+        // LAB43 uses only the exported MAIN+LAUNCHER entry, never private MainActivity.
+        // LAB40's NEW_TASK/MULTIPLE_TASK produced no visible Waze task
+        // on this Android 11 head unit. Restore the LAB39 command which
+        // reached Waze's splash on the OWN Cluster display. Retain the
+        // read-only LAB40 trace to reveal its later Activity migration.
+        return "am start --display "+own+
+            " -a android.intent.action.MAIN"+
+            " -c android.intent.category.LAUNCHER"+
+            " --activity-single-top -n "+component;
     }
     static String stopCommand(State task,int own,int map,int media){
         if(task==null||!task.valid||!ownedIds(own,map,media)||
