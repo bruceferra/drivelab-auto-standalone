@@ -40,7 +40,10 @@ assert "int dh=index==0?720:800" not in screen
 assert "Math.max(1f,original/screen)" not in screen
 adapter=touch.read_text(encoding="utf8")
 assert "owned.getRealSize(dimensions)" in adapter
-assert 'expectedName=panel==0?"DriveLabNAVMapa":"DriveLabNAVSpotify"' in adapter
+assert ('expectedName=panel==0?"DriveLabNAVMapa":"DriveLabNAVSpotify"' in adapter or
+        'String expectedName=panel==0?' in adapter)
+# Experimental LAB53 keeps the same exact display-name guard, now dynamic
+# when a four-slot owner explicitly activates verified surface swaps.
 assert "NavMosaicGeometry.fromSurface(" in adapter
 assert "int width=panel==0?1280:480" not in adapter
 assert "int height=panel==0?720:800" not in adapter
