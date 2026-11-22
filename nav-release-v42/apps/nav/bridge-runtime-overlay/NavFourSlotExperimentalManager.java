@@ -43,7 +43,8 @@ final class NavFourSlotExperimentalManager {
     private final LinearLayout toolbar;
     private final Reporter reporter;
     private final Handler main=new Handler(Looper.getMainLooper());
-    private boolean starting,active,closed,touchPaused;
+    private boolean starting,initializing,active,closed,touchPaused;
+    private int readinessTries;
     private NavFourSlotAndroidSurfaceDriver driver;
     private NavFourSlotSessionCoordinator coordinator;
     private NavFourSlotControls controls;
@@ -69,8 +70,8 @@ final class NavFourSlotExperimentalManager {
     }
 
     boolean isActive(){return active&&!closed;}
-    boolean isPreparing(){return starting&&!closed;}
-    boolean blockedInput(){return touchPaused||starting;}
+    boolean isPreparing(){return (starting||initializing)&&!closed;}
+    boolean blockedInput(){return touchPaused||starting||initializing;}
     boolean canSafelyClose(){return !starting&&!touchPaused;}
     void activate(){
         if(closed||starting||active)return;
@@ -125,19 +126,26 @@ final class NavFourSlotExperimentalManager {
         main.postDelayed(()->tryInitialize(),900L);
     }
     private void tryInitialize(){
-        if(closed||!starting||active)return;
+        if(closed||!starting||active||initializing)return;
         NavOwnClusterProbe.FourSlotAnchor cluster=
             NavOwnClusterProbe.fourSlotAnchor(owner,token);
         if(cluster==null||!cluster.slotA.isAvailable()||
            !cluster.slotB.isAvailable()||
            cluster.slotB.getWidth()<200||
            cluster.slotB.getHeight()<200){
+            if(++readinessTries>16){
+                starting=false;
+                fail("El segundo panel del tablero no generó una "+
+                    "superficie Android utilizable.");
+                NavOwnClusterProbe.restoreSingleFourSlot(owner,token);
+                return;
+            }
             main.postDelayed(()->{
                 if(!closed&&starting)tryInitialize();
             },500L);
             return;
         }
-        starting=false; // single initialization per active cluster session
+        initializing=true; // only one Android inventory read; still preparing
         surfaces.put(NavFourSlotPolicy.Slot.TABLERO_A,cluster.slotA);
         surfaces.put(NavFourSlotPolicy.Slot.TABLERO_B,cluster.slotB);
         new Thread(()->{
@@ -201,6 +209,7 @@ final class NavFourSlotExperimentalManager {
             final String problem=failure;
             main.post(()->{
                 if(closed)return;
+                initializing=false;starting=false;
                 if(problem!=null){
                     fail("Los cuatro paneles no se activaron: "+problem);
                     NavOwnClusterProbe.restoreSingleFourSlot(owner,token);
@@ -264,6 +273,9 @@ final class NavFourSlotExperimentalManager {
                         try{
                             TextureView host=surfaces.get(slot);
                             if(host!=null&&host.isAvailable()){
+                                // Re-enable the destination before waiting
+                                // for fresh frames after an empty-slot move.
+                                host.setAlpha(1f);
                                 NavFourSlotClusterABHost.fit(
                                     host,stream.width,stream.height);
                                 success[0]=true;
@@ -299,10 +311,14 @@ final class NavFourSlotExperimentalManager {
                         return true;
                     }
                     @Override public void resumeCentralInput(){
-                        if(!closed)touchPaused=false;
+                        if(!closed){
+                            updateVisibleSlots();
+                            touchPaused=false;
+                        }
                     }
                 },controls);
             active=true;
+            updateVisibleSlots();
             reporter.stateChanged(true);
             reporter.status("CUATRO ESPACIOS preparados: Central A/B y "+
                 "Tablero A/B. Tres aplicaciones existentes; el cuarto "+
@@ -311,6 +327,18 @@ final class NavFourSlotExperimentalManager {
             fail("Android rechazó cuatro paneles: "+
                 failed.getClass().getSimpleName()+": "+
                 String.valueOf(failed.getMessage()));
+        }
+    }
+    private void updateVisibleSlots(){
+        NavFourSlotLiveRouting.Snapshot s=
+            NavFourSlotLiveRouting.snapshot(owner,token);
+        if(s==null)return;
+        for(NavFourSlotPolicy.Slot slot:NavFourSlotPolicy.Slot.values()){
+            TextureView tv=surfaces.get(slot);
+            if(tv!=null){
+                NavFourSlotPolicy.Stream content=s.state.at(slot);
+                tv.setAlpha(content==null?0f:1f);
+            }
         }
     }
     NavFourSlotPolicy.Stream centralStream(int panel){
@@ -326,7 +354,9 @@ final class NavFourSlotExperimentalManager {
                 NavFourSlotPolicy.Slot.CENTRAL_B);
     }
     private void fail(String message){
+        starting=false;initializing=false;
         reporter.status(message);
+        if(!active)NavOwnClusterProbe.restoreSingleFourSlot(owner,token);
         if(!owner.isFinishing()&&!owner.isDestroyed())
             new AlertDialog.Builder(owner)
                 .setTitle("CUATRO PANELES · NO ACTIVADOS")
