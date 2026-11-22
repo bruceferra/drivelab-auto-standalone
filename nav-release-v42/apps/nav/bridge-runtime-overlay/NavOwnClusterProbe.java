@@ -45,8 +45,7 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
         DisplayManager.VIRTUAL_DISPLAY_FLAG_OWN_CONTENT_ONLY|
         DisplayManager.VIRTUAL_DISPLAY_FLAG_PRESENTATION;
     private static final long DURATION_MS=12000L;
-    private static final long WAZE_DURATION_MS=45000L;
-    private static NavOwnClusterProbe active;
+    private static volatile NavOwnClusterProbe active;
     private static volatile String lastWazeTrace="Todavía no hubo una prueba Waze LAB 40.";
     private static volatile long lastWazeTrialEndedSession;
     private static volatile long lastWazeTrialEndedAt;
@@ -54,7 +53,9 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
     private final Activity owner;
     private final long session;
     private boolean wazeTrial;
-    private int ownDisplayId=-1;
+    private volatile int ownDisplayId=-1;
+    private volatile int verifiedWazeTaskId=-1;
+    private volatile int verifiedWazeStackId=-1;
     private volatile boolean launchInProgress,closeRequested,closingInProgress;
     private volatile String launchProblem;
     private Runnable onReleaseComplete;
@@ -67,12 +68,13 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
     private Surface sink;
     private TextView marker;
     private int clusterWidth,clusterHeight,bandHeight,tick;
-    private boolean ended;
+    private volatile boolean ended;
     private boolean gotFrame;
     private volatile NavMosaicExitPolicy.Snapshot preflightTasks;
     private volatile boolean creationChecked;
+    // The 12-second timeout belongs ONLY to the surface-only test.
+    // Real Waze NAV remains on its own display until owner explicitly closes.
     private final Runnable deadline=()->finishTrial(
-        wazeTrial?"Prueba Waze NAV finalizada a los 45 segundos.":
         "Prueba de superficie NAV propia finalizada a los 12 segundos.");
     private final Runnable pulse=new Runnable(){
         @Override public void run(){
@@ -111,14 +113,15 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
             return;
         }
         new AlertDialog.Builder(owner)
-            .setTitle(waze?"NAV · WAZE PROPIO · 45 SEGUNDOS":
+            .setTitle(waze?"NAV · WAZE PROPIO · CIERRE MANUAL":
                 "NAV · CLÚSTER PROPIO · 12 SEGUNDOS")
             .setMessage(waze?
                 "Sólo con la T1 ESTACIONADA. NAV abre Waze REAL "+
                 "mediante ADB local en una tercera pantalla creada "+
                 "POR NAV. Mantiene Maps y Spotify en sus displays. "+
                 "Audita tareas antes/después; sin T1 Launcher, "+
-                "sin volante, sin tocar OEM. Cierre automático a 45 s. "+
+                "sin volante, sin tocar OEM. Permanece abierto hasta "+
+            "que vuelvas a tocar CLÚSTER NAV para cerrarlo. "+
                 "Si Waze ya está en otra pantalla NO se mueve. "+
                 "La imagen real requiere verificación visual." :
                 "Prueba con la T1 ESTACIONADA. Usa únicamente "+
@@ -156,6 +159,30 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
     }
     static boolean hasActiveWazeTrial(){
         return active!=null&&!active.ended&&active.wazeTrial;
+    }
+    /**
+     * Sender is serviced in the SAME signed NAV process. Expose only the
+     * identity previously proven after successful Waze relocation. All ADB
+     * reads and command allowlists are independently revalidated at delivery.
+     */
+    static NavWazeRoutePolicy.Target senderRouteTarget(Context context){
+        NavOwnClusterProbe p=active;
+        if(p==null||p.ended||!p.wazeTrial||p.launchInProgress||
+           p.closeRequested||p.closingInProgress||
+           p.verifiedWazeTaskId<=10||p.verifiedWazeStackId<=10||
+           p.preflightTasks==null||
+           !ownsLiveWazeDisplay(context,p.ownDisplayId,p.session))
+            throw new SecurityException(
+                "Waze del clúster NAV no está activo y verificado");
+        NavMosaicSessionRegistry.Session live=
+            NavMosaicSessionRegistry.snapshot(context);
+        if(live==null||live.token!=p.session||
+           live.displayId!=p.preflightTasks.map.displayId||
+           live.mediaDisplayId!=p.preflightTasks.spotify.displayId)
+            throw new SecurityException("El mosaico NAV cambió");
+        return new NavWazeRoutePolicy.Target(
+            p.ownDisplayId,live.displayId,live.mediaDisplayId,
+            p.verifiedWazeStackId,p.verifiedWazeTaskId,p.session);
     }
     static void showLastWazeTrace(Activity owner){
         if(owner==null||owner.isFinishing()||owner.isDestroyed())return;
@@ -400,8 +427,7 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
             });
             physicalLayer.show();
             configurePhysicalLayer();
-            handler.postDelayed(deadline,wazeTrial?
-                WAZE_DURATION_MS:DURATION_MS);
+            if(!wazeTrial)handler.postDelayed(deadline,DURATION_MS);
         }catch(Exception failed){
             close("Sin superficie propia NAV: "+
                 failed.getClass().getSimpleName());
@@ -496,7 +522,7 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
         final int vid=ownDisplayId;
         final long nonce=session;
         new Thread(()->{
-            String error=null;int taskId=-1;
+            String error=null;int taskId=-1,stackId=-1;
             try{
                 if(!ownsLiveWazeDisplay(app,vid,nonce))
                     throw new SecurityException("La pantalla NAV cambió");
@@ -576,6 +602,7 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
                         throw new SecurityException(
                             "Waze retornó a otra pantalla tras el traslado");
                     taskId=created.task;
+                    stackId=created.stack;
                 }else{
                     // If the whole Waze activity stays in the NAV display,
                     // accept ONLY an actual MainActivity; a splash is NOT
@@ -594,6 +621,7 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
                         throw new SecurityException(
                             "Sólo apareció splash Waze; MainActivity no llegó a NAV");
                     taskId=after2.task;
+                    stackId=after2.stack;
                 }
                 NavMosaicExitPolicy.Snapshot c1=NavMosaicExitPolicy.parse(
                     BridgeLocalAdb.shell(app,"am stack list"),
@@ -608,7 +636,8 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
                 error=failed.getClass().getSimpleName()+": "+
                     String.valueOf(failed.getMessage());
             }
-            final String failure=error;final int launchedId=taskId;
+            final String failure=error;
+            final int launchedId=taskId,launchedStack=stackId;
             owner.runOnUiThread(()->{
                 launchInProgress=false;
                 if(ended)return;
@@ -618,6 +647,8 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
                 }else if(closeRequested){
                     finishTrial("Cierre de Waze NAV solicitado");
                 }else{
+                    verifiedWazeTaskId=launchedId;
+                    verifiedWazeStackId=launchedStack;
                     Toast.makeText(owner,
                         "Waze tarea "+launchedId+" en pantalla NAV "+vid+
                         ". Verificá visualmente el clúster.",
@@ -686,13 +717,25 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
                     if(NavMosaicExitPolicy.rejected(result))
                         throw new SecurityException(
                             "Android rechazó cerrar Waze propio");
-                    java.util.List<NavWazeRelocationPolicy.Task> after=
-                        NavWazeRelocationPolicy.ownedWaze(
-                            BridgeLocalAdb.shell(app,"am stack list"),
-                            vid,map,media);
-                    for(NavWazeRelocationPolicy.Task t:after)
-                        if(task.same(t))throw new SecurityException(
-                            "No se confirmó cierre de Waze propio");
+                    // Android may report the old root for a short period
+                    // after accepting am stack remove. Re-read only; never
+                    // force-stop and never remove another root on retry.
+                    boolean rootStillPresent=true;
+                    for(int check=0;check<4;check++){
+                        if(check>0)Thread.sleep(350L);
+                        java.util.List<NavWazeRelocationPolicy.Task> after=
+                            NavWazeRelocationPolicy.ownedWaze(
+                                BridgeLocalAdb.shell(app,"am stack list"),
+                                vid,map,media);
+                        rootStillPresent=false;
+                        for(NavWazeRelocationPolicy.Task t:after)
+                            if(task.same(t))rootStillPresent=true;
+                        if(!rootStillPresent)break;
+                    }
+                    if(rootStillPresent)
+                        throw new IllegalStateException(
+                            "Android mantuvo la tarea Waze propia tras "+
+                            "esperar el cierre; no se tocó ninguna tarea ajena");
                 }
             }catch(Exception issue){
                 problem=issue.getClass().getSimpleName()+": "+
@@ -717,6 +760,8 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
     private void close(String why){
         if(ended)return;
         ended=true;
+        verifiedWazeTaskId=-1;
+        verifiedWazeStackId=-1;
         if(wazeTrial){
             lastWazeTrialEndedSession=session;
             lastWazeTrialEndedAt=SystemClock.elapsedRealtime();
