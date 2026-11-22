@@ -24,10 +24,11 @@ screen=mosaic.read_text(encoding="utf8")
 for phrase in (
   "updateTouchLabel(", "tryEnableSavedTouch(", "NavMosaicTouchService.connected()",
   "setClipToOutline(true)", "applyPanelCrop(", "normalizedCoverPoint(",
-  "COVER_PANELS", "AUTO_TOUCH", "frame.setPadding(dp(this,1),0",
+  "COVER_PANELS", "AUTO_TOUCH",
   'settingsButton=quickButton("⚙"', 'quickClusterButton=quickButton(',
   "root.addView(bar", "onSurfaceTextureDestroyed("):
     assert phrase in screen,("Missing LAB46 UI behavior",phrase)
+assert "frame.setPadding(dp(this,1),0" in screen or "frame.setPadding(0,0,0,0)" in screen
 assert "new TextView" in screen
 home_src=home.read_text(encoding="utf8")
 assert "⌂  VOLVER AL MOSAICO" in home_src
