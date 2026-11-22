@@ -1,0 +1,15 @@
+{
+  "kind": "drivelab-nav-ota-provenance",
+  "approvedScope": "NAV LAB50 only: Waze cluster UnsupportedOperationException repair by moving round background off TextureView onto NAV-owned FrameLayout; all LAB49 QR persistence/mosaic and Sender/Receiver/OEM unchanged",
+  "sourceRunId": 45075748718,
+  "sourceCommit": "a8674eb52d0891d9c0c76054d14a042a52aa45c7",
+  "sourceBranch": "fix/nav-lab50-cluster-texture-unsupported-background-20261122",
+  "applicationId": "ar.com.rango5gps.drivelabauto.boot.lab",
+  "versionName": "0.1.52-lab.50",
+  "versionCode": 54,
+  "releaseTag": "bridge-lab-v50",
+  "previousOtaVersion": "0.1.51-lab.49",
+  "previousOtaSha256": "2cf10be640f27473f331814057811397f4a6efa7b0a8e4638ca86ca2e77ef08c",
+  "previousOtaSize": 5102761,
+  "note": "LAB49 caused UnsupportedOperationException when rendering NAV Waze: Android TextureView.setBackground() unsupported. LAB50 clips only NAV-owned parent FrameLayout; no changes to Waze task, full-screen cluster geometry, sender route, app touches, QR keys, boot pairing receiver, Spotify, or OEM. Android build original signature QA passed; physical test pending. LAB49 rollback still available."
+}
