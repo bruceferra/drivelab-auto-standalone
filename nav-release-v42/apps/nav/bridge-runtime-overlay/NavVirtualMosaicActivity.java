@@ -11,6 +11,7 @@ import android.content.pm.PackageManager;
 import android.graphics.Color;
 import android.graphics.Matrix;
 import android.graphics.drawable.GradientDrawable;
+import android.graphics.drawable.RippleDrawable;
 import android.content.res.ColorStateList;
 import android.graphics.Point;
 import android.graphics.PixelFormat;
@@ -216,20 +217,32 @@ public final class NavVirtualMosaicActivity extends Activity {
         b.setAllCaps(false);b.setText(name);b.setTextSize(12f);
         b.setPadding(0,0,0,0);
         b.setMinimumHeight(0);b.setMinimumWidth(0);
-        b.setTextColor(0xFFE0F3F7);
-        b.setBackgroundTintList(ColorStateList.valueOf(0xFF142C38));
+        // Transparent OEM-inspired quick controls. Only the press ripple
+        // is tinted: no opaque button boxes over the mosaic/header.
+        b.setTextColor(0xFFD5EAF0);
+        GradientDrawable transparent=new GradientDrawable();
+        transparent.setColor(Color.TRANSPARENT);
+        transparent.setCornerRadius(dp(this,10));
+        b.setBackground(new RippleDrawable(
+            ColorStateList.valueOf(0x334FD9D2),
+            transparent,null));
         b.setElevation(0f);
+        b.setStateListAnimator(null);
         LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(
             0,dp(this,42),weight);
-        lp.setMargins(dp(this,1),0,dp(this,1),0);
+        lp.setMargins(0,0,0,0);
         bar.addView(b,lp);
         return b;
     }
     private void updateQuickCluster(){
         if(quickClusterButton!=null)
-            quickClusterButton.setText(
-                NavOwnClusterProbe.hasActiveWazeTrial()?
-                "CLÚSTER · ON":"CLÚSTER · OFF");
+            {
+                boolean on=NavOwnClusterProbe.hasActiveWazeTrial();
+                quickClusterButton.setText(on?
+                    "●  CLÚSTER ON":"○  CLÚSTER OFF");
+                quickClusterButton.setTextColor(on?
+                    0xFF68DDD2:0xFFC2D5DC);
+            }
     }
     private void toggleCluster(){
         if(closed||!appsRequested||openingApps||exitInProgress||
@@ -295,24 +308,27 @@ public final class NavVirtualMosaicActivity extends Activity {
         LinearLayout root=new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(14,10,14,10);
-        root.setBackgroundColor(0xFF091B2D);
+        root.setBackgroundColor(0xFF0A1924);
         rootLayout=root;
         LinearLayout bar=new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
-        bar.setPadding(2,0,2,0);
-        bar.setBackgroundColor(0xFF0E202B);
+        bar.setPadding(0,0,0,0);
+        bar.setBackgroundColor(Color.TRANSPARENT);
         root.addView(bar,new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,dp(this,44)));
+            ViewGroup.LayoutParams.MATCH_PARENT,dp(this,40)));
         settingsButton=quickButton("⚙",bar,1f);
         settingsButton.setTextSize(21f);
-        settingsButton.setTextColor(0xFF75D9FA);
+        settingsButton.setTextColor(0xFF7AD8E5);
         settingsButton.setContentDescription("Configuración NAV");
         settingsButton.setOnClickListener(v->setFullMosaic(!fullMosaic));
-        quickClusterButton=quickButton("CLÚSTER · OFF",bar,3f);
-        quickClusterButton.setTextColor(0xFF75D9FA);
+        quickClusterButton=quickButton("○  CLÚSTER OFF",bar,3f);
+        quickClusterButton.setTypeface(null,android.graphics.Typeface.BOLD);
+        quickClusterButton.setLetterSpacing(0.03f);
+        quickClusterButton.setTextColor(0xFFC2D5DC);
         quickClusterButton.setOnClickListener(v->toggleCluster());
         quickExitButton=quickButton("⏻",bar,1f);
         quickExitButton.setTextSize(20f);
+        quickExitButton.setTextColor(0xFFB4CBD5);
         quickExitButton.setContentDescription("Salir del mosaico NAV");
         quickExitButton.setOnClickListener(v->confirmExit());
         title=label("DRIVELAB NAV · MOSAICO PROPIO",19,0xFF78D8FF);
@@ -327,8 +343,9 @@ public final class NavVirtualMosaicActivity extends Activity {
         LinearLayout body=new LinearLayout(this);
         body.setOrientation(LinearLayout.HORIZONTAL);
         body.setBackgroundColor(0xFF0A1924);
-        body.setPadding(dp(this,3),dp(this,2),
-            dp(this,3),dp(this,3));
+        // Both app viewports now run flush to the actual drawable bounds.
+        // Rounded clipping remains local to each panel; no divider or padding.
+        body.setPadding(0,0,0,0);
         root.addView(body,new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,0,1f));
         fullButton=new Button(this);
@@ -342,7 +359,7 @@ public final class NavVirtualMosaicActivity extends Activity {
             final int index=i;
             LinearLayout frame=new LinearLayout(this);
             frame.setOrientation(LinearLayout.VERTICAL);
-            frame.setPadding(dp(this,1),0,dp(this,1),0);
+            frame.setPadding(0,0,0,0);
             frame.setBackgroundColor(Color.TRANSPARENT);
             body.addView(frame,new LinearLayout.LayoutParams(
                 0,ViewGroup.LayoutParams.MATCH_PARENT,i==0?ratio:100-ratio));
