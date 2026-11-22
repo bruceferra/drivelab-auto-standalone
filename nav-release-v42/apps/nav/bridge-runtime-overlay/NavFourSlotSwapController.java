@@ -40,6 +40,15 @@ final class NavFourSlotSwapController {
         }
     }
     private NavFourSlotSwapController(){}
+    private static String shortCause(Exception error){
+        String message=error.getMessage();
+        if(message==null||message.isEmpty())
+            return error.getClass().getSimpleName();
+        // Surface and SecurityException messages are useful to isolate
+        // driver/host failures, without dumping long OEM diagnostic logs.
+        return error.getClass().getSimpleName()+": "+
+            message.substring(0,Math.min(180,message.length()));
+    }
 
     private static boolean verifyAll(NavFourSlotPolicy.State state,Driver d){
         Set<Integer> verified=new HashSet<>();
@@ -97,7 +106,7 @@ final class NavFourSlotSwapController {
                 "Intercambio de superficies NAV verificado");
         }catch(Exception failure){
             boolean rollback=true;
-            String diagnostic=failure.getClass().getSimpleName();
+            String diagnostic=shortCause(failure);
             // Restore ALL old slots (not just ones we believe changed).
             // A backend may mutate a surface before reporting an error.
             for(NavFourSlotPolicy.Bind before:plan.rollback){
@@ -111,8 +120,7 @@ final class NavFourSlotSwapController {
                     d.bind(stream,before.slot);
                 }catch(Exception reverted){
                     rollback=false;
-                    diagnostic+=";rollback="+
-                        reverted.getClass().getSimpleName();
+                    diagnostic+=";rollback="+shortCause(reverted);
                 }
             }
             if(rollback){
@@ -126,7 +134,8 @@ final class NavFourSlotSwapController {
                         }
                     }catch(Exception verifyFailure){
                         rollback=false;
-                        diagnostic+=";sin verificación de restauración";
+                        diagnostic+=";sin verificación de restauración="+
+                            shortCause(verifyFailure);
                     }
                 }
             }
