@@ -143,6 +143,28 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
                 probe.preflight();
             }).show();
     }
+    /**
+     * LAB45: a single visible owner tap toggles Waze on NAV's own cluster.
+     * It preserves the LAB44 launch/verification path and never captures
+     * the Jetour wheel or moves any pre-existing task.
+     */
+    static boolean toggleWazeDirect(Activity owner,long token){
+        NavOwnClusterProbe p=active;
+        if(p!=null){
+            if(!p.wazeTrial||p.session!=token)return false;
+            p.finishTrial("Clúster NAV apagado manualmente.");
+            return true;
+        }
+        NavMosaicSessionRegistry.Session live=
+            NavMosaicSessionRegistry.snapshot(owner);
+        if(live==null||live.token!=token||
+           !NavMosaicSessionRegistry.MAPS.equals(live.mapPackage))
+            return false;
+        NavOwnClusterProbe started=new NavOwnClusterProbe(owner,token,true);
+        active=started;
+        started.preflight();
+        return true;
+    }
     static void releaseActive(){
         if(active!=null)active.finishTrial("Capa propia NAV liberada.");
     }
@@ -410,7 +432,7 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
                     "Geometría del tablero no reconocida");
             clusterWidth=measured.x;
             clusterHeight=measured.y;
-            bandHeight=Math.round(clusterHeight*0.65f);
+            bandHeight=wazeTrial?clusterHeight:Math.round(clusterHeight*0.65f);
             physicalLayer=new Presentation(owner,hardware);
             FrameLayout host=new FrameLayout(physicalLayer.getContext());
             host.setBackgroundColor(Color.TRANSPARENT);
