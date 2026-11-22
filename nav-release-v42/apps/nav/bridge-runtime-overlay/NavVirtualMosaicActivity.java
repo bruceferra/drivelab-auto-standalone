@@ -311,6 +311,7 @@ public final class NavVirtualMosaicActivity extends Activity {
                 fourSlotManager=new NavFourSlotExperimentalManager(
                     this,sessionToken,
                     panels[0].display,panels[1].display,
+                    panels[0].sink,panels[1].sink,
                     panels[0].texture,panels[1].texture,
                     fourSlotCentralHosts[0],fourSlotCentralHosts[1],
                     navToolbar,
