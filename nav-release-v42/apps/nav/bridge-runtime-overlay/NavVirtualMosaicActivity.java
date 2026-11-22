@@ -144,7 +144,7 @@ public final class NavVirtualMosaicActivity extends Activity {
     private static int dp(Context c,int value){
         return Math.round(value*c.getResources().getDisplayMetrics().density);
     }
-    private Button quickButton(String name,LinearLayout bar,int weight){
+    private Button quickButton(String name,LinearLayout bar,float weight){
         Button b=new Button(this);
         b.setAllCaps(false);b.setText(name);b.setTextSize(12f);
         b.setPadding(0,0,0,0);
