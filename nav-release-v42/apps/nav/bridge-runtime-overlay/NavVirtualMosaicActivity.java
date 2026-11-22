@@ -9,6 +9,9 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
 import android.graphics.Color;
+import android.graphics.Matrix;
+import android.graphics.drawable.GradientDrawable;
+import android.content.res.ColorStateList;
 import android.graphics.Point;
 import android.graphics.PixelFormat;
 import android.graphics.drawable.ColorDrawable;
@@ -58,6 +61,8 @@ public final class NavVirtualMosaicActivity extends Activity {
     private static final String AUTO_APPS="start_apps_automatically";
     private static final String AUTO_CLUSTER="start_waze_cluster_automatically";
     private static final String OPEN_IN_MOSAIC="open_in_mosaic";
+    private static final String AUTO_TOUCH="touch_mosaic_automatically";
+    private static final String COVER_PANELS="fill_panels_without_bars";
     private static final String CONFIG_INTENT="nav_open_config_only";
     private final Panel[] panels={new Panel(0),new Panel(1)};
     private TextView status;
@@ -76,6 +81,13 @@ public final class NavVirtualMosaicActivity extends Activity {
     private Button settingsButton,quickClusterButton,quickExitButton;
     private Button autoAppsButton,autoClusterButton,openInMosaicButton,advancedButton;
     private boolean scheduledAutoApps;
+    private Button fillModeButton;
+    private final Runnable touchAutoRetry=new Runnable(){
+        @Override public void run(){
+            if(closed||!appsRequested)return;
+            tryEnableSavedTouch();
+        }
+    };
     private boolean explicitSpotifyStop;
     private boolean navigatingToConfig;
     private final Runnable clusterButtonRefresh=new Runnable(){
@@ -144,13 +156,68 @@ public final class NavVirtualMosaicActivity extends Activity {
     private static int dp(Context c,int value){
         return Math.round(value*c.getResources().getDisplayMetrics().density);
     }
+    /** Fill both panes by cropping uniformly, never stretch source apps.
+     * Keep virtual display/task dimensions unchanged to preserve Sender.
+     */
+    private void applyPanelCrop(TextureView texture,int sw,int sh,int vw,int vh){
+        if(vw<10||vh<10)return;
+        Matrix transform=new Matrix();
+        if(mosaicPrefs().getBoolean(COVER_PANELS,true)){
+            float original=(float)sw/sh,screen=(float)vw/vh;
+            transform.setScale(Math.max(1f,original/screen),
+                Math.max(1f,screen/original),vw/2f,vh/2f);
+        }
+        texture.setTransform(transform);
+    }
+    private float normalizedCoverPoint(int panel,View view,
+                                       float pos,boolean horizontal){
+        float w=view.getWidth(),h=view.getHeight();
+        if(w<=0||h<=0)return -1f;
+        float original=panel==0?1280f/720f:480f/800f;
+        float screen=w/h;
+        float value=horizontal?pos/w:pos/h;
+        if(!mosaicPrefs().getBoolean(COVER_PANELS,true))return value;
+        float crop=horizontal?Math.max(1f,original/screen):
+            Math.max(1f,screen/original);
+        return (value-0.5f)/crop+0.5f;
+    }
+    private void updateTouchLabel(){
+        if(touchButton==null)return;
+        touchButton.setText(touchEnabled?
+            "TACTO MOSAICO · ON (AUTOMÁTICO)":
+            mosaicPrefs().getBoolean(AUTO_TOUCH,true)?
+                "TACTO MOSAICO · ESPERANDO PERMISO":
+                "TACTO MOSAICO · OFF");
+    }
+    private void tryEnableSavedTouch(){
+        if(closed||!appsRequested||
+           !mosaicPrefs().getBoolean(AUTO_TOUCH,true)){
+            touchEnabled=false;
+            updateTouchLabel();
+            return;
+        }
+        if(NavMosaicTouchService.connected()){
+            touchEnabled=true;
+            updateTouchLabel();
+        }else{
+            touchEnabled=false;
+            updateTouchLabel();
+            main.removeCallbacks(touchAutoRetry);
+            main.postDelayed(touchAutoRetry,2000L);
+        }
+    }
     private Button quickButton(String name,LinearLayout bar,float weight){
         Button b=new Button(this);
         b.setAllCaps(false);b.setText(name);b.setTextSize(12f);
         b.setPadding(0,0,0,0);
         b.setMinimumHeight(0);b.setMinimumWidth(0);
-        bar.addView(b,new LinearLayout.LayoutParams(
-            0,dp(this,42),weight));
+        b.setTextColor(0xFFE0F3F7);
+        b.setBackgroundTintList(ColorStateList.valueOf(0xFF142C38));
+        b.setElevation(0f);
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(
+            0,dp(this,42),weight);
+        lp.setMargins(dp(this,1),0,dp(this,1),0);
+        bar.addView(b,lp);
         return b;
     }
     private void updateQuickCluster(){
@@ -228,14 +295,16 @@ public final class NavVirtualMosaicActivity extends Activity {
         LinearLayout bar=new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
         bar.setPadding(2,0,2,0);
-        bar.setBackgroundColor(0xFF091B2D);
+        bar.setBackgroundColor(0xFF0E202B);
         root.addView(bar,new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,dp(this,44)));
         settingsButton=quickButton("⚙",bar,1f);
         settingsButton.setTextSize(21f);
+        settingsButton.setTextColor(0xFF75D9FA);
         settingsButton.setContentDescription("Configuración NAV");
         settingsButton.setOnClickListener(v->setFullMosaic(!fullMosaic));
         quickClusterButton=quickButton("CLÚSTER · OFF",bar,3f);
+        quickClusterButton.setTextColor(0xFF75D9FA);
         quickClusterButton.setOnClickListener(v->toggleCluster());
         quickExitButton=quickButton("⏻",bar,1f);
         quickExitButton.setTextSize(20f);
@@ -252,7 +321,9 @@ public final class NavVirtualMosaicActivity extends Activity {
         root.addView(warning);
         LinearLayout body=new LinearLayout(this);
         body.setOrientation(LinearLayout.HORIZONTAL);
-        body.setBackgroundColor(0xFF152B40);
+        body.setBackgroundColor(0xFF0A1924);
+        body.setPadding(dp(this,3),dp(this,2),
+            dp(this,3),dp(this,3));
         root.addView(body,new LinearLayout.LayoutParams(
             ViewGroup.LayoutParams.MATCH_PARENT,0,1f));
         fullButton=new Button(this);
@@ -266,19 +337,20 @@ public final class NavVirtualMosaicActivity extends Activity {
             final int index=i;
             LinearLayout frame=new LinearLayout(this);
             frame.setOrientation(LinearLayout.VERTICAL);
-            frame.setPadding(3,3,3,3);
-            frame.setBackgroundColor(i==0?0xFF10354D:0xFF13334A);
+            frame.setPadding(dp(this,1),0,dp(this,1),0);
+            frame.setBackgroundColor(Color.TRANSPARENT);
             body.addView(frame,new LinearLayout.LayoutParams(
                 0,ViewGroup.LayoutParams.MATCH_PARENT,i==0?ratio:100-ratio));
-            TextView cap=label(i==0?"MAPS / WAZE":"SPOTIFY · TELÉFONO",12,
-                0xFF75D9FA);
-            cap.setGravity(Gravity.CENTER);
-            frame.addView(cap);
+            // No duplicate labels: apps themselves are the content.
             // Preserve the actual display aspect ratio in each panel.
             // A stretched TextureView makes Maps unreadable and breaks the
             // normalized touch coordinates sent to its virtual display.
             FrameLayout viewport=new FrameLayout(this);
-            viewport.setBackgroundColor(Color.BLACK);
+            GradientDrawable rounded=new GradientDrawable();
+            rounded.setColor(Color.BLACK);
+            rounded.setCornerRadius(dp(this,13));
+            viewport.setBackground(rounded);
+            viewport.setClipToOutline(true);
             frame.addView(viewport,new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,0,1f));
             TextureView texture=new TextureView(this);
@@ -292,11 +364,7 @@ public final class NavVirtualMosaicActivity extends Activity {
             viewport.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob)->{
                 int vw=r-l,vh=b-t;
                 if(vw<10||vh<10)return;
-                FrameLayout.LayoutParams fitted=fitAspect(
-                    vw,vh,sourceW,sourceH,Gravity.CENTER);
-                ViewGroup.LayoutParams old=texture.getLayoutParams();
-                if(old.width!=fitted.width||old.height!=fitted.height)
-                    texture.setLayoutParams(fitted);
+                applyPanelCrop(texture,sourceW,sourceH,vw,vh);
             });
             texture.setSurfaceTextureListener(
                 new TextureView.SurfaceTextureListener(){
@@ -358,10 +426,14 @@ public final class NavVirtualMosaicActivity extends Activity {
                 }
                 if(type==MotionEvent.ACTION_UP){
                     if(view.getWidth()<50||view.getHeight()<50)return true;
-                    float x1=touchDownX[index]/view.getWidth();
-                    float y1=touchDownY[index]/view.getHeight();
-                    float x2=event.getX()/view.getWidth();
-                    float y2=event.getY()/view.getHeight();
+                    float x1=normalizedCoverPoint(index,view,
+                        touchDownX[index],true);
+                    float y1=normalizedCoverPoint(index,view,
+                        touchDownY[index],false);
+                    float x2=normalizedCoverPoint(index,view,
+                        event.getX(),true);
+                    float y2=normalizedCoverPoint(index,view,
+                        event.getY(),false);
                     float dx=x2-x1,dy=y2-y1;
                     boolean swipe=dx*dx+dy*dy>0.0025f;
                     boolean sent=NavMosaicTouchService.forward(
@@ -758,6 +830,7 @@ public final class NavVirtualMosaicActivity extends Activity {
                         return;
                     }
                     appsRequested=true;
+                    tryEnableSavedTouch();
                     if(panels[0].frame&&clusterButton!=null)
                         clusterButton.setEnabled(true);
                     if(clusterWazeButton!=null)
@@ -1047,6 +1120,7 @@ public final class NavVirtualMosaicActivity extends Activity {
     }
     @Override protected void onDestroy(){
         main.removeCallbacks(clusterButtonRefresh);
+        main.removeCallbacks(touchAutoRetry);
         main.removeCallbacks(clusterFocusWatchdog);
         stoppedDuringOwnClusterWaze=false;
         stop("Mosaico destruido y superficies liberadas.");
