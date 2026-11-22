@@ -25,6 +25,7 @@ shutil.copy2(source,target/"NavVirtualMosaicActivity.java")
 for filename in ("NavMosaicExitPolicy.java",
                  "NavOwnClusterProbe.java",
                  "NavOwnClusterWazePolicy.java",
+                 "NavWazeRelocationPolicy.java",
                  "NavWazeDisplayTrace.java",
                  "NavMosaicLifecyclePolicy.java",
                  "NavMosaicMapsRoute.java"):
