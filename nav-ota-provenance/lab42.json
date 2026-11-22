@@ -1,0 +1,16 @@
+{
+  "channel": "bridge-lab",
+  "tag": "bridge-lab-v42",
+  "versionName": "0.1.44-lab.42",
+  "versionCode": 46,
+  "packageName": "ar.com.rango5gps.drivelabauto.boot.lab",
+  "signedBuild": {
+    "workflowRunId": 45050428917,
+    "sourceCommit": "b1204f6b0b91753982b514c2e213ac4e90a3bd56",
+    "artifactName": "DriveLab-NAV-LAB42-SIGNED-CANDIDATE-NO-OTA",
+    "originalSignerVerified": true
+  },
+  "releaseTargetPurpose": "Publication metadata only: no change to .github/workflows; the signed APK is published only from verified CI artifact",
+  "previousOta": "bridge-lab-v41",
+  "senderReceiverUnchanged": true
+}
