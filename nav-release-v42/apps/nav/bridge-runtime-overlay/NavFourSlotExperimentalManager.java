@@ -285,13 +285,13 @@ final class NavFourSlotExperimentalManager {
                         try{
                             TextureView host=surfaces.get(slot);
                             if(host!=null&&host.isAvailable()){
-                                if(slot==NavFourSlotPolicy.Slot.TABLERO_A||
-                                   slot==NavFourSlotPolicy.Slot.TABLERO_B)
-                                    NavOwnClusterProbe.layoutFourSlots(
-                                        owner,token,true,true);
-                                // Re-enable the destination before waiting
-                                // for fresh frames after an empty-slot move.
-                                host.setAlpha(1f);
+                                // Do not PREEMPTIVELY shrink Waze to
+                                // A/B while a bind may still fail. This
+                                // led to a tiny window stranded on cluster
+                                // after SecurityException/failed rollback.
+                                // Keep B visually hidden until commit and
+                                // let the owned source Surface receive the
+                                // destination's first verified frame.
                                 NavFourSlotClusterABHost.fit(
                                     host,stream.width,stream.height);
                                 success[0]=true;
@@ -345,6 +345,14 @@ final class NavFourSlotExperimentalManager {
                             updateVisibleSlots();
                             touchPaused=false;
                         }
+                    }
+                    @Override public void onUnverifiedRollback(){
+                        // Visual-only cleanup. We do NOT claim task
+                        // recovery, send touches, or launch/stop Waze.
+                        // The driver remains fail-closed until user
+                        // closes and reopens NAV's own session.
+                        NavOwnClusterProbe.layoutFourSlots(
+                            owner,token,true,false);
                     }
                 },controls);
             active=true;
