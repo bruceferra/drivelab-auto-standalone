@@ -29,6 +29,7 @@ for filename in ("NavMosaicExitPolicy.java",
                  "NavWazeRoutePolicy.java",
                  "NavWazeDisplayTrace.java",
                  "NavMosaicLifecyclePolicy.java",
+                 "NavMosaicGeometry.java",
                  "NavMosaicMapsRoute.java"):
     source_file=repo/"apps/nav/bridge-runtime-overlay"/filename
     target_file=target/filename
