@@ -1,0 +1,14 @@
+{
+  "kind": "drivelab-nav-ota-provenance",
+  "approvedScope": "DriveLab NAV LAB43 OTA only; no Sender/Receiver/OEM/launcher changes",
+  "sourceRunId": 45055033460,
+  "sourceCommit": "83aa30f7c44e4644659b3559bfd1d3b19c9a3e67",
+  "sourceBranch": "fix/nav-lab43-waze-public-launch-safe-relocation-20261122",
+  "applicationId": "ar.com.rango5gps.drivelabauto.boot.lab",
+  "versionName": "0.1.45-lab.43",
+  "versionCode": 47,
+  "releaseTag": "bridge-lab-v43",
+  "previousOtaVersion": "0.1.44-lab.42",
+  "previousOtaSha256": "ba675fc5458a3fd7524456bd22e58e747f5c65b071e5b6baf05d68eb8415645f",
+  "note": "Vehicle-specific display behavior remains unverified. Fail closed if Android cannot relocate Waze. Safe rollback preserved."
+}
