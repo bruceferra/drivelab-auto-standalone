@@ -1,0 +1,10 @@
+{
+  "approval": "PUBLICAR_NAV_LAB40_SOLO_JETOUR_POR_OTA",
+  "sourceRunId": 44977816442,
+  "sourceCommit": "15370eee5dabf511c5abf38648581c658dfcfeab",
+  "tag": "bridge-lab-v40",
+  "versionName": "0.1.42-lab.40",
+  "versionCode": 44,
+  "senderUnchanged": true,
+  "publishLabChannel": true
+}
