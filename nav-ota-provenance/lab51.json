@@ -1,0 +1,15 @@
+{
+  "kind": "drivelab-nav-ota-provenance",
+  "approvedScope": "NAV LAB51 cosmetic-only upper Jetour toolbar corner radius 21dp->9dp; preserve LAB50 central mosaic, native-size panels, QR recovery, Waze cluster, Sender/Receiver, OEM and no four-slot feature",
+  "sourceRunId": 45076892061,
+  "sourceCommit": "049b85209b2af229c8147847e78468fc78fd6ecf",
+  "sourceBranch": "fix/nav-lab51-soft-toolbar-corners-only-20261122",
+  "applicationId": "ar.com.rango5gps.drivelabauto.boot.lab",
+  "versionName": "0.1.53-lab.51",
+  "versionCode": 55,
+  "releaseTag": "bridge-lab-v51",
+  "previousOtaVersion": "0.1.52-lab.50",
+  "previousOtaSha256": "466e59b89100345810a0f577dcf9062cb6135e33ac3d19287673fb61b2895f30",
+  "previousOtaSize": 5102733,
+  "note": "Only upper toolbar GradientDrawable corner radius changes from 21dp to 9dp. Buttons retain same translucent panel, size, actions. Central Maps and Spotify 24dp curvature and cluster Waze 19dp curvature unchanged. No four-slot code in APK; NAV LAB50 rollback remains available. Original signed Android CI passed, visual test still pending."
+}
