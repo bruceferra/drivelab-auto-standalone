@@ -1,7 +1,7 @@
 name: DriveLab NAV LAB 43 — ORIGINAL signed APK candidate (NO OTA)
 on:
   push:
-    branches: [release/fix/nav-lab43-waze-public-launch-safe-relocation-20261122]
+    branches: [fix/nav-lab43-waze-public-launch-safe-relocation-20261122]
     paths:
       - '.github/workflows/nav-lab-v43-signed-candidate.yml'
       - 'nav-release-v42/apps/**'
@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   sign-and-verify:
-    if: github.repository == 'bruceferra/drivelab-auto-standalone' && github.ref == 'refs/heads/release/fix/nav-lab43-waze-public-launch-safe-relocation-20261122'
+    if: github.repository == 'bruceferra/drivelab-auto-standalone' && github.ref == 'refs/heads/fix/nav-lab43-waze-public-launch-safe-relocation-20261122'
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     env:
