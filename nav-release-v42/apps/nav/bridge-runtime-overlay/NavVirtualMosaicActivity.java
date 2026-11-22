@@ -94,6 +94,12 @@ public final class NavVirtualMosaicActivity extends Activity {
         @Override public void run(){
             if(closed||!stoppedDuringOwnClusterWaze||isFinishing()||
                isDestroyed())return;
+            // Settings and a live cluster are intentional NAV sessions:
+            // never silently stop Waze after an arbitrary 52 seconds.
+            if(navigatingToConfig||NavOwnClusterProbe.hasActiveWazeTrial()){
+                main.postDelayed(this,20000L);
+                return;
+            }
             if(NavOwnClusterProbe.hasActiveWazeTrial()){
                 NavOwnClusterProbe.releaseActive();
                 main.postDelayed(this,4000L);
@@ -915,6 +921,16 @@ public final class NavVirtualMosaicActivity extends Activity {
                     throw new SecurityException(
                         "Todavía hay una tarea en el mosaico. "+
                         "La pantalla y sus tareas siguen sin liberarse.");
+                if(explicitSpotifyStop){
+                    // Separate, explicit owner-confirmed choice. Removing
+                    // Spotify's NAV task does not necessarily stop its audio
+                    // service; only this opt-in action stops the whole app.
+                    String stopReply=BridgeLocalAdb.stopSpotifyAfterOwnedExit(
+                        this,mapId,mediaId,sessionToken);
+                    if(NavMosaicExitPolicy.rejected(stopReply))
+                        throw new SecurityException(
+                            "Android rechazó la detención de Spotify");
+                }
             }catch(Exception failed){
                 problem=failed.getClass().getSimpleName()+": "+
                     String.valueOf(failed.getMessage());
@@ -924,7 +940,9 @@ public final class NavVirtualMosaicActivity extends Activity {
                 if(closed)return;
                 exitInProgress=false;
                 if(failure==null){
-                    stop("Apps del mosaico cerradas y pantallas NAV liberadas.");
+                    stop(explicitSpotifyStop?
+                        "Mosaico liberado; detención completa de Spotify solicitada.":
+                        "Apps del mosaico cerradas y pantallas NAV liberadas.");
                     finish();
                 }else{
                     exitButton.setEnabled(true);
