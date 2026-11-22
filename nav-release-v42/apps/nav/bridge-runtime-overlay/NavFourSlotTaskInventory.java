@@ -12,9 +12,9 @@ import java.util.regex.Pattern;
  */
 final class NavFourSlotTaskInventory {
     private static final Pattern ROOT=Pattern.compile(
-        "^\s*(?:Stack|RootTask) id=([0-9]{1,7})\b.*?\bdisplayId=([0-9]{1,3})\b");
+        "^\\s*(?:Stack|RootTask) id=([0-9]{1,7})\\b.*?\\bdisplayId=([0-9]{1,3})\\b");
     private static final Pattern TASK=Pattern.compile(
-        "^\s*taskId=([0-9]{1,7}):\s*([^\s]+)");
+        "^\\s*taskId=([0-9]{1,7}):\\s*([^\\s]+)");
     private NavFourSlotTaskInventory(){}
     static boolean exact(String raw,NavFourSlotPolicy.Stream stream){
         if(raw==null||stream==null||raw.length()<24||
@@ -22,7 +22,7 @@ final class NavFourSlotTaskInventory {
         int activeStack=-1,activeDisplay=-1;
         int matched=0,occupants=0,headers=0,rows=0;
         Set<Integer> allTaskIds=new HashSet<>();
-        for(String line:raw.split("\r?\n",-1)){
+        for(String line:raw.split("\\r?\\n",-1)){
             if(++rows>1800||line.length()>3000)return false;
             Matcher h=ROOT.matcher(line);
             if(h.find()){
