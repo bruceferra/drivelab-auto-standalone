@@ -99,6 +99,20 @@ public final class NavMosaicTouchService extends AccessibilityService {
             return false;
         int display=panel==0?live.displayId:live.mediaDisplayId;
         String pkg=panel==0?live.mapPackage:SPOTIFY;
+        String expectedName=panel==0?
+            "DriveLabNAVMapa":"DriveLabNAVSpotify";
+        // Four-slot experiment resolves central touch to the visible
+        // stream's own VD, not the original A/B fixed map/media slot.
+        // If an armed snapshot is invalid, fail CLOSED rather than
+        // accidentally touching Maps/Spotify on a different panel.
+        if(NavFourSlotLiveRouting.armed(token)){
+            NavFourSlotLiveRouting.TouchTarget selected=
+                NavFourSlotLiveRouting.central(context,token,panel);
+            if(selected==null)return false;
+            display=selected.stream.displayId;
+            pkg=selected.stream.pkg;
+            expectedName=selected.displayName;
+        }
         if(display<2||display>99||!current.topApplicationIs(display,pkg))
             return false;
         // Display geometry belongs to the currently verified NAV VD.
@@ -109,7 +123,6 @@ public final class NavMosaicTouchService extends AccessibilityService {
         if(dm==null)return false;
         Display owned=dm.getDisplay(display);
         if(owned==null||owned.getDisplayId()!=display)return false;
-        String expectedName=panel==0?"DriveLabNAVMapa":"DriveLabNAVSpotify";
         if(!expectedName.equals(owned.getName()))return false;
         Point dimensions=new Point();
         owned.getRealSize(dimensions);
