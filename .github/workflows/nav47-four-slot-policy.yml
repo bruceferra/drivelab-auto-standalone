@@ -1,0 +1,34 @@
+name: DriveLab NAV47 four-slot source-only policy tests (NO APK, NO OTA)
+on:
+  push:
+    branches: [feature/nav47-four-slot-surface-swap-policy-20261122]
+    paths:
+      - 'nav-release-v42/apps/nav/bridge-runtime-overlay/NavFourSlotPolicy.java'
+      - 'nav-release-v42/apps/nav/bridge-runtime-overlay/NavFourSlotPolicyTest.java'
+      - '.github/workflows/nav47-four-slot-policy.yml'
+permissions:
+  contents: read
+jobs:
+  four-slot-policy:
+    if: github.repository == 'bruceferra/drivelab-auto-standalone'
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Validate source-only test and no APK packaging
+        shell: bash
+        run: |
+          set -euo pipefail
+          p=nav-release-v42/apps/nav/bridge-runtime-overlay
+          mkdir -p /tmp/nav47-policy-classes
+          javac -encoding UTF-8 -d /tmp/nav47-policy-classes             "$p/NavFourSlotPolicy.java"             "$p/NavFourSlotPolicyTest.java"
+          java -cp /tmp/nav47-policy-classes             ar.com.rango5gps.drivelabauto.boot.NavFourSlotPolicyTest
+          ! grep -Fq 'am display move-stack' "$p/NavFourSlotPolicy.java" || {
+            echo 'Blocked: policy must not request task movement' >&2; exit 1;
+          }
+          echo 'PASS: Java policy only; absolutely no sender, boot, receiver, wheel, APK or OTA mutation' >> "$GITHUB_STEP_SUMMARY"
