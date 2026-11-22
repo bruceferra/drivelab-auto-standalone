@@ -31,7 +31,16 @@ for filename in ("NavMosaicExitPolicy.java",
                  "NavWazeDisplayTrace.java",
                  "NavMosaicLifecyclePolicy.java",
                  "NavMosaicGeometry.java",
-                 "NavMosaicMapsRoute.java"):
+                 "NavMosaicMapsRoute.java",
+                 "NavFourSlotPolicy.java",
+                 "NavFourSlotSwapController.java",
+                 "NavFourSlotTaskInventory.java",
+                 "NavFourSlotAndroidSurfaceDriver.java",
+                 "NavFourSlotClusterABHost.java",
+                 "NavFourSlotControls.java",
+                 "NavFourSlotLiveRouting.java",
+                 "NavFourSlotSessionCoordinator.java",
+                 "NavFourSlotExperimentalManager.java"):
     source_file=repo/"apps/nav/bridge-runtime-overlay"/filename
     target_file=target/filename
     if not source_file.is_file() or target_file.exists():
