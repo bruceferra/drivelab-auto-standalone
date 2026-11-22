@@ -326,7 +326,7 @@ public final class NavVirtualMosaicActivity extends Activity {
                         Panel p=panels[index];
                         if(NavMosaicLifecyclePolicy.retainSurfaceOnDestroy(
                                 NavOwnClusterProbe.hasOwnWazeFocusGrace(
-                                    sessionToken),
+                                    sessionToken)||navigatingToConfig,
                                 closed,isFinishing(),p.display!=null)){
                             // Return false: Android must NOT destroy the
                             // SurfaceTexture while Waze holds cluster focus.
