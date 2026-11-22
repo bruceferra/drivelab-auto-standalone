@@ -79,7 +79,11 @@ final class NavFourSlotExperimentalManager {
     boolean isPreparing(){return (starting||initializing)&&!closed;}
     boolean blockedInput(){return touchPaused||starting||initializing;}
     boolean canSafelyClose(){
-        return !starting&&!initializing&&!touchPaused;
+        // If a rollback was unconfirmed, central input remains blocked,
+        // but the owner must still be able to CLOSE its own verified
+        // Android tasks. Do not strand a Waze/Maps session indefinitely.
+        return !starting&&!initializing&&
+            (coordinator==null||!coordinator.isSwapRunning());
     }
     void activate(){
         if(closed||starting||active)return;
