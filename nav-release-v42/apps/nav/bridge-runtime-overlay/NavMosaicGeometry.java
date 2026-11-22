@@ -11,7 +11,7 @@ final class NavMosaicGeometry {
     static final class Size {
         final int w,h;
         Size(int width,int height){
-            if(width<240||height<240||width>3000||height>2200)
+            if(width<1||height<1||width>3000||height>2200)
                 throw new SecurityException("Tamaño de panel virtual fuera de rango");
             w=width;h=height;
         }
@@ -40,7 +40,11 @@ final class NavMosaicGeometry {
         }
     }
     private NavMosaicGeometry(){}
-    static Size fromSurface(int w,int h){return new Size(w,h);}
+    static Size fromSurface(int w,int h){
+        if(w<240||h<240)throw new SecurityException(
+            "Panel NAV demasiado pequeño para abrir una app");
+        return new Size(w,h);
+    }
     static Fit fit(int sourceW,int sourceH,int hostW,int hostH){
         return new Fit(new Size(sourceW,sourceH),new Size(hostW,hostH));
     }
