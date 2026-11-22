@@ -162,11 +162,13 @@ public final class NavVirtualMosaicActivity extends Activity {
     private void applyPanelCrop(TextureView texture,int sw,int sh,int vw,int vh){
         if(vw<10||vh<10)return;
         Matrix transform=new Matrix();
-        if(mosaicPrefs().getBoolean(COVER_PANELS,true)){
-            float original=(float)sw/sh,screen=(float)vw/vh;
-            transform.setScale(Math.max(1f,original/screen),
-                Math.max(1f,screen/original),vw/2f,vh/2f);
-        }
+        float original=(float)sw/sh,screen=(float)vw/vh;
+        boolean cover=mosaicPrefs().getBoolean(COVER_PANELS,true);
+        float sx=cover?Math.max(1f,original/screen):
+            Math.min(1f,original/screen);
+        float sy=cover?Math.max(1f,screen/original):
+            Math.min(1f,screen/original);
+        transform.setScale(sx,sy,vw/2f,vh/2f);
         texture.setTransform(transform);
     }
     private float normalizedCoverPoint(int panel,View view,
@@ -176,10 +178,13 @@ public final class NavVirtualMosaicActivity extends Activity {
         float original=panel==0?1280f/720f:480f/800f;
         float screen=w/h;
         float value=horizontal?pos/w:pos/h;
-        if(!mosaicPrefs().getBoolean(COVER_PANELS,true))return value;
-        float crop=horizontal?Math.max(1f,original/screen):
-            Math.max(1f,screen/original);
-        return (value-0.5f)/crop+0.5f;
+        boolean cover=mosaicPrefs().getBoolean(COVER_PANELS,true);
+        float scale=horizontal?
+            (cover?Math.max(1f,original/screen):
+                   Math.min(1f,original/screen)):
+            (cover?Math.max(1f,screen/original):
+                   Math.min(1f,screen/original));
+        return (value-0.5f)/scale+0.5f;
     }
     private void updateTouchLabel(){
         if(touchButton==null)return;
