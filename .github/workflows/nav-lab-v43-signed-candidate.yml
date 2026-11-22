@@ -45,6 +45,7 @@ jobs:
           assert len(j['files'])==33
           changed={
             '.github/workflows/nav-lab-v43-signed-candidate.yml',
+            'nav-release-v42/LAB43_WAZE_HANDOFF.md',
             'nav-release-v42/apps/nav/bridge-runtime-overlay/NavOwnClusterProbe.java',
             'nav-release-v42/apps/nav/bridge-runtime-overlay/NavOwnClusterWazePolicy.java',
             'nav-release-v42/apps/nav/bridge-runtime-overlay/NavOwnClusterWazePolicyTest.java',
