@@ -77,11 +77,12 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
     private Runnable clusterBFrameNotify;
     static final class FourSlotAnchor {
         final VirtualDisplay virtual;
+        final Surface originalSink;
         final TextureView slotA,slotB;
         final int display,task,stack,width,height;
         final long token;
         FourSlotAnchor(NavOwnClusterProbe p){
-            virtual=p.ownVirtual;
+            virtual=p.ownVirtual;originalSink=p.sink;
             slotA=p.texture;slotB=p.fourHost.surfaceB();
             display=p.ownDisplayId;task=p.verifiedWazeTaskId;
             stack=p.verifiedWazeStackId;
