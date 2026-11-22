@@ -78,7 +78,9 @@ final class NavFourSlotExperimentalManager {
     boolean isActive(){return active&&!closed;}
     boolean isPreparing(){return (starting||initializing)&&!closed;}
     boolean blockedInput(){return touchPaused||starting||initializing;}
-    boolean canSafelyClose(){return !starting&&!touchPaused;}
+    boolean canSafelyClose(){
+        return !starting&&!initializing&&!touchPaused;
+    }
     void activate(){
         if(closed||starting||active)return;
         if(NavOwnClusterProbe.fourSlotAnchor(owner,token)!=null){
