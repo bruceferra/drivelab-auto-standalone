@@ -1,0 +1,84 @@
+name: NAV52 four-slot Android surface backend — SOURCE ONLY, NO APK/OTA
+on:
+  push:
+    branches: [feature/nav52-android-four-slot-surface-driver-20261122]
+    paths:
+      - 'nav-release-v42/apps/nav/bridge-runtime-overlay/NavFourSlot*.java'
+      - '.github/workflows/nav52-four-slot-android-backend-tests.yml'
+permissions:
+  contents: read
+jobs:
+  source-backend:
+    if: github.repository == 'bruceferra/drivelab-auto-standalone'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Restrict changes to isolated LAB51-based four-slot source
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import subprocess
+          changed=set(subprocess.check_output(
+            ['git','diff','--name-only',
+             '049b85209b2af229c8147847e78468fc78fd6ecf','HEAD'],
+             text=True).splitlines())
+          base='nav-release-v42/apps/nav/bridge-runtime-overlay/'
+          files={base+x for x in (
+            'NavFourSlotPolicy.java','NavFourSlotPolicyTest.java',
+            'NavFourSlotSwapController.java','NavFourSlotSwapControllerTest.java',
+            'NavFourSlotTaskInventory.java','NavFourSlotTaskInventoryTest.java',
+            'NavFourSlotAndroidSurfaceDriver.java')}
+          files.add('.github/workflows/nav52-four-slot-android-backend-tests.yml')
+          assert changed==files,('BLOCKED unrelated LAB51 change',changed^files)
+          from pathlib import Path
+          driver=Path(base+'NavFourSlotAndroidSurfaceDriver.java').read_text()
+          inventory=Path(base+'NavFourSlotTaskInventory.java').read_text()
+          for text in (driver,inventory):
+            for denied in ('am display move-stack','am force-stop',
+                           'startActivity(', 'forceStopPackage(',
+                           'getSystemService(Context.WINDOW_SERVICE)'):
+              assert denied not in text, ('BLOCKED external side effect',denied)
+          assert 'occupant.virtual.setSurface(null)' in driver
+          assert 'selected.virtual.setSurface(surface)' in driver
+          assert 'if(!geometry.prepare(stream,target))' in driver
+          assert 'NavFourSlotTaskInventory.exact(' in driver
+          print('PASS unchanged LAB51 source, strict Android display ownership and no OEM/ADB mutations')
+          PY
+      - name: Android platform API for compile-only surface driver
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager=$(command -v sdkmanager || find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)
+          "$sdkmanager" 'platforms;android-35'
+      - name: Compile Android real-surface backend and pure Java test harness
+        shell: bash
+        run: |
+          set -euo pipefail
+          p=nav-release-v42/apps/nav/bridge-runtime-overlay
+          mkdir -p /tmp/nav52-classes
+          javac -encoding UTF-8 \
+            -cp "$ANDROID_HOME/platforms/android-35/android.jar" \
+            -d /tmp/nav52-classes \
+            "$p/NavFourSlotPolicy.java" \
+            "$p/NavFourSlotSwapController.java" \
+            "$p/NavFourSlotTaskInventory.java" \
+            "$p/NavFourSlotAndroidSurfaceDriver.java" \
+            "$p/NavFourSlotPolicyTest.java" \
+            "$p/NavFourSlotSwapControllerTest.java" \
+            "$p/NavFourSlotTaskInventoryTest.java"
+          java -cp /tmp/nav52-classes \
+            ar.com.rango5gps.drivelabauto.boot.NavFourSlotPolicyTest
+          java -cp /tmp/nav52-classes \
+            ar.com.rango5gps.drivelabauto.boot.NavFourSlotSwapControllerTest
+          java -cp /tmp/nav52-classes \
+            ar.com.rango5gps.drivelabauto.boot.NavFourSlotTaskInventoryTest
+          echo 'PASS LAB52 source only: four-slot Android Surface backend compiles, exact tasks and swaps validated. NO APK or OTA published.' >> "$GITHUB_STEP_SUMMARY"
