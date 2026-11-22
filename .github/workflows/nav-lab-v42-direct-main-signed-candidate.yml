@@ -147,8 +147,8 @@ jobs:
           trace=Path("nav-release-v42/apps/nav/bridge-runtime-overlay/NavWazeDisplayTrace.java").read_text(encoding="utf8")
           assert 'MAIN="com.waze/com.waze.MainActivity"' in ownWaze
           assert 'return "am start --display "+own+" -n "+MAIN;' in ownWaze
-          assert "getActivityInfo(mainComponent,0)" in ownProbe
-          assert "if(!info.exported)" in ownProbe
+          assert "getActivityInfo(mainComponent,0)" in own
+          assert "if(!info.exported)" in own
           exitPolicy=Path("nav-release-v42/apps/nav/bridge-runtime-overlay/NavMosaicExitPolicy.java").read_text(encoding="utf8")
           central=Path("nav-release-v42/apps/nav/bridge-runtime-overlay/NavVirtualMosaicActivity.java").read_text(encoding="utf8")
           ownProbe=Path("nav-release-v42/apps/nav/bridge-runtime-overlay/NavOwnClusterProbe.java").read_text(encoding="utf8")
