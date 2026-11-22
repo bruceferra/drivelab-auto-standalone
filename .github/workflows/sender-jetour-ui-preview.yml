@@ -1,0 +1,73 @@
+name: Xiaomi Sender Jetour UI prototype — Android compile (NO OTA)
+on:
+  push:
+    branches: [feature/sender-xiaomi-jetour-ui-20261122]
+    paths:
+      - 'sender/src/main/java/ar/com/rango5gps/drivelabauto/sender/SenderActivity.java'
+      - '.github/workflows/sender-jetour-ui-preview.yml'
+permissions:
+  contents: read
+jobs:
+  sender-ui:
+    if: github.repository == 'bruceferra/drivelab-auto-standalone'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Verify original installed Sender code preserved outside UI
+        shell: bash
+        run: |
+          set -euo pipefail
+          changed=$(git diff --name-only sender-v0.2.0 HEAD -- sender common receiver boot)
+          test "$changed" = 'sender/src/main/java/ar/com/rango5gps/drivelabauto/sender/SenderActivity.java' || {
+            echo "BLOCKED: changed sender business logic! $changed" >&2; exit 1;
+          }
+          python3 - <<'PY'
+          from pathlib import Path
+          ui=Path('sender/src/main/java/ar/com/rango5gps/drivelabauto/sender/SenderActivity.java').read_text()
+          required=[
+            'DRIVELAB   |   SENDER','JETOUR T1  •  XIAOMI',
+            'targetChip(', 'BridgeRouteTarget.BOTH',
+            'SenderRouteTarget.choose(this,target)',
+            'SenderClient.send(this,',
+            'SenderClient.finishPairing(this,',
+            'SenderClient.reconnect(this)',
+            'SenderAudioBootstrap.resumeLastMedia(',
+            'Updater.check(this,"sender"',
+            'this::scanPairQr', 'this::chooseCarAudio',
+            'this::chooseT1LauncherRouteTrial',
+            'this::chooseNavigationTarget',
+            'SenderClient.unpair(this)'
+          ]
+          missing=[x for x in required if x not in ui]
+          assert not missing, f'BLOCKED sender regression: {missing}'
+          assert 'RECORD_AUDIO' not in ui, 'Sender must not gain microphone permission'
+          print('PASS UI-only changes and unchanged SenderClient, share, audio, pairing, receiver')
+          PY
+      - name: Android SDK 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          sdkmanager=$(command -v sdkmanager || find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)
+          "$sdkmanager" 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Compile Sender UI (debug only, not delivered)
+        shell: bash
+        run: |
+          set -euo pipefail
+          gradle --no-daemon :sender:assembleDebug
+          test -s sender/build/outputs/apk/debug/sender-debug.apk
+          "$ANDROID_HOME/build-tools/35.0.0/aapt" dump badging             sender/build/outputs/apk/debug/sender-debug.apk |
+            grep -F "package: name='ar.com.rango5gps.drivelabauto.sender'"
+          javac -encoding UTF-8 -d /tmp             sender/tests/SenderShareHeadlessSourceContractTest.java
+          java -cp /tmp             ar.com.rango5gps.drivelabauto.sender.SenderShareHeadlessSourceContractTest
+          echo 'PASS Sender Jetour UI compiled. No release APK, sender.json OTA, or Receiver touched.' >> "$GITHUB_STEP_SUMMARY"
