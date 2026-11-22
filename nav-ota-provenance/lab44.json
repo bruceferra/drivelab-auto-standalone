@@ -1,0 +1,14 @@
+{
+  "kind": "drivelab-nav-ota-provenance",
+  "approvedScope": "DriveLab NAV LAB44 OTA only; no Sender/Receiver/OEM/T1Launcher changes",
+  "sourceRunId": 45059017855,
+  "sourceCommit": "5fd33960951e341532605fe00b47bf00da17b4ec",
+  "sourceBranch": "fix/nav-lab44-sender-to-owned-waze-manual-close-20261122",
+  "applicationId": "ar.com.rango5gps.drivelabauto.boot.lab",
+  "versionName": "0.1.46-lab.44",
+  "versionCode": 48,
+  "releaseTag": "bridge-lab-v44",
+  "previousOtaVersion": "0.1.45-lab.43",
+  "previousOtaSha256": "6db8b6115c28c9cb558e6950409e50d0facc97404cd8b13cedf09e9cab1bc536",
+  "note": "Original signed CI and pure Java tests pass; Waze route same-task behavior still needs physical parked Jetour test. Manual cluster Waze lifetime and restricted cleanup."
+}
