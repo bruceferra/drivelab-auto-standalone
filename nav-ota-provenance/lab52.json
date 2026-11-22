@@ -1,0 +1,15 @@
+{
+  "kind": "drivelab-nav-ota-provenance",
+  "approvedScope": "LAB52 Waze task continuity/reclaim across OTA, re-attach existing verified Waze on Cluster ON, keep Sender task routing; all LAB51 visuals, touch, QR, Maps, Spotify, OEM and Sender/Receiver intact. Four-slot work remains separate and is not in APK.",
+  "sourceRunId": 45081792234,
+  "sourceCommit": "373471371a78d233ac11e0b121ba47b957c68e35",
+  "sourceBranch": "fix/nav-lab52-waze-session-reclaim-ota-20261122",
+  "applicationId": "ar.com.rango5gps.drivelabauto.boot.lab",
+  "versionName": "0.1.54-lab.52",
+  "versionCode": 56,
+  "releaseTag": "bridge-lab-v52",
+  "previousOtaVersion": "0.1.53-lab.51",
+  "previousOtaSha256": "d63f98f203f0a40fe5b338b87aeeb6b60109ccbfd63e5fb2150b11f51d9885e1",
+  "previousOtaSize": 5102733,
+  "note": "Waze orphaned MainActivity isolated stack may be reclaimed onto newly owned cluster VD; double read and double verify; legacy pre-LAB52 orphan requires explicit one-time driver approval; verifies Android task and stack identity for Sender. Records only task id/time, never persistent display id; never global force-stop. LAB51 remains tested rollback. Four-slot live swaps not included. Physical test after OTA necessary."
+}
