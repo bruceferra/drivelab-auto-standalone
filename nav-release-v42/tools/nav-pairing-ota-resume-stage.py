@@ -63,6 +63,36 @@ assert m.count(anchor)==1,"ABORT: manifest boot receiver anchor changed"
 assert "android.intent.action.MY_PACKAGE_REPLACED" not in m
 m=m.replace(anchor,new_anchor,1)
 manifest.write_text(m,encoding="utf8")
+# The LAB45 app-home redirect can finish BootActivity before onResume()
+# (where the old listener recovery lived). Also resume from onCreate()
+# when the owner opens NAV; never require a new QR or launch apps.
+activity=stage/"boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/BootActivity.java"
+a=activity.read_text(encoding="utf8")
+start='''        super.onCreate(state);
+        BridgeImmersive.apply(this);'''
+replacement='''        super.onCreate(state);
+        // App-home redirect may finish BootActivity before onResume.
+        // Reuse existing local paired AES key, never start another QR.
+        if(BootConfig.enabled(this)){
+            try{
+                String saved=BootLinkService.prefs(this)
+                    .getString("secret","");
+                if(ar.com.rango5gps.drivelabauto.common.BridgeCrypto
+                    .unpackKey(saved).length==16)
+                    startForegroundService(new Intent(this,
+                        BootLinkService.class).setAction(BootLinkService.START));
+            }catch(Exception listenerDenied){
+                BootConfig.prefs(this).edit().putString("last_status",
+                    "Xiaomi sigue vinculado; abrir NAV no pudo "+
+                    "reanudar receptor ("+
+                    listenerDenied.getClass().getSimpleName()+")").apply();
+            }
+        }
+        BridgeImmersive.apply(this);'''
+assert a.count(start)==1,"ABORT: BootActivity onCreate changed"
+assert a.count("BridgeImmersive.apply(this);")>=1
+a=a.replace(start,replacement,1)
+activity.write_text(a,encoding="utf8")
 # Guard existing secret ownership. A package replace MUST NOT remove or
 # regenerate the key. The only lifecycle modification is the receiver.
 source=link.read_text(encoding="utf8")
@@ -72,6 +102,7 @@ assert 'if(!BootConfig.prefs(this).edit()' in source
 assert 'static final String PREFS="drivelab_boot_mosaic_config_v1"' in config.read_text(encoding="utf8")
 assert 'BootLinkService.START' in s
 assert "PAIR_QR" not in s
+assert 'App-home redirect may finish BootActivity before onResume' in a
 assert 'BootAutoService.class' in s
 assert 'BridgeStandaloneWindows.TAB_CONFIRMED,false' in s
 print("PASS LAB49: saved AES key stays intact; only system MY_PACKAGE_REPLACED resumes encrypted LAN listener, no QR, OEM/UI or maps")
