@@ -1,0 +1,132 @@
+package ar.com.rango5gps.drivelabauto.boot;
+
+import android.graphics.Color;
+import android.graphics.Matrix;
+import android.graphics.drawable.GradientDrawable;
+import android.view.Display;
+import android.view.Gravity;
+import android.view.SurfaceTexture;
+import android.view.TextureView;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.FrameLayout;
+
+/**
+ * NAV52 experimental physical cluster A/B host. Upgrade the EXISTING
+ * NAV-owned Presentation/TextureView; NEVER replace that Presentation
+ * or reparent the live Waze TextureView, which would destroy its surface.
+ *
+ * Full mode keeps Waze on its original full-size physical slot.
+ * Split mode reserves B alongside A. The client must transfer only its
+ * own VirtualDisplays and confirm new frames before displaying success.
+ *
+ * This source file is NOT included in any published LAB51 APK/OTA.
+ */
+final class NavFourSlotClusterABHost {
+    interface SlotListener extends TextureView.SurfaceTextureListener {
+        // Owner's listener tracks the new NAV B slot.
+    }
+    private final FrameLayout physicalRoot;
+    private final TextureView originalWaze;
+    private final FrameLayout secondContainer;
+    private final TextureView second;
+    private final int physicalWidth,physicalHeight;
+    private boolean split;
+
+    NavFourSlotClusterABHost(FrameLayout root,TextureView waze,
+                             int width,int height,SlotListener callback){
+        if(root==null||waze==null||callback==null||
+           width<1200||height<480||waze.getParent()!=root)
+            throw new SecurityException(
+                "Clúster NAV A/B requiere Presentation propia existente");
+        Display d=root.getDisplay();
+        if(d==null||d.getDisplayId()!=1||
+           waze.getDisplay()==null||
+           waze.getDisplay().getDisplayId()!=1)
+            throw new SecurityException(
+                "No se puede reutilizar un panel físico que no sea Display 1");
+        physicalRoot=root;originalWaze=waze;
+        physicalWidth=width;physicalHeight=height;
+        // Create the second surface with a rounded PARENT, never assign
+        // a background to TextureView (Android throws UOE).
+        secondContainer=new FrameLayout(root.getContext());
+        GradientDrawable rounded=new GradientDrawable();
+        rounded.setColor(Color.BLACK);
+        rounded.setCornerRadius(19f*
+            root.getResources().getDisplayMetrics().density);
+        secondContainer.setBackground(rounded);
+        secondContainer.setClipToOutline(true);
+        second=new TextureView(root.getContext());
+        second.setOpaque(true);
+        second.setSurfaceTextureListener(callback);
+        secondContainer.addView(second,
+            new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT));
+        secondContainer.setVisibility(View.GONE);
+        root.addView(secondContainer,new FrameLayout.LayoutParams(
+            width/2,height,Gravity.RIGHT|Gravity.TOP));
+    }
+
+    TextureView surfaceA(){return originalWaze;}
+    TextureView surfaceB(){return second;}
+    boolean isSplit(){return split;}
+
+    /**
+     * This only changes the physical OWNED host layout, not an Android
+     * task or display. Call on UI thread while the Jetour is parked.
+     * An unbound panel B may be black until its app is selected.
+     */
+    void prepareSplit(){
+        if(split)return;
+        if(!physicalRoot.isAttachedToWindow()||
+           originalWaze.getParent()!=physicalRoot)
+            throw new SecurityException("Clúster NAV original ya no existe");
+        physicalRoot.setBackgroundColor(Color.BLACK);
+        originalWaze.setLayoutParams(new FrameLayout.LayoutParams(
+            physicalWidth/2,physicalHeight,Gravity.LEFT|Gravity.TOP));
+        secondContainer.setLayoutParams(new FrameLayout.LayoutParams(
+            physicalWidth-physicalWidth/2,
+            physicalHeight,Gravity.RIGHT|Gravity.TOP));
+        secondContainer.setVisibility(View.VISIBLE);
+        split=true;
+    }
+
+    /**
+     * Return to full-screen mode ONLY after the owner has verified that
+     * no VirtualDisplay is bound to B. Never discard an active task.
+     */
+    void restoreFull(boolean bUnbound){
+        if(!bUnbound)
+            throw new SecurityException(
+                "Tablero B sigue ocupado; no se puede ocultar");
+        secondContainer.setVisibility(View.GONE);
+        originalWaze.setLayoutParams(new FrameLayout.LayoutParams(
+            physicalWidth,physicalHeight,Gravity.BOTTOM));
+        split=false;
+    }
+
+    /**
+     * Content is fitted (never cropped). The real VirtualDisplay's
+     * native size is kept unchanged while its host shifts from 100% to
+     * A/B; a responsive resize is a separate, guarded future feature.
+     */
+    static void fit(TextureView texture,int displayW,int displayH){
+        if(texture==null||texture.getWidth()<1||
+           texture.getHeight()<1)return;
+        NavMosaicGeometry.Fit f=NavMosaicGeometry.fit(
+            displayW,displayH,texture.getWidth(),texture.getHeight());
+        Matrix transform=new Matrix();
+        transform.setScale(f.sx,f.sy,
+            texture.getWidth()/2f,texture.getHeight()/2f);
+        texture.setTransform(transform);
+    }
+
+    /** Explicit cleanup after the owner's cluster session has ended. */
+    void closeAfterOwnerRelease(){
+        if(secondContainer.getParent()==physicalRoot){
+            secondContainer.setVisibility(View.GONE);
+            physicalRoot.removeView(secondContainer);
+        }
+    }
+}
