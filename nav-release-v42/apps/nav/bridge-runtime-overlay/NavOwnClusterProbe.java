@@ -437,21 +437,20 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
             physicalLayer=new Presentation(owner,hardware);
             FrameLayout host=new FrameLayout(physicalLayer.getContext());
             host.setBackgroundColor(Color.TRANSPARENT);
-            texture=new TextureView(physicalLayer.getContext());
-            texture.setOpaque(true);
+            // TextureView.setBackground() is unsupported on Android and
+            // throws UnsupportedOperationException before Waze can open.
+            // Round only the parent FrameLayout, never the TextureView.
             if(wazeTrial){
-                // Small corner clipping of NAV's OWN Waze display only.
-                // Never alter Jetour OEM layers or the physical screen
-                // shape. Display sizing, task IDs and Waze touch stay
-                // identical to LAB48 (no navigation controls trimmed).
                 GradientDrawable clusterRounded=new GradientDrawable();
                 clusterRounded.setColor(Color.BLACK);
                 float density=physicalLayer.getContext()
                     .getResources().getDisplayMetrics().density;
                 clusterRounded.setCornerRadius(19f*density);
-                texture.setBackground(clusterRounded);
-                texture.setClipToOutline(true);
+                host.setBackground(clusterRounded);
+                host.setClipToOutline(true);
             }
+            texture=new TextureView(physicalLayer.getContext());
+            texture.setOpaque(true);
             texture.setSurfaceTextureListener(this);
             host.addView(texture,new FrameLayout.LayoutParams(
                 clusterWidth,bandHeight,Gravity.BOTTOM));
