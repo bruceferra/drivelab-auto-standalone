@@ -55,6 +55,10 @@ public final class NavVirtualMosaicActivity extends Activity {
     private static final String WAZE="com.waze";
     private static final String SPOTIFY="com.spotify.music";
     private static final String PREFS="drivelab_nav_mosaic_lab_v1";
+    private static final String AUTO_APPS="start_apps_automatically";
+    private static final String AUTO_CLUSTER="start_waze_cluster_automatically";
+    private static final String OPEN_IN_MOSAIC="open_in_mosaic";
+    private static final String CONFIG_INTENT="nav_open_config_only";
     private final Panel[] panels={new Panel(0),new Panel(1)};
     private TextView status;
     private TextView title;
@@ -69,6 +73,18 @@ public final class NavVirtualMosaicActivity extends Activity {
     private Button wazeTraceButton;
     private Button touchButton;
     private Button wheelButton;
+    private Button settingsButton,quickClusterButton,quickExitButton;
+    private Button autoAppsButton,autoClusterButton,openInMosaicButton,advancedButton;
+    private boolean scheduledAutoApps;
+    private boolean explicitSpotifyStop;
+    private boolean navigatingToConfig;
+    private final Runnable clusterButtonRefresh=new Runnable(){
+        @Override public void run(){
+            if(closed)return;
+            updateQuickCluster();
+            main.postDelayed(this,1800L);
+        }
+    };
     private boolean touchEnabled;
     private boolean wheelAdjustedByMosaic;
     private final float[] touchDownX=new float[2],touchDownY=new float[2];
@@ -116,6 +132,83 @@ public final class NavVirtualMosaicActivity extends Activity {
         }
     }
 
+    private android.content.SharedPreferences mosaicPrefs(){
+        return getSharedPreferences(PREFS,Context.MODE_PRIVATE);
+    }
+    private static int dp(Context c,int value){
+        return Math.round(value*c.getResources().getDisplayMetrics().density);
+    }
+    private Button quickButton(String name,LinearLayout bar,int weight){
+        Button b=new Button(this);
+        b.setAllCaps(false);b.setText(name);b.setTextSize(12f);
+        b.setPadding(0,0,0,0);
+        b.setMinimumHeight(0);b.setMinimumWidth(0);
+        bar.addView(b,new LinearLayout.LayoutParams(
+            0,dp(this,42),weight));
+        return b;
+    }
+    private void updateQuickCluster(){
+        if(quickClusterButton!=null)
+            quickClusterButton.setText(
+                NavOwnClusterProbe.hasActiveWazeTrial()?
+                "CLÚSTER · ON":"CLÚSTER · OFF");
+    }
+    private void toggleCluster(){
+        if(closed||!appsRequested||openingApps||exitInProgress||
+           !panels[0].ready||!panels[1].ready||
+           !MAPS.equals(chosenMap())||
+           NavMosaicSessionRegistry.snapshot(this)==null){
+            android.widget.Toast.makeText(this,
+                "Abrí primero Maps y Spotify en el mosaico NAV",
+                android.widget.Toast.LENGTH_SHORT).show();
+            return;
+        }
+        if(!NavOwnClusterProbe.toggleWazeDirect(this,sessionToken))
+            android.widget.Toast.makeText(this,
+                "Clúster NAV ocupado; no se tocaron otras tareas",
+                android.widget.Toast.LENGTH_SHORT).show();
+        updateQuickCluster();
+    }
+    private void openAdvancedConfig(){
+        navigatingToConfig=true;
+        Intent intent=new Intent(this,BootActivity.class);
+        intent.putExtra(CONFIG_INTENT,true);
+        startActivity(intent);
+    }
+    private void confirmExit(){
+        new AlertDialog.Builder(this)
+            .setTitle("NAV · SALIR")
+            .setMessage("Cerrar las tareas del mosaico no siempre detiene "+
+                "el servicio de música de Spotify. Elegí cómo salir.")
+            .setNegativeButton("VOLVER",null)
+            .setNeutralButton("CERRAR MOSAICO",(d,w)->
+                exitAndCloseTasks())
+            .setPositiveButton("SALIR Y DETENER SPOTIFY",(d,w)->
+                new AlertDialog.Builder(this)
+                    .setTitle("DETENER SPOTIFY COMPLETAMENTE")
+                    .setMessage("Se detendrá com.spotify.music para todo "+
+                        "el sistema, incluida la música en segundo plano "+
+                        "y cualquier otra sesión. Puede requerir abrir "+
+                        "Spotify nuevamente para reproducir. ¿Continuar?")
+                    .setNegativeButton("NO",null)
+                    .setPositiveButton("DETENER Y SALIR",(x,y)->{
+                        explicitSpotifyStop=true;
+                        exitAndCloseTasks();
+                    }).show())
+            .show();
+    }
+    private void updateAutoButtons(){
+        if(autoAppsButton!=null)autoAppsButton.setText(
+            "AUTOABRIR MAPS + SPOTIFY · "+
+            (mosaicPrefs().getBoolean(AUTO_APPS,true)?"ON":"OFF"));
+        if(autoClusterButton!=null)autoClusterButton.setText(
+            "AUTOABRIR WAZE CLÚSTER · "+
+            (mosaicPrefs().getBoolean(AUTO_CLUSTER,false)?"ON":"OFF"));
+        if(openInMosaicButton!=null)openInMosaicButton.setText(
+            "NAV ABRE DIRECTO EN MOSAICO · "+
+            (mosaicPrefs().getBoolean(OPEN_IN_MOSAIC,true)?"ON":"OFF"));
+    }
+
     @Override protected void onCreate(Bundle saved){
         super.onCreate(saved);
         BridgeImmersive.apply(this);
@@ -126,6 +219,22 @@ public final class NavVirtualMosaicActivity extends Activity {
         root.setPadding(14,10,14,10);
         root.setBackgroundColor(0xFF091B2D);
         rootLayout=root;
+        LinearLayout bar=new LinearLayout(this);
+        bar.setOrientation(LinearLayout.HORIZONTAL);
+        bar.setPadding(2,0,2,0);
+        bar.setBackgroundColor(0xFF091B2D);
+        root.addView(bar,new LinearLayout.LayoutParams(
+            ViewGroup.LayoutParams.MATCH_PARENT,dp(this,44)));
+        settingsButton=quickButton("⚙",bar,1f);
+        settingsButton.setTextSize(21f);
+        settingsButton.setContentDescription("Configuración NAV");
+        settingsButton.setOnClickListener(v->setFullMosaic(!fullMosaic));
+        quickClusterButton=quickButton("CLÚSTER · OFF",bar,3f);
+        quickClusterButton.setOnClickListener(v->toggleCluster());
+        quickExitButton=quickButton("⏻",bar,1f);
+        quickExitButton.setTextSize(20f);
+        quickExitButton.setContentDescription("Salir del mosaico NAV");
+        quickExitButton.setOnClickListener(v->confirmExit());
         title=label("DRIVELAB NAV · MOSAICO PROPIO",19,0xFF78D8FF);
         root.addView(title);
         warning=label(
@@ -251,12 +360,10 @@ public final class NavVirtualMosaicActivity extends Activity {
                     boolean swipe=dx*dx+dy*dy>0.0025f;
                     boolean sent=NavMosaicTouchService.forward(
                         this,sessionToken,index,x1,y1,x2,y2,swipe);
-                    show(sent?
-                        "NAV táctil: gesto SOLICITADO sobre "+
-                        (index==0?"Maps/Waze":"Spotify")+
-                        ". Android todavía no confirmó interacción.":
-                        "NAV táctil: rechazado, app no verificable o "+
-                        "display inactivo. Ningún gesto ejecutado.");
+                    // Avoid SharedPreferences writes and TextView layout on
+                    // every successful gesture; these caused UI stutter.
+                    if(!sent)show("NAV táctil: gesto rechazado; "+
+                        "display o app no verificables.");
                     return true;
                 }
                 return type==MotionEvent.ACTION_MOVE||
@@ -389,7 +496,40 @@ public final class NavVirtualMosaicActivity extends Activity {
         exitButton.setAllCaps(false);
         exitButton.setOnClickListener(v->exitAndCloseTasks());
         root.addView(exitButton);
+        autoAppsButton=new Button(this);
+        autoAppsButton.setAllCaps(false);
+        autoAppsButton.setOnClickListener(v->{
+            boolean on=!mosaicPrefs().getBoolean(AUTO_APPS,true);
+            mosaicPrefs().edit().putBoolean(AUTO_APPS,on).apply();
+            updateAutoButtons();
+        });
+        root.addView(autoAppsButton);
+        autoClusterButton=new Button(this);
+        autoClusterButton.setAllCaps(false);
+        autoClusterButton.setOnClickListener(v->{
+            boolean on=!mosaicPrefs().getBoolean(AUTO_CLUSTER,false);
+            mosaicPrefs().edit().putBoolean(AUTO_CLUSTER,on).apply();
+            updateAutoButtons();
+        });
+        root.addView(autoClusterButton);
+        openInMosaicButton=new Button(this);
+        openInMosaicButton.setAllCaps(false);
+        openInMosaicButton.setOnClickListener(v->{
+            boolean on=!mosaicPrefs().getBoolean(OPEN_IN_MOSAIC,true);
+            mosaicPrefs().edit().putBoolean(OPEN_IN_MOSAIC,on).apply();
+            updateAutoButtons();
+        });
+        root.addView(openInMosaicButton);
+        advancedButton=new Button(this);
+        advancedButton.setAllCaps(false);
+        advancedButton.setText("CONFIGURACIÓN AVANZADA DE NAV");
+        advancedButton.setOnClickListener(v->openAdvancedConfig());
+        root.addView(advancedButton);
+        updateAutoButtons();
         setContentView(root);
+        setFullMosaic(true);
+        updateQuickCluster();
+        main.postDelayed(clusterButtonRefresh,1500L);
     }
 
     /** Contain, never stretch or crop, a live virtual display surface. */
@@ -414,6 +554,12 @@ public final class NavVirtualMosaicActivity extends Activity {
         touchButton.setVisibility(visibility);
         wheelButton.setVisibility(visibility);
         exitButton.setVisibility(visibility);
+        wazeTraceButton.setVisibility(visibility);
+        fullButton.setVisibility(visibility);
+        autoAppsButton.setVisibility(visibility);
+        autoClusterButton.setVisibility(visibility);
+        openInMosaicButton.setVisibility(visibility);
+        advancedButton.setVisibility(visibility);
         rootLayout.setPadding(requested?0:14,requested?0:10,
                               requested?0:14,requested?0:10);
         fullButton.setText(requested?
@@ -500,8 +646,14 @@ public final class NavVirtualMosaicActivity extends Activity {
                 "). Aún NO se abrió ninguna app.");
             if(ready==2&&launch!=null){
                 launch.setEnabled(true);
-                show("Mosaico propio preparado: dos superficies independientes. "+
-                    "Abrir apps requiere confirmación manual; Cluster intacto.");
+                show("Mosaico NAV listo: dos displays independientes.");
+                if(!scheduledAutoApps&&mosaicPrefs().getBoolean(AUTO_APPS,true)){
+                    scheduledAutoApps=true;
+                    main.postDelayed(()->{
+                        if(!closed&&!launchAttempted&&!openingApps&&ready==2)
+                            startThirdPartyApps();
+                    },500L);
+                }
             }
         }catch(RuntimeException denied){
             stop("No se pudo preparar mosaico: "+
@@ -605,6 +757,13 @@ public final class NavVirtualMosaicActivity extends Activity {
                     if(clusterWazeButton!=null)
                         clusterWazeButton.setEnabled(
                             MAPS.equals(packages[0]));
+                    if(MAPS.equals(packages[0])&&
+                       mosaicPrefs().getBoolean(AUTO_CLUSTER,false))
+                        main.postDelayed(()->{
+                            if(!closed&&appsRequested&&!exitInProgress&&
+                               !NavOwnClusterProbe.hasActiveWazeTrial())
+                                toggleCluster();
+                        },2100L);
                     show("NAV ADB: Android respondió a DOS solicitudes "+
                         "am start --display en las pantallas VIRTUALES "+
                         "de NAV. Verificá visualmente Maps y Spotify: "+
@@ -832,6 +991,7 @@ public final class NavVirtualMosaicActivity extends Activity {
     }
     @Override protected void onStart(){
         super.onStart();
+        navigatingToConfig=false;
         // Android can preserve the same TextureView/SurfaceTexture across
         // a temporary stop without firing a new onSurfaceTextureAvailable.
         // Reclaim readiness without changing any VirtualDisplay identity.
@@ -856,7 +1016,7 @@ public final class NavVirtualMosaicActivity extends Activity {
         // both central displays and rehomed Apps as floating fullscreen.
         if(NavMosaicLifecyclePolicy.retainOnStop(
                 NavOwnClusterProbe.hasOwnWazeFocusGrace(sessionToken)||
-                    exitInProgress||exitPending||openingApps,
+                    navigatingToConfig||exitInProgress||exitPending||openingApps,
                 closed,isFinishing())){
             stoppedDuringOwnClusterWaze=true;
             main.removeCallbacks(clusterFocusWatchdog);
@@ -868,6 +1028,7 @@ public final class NavVirtualMosaicActivity extends Activity {
         super.onStop();
     }
     @Override protected void onDestroy(){
+        main.removeCallbacks(clusterButtonRefresh);
         main.removeCallbacks(clusterFocusWatchdog);
         stoppedDuringOwnClusterWaze=false;
         stop("Mosaico destruido y superficies liberadas.");
