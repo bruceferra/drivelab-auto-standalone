@@ -71,10 +71,21 @@ final class NavFourSlotAndroidSurfaceDriver
         final int expectedHardwareId;
         Surface ownedSurface;
         SurfaceTexture originalTexture;
+        final boolean ownerProvided;
         long frames;
-        Host(NavFourSlotPolicy.Slot slot,TextureView texture){
+        Host(NavFourSlotPolicy.Slot slot,TextureView texture,
+             Surface fromOwner){
             this.slot=slot;this.texture=texture;
             expectedHardwareId=slot.touch?0:1;
+            ownerProvided=fromOwner!=null;
+            if(fromOwner!=null){
+                if(!fromOwner.isValid()||texture==null||
+                   texture.getSurfaceTexture()==null)
+                    throw new SecurityException(
+                        "El Surface original NAV no es válido");
+                ownedSurface=fromOwner;
+                originalTexture=texture.getSurfaceTexture();
+            }
         }
         boolean ready(){
             Display host=texture==null?null:texture.getDisplay();
@@ -102,7 +113,7 @@ final class NavFourSlotAndroidSurfaceDriver
         }
         void release(){
             if(ownedSurface!=null){
-                ownedSurface.release();
+                if(!ownerProvided)ownedSurface.release();
                 ownedSurface=null;
             }
             originalTexture=null;
@@ -128,8 +139,20 @@ final class NavFourSlotAndroidSurfaceDriver
             Map<String,RegisteredDisplay> displays,
             Ownership ownerProof,Inventory readOnlyInventory,
             GeometryAndInput layoutAndInput){
+        this(context,initial,textureSlots,displays,ownerProof,
+            readOnlyInventory,layoutAndInput,
+            java.util.Collections.emptyMap());
+    }
+    NavFourSlotAndroidSurfaceDriver(
+            Context context,NavFourSlotPolicy.State initial,
+            Map<NavFourSlotPolicy.Slot,TextureView> textureSlots,
+            Map<String,RegisteredDisplay> displays,
+            Ownership ownerProof,Inventory readOnlyInventory,
+            GeometryAndInput layoutAndInput,
+            Map<NavFourSlotPolicy.Slot,Surface> originalSurfaces){
         if(context==null||!LAB.equals(context.getPackageName())||
            initial==null||textureSlots==null||displays==null||
+           originalSurfaces==null||
            ownerProof==null||readOnlyInventory==null||
            layoutAndInput==null)
             throw new SecurityException("NAV driver sin propietario");
@@ -145,7 +168,7 @@ final class NavFourSlotAndroidSurfaceDriver
             TextureView tv=textureSlots.get(slot);
             if(tv==null)throw new SecurityException(
                 "Falta una de las cuatro superficies");
-            Host h=new Host(slot,tv);
+            Host h=new Host(slot,tv,originalSurfaces.get(slot));
             if(!h.ready())throw new SecurityException(
                 "El panel no pertenece a la pantalla NAV esperada: "+slot);
             hosts.put(slot,h);
