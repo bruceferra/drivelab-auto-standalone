@@ -22,7 +22,9 @@ for old,new in (
 screen=mosaic.read_text(encoding="utf8")
 for feature in (
     "new RippleDrawable(", "transparent.setColor(Color.TRANSPARENT)",
-    "bar.setBackgroundColor(Color.TRANSPARENT)",
+    "bar.setBackground(toolbarShape)" if
+        "bar.setBackground(toolbarShape)" in screen else
+        "bar.setBackgroundColor(Color.TRANSPARENT)",
     "frame.setPadding(0,0,0,0)",
     "body.setPadding(0,0,0,0)",
     "quickClusterButton.setLetterSpacing(",
