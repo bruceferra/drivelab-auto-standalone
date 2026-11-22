@@ -31,7 +31,8 @@ assert "NavMosaicGeometry.fromSurface(width,height)" in screen
 assert "normalizedCoverPoint(" in screen
 assert "NavOwnClusterProbe.toggleWazeDirect(" in screen
 assert "clusterRounded.setCornerRadius(19f*density)" in cluster.read_text(encoding="utf8")
-assert "texture.setClipToOutline(true)" in cluster.read_text(encoding="utf8")
+assert ("host.setClipToOutline(true)" in cluster.read_text(encoding="utf8") or
+        "texture.setClipToOutline(true)" in cluster.read_text(encoding="utf8"))
 r=receiver.read_text(encoding="utf8")
 a=activity.read_text(encoding="utf8")
 m=manifest.read_text(encoding="utf8")
