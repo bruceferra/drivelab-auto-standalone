@@ -136,6 +136,45 @@ final class NavWazeRelocationPolicy {
             throw new SecurityException("Pila Waze ajena o inválida");
         return "am display move-stack "+c.stack+" "+own;
     }
+    /**
+     * Only roots on NAV's owned display may be closed, and each root must
+     * contain exactly one Waze task. Foreign or physical Waze aborts cleanup.
+     */
+    static List<Task> ownedWaze(String report,int own,int map,int media){
+        List<Task> targets=new ArrayList<>();
+        for(Stack stack:read(report,own,map,media)){
+            if(stack.display==own){
+                if(stack.tasks.size()>1)
+                    throw new SecurityException("Pila mixta en display NAV");
+                for(Task t:stack.tasks){
+                    if(stack.id<=10||t.id<=10||
+                       !WAZE.matcher(t.component).matches())
+                        throw new SecurityException("Tarea NAV no verificable");
+                    targets.add(t);
+                    if(targets.size()>2)
+                        throw new SecurityException("Más de dos tareas Waze NAV");
+                }
+            }else for(Task t:stack.tasks){
+                if(t.component.startsWith("com.waze/"))
+                    throw new SecurityException("Waze fuera de pantalla NAV");
+            }
+        }
+        return targets;
+    }
+    static boolean sameOwned(List<Task> a,List<Task> b){
+        if(a==null||b==null||a.size()!=b.size())return false;
+        for(int i=0;i<a.size();i++)
+            if(!a.get(i).same(b.get(i)))return false;
+        return true;
+    }
+    static String removeOwned(Task t,int own,int map,int media){
+        if(!NavOwnClusterWazePolicy.ownedIds(own,map,media)||
+           t==null||t.display!=own||t.stack<=10||t.id<=10||
+           t.stack>=10000000||t.id>=10000000||
+           !WAZE.matcher(t.component).matches())
+            throw new SecurityException("Prohibido cerrar stack Waze ajeno");
+        return "am stack remove "+t.stack;
+    }
     static boolean relocated(String report,Candidate wanted,
                              int own,int map,int media){
         if(wanted==null||!NavOwnClusterWazePolicy.ownedIds(own,map,media))
