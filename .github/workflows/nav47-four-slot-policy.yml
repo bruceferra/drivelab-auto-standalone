@@ -28,7 +28,7 @@ jobs:
           mkdir -p /tmp/nav47-policy-classes
           javac -encoding UTF-8 -d /tmp/nav47-policy-classes             "$p/NavFourSlotPolicy.java"             "$p/NavFourSlotPolicyTest.java"
           java -cp /tmp/nav47-policy-classes             ar.com.rango5gps.drivelabauto.boot.NavFourSlotPolicyTest
-          ! grep -Fq 'am display move-stack' "$p/NavFourSlotPolicy.java" || {
-            echo 'Blocked: policy must not request task movement' >&2; exit 1;
+          ! grep -Eq '"am display move-stack|"am force-stop|shellInternal\\(|startActivity\\(' "$p/NavFourSlotPolicy.java" || {
+            echo 'Blocked: source-only policy may not execute tasks/ADB or force-stop' >&2; exit 1;
           }
           echo 'PASS: Java policy only; absolutely no sender, boot, receiver, wheel, APK or OTA mutation' >> "$GITHUB_STEP_SUMMARY"
