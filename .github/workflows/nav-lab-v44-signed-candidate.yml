@@ -61,6 +61,7 @@ jobs:
             'nav-release-v42/apps/nav/bridge-runtime-overlay/NavWazeRoutePolicyTest.java',
             'nav-release-v42/tools/nav-own-cluster-waze-adb-stage.py',
             'nav-release-v42/tools/nav-mosaic-route-stage.py',
+            'nav-release-v42/tools/nav-maps-central-dialog-stage.py',
             'nav-release-v42/tools/nav-virtual-mosaic-stage.py',
             'nav-release-v42/tools/nav-v44-stage.py'}
           changed=set(x.decode() for x in subprocess.check_output(
