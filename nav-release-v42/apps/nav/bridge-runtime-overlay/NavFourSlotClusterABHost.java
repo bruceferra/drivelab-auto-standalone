@@ -82,7 +82,7 @@ final class NavFourSlotClusterABHost {
         if(!physicalRoot.isAttachedToWindow()||
            originalWaze.getParent()!=physicalRoot)
             throw new SecurityException("Clúster NAV original ya no existe");
-        physicalRoot.setBackgroundColor(Color.BLACK);
+        // Preserve LAB50's rounded original Presentation background.
         originalWaze.setLayoutParams(new FrameLayout.LayoutParams(
             physicalWidth/2,physicalHeight,Gravity.LEFT|Gravity.TOP));
         secondContainer.setLayoutParams(new FrameLayout.LayoutParams(
