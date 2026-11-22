@@ -1,0 +1,75 @@
+name: LAB51 — four-slot swap controller source tests (NO APK, NO OTA)
+on:
+  push:
+    branches: [feature/nav51-four-slot-swap-controller-on-lab50-20261122]
+    paths:
+      - 'nav-release-v42/apps/nav/bridge-runtime-overlay/NavFourSlot*.java'
+      - 'nav-release-v42/NAV51_FOUR_SLOT_PROGRESS.md'
+      - '.github/workflows/nav51-four-slot-controller-tests.yml'
+permissions:
+  contents: read
+jobs:
+  four-slot-transaction:
+    if: github.repository == 'bruceferra/drivelab-auto-standalone'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Verify LAB50 base unchanged, strict source-only allowlist
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import subprocess
+          base='a8674eb52d0891d9c0c76054d14a042a52aa45c7'
+          changed=set(subprocess.check_output(
+              ['git','diff','--name-only',base,'HEAD'],
+              text=True).splitlines())
+          prefix='nav-release-v42/apps/nav/bridge-runtime-overlay/'
+          expected={
+              '.github/workflows/nav51-four-slot-controller-tests.yml',
+              'nav-release-v42/NAV51_FOUR_SLOT_PROGRESS.md',
+              prefix+'NavFourSlotPolicy.java',
+              prefix+'NavFourSlotPolicyTest.java',
+              prefix+'NavFourSlotSwapController.java',
+              prefix+'NavFourSlotSwapControllerTest.java',
+          }
+          assert changed==expected, ('UNSAFE LAB50 modification',changed^expected)
+          print('PASS: LAB50 source preserved; no original Android apps or OTA modified')
+          PY
+      - name: Compile two policy tests and test all rollback scenarios
+        shell: bash
+        run: |
+          set -euo pipefail
+          p=nav-release-v42/apps/nav/bridge-runtime-overlay
+          mkdir -p /tmp/nav51
+          javac -encoding UTF-8 -d /tmp/nav51 \
+            "$p/NavFourSlotPolicy.java" \
+            "$p/NavFourSlotPolicyTest.java" \
+            "$p/NavFourSlotSwapController.java" \
+            "$p/NavFourSlotSwapControllerTest.java"
+          java -cp /tmp/nav51 ar.com.rango5gps.drivelabauto.boot.NavFourSlotPolicyTest
+          java -cp /tmp/nav51 ar.com.rango5gps.drivelabauto.boot.NavFourSlotSwapControllerTest
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('nav-release-v42/apps/nav/bridge-runtime-overlay')
+          policy=(p/'NavFourSlotPolicy.java').read_text()
+          controller=(p/'NavFourSlotSwapController.java').read_text()
+          for src in (policy,controller):
+              for denied in ('Runtime.getRuntime()', 'android.content.', 'android.view.',
+                             'shellInternal(', 'startActivity(', 'forceStopPackage('):
+                  assert denied not in src, ('BLOCKED source-only policy escalation',denied)
+          assert 'rollbackVerified' in controller
+          assert 'requiresRecovery' in controller
+          assert 'd.awaitFrame(stream,next.slot)' in controller
+          assert 'if(!verifyAll(current,d))' in controller
+          print('PASS: no task launch, no Binder/OEM commands; double-verified surface swap rollback')
+          PY
+          echo 'PASS: LAB51 source-only switch controller, NOT STAGED in APK or OTA; LAB50 remains active.' >> "$GITHUB_STEP_SUMMARY"
