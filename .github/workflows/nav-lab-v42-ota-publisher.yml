@@ -19,7 +19,7 @@ jobs:
     timeout-minutes: 25
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      SOURCE_RUN: '45050316495'
+      SOURCE_RUN: '45050428917'
       SOURCE_SHA: 'b1204f6b0b91753982b514c2e213ac4e90a3bd56'
       TAG: 'bridge-lab-v42'
       APK: 'DriveLab-Bridge-LAB-v0.1.44-lab.42.apk'
@@ -36,7 +36,7 @@ jobs:
           data=json.load(open('nav-release-v42/APPROVE_OTA_LAB42.json',encoding='utf-8'))
           assert data=={
             'approval':'PUBLICAR_NAV_LAB42_SOLO_JETOUR_POR_OTA',
-            'sourceRunId':45050316495,
+            'sourceRunId':45050428917,
             'sourceCommit':'b1204f6b0b91753982b514c2e213ac4e90a3bd56',
             'tag':'bridge-lab-v42',
             'versionName':'0.1.44-lab.42',
