@@ -113,5 +113,28 @@ addon='''        button("NAV LAB · MOSAICO PROPIO (CENTRAL, SIN T1LAUNCHER)",()
 '''
 if s.count(anchor)!=1 or 'NavVirtualMosaicActivity' in s:
     raise SystemExit("ABORT: staged BootActivity anchor mismatch")
-activity.write_text(s.replace(anchor,addon+anchor,1),encoding="utf-8")
-print("PASS: staged NAV private central mosaic only, new Activity not exported")
+s=s.replace(anchor,addon+anchor,1)
+# Keep BootActivity as the exported launcher so OTA, QR and pairing remain
+# reachable. On ordinary app entry, route to the existing private mosaic
+# Activity; tapping "Configuración avanzada" explicitly bypasses this redirect.
+start_anchor="""        draw();
+    }
+    @Override protected void onResume(){"""
+start_patch="""        draw();
+        boolean settingsRequest=getIntent()!=null&&
+            getIntent().getBooleanExtra("nav_open_config_only",false);
+        boolean mosaicHome=getSharedPreferences(
+            "drivelab_nav_mosaic_lab_v1",MODE_PRIVATE)
+            .getBoolean("open_in_mosaic",true);
+        if(!settingsRequest&&mosaicHome){
+            startActivity(new Intent(this,NavVirtualMosaicActivity.class)
+                .addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP));
+            finish();
+        }
+    }
+    @Override protected void onResume(){"""
+if s.count(start_anchor)!=1:
+    raise SystemExit("ABORT: BootActivity main entry anchor changed")
+s=s.replace(start_anchor,start_patch,1)
+activity.write_text(s,encoding="utf-8")
+print("PASS NAV private mosaic home routing and settings bypass; no HOME override or ignition Activity start")
