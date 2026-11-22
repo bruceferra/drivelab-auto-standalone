@@ -118,6 +118,18 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
             return false;
         }
     }
+    static boolean layoutFourSlots(Activity owner,long token,
+                                   boolean slotAOccupied,
+                                   boolean slotBOccupied){
+        NavOwnClusterProbe p=active;
+        if(p==null||p.owner!=owner||p.session!=token||
+           p.ended||p.fourHost==null||!p.fourHost.isSplit())
+            return false;
+        try{
+            p.fourHost.layoutFor(slotAOccupied,slotBOccupied);
+            return true;
+        }catch(RuntimeException denied){return false;}
+    }
     static boolean restoreSingleFourSlot(Activity owner,long token){
         NavOwnClusterProbe p=active;
         if(p==null||p.owner!=owner||p.session!=token||
