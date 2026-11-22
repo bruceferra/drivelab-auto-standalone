@@ -42,7 +42,7 @@ jobs:
           j=json.loads(p.read_text(encoding='utf8'))
           assert j['sourceRepository']=='bruceferra/drivelab'
           assert j['sourceBranch']=='feat/nav-lab37-own-cluster-waze-20261121'
-          assert j['sourceCommit']=='e68278b9e97483dc2eee9db3be972a15e105a4e0'
+          assert j['sourceCommit']=='de2f76b2bd9b7ebb4a74e0f2868bd6d46cce5165'
           assert j['versionName']=='0.1.39-lab.37' and j['versionCode']==41
           assert len(j['files'])==27
           paths=set()
