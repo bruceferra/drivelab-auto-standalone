@@ -285,15 +285,14 @@ final class NavFourSlotExperimentalManager {
                         try{
                             TextureView host=surfaces.get(slot);
                             if(host!=null&&host.isAvailable()){
-                                // Do not PREEMPTIVELY shrink Waze to
-                                // A/B while a bind may still fail. This
-                                // led to a tiny window stranded on cluster
-                                // after SecurityException/failed rollback.
-                                // Keep B visually hidden until commit and
-                                // let the owned source Surface receive the
-                                // destination's first verified frame.
-                                NavFourSlotClusterABHost.fit(
-                                    host,stream.width,stream.height);
+                                // Preflight must NEVER transform this
+                                // TextureView: it may still be rendering
+                                // the previous occupant (Waze). LAB53
+                                // changed its Matrix to the NEW app before
+                                // the Surface transfer succeeded, creating
+                                // a miniature Waze window after rollback.
+                                // Only the verified completion callback
+                                // may resize or reframe the destination.
                                 success[0]=true;
                             }
                         }catch(RuntimeException ignored){}
@@ -353,6 +352,10 @@ final class NavFourSlotExperimentalManager {
                         // closes and reopens NAV's own session.
                         NavOwnClusterProbe.layoutFourSlots(
                             owner,token,true,false);
+                        // Restore only NAV-owned view transforms, never
+                        // claim Android task/Surface ownership recovered.
+                        mapsTexture.setTransform(new android.graphics.Matrix());
+                        spotifyTexture.setTransform(new android.graphics.Matrix());
                     }
                 },controls);
             active=true;
@@ -385,12 +388,18 @@ final class NavFourSlotExperimentalManager {
                 // app moves in, prepare() makes its texture visible before
                 // awaiting frames; after commit reflect the exact binding.
                 tv.setAlpha(content==null?0f:1f);
-                if(content!=null&&(slot==
-                    NavFourSlotPolicy.Slot.TABLERO_A||
-                    slot==NavFourSlotPolicy.Slot.TABLERO_B)){
+                if(content!=null){
                     final int sourceW=content.width,sourceH=content.height;
-                    tv.post(()->NavFourSlotClusterABHost.fit(
-                        tv,sourceW,sourceH));
+                    // Once the controller verified the task AND new
+                    // frames, apply the right aspect fit to ALL panels.
+                    // Central Waze/Spotify after a swap otherwise keeps
+                    // a stale LAB52 Maps-only transform.
+                    tv.post(()->{
+                        if(!closed)NavFourSlotClusterABHost.fit(
+                            tv,sourceW,sourceH);
+                    });
+                }else{
+                    tv.setTransform(new android.graphics.Matrix());
                 }
             }
         }
