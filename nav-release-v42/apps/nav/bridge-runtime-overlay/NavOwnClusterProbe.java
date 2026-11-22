@@ -51,6 +51,11 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
     private static volatile long lastWazeTrialEndedSession;
     private static volatile long lastWazeTrialEndedAt;
     private static final long TRANSIENT_FOCUS_GRACE_MS=8000L;
+    // Persist task ownership (NOT Android display IDs) across OTA/process
+    // replacement. Android may rehome Waze to physical display 0.
+    private static final String VERIFIED_WAZE_PREFS=
+        "nav_own_verified_waze_task_v1";
+    private static final class LegacyWazeNeedsConsent extends Exception {}
     private final Activity owner;
     private final long session;
     private boolean wazeTrial;
@@ -550,7 +555,8 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
     /** No application start until the two central tasks and this own VD
      * each pass two independent ADB inventory reads.
      */
-    private void launchOwnWaze(){
+    private void launchOwnWaze(){launchOwnWaze(false);}
+    private void launchOwnWaze(boolean approvedLegacy){
         if(ended||!wazeTrial||launchInProgress||closeRequested)return;
         launchInProgress=true;
         final Context app=owner.getApplicationContext();
@@ -558,11 +564,64 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
         final long nonce=session;
         new Thread(()->{
             String error=null;int taskId=-1,stackId=-1;
+            boolean legacyConfirmation=false;
             try{
                 if(!ownsLiveWazeDisplay(app,vid,nonce))
                     throw new SecurityException("La pantalla NAV cambió");
                 NavMosaicSessionRegistry.Session live=
                     NavMosaicSessionRegistry.snapshot(app);
+                android.content.SharedPreferences saved=app
+                    .getSharedPreferences(
+                        VERIFIED_WAZE_PREFS,Context.MODE_PRIVATE);
+                int oldTask=saved.getInt("task_id",-1);
+                long savedAt=saved.getLong("verified_at",0L);
+                long now=System.currentTimeMillis();
+                NavWazeResumptionPolicy.Decision previous1=
+                    NavWazeResumptionPolicy.inspect(
+                        BridgeLocalAdb.shell(app,"am stack list"),
+                        vid,live.displayId,live.mediaDisplayId,
+                        oldTask,savedAt,now,approvedLegacy);
+                NavWazeResumptionPolicy.Decision previous2=
+                    NavWazeResumptionPolicy.inspect(
+                        BridgeLocalAdb.shell(app,"am stack list"),
+                        vid,live.displayId,live.mediaDisplayId,
+                        oldTask,savedAt,now,approvedLegacy);
+                if(!previous1.same(previous2))
+                    throw new SecurityException(
+                        "La tarea Waze anterior cambió durante la lectura");
+                if(previous2.kind==
+                    NavWazeResumptionPolicy.Kind.BLOCKED)
+                    throw new SecurityException(previous2.reason);
+                if(previous2.kind==
+                    NavWazeResumptionPolicy.Kind.CONFIRM_LEGACY)
+                    throw new LegacyWazeNeedsConsent();
+                if(previous2.kind==
+                    NavWazeResumptionPolicy.Kind.RECLAIM){
+                    // Never run the exported Waze launcher if we can
+                    // reattach the SAME isolated verified Waze MainActivity.
+                    // No force-stop, no package-wide cleanup, no OEM display.
+                    NavWazeRelocationPolicy.Candidate previous=
+                        previous2.candidate();
+                    String moved=BridgeLocalAdb.moveNewWazeStackToOwn(
+                        app,previous,vid,nonce);
+                    recordWazeMoveReply(moved);
+                    if(NavMosaicExitPolicy.rejected(moved))
+                        throw new SecurityException(
+                            "Android rechazó recuperar la tarea Waze previa");
+                    for(int check=0;check<2;check++){
+                        if(check>0)Thread.sleep(350L);
+                        if(!NavWazeRelocationPolicy.relocated(
+                            BridgeLocalAdb.shell(app,"am stack list"),
+                            previous,vid,live.displayId,live.mediaDisplayId))
+                            throw new SecurityException(
+                                "Waze anterior no llegó a NAV completo");
+                    }
+                    taskId=previous.task;
+                    stackId=previous.stack;
+                    sampleWaze("REUTILIZADO");
+                }else{
+                // No previous Waze task: retain LAB51's proven fresh
+                // launcher + private-MainActivity relocation flow.
                 NavOwnClusterWazePolicy.State first=
                     NavOwnClusterWazePolicy.inspect(
                         BridgeLocalAdb.shell(app,"am stack list"),
@@ -658,6 +717,7 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
                     taskId=after2.task;
                     stackId=after2.stack;
                 }
+                } // End of LAB51 fresh-Waze launch fallback.
                 NavMosaicExitPolicy.Snapshot c1=NavMosaicExitPolicy.parse(
                     BridgeLocalAdb.shell(app,"am stack list"),
                     live.displayId,live.mapPackage,live.mediaDisplayId);
@@ -667,15 +727,34 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
                 if(!c1.same(c2)||!preflightTasks.same(c2))
                     throw new SecurityException(
                         "ALERTA: Maps o Spotify cambió al lanzar Waze");
+            }catch(LegacyWazeNeedsConsent pending){
+                legacyConfirmation=true;
             }catch(Exception failed){
                 error=failed.getClass().getSimpleName()+": "+
                     String.valueOf(failed.getMessage());
             }
             final String failure=error;
+            final boolean needsLegacyConfirmation=legacyConfirmation;
             final int launchedId=taskId,launchedStack=stackId;
             owner.runOnUiThread(()->{
                 launchInProgress=false;
                 if(ended)return;
+                if(needsLegacyConfirmation){
+                    new AlertDialog.Builder(owner)
+                        .setTitle("CLÚSTER · WAZE ANTERIOR DETECTADO")
+                        .setMessage("Hay una única tarea Waze de antes "+
+                            "de la actualización en la pantalla central. "+
+                            "¿Querés REUTILIZARLA en el clúster, "+
+                            "sin cerrarla ni perder su ruta? "+
+                            "Sólo se moverá su tarea aislada.")
+                        .setNegativeButton("CANCELAR",(dialog,which)->
+                            close("Se conservó Waze anterior sin moverlo"))
+                        .setPositiveButton("REUTILIZAR WAZE",
+                            (dialog,which)->launchOwnWaze(true))
+                        .setCancelable(false)
+                        .show();
+                    return;
+                }
                 if(failure!=null){
                     launchProblem=failure;
                     finishTrial("Waze NAV no confirmado");
@@ -684,6 +763,13 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
                 }else{
                     verifiedWazeTaskId=launchedId;
                     verifiedWazeStackId=launchedStack;
+                    // Future NAV OTAs can recover this EXACT Waze task,
+                    // even if Android kills the NAV process and rehomes it.
+                    app.getSharedPreferences(
+                        VERIFIED_WAZE_PREFS,Context.MODE_PRIVATE)
+                        .edit().putInt("task_id",launchedId)
+                        .putLong("verified_at",System.currentTimeMillis())
+                        .apply();
                     Toast.makeText(owner,
                         "Waze tarea "+launchedId+" en pantalla NAV "+vid+
                         ". Verificá visualmente el clúster.",
@@ -779,6 +865,16 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
             final String failure=problem;
             owner.runOnUiThread(()->{
                 if(ended)return;
+                // Clear only the identity we actually removed and
+                // verified absent. If Android rehomed Waze, retain it
+                // so Cluster ON can reclaim it on the next session.
+                if(failure==null&&verifiedWazeTaskId>10){
+                    android.content.SharedPreferences proof=app
+                        .getSharedPreferences(
+                            VERIFIED_WAZE_PREFS,Context.MODE_PRIVATE);
+                    if(proof.getInt("task_id",-1)==verifiedWazeTaskId)
+                        proof.edit().clear().apply();
+                }
                 close(reason);
                 if(!owner.isFinishing()&&!owner.isDestroyed()&&
                    (failure!=null||launchProblem!=null)){
