@@ -86,6 +86,10 @@ final class NavFourSlotLiveRouting {
         return record!=null&&record.state.session==token&&
             supported(app,record)&&current==record?record:null;
     }
+    static boolean armed(long token){
+        Snapshot found=current;
+        return found!=null&&found.state.session==token;
+    }
     static TouchTarget central(Context app,long token,int panel){
         if(panel<0||panel>1)return null;
         Snapshot record=snapshot(app,token);
