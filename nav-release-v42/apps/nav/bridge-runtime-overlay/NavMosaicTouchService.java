@@ -4,6 +4,9 @@ import android.accessibilityservice.AccessibilityService;
 import android.accessibilityservice.GestureDescription;
 import android.content.Context;
 import android.graphics.Path;
+import android.graphics.Point;
+import android.hardware.display.DisplayManager;
+import android.view.Display;
 import android.graphics.Rect;
 import android.os.Handler;
 import android.os.Looper;
@@ -98,8 +101,26 @@ public final class NavMosaicTouchService extends AccessibilityService {
         String pkg=panel==0?live.mapPackage:SPOTIFY;
         if(display<2||display>99||!current.topApplicationIs(display,pkg))
             return false;
-        int width=panel==0?1280:480;
-        int height=panel==0?720:800;
+        // Display geometry belongs to the currently verified NAV VD.
+        // LAB47's fixed 1280/480 pixel mapping was wrong after zooming
+        // panel surfaces; Android got taps shifted away from real icons.
+        DisplayManager dm=(DisplayManager)
+            context.getSystemService(Context.DISPLAY_SERVICE);
+        if(dm==null)return false;
+        Display owned=dm.getDisplay(display);
+        if(owned==null||owned.getDisplayId()!=display)return false;
+        String expectedName=panel==0?"DriveLabNAVMapa":"DriveLabNAVSpotify";
+        if(!expectedName.equals(owned.getName()))return false;
+        Point dimensions=new Point();
+        owned.getRealSize(dimensions);
+        final NavMosaicGeometry.Size actual;
+        try{
+            actual=NavMosaicGeometry.fromSurface(
+                dimensions.x,dimensions.y);
+        }catch(SecurityException invalid){
+            return false;
+        }
+        int width=actual.w,height=actual.h;
         float x1=bound(fromX*width,width),y1=bound(fromY*height,height);
         float x2=bound(toX*width,width),y2=bound(toY*height,height);
         Path path=new Path();
