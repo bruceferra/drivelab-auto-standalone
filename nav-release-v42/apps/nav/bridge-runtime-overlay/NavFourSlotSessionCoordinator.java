@@ -141,6 +141,7 @@ final class NavFourSlotSessionCoordinator
         // Fail-closed: NO touch or further swap until owner session reset.
         // No force-stop/ADB cleanup and no ability to affect OEM displays.
     }
+    boolean isSwapRunning(){return busy;}
     /** Only call when the owning NAV Activity has ended its session. */
     void closeAfterOwnerRelease(){
         if(Looper.myLooper()!=Looper.getMainLooper())
