@@ -1,0 +1,10 @@
+{
+  "approval": "PUBLICAR_NAV_LAB42_SOLO_JETOUR_POR_OTA",
+  "sourceRunId": 45050428917,
+  "sourceSha": "b1204f6b0b91753982b514c2e213ac4e90a3bd56",
+  "tagProvenanceCommit": "026d74d303bc170083f6d38a578051bc945cef7d",
+  "previousTag": "bridge-lab-v41",
+  "targetTag": "bridge-lab-v42",
+  "delivery": "OTA_ONLY",
+  "modifiesWorkflowsInTaggedCommit": false
+}
