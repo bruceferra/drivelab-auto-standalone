@@ -187,7 +187,11 @@ final class NavFourSlotAndroidSurfaceDriver
             if(name!=null)bound.put(name,slot);
         }
     }
-    private boolean checkDisplay(RegisteredDisplay r){
+    private boolean checkIdentity(RegisteredDisplay r){
+        // VirtualDisplay.setSurface(null) temporarily suspends video
+        // output and may report Display.STATE_OFF. That does NOT mean
+        // the exact owner display was released; rejecting a detached
+        // VD prevents the second half of a swap AND its rollback.
         DisplayManager dm=(DisplayManager)
             app.getSystemService(Context.DISPLAY_SERVICE);
         Display d=r.virtual.getDisplay();
@@ -197,8 +201,12 @@ final class NavFourSlotAndroidSurfaceDriver
             live.getDisplayId()==d.getDisplayId()&&
             r.expectedName.equals(d.getName())&&
             r.expectedName.equals(live.getName())&&
-            d.getState()!=Display.STATE_OFF&&
             (d.getFlags()&Display.FLAG_PRIVATE)==0;
+    }
+    private boolean checkDisplay(RegisteredDisplay r){
+        if(!checkIdentity(r))return false;
+        Display d=r.virtual.getDisplay();
+        return d!=null&&d.getState()!=Display.STATE_OFF;
     }
     private void requireWorker(){
         if(Looper.myLooper()==Looper.getMainLooper())
@@ -239,7 +247,7 @@ final class NavFourSlotAndroidSurfaceDriver
             throw new SecurityException("Destino NAV fuera de sesión");
         RegisteredDisplay selected=running.get(stream.id);
         if(selected==null||selected.stream!=stream||
-           !checkDisplay(selected)||!proof.ownsDisplay(stream))
+           !checkIdentity(selected)||!proof.ownsDisplay(stream))
             throw new SecurityException("Flujo NAV no reconocido");
         Host destination=hosts.get(target);
         // Geometry/touch callback must update its per-slot VID and fit.
@@ -258,7 +266,7 @@ final class NavFourSlotAndroidSurfaceDriver
                 }
             if(other!=null){
                 RegisteredDisplay occupant=running.get(other);
-                if(occupant==null||!checkDisplay(occupant))
+                if(occupant==null||!checkIdentity(occupant))
                     throw new SecurityException("Ocupante no pertenece a NAV");
                 // No force-stop, no task relaunch.
                 occupant.virtual.setSurface(null);
@@ -280,7 +288,7 @@ final class NavFourSlotAndroidSurfaceDriver
             NavFourSlotPolicy.Slot target)throws Exception{
         requireWorker();
         if(stream==null||target==null||!current())return false;
-        final long deadline=SystemClock.elapsedRealtime()+1800L;
+        final long deadline=SystemClock.elapsedRealtime()+5000L;
         synchronized(monitor){
             while(SystemClock.elapsedRealtime()<deadline){
                 if(!ownsSlot(target,session)||
