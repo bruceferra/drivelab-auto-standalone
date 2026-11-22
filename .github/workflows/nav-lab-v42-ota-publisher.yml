@@ -2,7 +2,7 @@ name: Publish DriveLab NAV LAB 42 OTA — owner-approved Jetour only
 on:
   push:
     branches: [release/nav-lab-v42-direct-waze-main-ota-20261122]
-    paths: ['nav-release-v42/APPROVE_OTA_LAB42.json']
+    paths: ['nav-release-v42/APPROVE_OTA_LAB42.json', 'nav-release-v42/PUBLISH_RETRY_TAG_FIRST.json']
 
 permissions:
   contents: write
@@ -122,6 +122,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Split the tag and release steps to isolate GitHub's 403 during
+          # implicit tag creation. Match ONLY the pinned signed SHA.
+          if ! gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" >/dev/null 2>&1; then
+            gh api -X POST "repos/$GITHUB_REPOSITORY/git/refs" \
+              -f ref="refs/tags/$TAG" -f sha="$SOURCE_SHA" >/dev/null
+          fi
+          actual_tag_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/tags/$TAG" --jq .object.sha)
+          test "$actual_tag_sha" = "$SOURCE_SHA" || {
+            echo 'BLOCKED: tag does not point to the original-signed candidate';exit 31;
+          }
           gh release create "$TAG" "dist/nav42/$APK" dist/nav42/bridge-lab.json \
             --target "$SOURCE_SHA" --prerelease \
             --title 'DriveLab NAV LAB 42 · MainActivity Waze directamente en display propio, sin splash' \
