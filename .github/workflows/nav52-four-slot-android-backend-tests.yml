@@ -36,7 +36,8 @@ jobs:
             'NavFourSlotPolicy.java','NavFourSlotPolicyTest.java',
             'NavFourSlotSwapController.java','NavFourSlotSwapControllerTest.java',
             'NavFourSlotTaskInventory.java','NavFourSlotTaskInventoryTest.java',
-            'NavFourSlotAndroidSurfaceDriver.java')}
+            'NavFourSlotAndroidSurfaceDriver.java',
+            'NavFourSlotControls.java','NavFourSlotClusterABHost.java')}
           files.add('.github/workflows/nav52-four-slot-android-backend-tests.yml')
           assert changed==files,('BLOCKED unrelated LAB51 change',changed^files)
           from pathlib import Path
@@ -51,6 +52,17 @@ jobs:
           assert 'selected.virtual.setSurface(surface)' in driver
           assert 'if(!geometry.prepare(stream,target))' in driver
           assert 'NavFourSlotTaskInventory.exact(' in driver
+          cluster=Path(base+'NavFourSlotClusterABHost.java').read_text()
+          ui=Path(base+'NavFourSlotControls.java').read_text()
+          assert 'waze.getParent()!=root' in cluster
+          assert 'secondContainer.setVisibility(View.GONE)' in cluster
+          assert 'secondContainer.setVisibility(View.VISIBLE)' in cluster
+          assert 'void restoreFull(boolean bUnbound)' in cluster
+          assert 'originalWaze.setLayoutParams' in cluster
+          assert 'setBackground(' not in cluster.split('second=new TextureView')[1].split('secondContainer.addView')[0]
+          assert 'TABLERO  A⇄B' in ui
+          assert 'requestVerified(from,options[index],snapshot)' in ui
+          assert 'send.request(from,to,original.session,original.revision)' in ui
           print('PASS unchanged LAB51 source, strict Android display ownership and no OEM/ADB mutations')
           PY
       - name: Android platform API for compile-only surface driver
@@ -72,6 +84,9 @@ jobs:
             "$p/NavFourSlotSwapController.java" \
             "$p/NavFourSlotTaskInventory.java" \
             "$p/NavFourSlotAndroidSurfaceDriver.java" \
+            "$p/NavFourSlotControls.java" \
+            "$p/NavFourSlotClusterABHost.java" \
+            "$p/NavMosaicGeometry.java" \
             "$p/NavFourSlotPolicyTest.java" \
             "$p/NavFourSlotSwapControllerTest.java" \
             "$p/NavFourSlotTaskInventoryTest.java"
