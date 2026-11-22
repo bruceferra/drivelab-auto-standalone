@@ -1,0 +1,14 @@
+{
+  "kind": "drivelab-nav-ota-provenance",
+  "approvedScope": "DriveLab NAV LAB45 OTA only; no Sender/Receiver/OEM/T1Launcher changes",
+  "sourceRunId": 45060683025,
+  "sourceCommit": "04b4054c58c5698e9157243d938d428e21a8c7d0",
+  "sourceBranch": "fix/nav-lab45-compact-autostart-spotify-explicit-stop-20261122",
+  "applicationId": "ar.com.rango5gps.drivelabauto.boot.lab",
+  "versionName": "0.1.47-lab.45",
+  "versionCode": 49,
+  "releaseTag": "bridge-lab-v45",
+  "previousOtaVersion": "0.1.46-lab.44",
+  "previousOtaSha256": "f291f2dcb889405421daa605c2cd48f8df1ab7457c7a46e593dc4c60f67e5393",
+  "note": "Full-height opt-in Waze NAV cluster with one-tap off, auto-opening central mosaic and explicit Spotify app-wide stop only after owner confirmation; no ignition UI background launch; vehicle behavior not yet field-tested; previous LAB44 retained."
+}
