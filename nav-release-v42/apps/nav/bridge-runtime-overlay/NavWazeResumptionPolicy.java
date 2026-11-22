@@ -62,7 +62,7 @@ final class NavWazeResumptionPolicy {
         if(savedTask>0&&savedTask<=10)
             return bad("Tarea previa inválida");
         if(now<0||savedAt<0)return bad("Reloj de sesión inválido");
-        int display=-1,root=-1,inRoot=0,rootCount=0;
+        int display=-1,root=-1,inRoot=0,rootCount=0,headers=0;
         int wazeCount=0,taskId=-1,taskRoot=-1,taskDisplay=-1;
         String component="";
         Set<Integer> ids=new HashSet<>();
@@ -75,7 +75,7 @@ final class NavWazeResumptionPolicy {
                 display=Integer.parseInt(header.group(2));
                 if(root<=0||display>999)
                     return bad("Root de Android inválido");
-                inRoot=0;continue;
+                headers++;inRoot=0;continue;
             }
             if((line.contains("Stack id=")||
                 line.contains("RootTask id="))&&
@@ -102,7 +102,7 @@ final class NavWazeResumptionPolicy {
             taskId=taskNumber;taskRoot=root;taskDisplay=display;
             component=activity;
         }
-        if(rootCount==0)return bad("Sin respuesta Android");
+        if(headers==0)return bad("Sin stacks Android");
         if(wazeCount==0)
             return new Decision(Kind.EMPTY,-1,-1,-1,"",
                 "No hay Waze previo; iniciar como siempre");
