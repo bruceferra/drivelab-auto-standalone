@@ -509,12 +509,14 @@ public final class NavVirtualMosaicActivity extends Activity {
         root.addView(wazeTraceButton);
         touchButton=new Button(this);
         touchButton.setAllCaps(false);
-        touchButton.setText("TACTO MOSAICO · APAGADO (OPCIONAL)");
+        updateTouchLabel();
         touchButton.setOnClickListener(v->{
             if(touchEnabled){
+                mosaicPrefs().edit().putBoolean(AUTO_TOUCH,false).apply();
                 touchEnabled=false;
-                touchButton.setText("TACTO MOSAICO · APAGADO (OPCIONAL)");
-                show("Control táctil virtual desactivado por usuario.");
+                main.removeCallbacks(touchAutoRetry);
+                updateTouchLabel();
+                show("Tacto NAV desactivado. Podés reactivarlo desde ajustes.");
                 return;
             }
             if(!NavMosaicTouchService.connected()){
@@ -526,14 +528,14 @@ public final class NavVirtualMosaicActivity extends Activity {
                     if(closed||isFinishing())return;
                     if(connected&&appsRequested&&
                        NavMosaicSessionRegistry.snapshot(this)!=null){
+                        mosaicPrefs().edit().putBoolean(AUTO_TOUCH,true).apply();
                         touchEnabled=true;
-                        touchButton.setText("TACTO MOSAICO · ACTIVADO");
+                        updateTouchLabel();
                         show(report+". Tacto NAV habilitado en esta sesión. "+
                             "Probá un toque en Maps; volante/OEM intactos.");
                     }else{
                         touchEnabled=false;
-                        touchButton.setText(
-                            "TACTO MOSAICO · APAGADO (OPCIONAL)");
+                        updateTouchLabel();
                         show(report+
                             ". No se afirmó control táctil sin servicio conectado.");
                     }
@@ -549,8 +551,9 @@ public final class NavVirtualMosaicActivity extends Activity {
                     "Se desactiva al salir. ¿Activar?")
                 .setNegativeButton("NO",null)
                 .setPositiveButton("ACTIVAR",(d,w)->{
+                    mosaicPrefs().edit().putBoolean(AUTO_TOUCH,true).apply();
                     touchEnabled=true;
-                    touchButton.setText("TACTO MOSAICO · ACTIVADO");
+                    updateTouchLabel();
                     show("Toques permitidos sólo en pantallas NAV verificadas.");
                 })
                 .show();
@@ -598,6 +601,23 @@ public final class NavVirtualMosaicActivity extends Activity {
             updateAutoButtons();
         });
         root.addView(openInMosaicButton);
+        fillModeButton=new Button(this);
+        fillModeButton.setAllCaps(false);
+        fillModeButton.setOnClickListener(v->{
+            boolean crop=!mosaicPrefs().getBoolean(COVER_PANELS,true);
+            mosaicPrefs().edit().putBoolean(COVER_PANELS,crop).apply();
+            fillModeButton.setText(crop?
+                "PANELES: LLENAR SIN DEFORMAR":"PANELES: AJUSTAR SIN RECORTAR");
+            for(int i=0;i<2;i++){
+                TextureView tv=panels[i].texture;
+                if(tv!=null&&tv.getWidth()>10&&tv.getHeight()>10)
+                    applyPanelCrop(tv,i==0?1280:480,i==0?720:800,
+                        tv.getWidth(),tv.getHeight());
+            }
+        });
+        fillModeButton.setText(mosaicPrefs().getBoolean(COVER_PANELS,true)?
+            "PANELES: LLENAR SIN DEFORMAR":"PANELES: AJUSTAR SIN RECORTAR");
+        root.addView(fillModeButton);
         advancedButton=new Button(this);
         advancedButton.setAllCaps(false);
         advancedButton.setText("CONFIGURACIÓN AVANZADA DE NAV");
@@ -638,6 +658,7 @@ public final class NavVirtualMosaicActivity extends Activity {
         autoClusterButton.setVisibility(visibility);
         openInMosaicButton.setVisibility(visibility);
         advancedButton.setVisibility(visibility);
+        fillModeButton.setVisibility(visibility);
         rootLayout.setPadding(requested?0:14,requested?0:10,
                               requested?0:14,requested?0:10);
         fullButton.setText(requested?
@@ -1083,6 +1104,7 @@ public final class NavVirtualMosaicActivity extends Activity {
     @Override protected void onStart(){
         super.onStart();
         navigatingToConfig=false;
+        if(appsRequested)tryEnableSavedTouch();
         // Android can preserve the same TextureView/SurfaceTexture across
         // a temporary stop without firing a new onSurfaceTextureAvailable.
         // Reclaim readiness without changing any VirtualDisplay identity.
