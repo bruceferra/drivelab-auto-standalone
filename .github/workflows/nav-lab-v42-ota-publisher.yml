@@ -20,7 +20,7 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       SOURCE_RUN: '45050316495'
-      SOURCE_SHA: '0ac5daf87c6071e43b870eccc9fc0691668422fb'
+      SOURCE_SHA: 'b1204f6b0b91753982b514c2e213ac4e90a3bd56'
       TAG: 'bridge-lab-v42'
       APK: 'DriveLab-Bridge-LAB-v0.1.44-lab.42.apk'
     steps:
@@ -37,7 +37,7 @@ jobs:
           assert data=={
             'approval':'PUBLICAR_NAV_LAB42_SOLO_JETOUR_POR_OTA',
             'sourceRunId':45050316495,
-            'sourceCommit':'0ac5daf87c6071e43b870eccc9fc0691668422fb',
+            'sourceCommit':'b1204f6b0b91753982b514c2e213ac4e90a3bd56',
             'tag':'bridge-lab-v42',
             'versionName':'0.1.44-lab.42',
             'versionCode':46,
