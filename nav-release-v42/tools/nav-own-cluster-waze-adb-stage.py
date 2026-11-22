@@ -40,6 +40,33 @@ addon=r"""    /**
             id,live.displayId,live.mediaDisplayId,component);
         return shellInternal(context,command,false,false,true);
     }
+    /**
+     * Move only a newly produced, Waze-only physical MainActivity root,
+     * never a task that existed before NAV's launch.
+     */
+    static String moveNewWazeStackToOwn(Context context,
+            NavWazeRelocationPolicy.Candidate candidate,
+            int id,long token)throws Exception{
+        NavMosaicSessionRegistry.Session live=
+            NavMosaicSessionRegistry.snapshot(context);
+        if(live==null||live.token!=token||
+           !NavOwnClusterProbe.ownsLiveWazeDisplay(context,id,token))
+            throw new SecurityException("NAV no es dueño de este display");
+        NavWazeRelocationPolicy.Candidate first=
+            NavWazeRelocationPolicy.physicalMain(
+                shell(context,"am stack list"),
+                id,live.displayId,live.mediaDisplayId);
+        NavWazeRelocationPolicy.Candidate second=
+            NavWazeRelocationPolicy.physicalMain(
+                shell(context,"am stack list"),
+                id,live.displayId,live.mediaDisplayId);
+        if(candidate==null||!candidate.same(first)||
+           !first.same(second))
+            throw new SecurityException("Waze físico cambió: movimiento cancelado");
+        String command=NavWazeRelocationPolicy.moveCommand(
+            candidate,id,live.displayId,live.mediaDisplayId);
+        return shellInternal(context,command,false,false,true);
+    }
     private static boolean exactNavClusterWazeLaunch(
             Context context,String command,boolean authorized){
         if(!authorized||
@@ -47,13 +74,31 @@ addon=r"""    /**
                context.getPackageName()))return false;
         java.util.regex.Matcher m=java.util.regex.Pattern.compile(
             "am start --display ([2-9]|[1-9][0-9]) "+
-            "-n com\\.waze/com\\.waze\\.MainActivity").matcher(command);
+            "-a android\\.intent\\.action\\.MAIN "+
+            "-c android\\.intent\\.category\\.LAUNCHER "+
+            "--activity-single-top -n com\\.waze/"+
+            "(\\.?[A-Za-z_][A-Za-z0-9_.$]{0,200})").matcher(command);
         if(!m.matches())return false;
         int ownId=Integer.parseInt(m.group(1));
         NavMosaicSessionRegistry.Session live=
             NavMosaicSessionRegistry.snapshot(context);
         return live!=null&&NavOwnClusterProbe.ownsLiveWazeDisplay(
             context,ownId,live.token);
+    }
+    private static boolean exactNavClusterWazeMove(
+            Context context,String command,boolean authorized){
+        if(!authorized||
+           !"ar.com.rango5gps.drivelabauto.boot.lab".equals(
+               context.getPackageName()))return false;
+        java.util.regex.Matcher match=java.util.regex.Pattern.compile(
+            "am display move-stack ([1-9][0-9]{1,6}) "+
+            "([2-9]|[1-9][0-9])").matcher(command);
+        if(!match.matches())return false;
+        int id=Integer.parseInt(match.group(2));
+        NavMosaicSessionRegistry.Session live=
+            NavMosaicSessionRegistry.snapshot(context);
+        return live!=null&&NavOwnClusterProbe.ownsLiveWazeDisplay(
+            context,id,live.token);
     }
 """
 assert s.count(anchor)==1 and "startOwnClusterWaze(" not in s
@@ -65,9 +110,11 @@ new="""        boolean exactNavMosaicLaunch=exactOwnedVirtualLaunch(
             context,command,verifiedT1);
         boolean exactNavClusterWaze=exactNavClusterWazeLaunch(
             context,command,verifiedNavOwnCluster);
+        boolean exactNavClusterMove=exactNavClusterWazeMove(
+            context,command,verifiedNavOwnCluster);
         if(!(exactWazeMove||exactT1MapDelivery||exactNavMosaicLaunch||
-             exactNavClusterWaze||"""
+             exactNavClusterWaze||exactNavClusterMove||"""
 assert s.count(old)==1,"unexpected NAV ADB whitelist layout"
 s=s.replace(old,new,1)
 adb.write_text(s,encoding="utf8")
-print("PASS own-only NAV Cluster Waze ADB whitelist; no generic shell or task move")
+print("PASS own-only NAV Cluster Waze ADB whitelist; no generic shell; only double-verified Waze own-display stack move")
