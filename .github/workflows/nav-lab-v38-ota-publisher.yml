@@ -1,0 +1,154 @@
+name: Publish DriveLab NAV LAB 38 OTA — owner-approved Jetour only
+on:
+  push:
+    branches: [release/nav-lab-v38-central-maps-route-ota-20261121]
+    paths: ['nav-release-v38/APPROVE_OTA_LAB38.json']
+
+permissions:
+  contents: write
+  actions: read
+
+concurrency:
+  group: drivelab-nav-lab-v38-ota-release
+  cancel-in-progress: false
+
+jobs:
+  publish-nav:
+    if: github.repository == 'bruceferra/drivelab-auto-standalone' && github.ref == 'refs/heads/release/nav-lab-v38-central-maps-route-ota-20261121'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      SOURCE_RUN: '44975548057'
+      SOURCE_SHA: '1298215d715806ab59de2d457a490d3282511596'
+      TAG: 'bridge-lab-v38'
+      APK: 'DriveLab-Bridge-LAB-v0.1.40-lab.38.apk'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Require owner approval, signed build success and exact source commit
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          data=json.load(open('nav-release-v38/APPROVE_OTA_LAB38.json',encoding='utf-8'))
+          assert data=={
+            'approval':'PUBLICAR_NAV_LAB38_SOLO_JETOUR_POR_OTA',
+            'sourceRunId':44975548057,
+            'sourceCommit':'1298215d715806ab59de2d457a490d3282511596',
+            'tag':'bridge-lab-v38',
+            'versionName':'0.1.40-lab.38',
+            'versionCode':42,
+            'senderUnchanged':True,
+            'publishLabChannel':True
+          }, 'BLOCKED: expected exact owner-specified NAV LAB38 only'
+          PY
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" --jq .conclusion)" = success || {
+            echo 'BLOCKED: signed candidate CI not successful';exit 21;
+          }
+          test "$(gh api "repos/$GITHUB_REPOSITORY/actions/runs/$SOURCE_RUN" --jq .head_sha)" = "$SOURCE_SHA" || {
+            echo 'BLOCKED: signed candidate head SHA mismatch';exit 22;
+          }
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.97 || {
+            echo 'BLOCKED: stable release pointer changed';exit 23;
+          }
+          ! gh release view "$TAG" >/dev/null 2>&1 || {
+            echo 'BLOCKED: LAB38 release already exists';exit 24;
+          }
+      - name: Retrieve signed candidate, verify exact legacy OTA filename/hash/size and original certificate
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p dist/nav38 original
+          gh run download "$SOURCE_RUN" --name DriveLab-NAV-LAB38-SIGNED-CANDIDATE-NO-OTA --dir dist/nav38
+          (cd dist/nav38; sha256sum -c SHA256SUMS)
+          python3 - <<'PY'
+          import hashlib,json,pathlib,re
+          d=pathlib.Path('dist/nav38')
+          apk=d/'DriveLab-Bridge-LAB-v0.1.40-lab.38.apk'
+          m=json.loads((d/'bridge-lab.json').read_text(encoding='utf8'))
+          assert apk.is_file() and apk.stat().st_size>1024
+          expected={
+            'channel':'bridge-lab',
+            'packageName':'ar.com.rango5gps.drivelabauto.boot.lab',
+            'versionName':'0.1.40-lab.38',
+            'versionCode':42,
+            'tag':'bridge-lab-v38',
+            'size':apk.stat().st_size,
+            'sha256':hashlib.sha256(apk.read_bytes()).hexdigest(),
+            'apkUrl':'https://github.com/bruceferra/drivelab-auto-standalone/releases/download/bridge-lab-v38/'+apk.name
+          }
+          assert m==expected,'BLOCKED: invalid metadata or unexpected apk name'
+          assert apk.name=='DriveLab-Bridge-LAB-v'+m['versionName']+'.apk','BLOCKED: legacy updater APK naming regression'
+          assert re.fullmatch(r'0\.(?:1|2)\.[0-9]+-lab\.[0-9]+',m['versionName'])
+          PY
+          sdk=$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)
+          "$sdk" 'platforms;android-35' 'build-tools;35.0.0' >/dev/null
+          signer="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          apk="dist/nav38/$APK"
+          "$aapt" dump badging "$apk" | grep -F "package: name='ar.com.rango5gps.drivelabauto.boot.lab' versionCode='42' versionName='0.1.40-lab.38'"
+          "$aapt" dump badging "$apk" | grep -F "application-label:'DriveLab NAV'"
+          "$signer" verify --print-certs "$apk" >/dev/null
+          gh release download bridge-lab-v27 --pattern DriveLab-Bridge-LAB-v0.1.29-lab.27.apk --dir original
+          printf '%s  %s\n' '7e051f6efa3089bbd06e632ca91229352b0d70fd8b3048d9ec99876a163fe3bc' 'original/DriveLab-Bridge-LAB-v0.1.29-lab.27.apk' | sha256sum -c -
+          cert(){ "$signer" verify --print-certs "$1" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF;exit}'; }
+          test -n "$(cert "$apk")"
+          test "$(cert "$apk")" = "$(cert original/DriveLab-Bridge-LAB-v0.1.29-lab.27.apk)" || {
+            echo 'BLOCKED: Android package certificate differs from installed NAV LAB27';exit 25;
+          }
+          gh api "repos/$GITHUB_REPOSITORY/contents/bridge-lab.json?ref=bridge-lab-ota" > old-pointer-response.json
+          jq -r .content old-pointer-response.json | base64 -d > old-pointer.json
+          python3 - <<'PY'
+          import json
+          before=json.load(open('old-pointer.json'))
+          assert before=={
+            'channel':'bridge-lab',
+            'packageName':'ar.com.rango5gps.drivelabauto.boot.lab',
+            'versionName':'0.1.39-lab.37',
+            'versionCode':41,
+            'tag':'bridge-lab-v37',
+            'size':5059537,
+            'sha256':'e29cc7c5415e6830d9bc64baa3a7a88a1bc2c84bfbc4ca16f7977159fc041e5a',
+            'apkUrl':'https://github.com/bruceferra/drivelab-auto-standalone/releases/download/bridge-lab-v37/DriveLab-Bridge-LAB-v0.1.39-lab.37.apk'
+          }, 'BLOCKED: previous OTA pointer changed'
+          PY
+          gh release download v0.3.97 --pattern sender.json --dir original
+          gh release download v0.3.97 --pattern receiver.json --dir original
+          echo 'PASS original Android signer + LAB37 pointer + legacy BootUpdater LAB38 APK filename, Sender untouched' >> "$GITHUB_STEP_SUMMARY"
+      - name: Publish ONLY signed Jetour NAV LAB38 prerelease, verify downloaded file
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release create "$TAG" "dist/nav38/$APK" dist/nav38/bridge-lab.json \
+            --target "$SOURCE_SHA" --prerelease \
+            --title 'DriveLab NAV LAB 38 · Reemplazar ruta activa de Google Maps central por Sender' \
+            --notes 'LAB38: Soluciona el aviso ¿Quieres salir de la navegación? que aparece cuando Sender comparte un destino nuevo con Google Maps del mosaico central. La entrega al TASK EXISTENTE de Maps ya funcionaba; este cambio suma autorización efímera de 14 s y una confirmación automática mediante Accesibilidad NAV exclusivamente en su VirtualDisplay propio. Exige la pregunta exacta y un único botón visible verificable de Maps, consume consentimiento antes del clic, luego intenta un único Iniciar si aparece. Si está desconectada la Accesibilidad NAV, el display se altera, hay otro diálogo, no hay un botón inequívoco o Android rechaza la acción, deja confirmación manual. Sin alteraciones de Sender/Receiver, mapas, Spotify, volante, OEM ni clúster independiente; no usa T1Launcher. Firma original. LAB37 anterior disponible para volver. La sustitución automática aún requiere prueba real del propietario.'
+          mkdir -p verify
+          gh release download "$TAG" --pattern "$APK" --dir verify
+          cmp "dist/nav38/$APK" "verify/$APK"
+          gh release download "$TAG" --pattern bridge-lab.json --dir verify
+          cmp dist/nav38/bridge-lab.json verify/bridge-lab.json
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.97
+      - name: Switch ONLY NAV LAB OTA pointer and verify Sender, Receiver unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          old_sha=$(jq -r .sha old-pointer-response.json)
+          test -n "$old_sha"
+          content=$(base64 -w0 dist/nav38/bridge-lab.json)
+          gh api -X PUT "repos/$GITHUB_REPOSITORY/contents/bridge-lab.json" \
+            -f branch=bridge-lab-ota -f sha="$old_sha" \
+            -f message='ota(nav): original-signed NAV LAB38 code42 own central Maps Sender route replacement' \
+            -f content="$content" >/dev/null
+          gh api "repos/$GITHUB_REPOSITORY/contents/bridge-lab.json?ref=bridge-lab-ota" --jq .content | base64 -d > current-bridge.json
+          cmp current-bridge.json dist/nav38/bridge-lab.json
+          mkdir -p current
+          gh release download v0.3.97 --pattern sender.json --dir current
+          gh release download v0.3.97 --pattern receiver.json --dir current
+          cmp original/sender.json current/sender.json
+          cmp original/receiver.json current/receiver.json
+          test "$(gh api "repos/$GITHUB_REPOSITORY/releases/latest" --jq .tag_name)" = v0.3.97
+          echo 'PUBLISHED NAV LAB38 only: original signer/Android identity, correct OTA filename, separate Sender/Receiver unchanged. User must approve install.' >> "$GITHUB_STEP_SUMMARY"
