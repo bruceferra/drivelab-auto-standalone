@@ -82,12 +82,17 @@ final class NavFourSlotClusterABHost {
            originalWaze.getParent()!=physicalRoot)
             throw new SecurityException("Clúster NAV original ya no existe");
         // Preserve LAB50's rounded original Presentation background.
+        // Prepare an attached/available B Surface but DO NOT shrink Waze
+        // merely because 4P mode was enabled. A/B split is committed only
+        // after two NAV-owned streams have delivered verified frames.
         originalWaze.setLayoutParams(new FrameLayout.LayoutParams(
-            physicalWidth/2,physicalHeight,Gravity.LEFT|Gravity.TOP));
+            physicalWidth,physicalHeight,Gravity.LEFT|Gravity.TOP));
         secondContainer.setLayoutParams(new FrameLayout.LayoutParams(
             physicalWidth-physicalWidth/2,
             physicalHeight,Gravity.RIGHT|Gravity.TOP));
         secondContainer.setVisibility(View.VISIBLE);
+        secondContainer.setAlpha(0f);
+        originalWaze.setAlpha(1f);
         split=true;
     }
 
@@ -108,6 +113,11 @@ final class NavFourSlotClusterABHost {
             bW,physicalHeight,Gravity.RIGHT|Gravity.TOP));
         originalWaze.setAlpha(aOccupied?1f:0f);
         secondContainer.setAlpha(bOccupied?1f:0f);
+        if(aOccupied&&!bOccupied){
+            // A failed attempt must not leave Waze looking miniature.
+            // Its normal full-width 1920x720 original Surface is unchanged.
+            originalWaze.setTransform(new Matrix());
+        }
     }
     /**
      * Return to full-screen mode ONLY after the owner has verified that
@@ -117,7 +127,10 @@ final class NavFourSlotClusterABHost {
         if(!bUnbound)
             throw new SecurityException(
                 "Tablero B sigue ocupado; no se puede ocultar");
+        secondContainer.setAlpha(0f);
         secondContainer.setVisibility(View.GONE);
+        originalWaze.setAlpha(1f);
+        originalWaze.setTransform(new Matrix());
         originalWaze.setLayoutParams(new FrameLayout.LayoutParams(
             physicalWidth,physicalHeight,Gravity.BOTTOM));
         split=false;
