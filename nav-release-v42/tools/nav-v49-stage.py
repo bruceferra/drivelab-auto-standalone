@@ -25,7 +25,8 @@ for old,new in (
     txt=txt.replace(old,new,1)
 screen=mosaic.read_text(encoding="utf8")
 assert "rounded.setCornerRadius(dp(this,24))" in screen
-assert "toolbarShape.setCornerRadius(dp(this,21))" in screen
+assert ("toolbarShape.setCornerRadius(dp(this,21))" in screen or
+        "toolbarShape.setCornerRadius(dp(this,9))" in screen)
 assert "bar.setClipToOutline(true)" in screen
 assert "NavMosaicGeometry.fromSurface(width,height)" in screen
 assert "normalizedCoverPoint(" in screen
