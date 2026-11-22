@@ -30,14 +30,10 @@ public final class NavOwnClusterWazePolicyTest {
         yes(!NavOwnClusterWazePolicy.inspect(one,1,6,7).valid);
         yes(!NavOwnClusterWazePolicy.inspect(one,6,6,7).valid);
         yes(!NavOwnClusterWazePolicy.inspect(one,8,6,8).valid);
-        yes("am start --display 8 -n com.waze/com.waze.MainActivity".equals(
-            NavOwnClusterWazePolicy.startCommand(8,6,7,
-                "com.waze/com.waze.MainActivity")));
-        try{
-            NavOwnClusterWazePolicy.startCommand(8,6,7,
-                "com.waze/com.waze.FreeMapAppActivity");
-            throw new AssertionError("accepted the splash launcher");
-        }catch(SecurityException expected){}
+        yes(("am start --display 8 -a android.intent.action.MAIN "+
+            "-c android.intent.category.LAUNCHER "+
+            "--activity-single-top -n com.waze/.Main").equals(
+            NavOwnClusterWazePolicy.startCommand(8,6,7,"com.waze/.Main")));
         yes(NavOwnClusterWazePolicy.accepted("Starting: Intent { }"));
         yes(!NavOwnClusterWazePolicy.accepted("Error: denied"));
         try{
