@@ -71,6 +71,63 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
     private Presentation physicalLayer,scene;
     private TextureView texture;
     private VirtualDisplay ownVirtual;
+    private FrameLayout ownPhysicalHost;
+    private NavFourSlotClusterABHost fourHost;
+    private Runnable clusterAFrameNotify;
+    private Runnable clusterBFrameNotify;
+    static final class FourSlotAnchor {
+        final VirtualDisplay virtual;
+        final TextureView slotA,slotB;
+        final int display,task,stack,width,height;
+        final long token;
+        FourSlotAnchor(NavOwnClusterProbe p){
+            virtual=p.ownVirtual;
+            slotA=p.texture;slotB=p.fourHost.surfaceB();
+            display=p.ownDisplayId;task=p.verifiedWazeTaskId;
+            stack=p.verifiedWazeStackId;
+            width=p.clusterWidth;height=p.bandHeight;token=p.session;
+        }
+    }
+    static FourSlotAnchor fourSlotAnchor(Activity owner,long token){
+        NavOwnClusterProbe p=active;
+        return p!=null&&p.owner==owner&&p.session==token&&
+            !p.ended&&p.wazeTrial&&!p.closeRequested&&
+            p.verifiedWazeTaskId>10&&p.verifiedWazeStackId>10&&
+            p.ownVirtual!=null&&p.fourHost!=null&&
+            p.fourHost.isSplit()?new FourSlotAnchor(p):null;
+    }
+    static boolean prepareFourSlots(Activity owner,long token,
+        NavFourSlotClusterABHost.SlotListener listener,
+        Runnable clusterAFrame,Runnable clusterBFrame){
+        NavOwnClusterProbe p=active;
+        if(p==null||p.owner!=owner||p.session!=token||
+           p.ended||!p.wazeTrial||p.closeRequested||
+           p.verifiedWazeTaskId<=10||p.ownVirtual==null||
+           p.ownPhysicalHost==null||listener==null)return false;
+        try{
+            if(p.fourHost==null)
+                p.fourHost=new NavFourSlotClusterABHost(
+                    p.ownPhysicalHost,p.texture,
+                    p.clusterWidth,p.clusterHeight,listener);
+            p.clusterAFrameNotify=clusterAFrame;
+            p.clusterBFrameNotify=clusterBFrame;
+            p.fourHost.prepareSplit();
+            return true;
+        }catch(RuntimeException failure){
+            return false;
+        }
+    }
+    static boolean restoreSingleFourSlot(Activity owner,long token){
+        NavOwnClusterProbe p=active;
+        if(p==null||p.owner!=owner||p.session!=token||
+           p.fourHost==null)return false;
+        try{
+            p.fourHost.restoreFull(true);
+            p.clusterAFrameNotify=null;
+            p.clusterBFrameNotify=null;
+            return true;
+        }catch(RuntimeException failure){return false;}
+    }
     private Surface sink;
     private TextView marker;
     private int clusterWidth,clusterHeight,bandHeight,tick;
@@ -459,6 +516,7 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
             texture.setSurfaceTextureListener(this);
             host.addView(texture,new FrameLayout.LayoutParams(
                 clusterWidth,bandHeight,Gravity.BOTTOM));
+            ownPhysicalHost=host;
             physicalLayer.setContentView(host);
             configurePhysicalLayer();
             physicalLayer.setOnDismissListener(dialog->{
@@ -542,8 +600,10 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
         }
     }
     @Override public void onSurfaceTextureUpdated(SurfaceTexture st){
-        if(ended||gotFrame)return;
+        if(ended)return;
         gotFrame=true;
+        Runnable signal=clusterAFrameNotify;
+        if(signal!=null)signal.run();
         // A frame only confirms renderer transport, NEVER OEM visibility.
     }
     @Override public void onSurfaceTextureSizeChanged(
@@ -910,6 +970,14 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
             ownVirtual=null;
         }
         if(sink!=null){sink.release();sink=null;}
+        if(fourHost!=null){
+            try{fourHost.closeAfterOwnerRelease();}
+            catch(RuntimeException ignored){}
+            fourHost=null;
+        }
+        clusterAFrameNotify=null;
+        clusterBFrameNotify=null;
+        ownPhysicalHost=null;
         if(physicalLayer!=null){
             try{physicalLayer.dismiss();}catch(RuntimeException ignored){}
             physicalLayer=null;
