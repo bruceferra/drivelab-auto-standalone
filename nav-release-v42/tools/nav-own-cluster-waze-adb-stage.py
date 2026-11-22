@@ -67,6 +67,56 @@ addon=r"""    /**
             candidate,id,live.displayId,live.mediaDisplayId);
         return shellInternal(context,command,false,false,true);
     }
+    /**
+     * Sender Waze target, not an app launch: only a previously verified
+     * Waze MainActivity task on NAV's currently owned third VirtualDisplay.
+     */
+    static String deliverToExistingNavWaze(
+            Context context,String uri)throws Exception{
+        NavWazeRoutePolicy.Target target=
+            NavOwnClusterProbe.senderRouteTarget(context);
+        NavWazeRelocationPolicy.Task one=NavWazeRoutePolicy.verify(
+            shell(context,"am stack list"),target);
+        NavWazeRelocationPolicy.Task two=NavWazeRoutePolicy.verify(
+            shell(context,"am stack list"),target);
+        if(!NavWazeRoutePolicy.same(one,two))
+            throw new SecurityException(
+                "La tarea Waze NAV cambió antes de recibir destino");
+        NavWazeRoutePolicy.Target latest=
+            NavOwnClusterProbe.senderRouteTarget(context);
+        if(latest.token!=target.token||latest.display!=target.display||
+           latest.task!=target.task||latest.stack!=target.stack)
+            throw new SecurityException("La sesión Waze NAV cambió");
+        String command=NavWazeRoutePolicy.command(target,uri);
+        String reply=shellInternal(context,command,false,false,true);
+        NavWazeRelocationPolicy.Task after=NavWazeRoutePolicy.verify(
+            shell(context,"am stack list"),target);
+        if(!NavWazeRoutePolicy.same(two,after))
+            throw new SecurityException(
+                "Android movió/reemplazó Waze: no se confirma entrega");
+        return NavWazeRoutePolicy.delivered(reply)?
+            "ENTREGADO AL WAZE EXISTENTE DEL CLÚSTER NAV":
+            "WAZE NAV: ANDROID NO CONFIRMÓ ENTREGA A LA TAREA EXISTENTE; "+
+            "no se reintentó ni se abrió otra instancia desde NAV";
+    }
+
+    private static boolean exactNavWazeDelivery(
+            Context context,String command,boolean authorized){
+        if(!authorized||
+           !"ar.com.rango5gps.drivelabauto.boot.lab".equals(
+               context.getPackageName()))return false;
+        java.util.regex.Matcher m=java.util.regex.Pattern.compile(
+            "am start --display ([2-9]|[1-9][0-9]) "+
+            "--task ([1-9][0-9]{1,6}) --activity-single-top "+
+            "-a android\\.intent\\.action\\.VIEW "+
+            "-d 'waze://\\?(?:ll|q)=[A-Za-z0-9%.,_:+\\-]+&navigate=yes' "+
+            "-p com\\.waze").matcher(command);
+        if(!m.matches())return false;
+        NavWazeRoutePolicy.Target target=
+            NavOwnClusterProbe.senderRouteTarget(context);
+        return target.display==Integer.parseInt(m.group(1))&&
+               target.task==Integer.parseInt(m.group(2));
+    }
     private static boolean exactNavClusterWazeLaunch(
             Context context,String command,boolean authorized){
         if(!authorized||
@@ -112,8 +162,10 @@ new="""        boolean exactNavMosaicLaunch=exactOwnedVirtualLaunch(
             context,command,verifiedNavOwnCluster);
         boolean exactNavClusterMove=exactNavClusterWazeMove(
             context,command,verifiedNavOwnCluster);
+        boolean exactNavWazeRoute=exactNavWazeDelivery(
+            context,command,verifiedNavOwnCluster);
         if(!(exactWazeMove||exactT1MapDelivery||exactNavMosaicLaunch||
-             exactNavClusterWaze||exactNavClusterMove||"""
+             exactNavClusterWaze||exactNavClusterMove||exactNavWazeRoute||"""
 assert s.count(old)==1,"unexpected NAV ADB whitelist layout"
 s=s.replace(old,new,1)
 adb.write_text(s,encoding="utf8")
