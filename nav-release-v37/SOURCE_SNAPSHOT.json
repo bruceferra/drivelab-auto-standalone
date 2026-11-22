@@ -1,7 +1,7 @@
 {
   "sourceRepository": "bruceferra/drivelab",
   "sourceBranch": "feat/nav-lab37-own-cluster-waze-20261121",
-  "sourceCommit": "e68278b9e97483dc2eee9db3be972a15e105a4e0",
+  "sourceCommit": "de2f76b2bd9b7ebb4a74e0f2868bd6d46cce5165",
   "releaseBranch": "release/nav-lab-v37-own-waze-ota-20261121",
   "versionName": "0.1.39-lab.37",
   "versionCode": 41,
@@ -44,7 +44,7 @@
     },
     {
       "path": "nav-release-v37/apps/nav/bridge-runtime-overlay/NavOwnClusterProbe.java",
-      "gitBlob": "900dc5884d56f5ddc4ebd41e423595418a692354"
+      "gitBlob": "59cd3a694c50f2b1002605190fab5a9ccf833e33"
     },
     {
       "path": "nav-release-v37/apps/nav/bridge-runtime-overlay/NavOwnClusterWazePolicy.java",
