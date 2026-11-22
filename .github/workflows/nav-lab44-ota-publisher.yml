@@ -43,7 +43,7 @@ jobs:
           assert data['sourceBranch']=='fix/nav-lab44-sender-to-owned-waze-manual-close-20261122'
           assert data['applicationId']=='ar.com.rango5gps.drivelabauto.boot.lab'
           assert data['versionName']=='0.1.46-lab.44'
-          assert data['versionCode']==47 and data['releaseTag']=='bridge-lab-v44'
+          assert data['versionCode']==48 and data['releaseTag']=='bridge-lab-v44'
           assert data['previousOtaVersion']=='0.1.45-lab.43'
           assert data['previousOtaSha256']=='6db8b6115c28c9cb558e6950409e50d0facc97404cd8b13cedf09e9cab1bc536'
           PY
