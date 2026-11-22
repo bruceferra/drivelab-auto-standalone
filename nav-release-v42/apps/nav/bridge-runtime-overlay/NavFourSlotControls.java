@@ -28,7 +28,7 @@ final class NavFourSlotControls {
     }
     private final Activity activity;
     private final SwapRequest send;
-    private final Button left,right,dashboard;
+    private final Button left,right,dashboard,clusterMove;
     private NavFourSlotPolicy.State state;
     private boolean busy,requiresRecovery;
 
@@ -49,6 +49,11 @@ final class NavFourSlotControls {
         navToolbar.addView(dashboard,
             new LinearLayout.LayoutParams(0,dp(40),1.4f));
         dashboard.setOnClickListener(v->requestDashboardSwap());
+        clusterMove=chip("TABLERO ↗");
+        clusterMove.setTextSize(10);
+        navToolbar.addView(clusterMove,
+            new LinearLayout.LayoutParams(0,dp(40),1.35f));
+        clusterMove.setOnClickListener(v->chooseClusterSource());
         setBusy(false);
     }
     private int dp(int size){
@@ -140,6 +145,10 @@ final class NavFourSlotControls {
                 (state.at(NavFourSlotPolicy.Slot.TABLERO_A)!=null||
                  state.at(NavFourSlotPolicy.Slot.TABLERO_B)!=null));
         }
+        if(clusterMove!=null)
+            clusterMove.setEnabled(permitted&&
+                (state.at(NavFourSlotPolicy.Slot.TABLERO_A)!=null||
+                 state.at(NavFourSlotPolicy.Slot.TABLERO_B)!=null));
     }
     private void chooseDestination(NavFourSlotPolicy.Slot from){
         if(state==null||busy||requiresRecovery||state.at(from)==null)
@@ -162,6 +171,28 @@ final class NavFourSlotControls {
                       " desde "+name(from))
             .setItems(labels,(dialog,index)->
                 requestVerified(from,options[index],snapshot))
+            .setNegativeButton("CANCELAR",null).show();
+    }
+    /** The cluster has no touchscreen: choose its source on the CENTRAL. */
+    private void chooseClusterSource(){
+        if(state==null||busy||requiresRecovery)return;
+        NavFourSlotPolicy.Stream a=state.at(NavFourSlotPolicy.Slot.TABLERO_A);
+        NavFourSlotPolicy.Stream b=state.at(NavFourSlotPolicy.Slot.TABLERO_B);
+        if(a==null&&b==null)return;
+        final NavFourSlotPolicy.Slot[] options=a!=null&&b!=null?
+            new NavFourSlotPolicy.Slot[]{
+                NavFourSlotPolicy.Slot.TABLERO_A,
+                NavFourSlotPolicy.Slot.TABLERO_B}:
+            new NavFourSlotPolicy.Slot[]{a!=null?
+                NavFourSlotPolicy.Slot.TABLERO_A:
+                NavFourSlotPolicy.Slot.TABLERO_B};
+        String[] choices=new String[options.length];
+        for(int i=0;i<options.length;i++)
+            choices[i]=name(options[i])+" · "+appName(state.at(options[i]));
+        new AlertDialog.Builder(activity)
+            .setTitle("¿Qué app del tablero querés mover?")
+            .setItems(choices,(dialog,which)->
+                chooseDestination(options[which]))
             .setNegativeButton("CANCELAR",null).show();
     }
     private void requestDashboardSwap(){
