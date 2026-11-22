@@ -140,6 +140,7 @@ public final class NavVirtualMosaicActivity extends Activity {
         boolean ready;
         boolean frame;
         SurfaceTexture retainedTexture;
+        int sourceWidth,sourceHeight;
         Panel(int i){index=i;}
         void release(){
             if(display!=null){display.release();display=null;}
@@ -148,6 +149,7 @@ public final class NavVirtualMosaicActivity extends Activity {
                 retainedTexture.release();retainedTexture=null;
             }
             ready=false;frame=false;
+            sourceWidth=0;sourceHeight=0;
         }
     }
 
@@ -157,35 +159,25 @@ public final class NavVirtualMosaicActivity extends Activity {
     private static int dp(Context c,int value){
         return Math.round(value*c.getResources().getDisplayMetrics().density);
     }
-    /** Fill both panes by cropping uniformly, never stretch source apps.
-     * Keep virtual display/task dimensions unchanged to preserve Sender.
+    /** Legacy API name retained for staging compatibility.
+     * LAB48 never crops or stretches either app: the two VirtualDisplays
+     * are allocated to match their panel host's pixels and aspect ratio.
      */
     private void applyPanelCrop(TextureView texture,int sw,int sh,int vw,int vh){
-        if(vw<10||vh<10)return;
+        if(vw<1||vh<1||sw<1||sh<1)return;
+        NavMosaicGeometry.Fit fit=NavMosaicGeometry.fit(sw,sh,vw,vh);
         Matrix transform=new Matrix();
-        float original=(float)sw/sh,screen=(float)vw/vh;
-        boolean cover=mosaicPrefs().getBoolean(COVER_PANELS,true);
-        float sx=cover?Math.max(1f,original/screen):
-            Math.min(1f,original/screen);
-        float sy=cover?Math.max(1f,screen/original):
-            Math.min(1f,screen/original);
-        transform.setScale(sx,sy,vw/2f,vh/2f);
+        transform.setScale(fit.sx,fit.sy,vw/2f,vh/2f);
         texture.setTransform(transform);
     }
     private float normalizedCoverPoint(int panel,View view,
                                        float pos,boolean horizontal){
-        float w=view.getWidth(),h=view.getHeight();
-        if(w<=0||h<=0)return -1f;
-        float original=panel==0?1280f/720f:480f/800f;
-        float screen=w/h;
-        float value=horizontal?pos/w:pos/h;
-        boolean cover=mosaicPrefs().getBoolean(COVER_PANELS,true);
-        float scale=horizontal?
-            (cover?Math.max(1f,original/screen):
-                   Math.min(1f,original/screen)):
-            (cover?Math.max(1f,screen/original):
-                   Math.min(1f,screen/original));
-        return (value-0.5f)/scale+0.5f;
+        int w=view.getWidth(),h=view.getHeight();
+        Panel p=panels[panel];
+        if(w<1||h<1||p.sourceWidth<1||p.sourceHeight<1)return -1f;
+        NavMosaicGeometry.Fit fit=NavMosaicGeometry.fit(
+            p.sourceWidth,p.sourceHeight,w,h);
+        return horizontal?fit.x(pos):fit.y(pos);
     }
     private void updateTouchLabel(){
         if(touchButton==null)return;
@@ -302,6 +294,9 @@ public final class NavVirtualMosaicActivity extends Activity {
 
     @Override protected void onCreate(Bundle saved){
         super.onCreate(saved);
+        // Migrate LAB47's old crop=true preference. The driver must not
+        // lose map/sidebar controls after an in-place update.
+        mosaicPrefs().edit().putBoolean(COVER_PANELS,false).apply();
         BridgeImmersive.apply(this);
         // Unlike the original Bridge floating windows, these are native
         // frames within NAV's own central Activity, no system task resize.
@@ -381,12 +376,13 @@ public final class NavVirtualMosaicActivity extends Activity {
             viewport.addView(texture,new FrameLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.MATCH_PARENT,Gravity.CENTER));
-            final int sourceW=i==0?1280:480;
-            final int sourceH=i==0?720:800;
             viewport.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob)->{
                 int vw=r-l,vh=b-t;
-                if(vw<10||vh<10)return;
-                applyPanelCrop(texture,sourceW,sourceH,vw,vh);
+                if(vw<1||vh<1)return;
+                Panel p=panels[index];
+                applyPanelCrop(texture,
+                    p.sourceWidth>0?p.sourceWidth:vw,
+                    p.sourceHeight>0?p.sourceHeight:vh,vw,vh);
             });
             texture.setSurfaceTextureListener(
                 new TextureView.SurfaceTextureListener(){
@@ -626,19 +622,17 @@ public final class NavVirtualMosaicActivity extends Activity {
         fillModeButton=new Button(this);
         fillModeButton.setAllCaps(false);
         fillModeButton.setOnClickListener(v->{
-            boolean crop=!mosaicPrefs().getBoolean(COVER_PANELS,true);
-            mosaicPrefs().edit().putBoolean(COVER_PANELS,crop).apply();
-            fillModeButton.setText(crop?
-                "PANELES: LLENAR SIN DEFORMAR":"PANELES: AJUSTAR SIN RECORTAR");
-            for(int i=0;i<2;i++){
-                TextureView tv=panels[i].texture;
-                if(tv!=null&&tv.getWidth()>10&&tv.getHeight()>10)
-                    applyPanelCrop(tv,i==0?1280:480,i==0?720:800,
+            for(Panel panel:panels){
+                TextureView tv=panel.texture;
+                if(tv!=null&&tv.getWidth()>0&&tv.getHeight()>0&&
+                   panel.sourceWidth>0&&panel.sourceHeight>0)
+                    applyPanelCrop(tv,panel.sourceWidth,panel.sourceHeight,
                         tv.getWidth(),tv.getHeight());
             }
+            show("Ajuste NAV sin recortes recalculado con las dimensiones "+
+                "reales de los displays. La sesión y las rutas siguen abiertas.");
         });
-        fillModeButton.setText(mosaicPrefs().getBoolean(COVER_PANELS,true)?
-            "PANELES: LLENAR SIN DEFORMAR":"PANELES: AJUSTAR SIN RECORTAR");
+        fillModeButton.setText("PANELES · REENCUADRAR SIN RECORTAR");
         root.addView(fillModeButton);
         advancedButton=new Button(this);
         advancedButton.setAllCaps(false);
@@ -718,8 +712,10 @@ public final class NavVirtualMosaicActivity extends Activity {
                         "No existe textura NAV retenida para reconectar");
                 SurfaceTexture oldTexture=p.retainedTexture;
                 if(texture!=oldTexture){
-                    int dw=index==0?1280:480,dh=index==0?720:800;
-                    texture.setDefaultBufferSize(dw,dh);
+                    if(p.sourceWidth<240||p.sourceHeight<240)
+                        throw new SecurityException(
+                            "NAV perdió dimensiones originales del display");
+                    texture.setDefaultBufferSize(p.sourceWidth,p.sourceHeight);
                     Surface fresh=new Surface(texture);
                     try{p.display.setSurface(fresh);}
                     catch(RuntimeException fail){
@@ -735,12 +731,17 @@ public final class NavVirtualMosaicActivity extends Activity {
                     " reconectado conservando la tarea original.");
                 return;
             }
-            // Spotify is deliberately portrait to request its phone
-            // responsive layout. Maps remains landscape. These sizes
-            // never resize after creation (same proven host principle).
-            int dw=index==0?1280:480;
-            int dh=index==0?720:800;
+            // The old hard-coded 1280x720 / 480x800 surfaces were
+            // drawn into a differently shaped host. They left a tall
+            // black band and caused horizontal cropping and tap offsets.
+            // Match each new VirtualDisplay EXACTLY to its own host slot;
+            // Android chooses the app's responsive layout natively.
+            // We never resize or recreate it while the app is alive.
+            NavMosaicGeometry.Size nativeSize=
+                NavMosaicGeometry.fromSurface(width,height);
+            int dw=nativeSize.w,dh=nativeSize.h;
             texture.setDefaultBufferSize(dw,dh);
+            p.sourceWidth=dw;p.sourceHeight=dh;
             p.sink=new Surface(texture);
             DisplayManager manager=(DisplayManager)
                 getSystemService(Context.DISPLAY_SERVICE);
@@ -762,6 +763,8 @@ public final class NavVirtualMosaicActivity extends Activity {
                     "Android no creó un display PÚBLICO aislado");
             p.ready=true;
             ready++;
+            applyPanelCrop(p.texture,p.sourceWidth,p.sourceHeight,
+                p.texture.getWidth(),p.texture.getHeight());
             show("Pantalla NAV "+(index+1)+
                 " disponible (ID "+p.display.getDisplay().getDisplayId()+
                 "). Aún NO se abrió ninguna app.");
