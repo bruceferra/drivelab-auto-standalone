@@ -131,6 +131,7 @@ jobs:
             "nav-release-v42/apps/nav/bridge-runtime-overlay/NavMosaicTouchService.java",
             "nav-release-v42/tools/nav-virtual-mosaic-stage.py",
             "nav-release-v42/tools/nav-v53-stage.py",
+            "nav-release-v42/tools/nav-v48-stage.py",
           }
           changed=set(x.decode() for x in subprocess.check_output(
             ['git','diff','--name-only',
