@@ -1,0 +1,14 @@
+{
+  "kind": "drivelab-nav-ota-provenance",
+  "approvedScope": "DriveLab NAV LAB46 visual/touch/home only; no Sender/Receiver/OEM/T1Launcher modifications; four-slot switch feature NOT included",
+  "sourceRunId": 45061936993,
+  "sourceCommit": "c52e92d6207d3cfc7446f253641982434d2a1282",
+  "sourceBranch": "fix/nav-lab46-jetour-fullbleed-touch-home-wheel-readonly-20261122",
+  "applicationId": "ar.com.rango5gps.drivelabauto.boot.lab",
+  "versionName": "0.1.48-lab.46",
+  "versionCode": 50,
+  "releaseTag": "bridge-lab-v46",
+  "previousOtaVersion": "0.1.47-lab.45",
+  "previousOtaSha256": "a91f86e5a85863b999b6da4c77045ba4867e2cd6ac615649a28372966392819d",
+  "note": "Jetour dark-toolbar fullbleed center crop with rounded panels; no labels/borders, inverse crop touch mapping; default-on touch only when accessibility already connected, saved optional OFF; fixed back-to-mosaic in settings. Wheel unchanged and disabled; four-slot moving tasks is separate, NOT delivered. Android build original signing verified; physical testing pending."
+}
