@@ -285,6 +285,10 @@ final class NavFourSlotExperimentalManager {
                         try{
                             TextureView host=surfaces.get(slot);
                             if(host!=null&&host.isAvailable()){
+                                if(slot==NavFourSlotPolicy.Slot.TABLERO_A||
+                                   slot==NavFourSlotPolicy.Slot.TABLERO_B)
+                                    NavOwnClusterProbe.layoutFourSlots(
+                                        owner,token,true,true);
                                 // Re-enable the destination before waiting
                                 // for fresh frames after an empty-slot move.
                                 host.setAlpha(1f);
@@ -359,11 +363,27 @@ final class NavFourSlotExperimentalManager {
         NavFourSlotLiveRouting.Snapshot s=
             NavFourSlotLiveRouting.snapshot(owner,token);
         if(s==null)return;
+        NavFourSlotPolicy.Stream clusterA=s.state.at(
+            NavFourSlotPolicy.Slot.TABLERO_A);
+        NavFourSlotPolicy.Stream clusterB=s.state.at(
+            NavFourSlotPolicy.Slot.TABLERO_B);
+        NavOwnClusterProbe.layoutFourSlots(owner,token,
+            clusterA!=null,clusterB!=null);
         for(NavFourSlotPolicy.Slot slot:NavFourSlotPolicy.Slot.values()){
             TextureView tv=surfaces.get(slot);
             if(tv!=null){
                 NavFourSlotPolicy.Stream content=s.state.at(slot);
+                // The cluster B host is kept ATTACHED when empty. When an
+                // app moves in, prepare() makes its texture visible before
+                // awaiting frames; after commit reflect the exact binding.
                 tv.setAlpha(content==null?0f:1f);
+                if(content!=null&&(slot==
+                    NavFourSlotPolicy.Slot.TABLERO_A||
+                    slot==NavFourSlotPolicy.Slot.TABLERO_B)){
+                    final int sourceW=content.width,sourceH=content.height;
+                    tv.post(()->NavFourSlotClusterABHost.fit(
+                        tv,sourceW,sourceH));
+                }
             }
         }
     }
