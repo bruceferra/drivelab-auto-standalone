@@ -191,6 +191,14 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
             lastWazeTrace=wazeTrace.toString();
         }
     }
+    private void recordWazeMoveReply(String result){
+        String summary=NavWazeDisplayTrace.launchReply(result);
+        synchronized(wazeTrace){
+            if(wazeTrace.length()>2500)return;
+            wazeTrace.append("\\nRESULTADO MOVE-STACK: ").append(summary);
+            lastWazeTrace=wazeTrace.toString();
+        }
+    }
     private void sampleWaze(String phase){
         final NavMosaicExitPolicy.Snapshot baseline=preflightTasks;
         final int map=baseline==null||baseline.map==null?
@@ -505,23 +513,18 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
                 if(!first.same(second)||second.task!=-1)
                     throw new SecurityException(
                         "Waze ya está activo o la pantalla NAV no está vacía");
-                // LAB41 physical trace: FreeMapAppActivity on our VD
-                // launches MainActivity in a NEW task on physical d0.
-                // Bypass only that splash; test the exact observed final
-                // component, without moving any task or using a launcher.
-                android.content.ComponentName mainComponent=
-                    new android.content.ComponentName(
-                        "com.waze","com.waze.MainActivity");
-                android.content.pm.ActivityInfo info=
-                    app.getPackageManager().getActivityInfo(mainComponent,0);
-                if(info==null||!"com.waze".equals(info.packageName))
-                    throw new SecurityException(
-                        "Activity principal de Waze no verificable");
-                if(!info.exported)
-                    throw new SecurityException(
-                        "MainActivity de Waze no es exportada; "+
-                        "Android no permite abrirla desde NAV");
-                String component=mainComponent.flattenToString();
+                // LAB42 proved MainActivity is private. Launch ONLY the
+                // exported launcher, then inspect its subsequent Waze task.
+                Intent target=app.getPackageManager()
+                    .getLaunchIntentForPackage("com.waze");
+                if(target==null||target.getComponent()==null||
+                   !"com.waze".equals(target.getComponent().getPackageName()))
+                    throw new SecurityException("Waze sin launcher público");
+                android.content.pm.ActivityInfo info=app.getPackageManager()
+                    .getActivityInfo(target.getComponent(),0);
+                if(info==null||!info.exported)
+                    throw new SecurityException("Launcher Waze no exportado");
+                String component=target.getComponent().flattenToString();
                 sampleWaze("ANTES");
                 String reply=BridgeLocalAdb.startOwnClusterWaze(
                     app,vid,component,nonce);
@@ -532,17 +535,66 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
                     throw new SecurityException(
                         "Android no aceptó iniciar Waze en NAV. "+
                         NavWazeDisplayTrace.launchReply(reply));
-                NavOwnClusterWazePolicy.State after1=
-                    NavOwnClusterWazePolicy.inspect(
-                        BridgeLocalAdb.shell(app,"am stack list"),
-                        vid,live.displayId,live.mediaDisplayId);
-                NavOwnClusterWazePolicy.State after2=
-                    NavOwnClusterWazePolicy.inspect(
-                        BridgeLocalAdb.shell(app,"am stack list"),
-                        vid,live.displayId,live.mediaDisplayId);
-                if(!after1.same(after2)||after2.task<=10)
-                    throw new SecurityException(
-                        "Android no confirmó Waze en la pantalla NAV propia");
+                // Android may open the exported FreeMapAppActivity on our
+                // virtual display, but spawn PRIVATE MainActivity as a NEW
+                // stack on physical display 0. Never launch that private
+                // activity ourselves. Move only a newly observed isolated
+                // Waze-only stack after TWO identical read-only snapshots.
+                NavWazeRelocationPolicy.Candidate created=null;
+                for(int attempt=0;attempt<9;attempt++){
+                    if(closeRequested||!ownsLiveWazeDisplay(app,vid,nonce))
+                        throw new SecurityException("Prueba NAV cancelada");
+                    NavWazeRelocationPolicy.Candidate one=
+                        NavWazeRelocationPolicy.physicalMain(
+                            BridgeLocalAdb.shell(app,"am stack list"),
+                            vid,live.displayId,live.mediaDisplayId);
+                    if(one!=null){
+                        Thread.sleep(150);
+                        NavWazeRelocationPolicy.Candidate two=
+                            NavWazeRelocationPolicy.physicalMain(
+                                BridgeLocalAdb.shell(app,"am stack list"),
+                                vid,live.displayId,live.mediaDisplayId);
+                        if(one.same(two)){created=two;break;}
+                    }
+                    Thread.sleep(550);
+                }
+                if(created!=null){
+                    String moved=BridgeLocalAdb.moveNewWazeStackToOwn(
+                        app,created,vid,nonce);
+                    recordWazeMoveReply(moved);
+                    if(NavMosaicExitPolicy.rejected(moved))
+                        throw new SecurityException("Android rechazó mover Waze");
+                    if(!NavWazeRelocationPolicy.relocated(
+                          BridgeLocalAdb.shell(app,"am stack list"),
+                          created,vid,live.displayId,live.mediaDisplayId))
+                        throw new SecurityException(
+                            "No se confirmó el traslado de Waze al Cluster NAV");
+                    Thread.sleep(450);
+                    if(!NavWazeRelocationPolicy.relocated(
+                          BridgeLocalAdb.shell(app,"am stack list"),
+                          created,vid,live.displayId,live.mediaDisplayId))
+                        throw new SecurityException(
+                            "Waze retornó a otra pantalla tras el traslado");
+                    taskId=created.task;
+                }else{
+                    // If the whole Waze activity stays in the NAV display,
+                    // accept ONLY an actual MainActivity; a splash is NOT
+                    // Waze visible or functional on the Cluster.
+                    NavOwnClusterWazePolicy.State after1=
+                        NavOwnClusterWazePolicy.inspect(
+                            BridgeLocalAdb.shell(app,"am stack list"),
+                            vid,live.displayId,live.mediaDisplayId);
+                    NavOwnClusterWazePolicy.State after2=
+                        NavOwnClusterWazePolicy.inspect(
+                            BridgeLocalAdb.shell(app,"am stack list"),
+                            vid,live.displayId,live.mediaDisplayId);
+                    if(!after1.same(after2)||after2.task<=10||
+                       !("com.waze/com.waze.MainActivity".equals(after2.component)||
+                         "com.waze/.MainActivity".equals(after2.component)))
+                        throw new SecurityException(
+                            "Sólo apareció splash Waze; MainActivity no llegó a NAV");
+                    taskId=after2.task;
+                }
                 NavMosaicExitPolicy.Snapshot c1=NavMosaicExitPolicy.parse(
                     BridgeLocalAdb.shell(app,"am stack list"),
                     live.displayId,live.mapPackage,live.mediaDisplayId);
@@ -552,7 +604,6 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
                 if(!c1.same(c2)||!preflightTasks.same(c2))
                     throw new SecurityException(
                         "ALERTA: Maps o Spotify cambió al lanzar Waze");
-                taskId=after2.task;
             }catch(Exception failed){
                 error=failed.getClass().getSimpleName()+": "+
                     String.valueOf(failed.getMessage());
@@ -577,7 +628,7 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
     }
     /**
      * Finish ONLY Waze task on the still-owned VirtualDisplay BEFORE
-     * removing its Surface. Never use global force-stop or move-stack.
+     * removing its Surface. Never use global force-stop or move external tasks.
      */
     private void finishTrial(String reason){
         if(ended)return;
@@ -609,36 +660,39 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
                 // If central session was already closed, its IDs are from
                 // the immutable preflight snapshot; never target 0/1.
                 sampleWaze("CIERRE");
-                NavOwnClusterWazePolicy.State a=
-                    NavOwnClusterWazePolicy.inspect(
+                java.util.List<NavWazeRelocationPolicy.Task> a=
+                    NavWazeRelocationPolicy.ownedWaze(
                         BridgeLocalAdb.shell(app,"am stack list"),
                         vid,map,media);
-                NavOwnClusterWazePolicy.State b=
-                    NavOwnClusterWazePolicy.inspect(
+                java.util.List<NavWazeRelocationPolicy.Task> b=
+                    NavWazeRelocationPolicy.ownedWaze(
                         BridgeLocalAdb.shell(app,"am stack list"),
                         vid,map,media);
-                if(!a.same(b))
-                    throw new SecurityException("Tarea Waze inestable al cerrar");
-                if(b.task>10){
-                    String cmd=NavOwnClusterWazePolicy.stopCommand(b,vid,map,media);
-                    NavOwnClusterWazePolicy.State justBefore=
-                        NavOwnClusterWazePolicy.inspect(
+                if(!NavWazeRelocationPolicy.sameOwned(a,b))
+                    throw new SecurityException("Pilas Waze NAV inestables");
+                for(NavWazeRelocationPolicy.Task task:b){
+                    java.util.List<NavWazeRelocationPolicy.Task> before=
+                        NavWazeRelocationPolicy.ownedWaze(
                             BridgeLocalAdb.shell(app,"am stack list"),
                             vid,map,media);
-                    if(!b.same(justBefore))
-                        throw new SecurityException(
-                            "Waze cambió de tarea antes del cierre");
-                    String result=BridgeLocalAdb.shell(app,cmd);
+                    boolean present=false;
+                    for(NavWazeRelocationPolicy.Task currentTask:before)
+                        if(task.same(currentTask))present=true;
+                    if(!present)throw new SecurityException(
+                        "Waze cambió de pila antes del cierre");
+                    String result=BridgeLocalAdb.shell(app,
+                        NavWazeRelocationPolicy.removeOwned(
+                            task,vid,map,media));
                     if(NavMosaicExitPolicy.rejected(result))
                         throw new SecurityException(
-                            "Android rechazó cerrar tarea Waze de NAV");
-                    NavOwnClusterWazePolicy.State after=
-                        NavOwnClusterWazePolicy.inspect(
+                            "Android rechazó cerrar Waze propio");
+                    java.util.List<NavWazeRelocationPolicy.Task> after=
+                        NavWazeRelocationPolicy.ownedWaze(
                             BridgeLocalAdb.shell(app,"am stack list"),
                             vid,map,media);
-                    if(!after.valid||after.task!=-1)
-                        throw new SecurityException(
-                            "No se confirmó el cierre de Waze NAV");
+                    for(NavWazeRelocationPolicy.Task t:after)
+                        if(task.same(t))throw new SecurityException(
+                            "No se confirmó cierre de Waze propio");
                 }
             }catch(Exception issue){
                 problem=issue.getClass().getSimpleName()+": "+
