@@ -307,10 +307,21 @@ public final class NavVirtualMosaicActivity extends Activity {
         rootLayout=root;
         LinearLayout bar=new LinearLayout(this);
         bar.setOrientation(LinearLayout.HORIZONTAL);
-        bar.setPadding(0,0,0,0);
-        bar.setBackgroundColor(Color.TRANSPARENT);
-        root.addView(bar,new LinearLayout.LayoutParams(
-            ViewGroup.LayoutParams.MATCH_PARENT,dp(this,40)));
+        // Soft rounded glass-like Jetour control surface. Keep the three
+        // buttons themselves transparent, with no new overlays over apps.
+        bar.setPadding(dp(this,5),0,dp(this,5),0);
+        GradientDrawable toolbarShape=new GradientDrawable();
+        toolbarShape.setColor(0xA0142B37);
+        toolbarShape.setCornerRadius(dp(this,21));
+        toolbarShape.setStroke(dp(this,1),0x554E8B9A);
+        bar.setBackground(toolbarShape);
+        bar.setClipToOutline(true);
+        LinearLayout.LayoutParams toolbarSpace=
+            new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,dp(this,40));
+        toolbarSpace.setMargins(dp(this,5),dp(this,3),
+            dp(this,5),dp(this,4));
+        root.addView(bar,toolbarSpace);
         settingsButton=quickButton("⚙",bar,1f);
         settingsButton.setTextSize(21f);
         settingsButton.setTextColor(0xFF7AD8E5);
@@ -365,7 +376,7 @@ public final class NavVirtualMosaicActivity extends Activity {
             FrameLayout viewport=new FrameLayout(this);
             GradientDrawable rounded=new GradientDrawable();
             rounded.setColor(Color.BLACK);
-            rounded.setCornerRadius(dp(this,13));
+            rounded.setCornerRadius(dp(this,24));
             viewport.setBackground(rounded);
             viewport.setClipToOutline(true);
             frame.addView(viewport,new LinearLayout.LayoutParams(
