@@ -1,0 +1,15 @@
+{
+  "kind": "drivelab-nav-ota-provenance",
+  "approvedScope": "LAB53 manual opt-in real Surface four-slot experiment: uses exact existing NAV Maps Spotify Waze VirtualDisplay tasks, no relaunch/force-stop/move-task, adds Central A/B and cluster A/B, touchscreen swap controls, dynamic touch and sender by unchanged original task IDs; classic LAB52 default untouched; no 4th independently launched app, no wheel/mic changes, no OEM/Receiver/Sender changes.",
+  "sourceRunId": 45083489197,
+  "sourceCommit": "dc608c12d0ea90b73520995de26df20caa108acc",
+  "sourceBranch": "feature/nav-lab53-real-four-surface-compositor-20261122",
+  "applicationId": "ar.com.rango5gps.drivelabauto.boot.lab",
+  "versionName": "0.1.55-lab.53",
+  "versionCode": 57,
+  "releaseTag": "bridge-lab-v53",
+  "previousOtaVersion": "0.1.54-lab.52",
+  "previousOtaSha256": "5d414a7b52f21dfad2a19b9cad73dc8b2d5218c45a9027f5cbff42c1b5d89a6d",
+  "previousOtaSize": 5109869,
+  "note": "Opt-in ↔ 4P requires the owner to open Waze in cluster then confirm experiment while parked. Three existing NAV tasks Maps Spotify Waze can move or exchange between four physical slots (Central A/B, Tablero A/B), with cluster single app full width, dual app split. Fourth slot begins EMPTY; arbitrary additional app launch not implemented. Stream identities/task IDs unchanged so Sender routing still reaches original Waze and Maps VDs, touch routes to currently visible stream. Strict double inventory reads, exact NAV ownership, frame ACK and fail-closed rollback. Android original-signed CI successful; physical in-car render/swap test pending. LAB52 remains rollback and opens normally by default."
+}
