@@ -12,6 +12,7 @@ import android.graphics.Color;
 import android.graphics.Point;
 import android.graphics.SurfaceTexture;
 import android.graphics.drawable.ColorDrawable;
+import android.graphics.drawable.GradientDrawable;
 import android.hardware.display.DisplayManager;
 import android.hardware.display.VirtualDisplay;
 import android.os.Handler;
@@ -438,6 +439,19 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
             host.setBackgroundColor(Color.TRANSPARENT);
             texture=new TextureView(physicalLayer.getContext());
             texture.setOpaque(true);
+            if(wazeTrial){
+                // Small corner clipping of NAV's OWN Waze display only.
+                // Never alter Jetour OEM layers or the physical screen
+                // shape. Display sizing, task IDs and Waze touch stay
+                // identical to LAB48 (no navigation controls trimmed).
+                GradientDrawable clusterRounded=new GradientDrawable();
+                clusterRounded.setColor(Color.BLACK);
+                float density=physicalLayer.getContext()
+                    .getResources().getDisplayMetrics().density;
+                clusterRounded.setCornerRadius(19f*density);
+                texture.setBackground(clusterRounded);
+                texture.setClipToOutline(true);
+            }
             texture.setSurfaceTextureListener(this);
             host.addView(texture,new FrameLayout.LayoutParams(
                 clusterWidth,bandHeight,Gravity.BOTTOM));
