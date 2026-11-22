@@ -23,6 +23,8 @@ final class NavFourSlotSessionCoordinator
         boolean pauseAllCentralInput();
         /** Called after verified commit or verified rollback. */
         void resumeCentralInput();
+        /** UI-only restoration; NEVER mark a failed swap as successful. */
+        void onUnverifiedRollback();
     }
 
     private final Activity owner;
@@ -137,7 +139,14 @@ final class NavFourSlotSessionCoordinator
     }
     private void requireRecovery(String message){
         recoveryRequired=true;
-        controls.blockUntilRecovery(message);
+        // We can restore the OWNED visual layout without making any
+        // claim that Android's task/Surface binding was restored. The
+        // user must still close/reopen NAV to recover uncertain streams.
+        try{touches.onUnverifiedRollback();}
+        catch(RuntimeException ignored){}
+        controls.blockUntilRecovery(message+
+            "\n\nCerrá NAV con ⏻, volvé a abrirlo y activá "+
+            "CLÚSTER ON sin usar 4P.");
         // Fail-closed: NO touch or further swap until owner session reset.
         // No force-stop/ADB cleanup and no ability to affect OEM displays.
     }
