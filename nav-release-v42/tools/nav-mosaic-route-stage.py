@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Attach a strict route into NAV's OWN virtual Maps task without modifying
+"""Attach strict Sender routes into existing NAV Maps and cluster Waze tasks without modifying
 immutable Bridge LAB v24, its QR protocol, old T1Launcher target or wheel.
 
 The original BridgeLocalAdb already permits one narrowly whitelisted
@@ -85,37 +85,60 @@ insert="""        // DriveLab NAV owns its virtual display only while the centra
         NavMosaicSessionRegistry.Session nav=
             NavMosaicSessionRegistry.snapshot(this);
         if(nav!=null&&!BridgeRouteTarget.T1_LAUNCHER.equals(target)){
-            boolean routeAccepted=false;
-            String outcome;
-            if(!BridgeRouteTarget.MAPS.equals(target)||
-               !NavMosaicSessionRegistry.MAPS.equals(nav.mapPackage)){
-                outcome="NAV MOSAICO ACTIVO: modo Sender "+target+
-                    " no coincide con Maps de NAV. No se abrió otro mapa.";
-            }else{
+            boolean wantMaps=BridgeRouteTarget.MAPS.equals(target)||
+                BridgeRouteTarget.BOTH.equals(target);
+            boolean wantWaze=BridgeRouteTarget.WAZE.equals(target)||
+                BridgeRouteTarget.BOTH.equals(target);
+            int expected=(wantMaps?1:0)+(wantWaze?1:0);
+            int accepted=0;
+            StringBuilder outcome=new StringBuilder();
+            if(wantWaze){
                 try{
+                    String uri="waze://?"+
+                        ("coord".equals(kind)?"ll=":"q=")+
+                        Uri.encode(packet.value,"coord".equals(kind)?",":"")+
+                        "&navigate=yes";
+                    String result=BridgeLocalAdb.deliverToExistingNavWaze(this,uri);
+                    if(result.startsWith(
+                        "ENTREGADO AL WAZE EXISTENTE DEL CLÚSTER NAV"))
+                        accepted++;
+                    outcome.append(result);
+                }catch(Exception unavailable){
+                    outcome.append("WAZE NAV: NO ENTREGADO (")
+                        .append(unavailable.getClass().getSimpleName())
+                        .append("). Sin crear otro Waze.");
+                }
+            }
+            if(wantMaps){
+                if(wantWaze)outcome.append(" | ");
+                if(!NavMosaicSessionRegistry.MAPS.equals(nav.mapPackage)){
+                    outcome.append("MAPS NAV: mosaico no está en Maps");
+                }else try{
                     String uri="google.navigation:q="+
                         Uri.encode(packet.value,"coord".equals(kind)?",":"")+
                         "&mode=d";
-                    outcome=BridgeLocalAdb.deliverToExistingNavMaps(
+                    String result=BridgeLocalAdb.deliverToExistingNavMaps(
                         this,uri,nav.displayId,nav.token);
-                    routeAccepted=outcome.startsWith(
-                        "ENTREGADO AL GOOGLE MAPS EXISTENTE DE NAV");
+                    if(result.startsWith(
+                        "ENTREGADO AL GOOGLE MAPS EXISTENTE DE NAV"))
+                        accepted++;
+                    outcome.append(result);
                 }catch(Exception unavailable){
-                    outcome="NAV MOSAICO: NO SE ENVIÓ AL MAPA EXISTENTE ("+
-                        unavailable.getClass().getSimpleName()+
-                        "). Sin abrir otras tareas. Comprobar ADB local "+
-                        "autorizado y mapa virtual activo.";
+                    outcome.append("MAPS NAV: NO ENTREGADO (")
+                        .append(unavailable.getClass().getSimpleName())
+                        .append("). Sin abrir otro mapa.");
                 }
             }
-            prefs(this).edit().putString("last_route",outcome)
+            boolean all=expected>0&&accepted==expected;
+            prefs(this).edit().putString("last_route",outcome.toString())
                 .putInt("received",prefs(this).getInt("received",0)+
-                    (routeAccepted?1:0)).apply();
-            // ACK means exact existing Maps Activity got onNewIntent.
-            // It does NOT certify physical visibility or navigation start.
-            return routeAccepted;
+                    (all?1:0)).apply();
+            // An ACK confirms existing-task delivery only. The driver
+            // must verify the actual route and map visibility on the T1.
+            return all;
         }
 """
 if s.count(anchor)!=1 or "deliverToExistingNavMaps(" in s:
     raise SystemExit("ABORT: staged BootLinkService anchor unexpected")
 service.write_text(s.replace(anchor,insert+anchor,1),encoding="utf-8")
-print("PASS: Sender destination gated by live NAV owned virtual-display task + double ADB read, no fallback or T1Launcher changes")
+print("PASS: Sender Maps/Waze/BOTH gated by exact NAV-owned task; no other Waze or T1Launcher changes")
