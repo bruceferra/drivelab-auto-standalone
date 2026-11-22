@@ -1,0 +1,15 @@
+{
+  "kind": "drivelab-nav-ota-provenance",
+  "approvedScope": "NAV LAB49: preserve Xiaomi AES pairing through OTA receiver restart and new rounded Jetour central/cluster UI only. No Sender, Receiver, QR rekey, OEM, T1Launcher, wheel or microphone modifications.",
+  "sourceRunId": 45073977159,
+  "sourceCommit": "30dc2e1aae35d07bdca1d97f219484f20a9cd147",
+  "sourceBranch": "fix/nav-lab49-ota-pairing-resume-rounded-ui-20261122",
+  "applicationId": "ar.com.rango5gps.drivelabauto.boot.lab",
+  "versionName": "0.1.51-lab.49",
+  "versionCode": 53,
+  "releaseTag": "bridge-lab-v49",
+  "previousOtaVersion": "0.1.50-lab.48",
+  "previousOtaSha256": "a2ebc5678d1a4496351308fbb458978abaa61407f2f0c0f982d7371dd3b4d726",
+  "previousOtaSize": 5101589,
+  "note": "Resumes own paired BootLinkService on system MY_PACKAGE_REPLACED if and only if original encrypted secret exists and listener was opted in; owner opening NAV provides fallback. No Sender key modification and no QR generation, no app launches. Round central app surfaces 24dp, toolbar glass 21dp, Waze own cluster corners 19dp. Original signed CI passed, physical OTA/QR persistence test pending. LAB48 rollback preserved."
+}
