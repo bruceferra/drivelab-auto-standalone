@@ -80,6 +80,10 @@ public final class NavVirtualMosaicActivity extends Activity {
     private Button touchButton;
     private Button wheelButton;
     private Button settingsButton,quickClusterButton,quickExitButton;
+    private Button fourSlotButton;
+    private LinearLayout navToolbar;
+    private final FrameLayout[] fourSlotCentralHosts=new FrameLayout[2];
+    private NavFourSlotExperimentalManager fourSlotManager;
     private Button autoAppsButton,autoClusterButton,openInMosaicButton,advancedButton;
     private boolean scheduledAutoApps;
     private Button fillModeButton;
@@ -175,8 +179,15 @@ public final class NavVirtualMosaicActivity extends Activity {
         int w=view.getWidth(),h=view.getHeight();
         Panel p=panels[panel];
         if(w<1||h<1||p.sourceWidth<1||p.sourceHeight<1)return -1f;
+        int sw=p.sourceWidth,sh=p.sourceHeight;
+        if(fourSlotManager!=null&&fourSlotManager.isActive()){
+            NavFourSlotPolicy.Stream showing=
+                fourSlotManager.centralStream(panel);
+            if(showing==null)return -1f;
+            sw=showing.width;sh=showing.height;
+        }
         NavMosaicGeometry.Fit fit=NavMosaicGeometry.fit(
-            p.sourceWidth,p.sourceHeight,w,h);
+            sw,sh,w,h);
         return horizontal?fit.x(pos):fit.y(pos);
     }
     private void updateTouchLabel(){
@@ -237,6 +248,16 @@ public final class NavVirtualMosaicActivity extends Activity {
             }
     }
     private void toggleCluster(){
+        if(fourSlotManager!=null&&
+           (fourSlotManager.isActive()||fourSlotManager.isPreparing())){
+            new AlertDialog.Builder(this)
+                .setTitle("CUATRO PANELES ACTIVOS")
+                .setMessage("El clúster está mostrando ventanas NAV. "+
+                    "Para cerrarlo sin dejar tareas sin superficie, "+
+                    "cerrá el mosaico con ⏻ y volvé a abrir NAV.")
+                .setPositiveButton("ENTENDIDO",null).show();
+            return;
+        }
         if(closed||!appsRequested||openingApps||exitInProgress||
            !panels[0].ready||!panels[1].ready||
            !MAPS.equals(chosenMap())||
@@ -257,6 +278,54 @@ public final class NavVirtualMosaicActivity extends Activity {
         Intent intent=new Intent(this,BootActivity.class);
         intent.putExtra(CONFIG_INTENT,true);
         startActivity(intent);
+    }
+    private void enableFourSlotExperiment(){
+        if(closed||!appsRequested||exitInProgress||openingApps||
+           panels[0].display==null||panels[1].display==null||
+           !NavOwnClusterProbe.hasActiveWazeTrial()){
+            show("Primero abrí Maps, Spotify y CLÚSTER ON; "+
+                "Waze debe aparecer en el tablero.");
+            android.widget.Toast.makeText(this,
+                "Abrí primero Waze con CLÚSTER ON",
+                android.widget.Toast.LENGTH_LONG).show();
+            return;
+        }
+        if(fourSlotManager!=null&&
+           (fourSlotManager.isActive()||fourSlotManager.isPreparing())){
+            show("Modo cuatro paneles ya preparado. Usá ↗ en cada "+
+                "panel central, o TABLERO ↗ en la barra superior.");
+            return;
+        }
+        new AlertDialog.Builder(this)
+            .setTitle("NAV · CUATRO ESPACIOS (PRUEBA)")
+            .setMessage("Central A/B y Tablero A/B. Se reutilizan las "+
+                "tres tareas que ya funcionan: Maps, Spotify y Waze. "+
+                "El cuarto espacio comienza LIBRE; todavía no se "+
+                "abre una cuarta app independiente. "+
+                "Android intercambiará solamente superficies NAV, "+
+                "no teclas OEM ni tareas del sistema. "+
+                "Probá sólo con la Jetour ESTACIONADA. "+
+                "Para regresar al modo clásico, cerrá NAV con ⏻.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("ACTIVAR 4 ESPACIOS",(dialog,which)->{
+                fourSlotManager=new NavFourSlotExperimentalManager(
+                    this,sessionToken,
+                    panels[0].display,panels[1].display,
+                    panels[0].texture,panels[1].texture,
+                    fourSlotCentralHosts[0],fourSlotCentralHosts[1],
+                    navToolbar,
+                    new NavFourSlotExperimentalManager.Reporter(){
+                        @Override public void status(String message){
+                            if(!closed)show(message);
+                        }
+                        @Override public void stateChanged(boolean enabled){
+                            if(fourSlotButton!=null)
+                                fourSlotButton.setText(enabled?
+                                    "↔ 4P ON":"↔ 4P");
+                        }
+                    });
+                fourSlotManager.activate();
+            }).show();
     }
     private void confirmExit(){
         new AlertDialog.Builder(this)
@@ -322,11 +391,17 @@ public final class NavVirtualMosaicActivity extends Activity {
         toolbarSpace.setMargins(dp(this,5),dp(this,3),
             dp(this,5),dp(this,4));
         root.addView(bar,toolbarSpace);
+        navToolbar=bar;
         settingsButton=quickButton("⚙",bar,1f);
         settingsButton.setTextSize(21f);
         settingsButton.setTextColor(0xFF7AD8E5);
         settingsButton.setContentDescription("Configuración NAV");
         settingsButton.setOnClickListener(v->setFullMosaic(!fullMosaic));
+        fourSlotButton=quickButton("↔ 4P",bar,1.7f);
+        fourSlotButton.setTextColor(0xFF7AD8E5);
+        fourSlotButton.setContentDescription(
+            "Intercambiar ventanas entre Central A/B y Tablero A/B");
+        fourSlotButton.setOnClickListener(v->enableFourSlotExperiment());
         quickClusterButton=quickButton("○  CLÚSTER OFF",bar,3f);
         quickClusterButton.setTypeface(null,android.graphics.Typeface.BOLD);
         quickClusterButton.setLetterSpacing(0.03f);
@@ -379,6 +454,7 @@ public final class NavVirtualMosaicActivity extends Activity {
             rounded.setCornerRadius(dp(this,24));
             viewport.setBackground(rounded);
             viewport.setClipToOutline(true);
+            fourSlotCentralHosts[index]=viewport;
             frame.addView(viewport,new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,0,1f));
             TextureView texture=new TextureView(this);
@@ -408,6 +484,8 @@ public final class NavVirtualMosaicActivity extends Activity {
                     }
                     @Override public void onSurfaceTextureUpdated(
                         SurfaceTexture surface){
+                        if(fourSlotManager!=null)
+                            fourSlotManager.frameCentral(index);
                         Panel p=panels[index];
                         if(!p.frame&&p.display!=null){
                             p.frame=true;firstFrames++;
@@ -445,7 +523,9 @@ public final class NavVirtualMosaicActivity extends Activity {
             texture.setOnTouchListener((view,event)->{
                 // No Cluster transfer exists in the read-only probe.
                 // Keep working Maps and Spotify input on NAV's own displays.
-                if(closed||!touchEnabled||!appsRequested)return false;
+                if(closed||!touchEnabled||!appsRequested||
+                   (fourSlotManager!=null&&
+                       fourSlotManager.blockedInput()))return false;
                 if(event.getPointerCount()!=1)return false;
                 int type=event.getActionMasked();
                 if(type==MotionEvent.ACTION_DOWN){
@@ -1125,6 +1205,10 @@ public final class NavVirtualMosaicActivity extends Activity {
     }
     private void stop(String reason){
         if(closed)return;
+        if(fourSlotManager!=null){
+            fourSlotManager.closeAfterOwnerCleanup();
+            fourSlotManager=null;
+        }
         disableMosaicWheel(null);
         closed=true;
         touchEnabled=false;
