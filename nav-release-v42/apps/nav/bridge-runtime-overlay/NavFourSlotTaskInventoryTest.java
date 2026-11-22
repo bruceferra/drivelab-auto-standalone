@@ -37,7 +37,10 @@ public final class NavFourSlotTaskInventoryTest {
                          "com.spotify.music/.Main"),map()),
             "reject foreign app in NAV slot");
         check(!NavFourSlotTaskInventory.exact(
-            full+" taskId=456: com.google.android.apps.maps/.Other\n",
+            full.replace(
+                "Stack id=67",
+                " taskId=456: com.google.android.apps.maps/.Other\n"+
+                "Stack id=67"),
             map()),"reject extra NAV task");
         check(!NavFourSlotTaskInventory.exact(
             full+"RootTask id=75 displayId=6\n"+
