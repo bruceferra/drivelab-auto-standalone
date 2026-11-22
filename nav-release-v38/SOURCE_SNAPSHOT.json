@@ -1,0 +1,126 @@
+{
+  "sourceRepository": "bruceferra/drivelab",
+  "sourceBranch": "fix/nav-maps-central-replace-dialog-20261121",
+  "sourceCommit": "eafda806a27558df362a949330e0240c3af03bba",
+  "releaseBranch": "release/nav-lab-v38-central-maps-route-ota-20261121",
+  "versionName": "0.1.40-lab.38",
+  "versionCode": 42,
+  "files": [
+    {
+      "path": "nav-release-v38/apps/nav/bridge-runtime-overlay/nav_mosaic_touch_accessibility.xml",
+      "gitBlob": "f322544fbfa27c58e66475516fe09f251ecb0e59"
+    },
+    {
+      "path": "nav-release-v38/apps/nav/bridge-runtime-overlay/NavClusterReadOnlyProbe.java",
+      "gitBlob": "3c8d8cc5b1e8d97e7e1e8f9b8e5ac2d510ce3858"
+    },
+    {
+      "path": "nav-release-v38/apps/nav/bridge-runtime-overlay/NavClusterTaskInventory.java",
+      "gitBlob": "1d682404e030f118b9847f605ceea0b6c8be0cb1"
+    },
+    {
+      "path": "nav-release-v38/apps/nav/bridge-runtime-overlay/NavClusterTaskInventoryTest.java",
+      "gitBlob": "4b49b6cda70a7a65ded247b0af9fcb85ddcad499"
+    },
+    {
+      "path": "nav-release-v38/apps/nav/bridge-runtime-overlay/NavMosaicExitPolicy.java",
+      "gitBlob": "00672cce96850e2f8b6d2708e3b4a8b1b219354f"
+    },
+    {
+      "path": "nav-release-v38/apps/nav/bridge-runtime-overlay/NavMosaicExitPolicyTest.java",
+      "gitBlob": "b3cae0c7556c1589fbcfef3434f3c5008975b829"
+    },
+    {
+      "path": "nav-release-v38/apps/nav/bridge-runtime-overlay/NavMosaicMapsRoute.java",
+      "gitBlob": "1108e99db5f7df0957f2488941944c0c2dee6079"
+    },
+    {
+      "path": "nav-release-v38/apps/nav/bridge-runtime-overlay/NavMosaicSessionRegistry.java",
+      "gitBlob": "fdbbe301132653e7569a8c484b6b077fb9a06a7f"
+    },
+    {
+      "path": "nav-release-v38/apps/nav/bridge-runtime-overlay/NavMosaicTouchRecovery.java",
+      "gitBlob": "0944abd7ed870ebc33bdc09e2e25ee0d9bdb4f68"
+    },
+    {
+      "path": "nav-release-v38/apps/nav/bridge-runtime-overlay/NavMosaicTouchService.java",
+      "gitBlob": "06c1a96941c44e26d928e0d05c859be116ad835d"
+    },
+    {
+      "path": "nav-release-v38/apps/nav/bridge-runtime-overlay/NavOwnClusterProbe.java",
+      "gitBlob": "59cd3a694c50f2b1002605190fab5a9ccf833e33"
+    },
+    {
+      "path": "nav-release-v38/apps/nav/bridge-runtime-overlay/NavOwnClusterWazePolicy.java",
+      "gitBlob": "00c86b0de09cf8113cfbb5bcdb612927a5ca6c8a"
+    },
+    {
+      "path": "nav-release-v38/apps/nav/bridge-runtime-overlay/NavOwnClusterWazePolicyTest.java",
+      "gitBlob": "c974b6e1001db918c05685b5b2fc875dc9398829"
+    },
+    {
+      "path": "nav-release-v38/apps/nav/bridge-runtime-overlay/NavVirtualMosaicActivity.java",
+      "gitBlob": "a18a4671a7653a4cdf1679878190280d2e286ce0"
+    },
+    {
+      "path": "nav-release-v38/apps/nav/core/src/main/java/ar/com/rango5gps/drivelabnav/core/NavMosaicTaskPolicy.java",
+      "gitBlob": "e5746ff2aedf4e2a625585382c9cd4dae6d5dab4"
+    },
+    {
+      "path": "nav-release-v38/apps/nav/core/src/test/java/ar/com/rango5gps/drivelabnav/core/NavMosaicTaskPolicyTest.java",
+      "gitBlob": "3c35dd08d233d5082ba2d2bfca3768099bc6394a"
+    },
+    {
+      "path": "nav-release-v38/tools/nav-maps-central-dialog-stage.py",
+      "gitBlob": "4475a7ea3e9281f30e5f2922d51e01000d059c61"
+    },
+    {
+      "path": "nav-release-v38/tools/nav-mosaic-adb-launch-stage.py",
+      "gitBlob": "d735fce351d0b0eec03b6ed48202c5b74ce74f4e"
+    },
+    {
+      "path": "nav-release-v38/tools/nav-mosaic-route-stage.py",
+      "gitBlob": "17b6eb3b7f22e81cf4ae25b0153757ff18fab5fb"
+    },
+    {
+      "path": "nav-release-v38/tools/nav-mosaic-wheel-stage.py",
+      "gitBlob": "3d20f2e85c70c6c3234d52795a62de1ca95daa12"
+    },
+    {
+      "path": "nav-release-v38/tools/nav-own-cluster-waze-adb-stage.py",
+      "gitBlob": "e9824bd95a7630b08ac4bfc1f482e9bb565aa386"
+    },
+    {
+      "path": "nav-release-v38/tools/nav-v27-stage.py",
+      "gitBlob": "aa0f499a59bc23d9faf55b88cd51591fd01c91bb"
+    },
+    {
+      "path": "nav-release-v38/tools/nav-v28-stage.py",
+      "gitBlob": "d6e56cf86a204cfed9abd3eaeea46aa45b5a7ad0"
+    },
+    {
+      "path": "nav-release-v38/tools/nav-v29-stage.py",
+      "gitBlob": "435f04544d7cdfc516dc9886d01540cb2b6973eb"
+    },
+    {
+      "path": "nav-release-v38/tools/nav-v30-stage.py",
+      "gitBlob": "7bc77fa1dd9780e8ba957268c8f842edf6345885"
+    },
+    {
+      "path": "nav-release-v38/tools/nav-v31-stage.py",
+      "gitBlob": "eefb1dcfa924bb6ddc7cd2061c49c5e7fa627d31"
+    },
+    {
+      "path": "nav-release-v38/tools/nav-v32-stage.py",
+      "gitBlob": "018de76a641dcc0cca23c4e0120473632a9df65c"
+    },
+    {
+      "path": "nav-release-v38/tools/nav-v34-stage.py",
+      "gitBlob": "382680f621d2724baa042b456bd2e96802960f38"
+    },
+    {
+      "path": "nav-release-v38/tools/nav-virtual-mosaic-stage.py",
+      "gitBlob": "f6c50beb69909cd3d9507dc53ab5d054a9df5adc"
+    }
+  ]
+}
