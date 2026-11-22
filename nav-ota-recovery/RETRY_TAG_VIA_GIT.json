@@ -1,8 +1,0 @@
-{
-  "approval": "PUBLICAR_NAV_LAB42_SOLO_JETOUR_POR_OTA",
-  "signedCandidateRun": 45050428917,
-  "sourceSha": "b1204f6b0b91753982b514c2e213ac4e90a3bd56",
-  "delivery": "OTA_ONLY",
-  "retry": "pinned_git_ref_push_before_release",
-  "previous": "bridge-lab-v41"
-}
