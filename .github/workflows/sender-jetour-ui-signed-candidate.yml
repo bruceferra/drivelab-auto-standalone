@@ -89,8 +89,8 @@ jobs:
           echo "$baseline" | grep -F "package: name='ar.com.rango5gps.drivelabauto.sender'"
           echo "$baseline" | grep -F "versionName='0.2.0'"
           old_code=$(echo "$baseline" | sed -E "s/.*versionCode='([0-9]+)'.*/\1/")
-          test "$old_code" -lt 26 || {
-            echo "BLOCKED: new code26 is not greater than installed code $old_code" >&2; exit 1;
+          test "$old_code" -lt 30 || {
+            echo "BLOCKED: new code30 is not greater than installed code $old_code" >&2; exit 1;
           }
           python3 - <<'PY'
           from pathlib import Path
@@ -98,7 +98,7 @@ jobs:
           s=p.read_text()
           assert s.count('versionCode 25')==1
           assert s.count("versionName '0.2.24'")==1
-          p.write_text(s.replace('versionCode 25','versionCode 26')
+          p.write_text(s.replace('versionCode 25','versionCode 30')
               .replace("versionName '0.2.24'","versionName '0.2.25'"))
           PY
           javac -encoding UTF-8 -d /tmp             sender/tests/SenderShareHeadlessSourceContractTest.java
@@ -112,7 +112,7 @@ jobs:
           new_cert=$("$apksigner" verify --print-certs "$signed" |
             awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
           test -n "$old_cert" && test "$old_cert" = "$new_cert"
-          "$aapt" dump badging "$signed" | grep -F             "package: name='ar.com.rango5gps.drivelabauto.sender' versionCode='26' versionName='0.2.25'"
+          "$aapt" dump badging "$signed" | grep -F             "package: name='ar.com.rango5gps.drivelabauto.sender' versionCode='30' versionName='0.2.25'"
           cp "$signed" dist/sender25/DriveLab-Auto-Sender-v0.2.25.apk
           (cd dist/sender25; sha256sum DriveLab-Auto-Sender-v0.2.25.apk > SHA256SUMS)
           python3 - <<'PY'
@@ -122,12 +122,12 @@ jobs:
           apk=d/'DriveLab-Auto-Sender-v0.2.25.apk'
           m={
             'packageName':'ar.com.rango5gps.drivelabauto.sender',
-            'versionName':'0.2.25','versionCode':26,
+            'versionName':'0.2.25','versionCode':30,
             'sha256':hashlib.sha256(apk.read_bytes()).hexdigest(),
             'apkUrl':'https://github.com/bruceferra/drivelab-auto-standalone/releases/download/sender-v0.2.25/'+apk.name}
           (d/'sender.json').write_text(json.dumps(m,indent=2)+'\n',encoding='utf8')
           assert apk.is_file() and apk.stat().st_size>1000000
-          print('PASS original Sender certificate and code26 identity; NO OTA released')
+          print('PASS original Sender certificate and code30 identity; NO OTA released')
           PY
       - name: Upload original-signed candidate privately (NO RELEASE)
         uses: actions/upload-artifact@v4
