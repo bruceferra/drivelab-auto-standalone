@@ -1,0 +1,15 @@
+{
+  "kind": "drivelab-nav-ota-provenance",
+  "approvedScope": "LAB54 targeted NAV 4P swap failure hotfix: stop premature shrinking Waze cluster, restore full-screen after uncertain rollback, permit exact NAV VirtualDisplay temporarily STATE_OFF after setSurface(null), wait for frame and show bounded diagnostics. Preserve LAB53 classic mode and LAB52 Waze recovery, QR, Maps, Spotify, Sender/Receiver/OEM/T1Launcher.",
+  "sourceRunId": 45085140521,
+  "sourceCommit": "882faa06e3663668d823ee597a7f47ca65381f80",
+  "sourceBranch": "fix/nav-lab54-4p-fail-safe-layout-20261122",
+  "applicationId": "ar.com.rango5gps.drivelabauto.boot.lab",
+  "versionName": "0.1.56-lab.54",
+  "versionCode": 58,
+  "releaseTag": "bridge-lab-v54",
+  "previousOtaVersion": "0.1.55-lab.53",
+  "previousOtaSha256": "555ab131a4719b88244ab41bb842da6cc5c1d9fb7d0263a3565557922501bc99",
+  "previousOtaSize": 5162709,
+  "note": "Driver identifies exact NAV VirtualDisplay during temporary STATE_OFF following setSurface(null) so second leg and rollback can restore; precommit no longer reconfigures host TextureView Matrix or shrinks Waze. 4P cluster keeps full-size Waze until second app verified; unsafe rollback resets NAV-only visual geometry but retains task uncertainty block and requests user close/reopen NAV. 5-second bounded frame check, diagnostic includes exception message. Build and original signed CI pass; physical 4P swap not verified. No fourth independently launched app; LAB53 backup remains."
+}
