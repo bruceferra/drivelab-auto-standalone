@@ -195,7 +195,7 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
         String summary=NavWazeDisplayTrace.launchReply(result);
         synchronized(wazeTrace){
             if(wazeTrace.length()>2500)return;
-            wazeTrace.append("\\nRESULTADO MOVE-STACK: ").append(summary);
+            wazeTrace.append("\nRESULTADO MOVE-STACK: ").append(summary);
             lastWazeTrace=wazeTrace.toString();
         }
     }
