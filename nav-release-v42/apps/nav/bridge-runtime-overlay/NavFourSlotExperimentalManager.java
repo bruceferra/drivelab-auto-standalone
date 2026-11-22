@@ -310,7 +310,14 @@ final class NavFourSlotExperimentalManager {
                 cluster.originalSink);
             driver=new NavFourSlotAndroidSurfaceDriver(
                 owner,state,surfaces,records,proof,
-                ()->BridgeLocalAdb.shell(owner,"am stack list"),geo,
+                ()->{
+                    try{
+                        return BridgeLocalAdb.shell(owner,"am stack list");
+                    }catch(Exception denied){
+                        // ADB unavailable => no task proof => fail closed.
+                        return null;
+                    }
+                },geo,
                 borrowed);
             // Refresh both central slots' source geometry on swaps.
             NavFourSlotClusterABHost.fit(
