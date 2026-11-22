@@ -1003,6 +1003,11 @@ public final class NavVirtualMosaicActivity extends Activity {
      */
     private void exitAndCloseTasks(){
         if(closed||exitInProgress)return;
+        if(fourSlotManager!=null&&!fourSlotManager.canSafelyClose()){
+            show("Esperá a que termine el intercambio de superficies "+
+                "antes de cerrar NAV. No se perdieron tareas.");
+            return;
+        }
         if(NavOwnClusterProbe.hasActiveWazeTrial()){
             if(exitPending)return;
             exitPending=true;
