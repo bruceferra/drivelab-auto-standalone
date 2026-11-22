@@ -46,7 +46,7 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
     private static NavOwnClusterProbe active;
     private final Activity owner;
     private final long session;
-    private final boolean wazeTrial;
+    private boolean wazeTrial;
     private int ownDisplayId=-1;
     private volatile boolean launchInProgress,closeRequested,closingInProgress;
     private volatile String launchProblem;
