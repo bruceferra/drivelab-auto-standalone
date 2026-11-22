@@ -16,14 +16,14 @@ touch=stage/"boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/NavMosaicTouc
 route=stage/"boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/NavMosaicMapsRoute.java"
 assert boot.is_file() and touch.is_file() and route.is_file()
 s=boot.read_text(encoding="utf8")
-old="""                    routeAccepted=outcome.startsWith(
-                        "ENTREGADO AL GOOGLE MAPS EXISTENTE DE NAV");"""
-new="""                    routeAccepted=outcome.startsWith(
-                        "ENTREGADO AL GOOGLE MAPS EXISTENTE DE NAV");
-                    if(routeAccepted){
-                        // One-shot permission ONLY after Android confirmed
-                        // the route was delivered to THIS exact NAV task.
-                        // The destination itself and its task are unchanged.
+old="""                    if(result.startsWith(
+                        "ENTREGADO AL GOOGLE MAPS EXISTENTE DE NAV"))
+                        accepted++;"""
+new="""                    if(result.startsWith(
+                        "ENTREGADO AL GOOGLE MAPS EXISTENTE DE NAV")){
+                        accepted++;
+                        // Arm route-confirmation ONLY for existing NAV Maps,
+                        // not when a Waze-only Sender target arrives.
                         try{
                             NavMosaicMapsRoute.arm(
                                 this,nav.token,nav.displayId);
@@ -38,7 +38,7 @@ assert s.count(old)==1 and "NavMosaicMapsRoute.arm(" not in s, (
 s=s.replace(old,new,1)
 assert "BridgeLocalAdb.deliverToExistingNavMaps(" in s
 assert "if(nav!=null&&!BridgeRouteTarget.T1_LAUNCHER.equals(target))" in s
-assert "routeAccepted=outcome.startsWith(" in s
+assert "ENTREGADO AL WAZE EXISTENTE DEL CLÚSTER NAV" in s
 assert "BridgeGoogleMapsReplacement.arm(this,displayId)" in s
 boot.write_text(s,encoding="utf8")
 t=touch.read_text(encoding="utf8")
