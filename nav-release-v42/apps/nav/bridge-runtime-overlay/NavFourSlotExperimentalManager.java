@@ -4,6 +4,7 @@ import android.app.Activity;
 import android.app.AlertDialog;
 import android.graphics.SurfaceTexture;
 import android.hardware.display.VirtualDisplay;
+import android.view.Surface;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.TextureView;
@@ -38,6 +39,7 @@ final class NavFourSlotExperimentalManager {
     private final Activity owner;
     private final long token;
     private final VirtualDisplay mapsDisplay,spotifyDisplay;
+    private final Surface mapsSink,spotifySink;
     private final TextureView mapsTexture,spotifyTexture;
     private final FrameLayout mapsHost,spotifyHost;
     private final LinearLayout toolbar;
@@ -53,15 +55,19 @@ final class NavFourSlotExperimentalManager {
 
     NavFourSlotExperimentalManager(Activity activity,long session,
             VirtualDisplay maps,VirtualDisplay media,
+            Surface mapsOwnedSink,Surface mediaOwnedSink,
             TextureView mapsView,TextureView mediaView,
             FrameLayout panelA,FrameLayout panelB,
             LinearLayout topBar,Reporter callback){
         if(activity==null||session<=0||maps==null||media==null||
+           mapsOwnedSink==null||mediaOwnedSink==null||
+           !mapsOwnedSink.isValid()||!mediaOwnedSink.isValid()||
            mapsView==null||mediaView==null||panelA==null||
            panelB==null||topBar==null||callback==null)
             throw new SecurityException("NAV cuatro paneles sin propietario");
         owner=activity;token=session;
         mapsDisplay=maps;spotifyDisplay=media;
+        mapsSink=mapsOwnedSink;spotifySink=mediaOwnedSink;
         mapsTexture=mapsView;spotifyTexture=mediaView;
         mapsHost=panelA;spotifyHost=panelB;toolbar=topBar;
         reporter=callback;
@@ -290,9 +296,16 @@ final class NavFourSlotExperimentalManager {
                         Thread.currentThread().interrupt();return false;
                     }
                 };
+            Map<NavFourSlotPolicy.Slot,Surface> borrowed=
+                new EnumMap<>(NavFourSlotPolicy.Slot.class);
+            borrowed.put(NavFourSlotPolicy.Slot.CENTRAL_A,mapsSink);
+            borrowed.put(NavFourSlotPolicy.Slot.CENTRAL_B,spotifySink);
+            borrowed.put(NavFourSlotPolicy.Slot.TABLERO_A,
+                cluster.originalSink);
             driver=new NavFourSlotAndroidSurfaceDriver(
                 owner,state,surfaces,records,proof,
-                ()->BridgeLocalAdb.shell(owner,"am stack list"),geo);
+                ()->BridgeLocalAdb.shell(owner,"am stack list"),geo,
+                borrowed);
             // Refresh both central slots' source geometry on swaps.
             NavFourSlotClusterABHost.fit(
                 cluster.slotA,cluster.width,cluster.height);
