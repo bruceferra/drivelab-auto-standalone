@@ -1,0 +1,15 @@
+{
+  "kind": "drivelab-nav-ota-provenance",
+  "approvedScope": "NAV LAB48 geometry-only correction: preserve LAB47 sender dispatch, Spotify playback, Waze cluster, original Jetour OEM, Sender/Receiver signatures and QR data; no new permissions, wheel or T1Launcher changes",
+  "sourceRunId": 45064701285,
+  "sourceCommit": "6462e2fae1c0c25d28ae5f6fa474f4ce25adfe2f",
+  "sourceBranch": "fix/nav-lab48-native-panel-geometry-safe-touch-20261122",
+  "applicationId": "ar.com.rango5gps.drivelabauto.boot.lab",
+  "versionName": "0.1.50-lab.48",
+  "versionCode": 52,
+  "releaseTag": "bridge-lab-v48",
+  "previousOtaVersion": "0.1.49-lab.47",
+  "previousOtaSha256": "5350b4439742accd2f96af7d9f87c629f284c177e6e68802b36fbc9e4c06e2b3",
+  "previousOtaSize": 5100077,
+  "note": "Native-size NAV VirtualDisplays exactly match host panel slots; no cropping or forced zoom; uses center-inside when the central UI temporarily changes layout. Accessibility gestures use live verified display names/real pixel dimensions. Java geometry tests and original-signed Android CI passed, but real Jetour visual/touch test remains necessary. LAB47 rollback preserved."
+}
