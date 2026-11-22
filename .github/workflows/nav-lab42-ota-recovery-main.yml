@@ -2,7 +2,7 @@ name: Recover DriveLab NAV LAB42 OTA from default-branch publisher
 on:
   push:
     branches: [main]
-    paths: ['nav-ota-recovery/APPROVE_LAB42_FROM_MAIN.json', 'nav-ota-recovery/RETRY_TAG_VIA_GIT.json']
+    paths: ['nav-ota-recovery/APPROVE_LAB42_FROM_MAIN.json', 'nav-ota-recovery/RETRY_TAG_VIA_GIT.json', 'nav-ota-recovery/RETRY_FULL_FETCH.json']
 
 permissions:
   contents: write
@@ -27,6 +27,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           ref: release/nav-lab-v42-direct-waze-main-ota-20261122
+          fetch-depth: 64
           persist-credentials: false
       - name: Require owner approval, signed build success and exact source commit
         shell: bash
