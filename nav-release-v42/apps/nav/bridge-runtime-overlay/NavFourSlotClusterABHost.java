@@ -5,7 +5,6 @@ import android.graphics.Matrix;
 import android.graphics.drawable.GradientDrawable;
 import android.view.Display;
 import android.view.Gravity;
-import android.view.SurfaceTexture;
 import android.view.TextureView;
 import android.view.View;
 import android.view.ViewGroup;
