@@ -1,0 +1,14 @@
+{
+  "kind": "drivelab-nav-ota-provenance",
+  "approvedScope": "NAV LAB47 only: transparent OEM-inspired quick controls and zero outer/per-pane padding; no Sender, Receiver, OEM, cluster task or four-slot system changes",
+  "sourceRunId": 45063261310,
+  "sourceCommit": "f27909612ad0ff9e1814b39c4fed868f2569faf2",
+  "sourceBranch": "fix/nav-lab47-transparent-toolbar-fullbleed-20261122",
+  "applicationId": "ar.com.rango5gps.drivelabauto.boot.lab",
+  "versionName": "0.1.49-lab.47",
+  "versionCode": 51,
+  "releaseTag": "bridge-lab-v47",
+  "previousOtaVersion": "0.1.48-lab.46",
+  "previousOtaSha256": "69eb97fa08971a5464564f6d5c6b2d6e4319b6d7338ddff3b2c85951dcda39ae",
+  "note": "Keep LAB46 layout/content and double Maps+Waze Sender; make top buttons transparent with subtle Jetour cyan ripple, cluster status and flush panel padding. Does not contain four-slot movement. QA passed and originally signed, physical screenshot test pending."
+}
