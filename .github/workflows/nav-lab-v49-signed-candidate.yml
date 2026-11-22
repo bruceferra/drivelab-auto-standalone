@@ -92,6 +92,7 @@ jobs:
             '.github/workflows/nav-lab-v49-signed-candidate.yml',
             'nav-release-v42/apps/nav/bridge-runtime-overlay/NavVirtualMosaicActivity.java',
             'nav-release-v42/apps/nav/bridge-runtime-overlay/NavOwnClusterProbe.java',
+            'nav-release-v42/tools/nav-v47-stage.py',
             'nav-release-v42/tools/nav-pairing-ota-resume-stage.py',
             'nav-release-v42/tools/nav-v49-stage.py'}
           changed=set(x.decode() for x in subprocess.check_output(
