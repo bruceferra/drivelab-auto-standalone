@@ -298,7 +298,7 @@ public final class NavVirtualMosaicActivity extends Activity {
         clusterWazeButton=new Button(this);
         clusterWazeButton.setAllCaps(false);
         clusterWazeButton.setText(
-            "CLÚSTER NAV · WAZE MAIN DIRECTO · PRUEBA 45 S");
+            "CLÚSTER NAV · WAZE (ABRIR / CERRAR MANUAL)");
         clusterWazeButton.setEnabled(false);
         clusterWazeButton.setOnClickListener(v->{
             if(closed||!appsRequested||openingApps||exitInProgress||
