@@ -312,7 +312,7 @@ public final class NavVirtualMosaicActivity extends Activity {
         bar.setPadding(dp(this,5),0,dp(this,5),0);
         GradientDrawable toolbarShape=new GradientDrawable();
         toolbarShape.setColor(0xA0142B37);
-        toolbarShape.setCornerRadius(dp(this,21));
+        toolbarShape.setCornerRadius(dp(this,9));
         toolbarShape.setStroke(dp(this,1),0x554E8B9A);
         bar.setBackground(toolbarShape);
         bar.setClipToOutline(true);
