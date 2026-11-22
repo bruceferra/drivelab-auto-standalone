@@ -1,0 +1,409 @@
+name: DriveLab NAV LAB 49 — ORIGINAL signed APK candidate (NO OTA)
+on:
+  push:
+    branches: [fix/nav-lab49-ota-pairing-resume-rounded-ui-20261122]
+    paths:
+      - '.github/workflows/nav-lab-v49-signed-candidate.yml'
+      - 'nav-release-v42/apps/**'
+      - 'nav-release-v42/tools/**'
+      - 'nav-release-v42/SOURCE_SNAPSHOT.json'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: drivelab-nav-v46-jetour-mosaic-original-sign-20261122
+  cancel-in-progress: true
+
+jobs:
+  sign-and-verify:
+    if: github.repository == 'bruceferra/drivelab-auto-standalone' && github.ref == 'refs/heads/fix/nav-lab49-ota-pairing-resume-rounded-ui-20261122'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      RECEIVER_STORE_PASSWORD: ${{ secrets.RECEIVER_STORE_PASSWORD }}
+      RECEIVER_KEY_ALIAS: ${{ secrets.RECEIVER_KEY_ALIAS }}
+      RECEIVER_KEY_PASSWORD: ${{ secrets.RECEIVER_KEY_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify ONLY original Bridge LAB v24 source and private NAV mirror
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse bridge-lab-v24^{commit})" = 64282656f61e9287d8de8faa655b6a5f56b4432d
+          git diff --exit-code bridge-lab-v24 HEAD -- boot sender common settings.gradle build.gradle gradle.properties
+          python3 - <<'PY'
+          import json,pathlib,subprocess
+          p=pathlib.Path('nav-release-v42/SOURCE_SNAPSHOT.json')
+          j=json.loads(p.read_text(encoding='utf8'))
+          assert j['sourceRepository']=='bruceferra/drivelab'
+          assert j['sourceCommit']=='03fcdf4560db89bba31fa36cd1fe9f087c1cc253'
+          assert len(j['files'])==33
+          lab43changed={
+            'nav-release-v42/LAB43_WAZE_HANDOFF.md',
+            'nav-release-v42/apps/nav/bridge-runtime-overlay/NavOwnClusterProbe.java',
+            'nav-release-v42/apps/nav/bridge-runtime-overlay/NavOwnClusterWazePolicy.java',
+            'nav-release-v42/apps/nav/bridge-runtime-overlay/NavOwnClusterWazePolicyTest.java',
+            'nav-release-v42/apps/nav/bridge-runtime-overlay/NavWazeRelocationPolicy.java',
+            'nav-release-v42/apps/nav/bridge-runtime-overlay/NavWazeRelocationPolicyTest.java',
+            'nav-release-v42/tools/nav-virtual-mosaic-stage.py',
+            'nav-release-v42/tools/nav-own-cluster-waze-adb-stage.py',
+            'nav-release-v42/tools/nav-v43-stage.py'}
+          lab44changed={
+            'nav-release-v42/apps/nav/bridge-runtime-overlay/NavOwnClusterProbe.java',
+            'nav-release-v42/apps/nav/bridge-runtime-overlay/NavVirtualMosaicActivity.java',
+            'nav-release-v42/apps/nav/bridge-runtime-overlay/NavWazeRoutePolicy.java',
+            'nav-release-v42/apps/nav/bridge-runtime-overlay/NavWazeRoutePolicyTest.java',
+            'nav-release-v42/tools/nav-own-cluster-waze-adb-stage.py',
+            'nav-release-v42/tools/nav-mosaic-route-stage.py',
+            'nav-release-v42/tools/nav-maps-central-dialog-stage.py',
+            'nav-release-v42/tools/nav-virtual-mosaic-stage.py',
+            'nav-release-v42/tools/nav-v44-stage.py'}
+          lab45changed={
+            '.github/workflows/nav-lab-v49-signed-candidate.yml',
+            'nav-release-v42/apps/nav/bridge-runtime-overlay/NavOwnClusterProbe.java',
+            'nav-release-v42/apps/nav/bridge-runtime-overlay/NavVirtualMosaicActivity.java',
+            'nav-release-v42/tools/nav-virtual-mosaic-stage.py',
+            'nav-release-v42/tools/nav-spotify-explicit-close-stage.py',
+            'nav-release-v42/tools/nav-v45-stage.py'}
+          lab46changed={
+            '.github/workflows/nav-lab-v49-signed-candidate.yml',
+            'nav-release-v42/apps/nav/bridge-runtime-overlay/NavVirtualMosaicActivity.java',
+            'nav-release-v42/tools/nav-virtual-mosaic-stage.py',
+            'nav-release-v42/tools/nav-v46-stage.py'}
+          lab47changed={
+            '.github/workflows/nav-lab-v49-signed-candidate.yml',
+            'nav-release-v42/apps/nav/bridge-runtime-overlay/NavVirtualMosaicActivity.java',
+            'nav-release-v42/tools/nav-v46-stage.py',
+            'nav-release-v42/tools/nav-v47-stage.py'}
+          lab48changed={
+            '.github/workflows/nav-lab-v49-signed-candidate.yml',
+            'nav-release-v42/apps/nav/bridge-runtime-overlay/NavVirtualMosaicActivity.java',
+            'nav-release-v42/apps/nav/bridge-runtime-overlay/NavMosaicTouchService.java',
+            'nav-release-v42/apps/nav/bridge-runtime-overlay/NavMosaicGeometry.java',
+            'nav-release-v42/apps/nav/bridge-runtime-overlay/NavMosaicGeometryTest.java',
+            'nav-release-v42/tools/nav-virtual-mosaic-stage.py',
+            'nav-release-v42/tools/nav-v48-stage.py'}
+          lab49changed={
+            '.github/workflows/nav-lab-v49-signed-candidate.yml',
+            'nav-release-v42/apps/nav/bridge-runtime-overlay/NavVirtualMosaicActivity.java',
+            'nav-release-v42/apps/nav/bridge-runtime-overlay/NavOwnClusterProbe.java',
+            'nav-release-v42/tools/nav-pairing-ota-resume-stage.py',
+            'nav-release-v42/tools/nav-v49-stage.py'}
+          changed=set(x.decode() for x in subprocess.check_output(
+            ['git','diff','--name-only',
+             '6462e2fae1c0c25d28ae5f6fa474f4ce25adfe2f','HEAD']
+            ).splitlines())
+          assert changed==lab49changed, 'BLOCKED unrelated LAB49 changes: '+repr(changed^lab49changed)
+          for item in j['files']:
+            name=item['path']
+            if name in lab43changed or name in lab44changed or name in lab45changed or name in lab46changed or name in lab47changed or name in lab48changed or name in lab49changed: continue
+            sha=subprocess.check_output(['git','hash-object',name],text=True).strip()
+            assert sha==item['gitBlob'],f'BLOCKED unchanged canonical NAV source: {name}'
+          print('PASS LAB49: exact LAB43 signed baseline and restricted Sender Waze change allowlist')
+          PY
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Android SDK 35
+        shell: bash
+        run: |
+          set -euo pipefail
+          m=$(find "$ANDROID_HOME/cmdline-tools" -type f -name sdkmanager -print -quit)
+          test -x "$m"
+          "$m" 'platforms;android-35' 'build-tools;35.0.0' >/dev/null
+      - name: Recover ORIGINAL Jetour Bridge LAB signing key (no new certificates)
+        shell: bash
+        env:
+          RECEIVER_KEYSTORE_B64: ${{ secrets.RECEIVER_KEYSTORE_B64 }}
+        run: |
+          set -euo pipefail
+          test -n "$RECEIVER_KEYSTORE_B64" &&
+          test -n "$RECEIVER_STORE_PASSWORD" &&
+          test -n "$RECEIVER_KEY_ALIAS" &&
+          test -n "$RECEIVER_KEY_PASSWORD" || {
+            echo 'BLOCKED: Original signed NAV Bridge LAB keystore unavailable'; exit 41;
+          }
+          printf '%s' "$RECEIVER_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/nav-original-bridge.p12"
+          chmod 600 "$RUNNER_TEMP/nav-original-bridge.p12"
+          echo "RECEIVER_KEYSTORE=$RUNNER_TEMP/nav-original-bridge.p12" >> "$GITHUB_ENV"
+      - name: Compile only NAV Jetour LAB 49 and strict sender-to-existing-maps tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          root="$GITHUB_WORKSPACE/nav-release-v42"
+          stage="$RUNNER_TEMP/nav-v43-boot"
+          mkdir -p "$stage/.github/workflows"
+          cp -a boot sender common build.gradle settings.gradle gradle.properties "$stage/"
+          cp .github/workflows/publish-bridge-lab-ota.yml "$stage/.github/workflows/"
+          cp -a nav-transition/navCore "$stage/navCore"
+          mkdir -p "$stage/navCore/src/main/java/ar/com/rango5gps/drivelabnav/core"
+          cp "$root/apps/nav/core/src/main/java/ar/com/rango5gps/drivelabnav/core/NavMosaicTaskPolicy.java" "$stage/navCore/src/main/java/ar/com/rango5gps/drivelabnav/core/"
+          mkdir -p "$stage/.nav-qa-classes"
+          javac -encoding UTF-8 -d "$stage/.nav-qa-classes" \
+            "$root/apps/nav/core/src/main/java/ar/com/rango5gps/drivelabnav/core/NavMosaicTaskPolicy.java" \
+            "$root/apps/nav/core/src/test/java/ar/com/rango5gps/drivelabnav/core/NavMosaicTaskPolicyTest.java"
+          java -cp "$stage/.nav-qa-classes" ar.com.rango5gps.drivelabnav.core.NavMosaicTaskPolicyTest
+          javac -encoding UTF-8 -d "$stage/.nav-qa-classes" \
+            "$root/apps/nav/bridge-runtime-overlay/NavMosaicExitPolicy.java" \
+            "$root/apps/nav/bridge-runtime-overlay/NavMosaicExitPolicyTest.java"
+          java -cp "$stage/.nav-qa-classes" ar.com.rango5gps.drivelabauto.boot.NavMosaicExitPolicyTest
+          javac -encoding UTF-8 -d "$stage/.nav-qa-classes" \
+            "$root/apps/nav/bridge-runtime-overlay/NavOwnClusterWazePolicy.java" \
+            "$root/apps/nav/bridge-runtime-overlay/NavOwnClusterWazePolicyTest.java"
+          java -cp "$stage/.nav-qa-classes" ar.com.rango5gps.drivelabauto.boot.NavOwnClusterWazePolicyTest
+          javac -encoding UTF-8 -d "$stage/.nav-qa-classes" \
+            "$root/apps/nav/bridge-runtime-overlay/NavOwnClusterWazePolicy.java" \
+            "$root/apps/nav/bridge-runtime-overlay/NavWazeRelocationPolicy.java" \
+            "$root/apps/nav/bridge-runtime-overlay/NavWazeRelocationPolicyTest.java"
+          java -cp "$stage/.nav-qa-classes" ar.com.rango5gps.drivelabauto.boot.NavWazeRelocationPolicyTest
+          javac -encoding UTF-8 -d "$stage/.nav-qa-classes" \
+            "$root/apps/nav/bridge-runtime-overlay/NavOwnClusterWazePolicy.java" \
+            "$root/apps/nav/bridge-runtime-overlay/NavWazeRelocationPolicy.java" \
+            "$root/apps/nav/bridge-runtime-overlay/NavWazeRoutePolicy.java" \
+            "$root/apps/nav/bridge-runtime-overlay/NavWazeRoutePolicyTest.java"
+          java -cp "$stage/.nav-qa-classes" ar.com.rango5gps.drivelabauto.boot.NavWazeRoutePolicyTest
+          javac -encoding UTF-8 -d "$stage/.nav-qa-classes" \
+            "$root/apps/nav/bridge-runtime-overlay/NavMosaicGeometry.java" \
+            "$root/apps/nav/bridge-runtime-overlay/NavMosaicGeometryTest.java"
+          java -cp "$stage/.nav-qa-classes" ar.com.rango5gps.drivelabauto.boot.NavMosaicGeometryTest
+          javac -encoding UTF-8 -d "$stage/.nav-qa-classes" \
+            "$root/apps/nav/bridge-runtime-overlay/NavWazeDisplayTrace.java" \
+            "$root/apps/nav/bridge-runtime-overlay/NavWazeDisplayTraceTest.java"
+          java -cp "$stage/.nav-qa-classes" ar.com.rango5gps.drivelabauto.boot.NavWazeDisplayTraceTest
+          javac -encoding UTF-8 -d "$stage/.nav-qa-classes" \
+            "$root/apps/nav/bridge-runtime-overlay/NavMosaicLifecyclePolicy.java" \
+            "$root/apps/nav/bridge-runtime-overlay/NavMosaicLifecyclePolicyTest.java"
+          java -cp "$stage/.nav-qa-classes" ar.com.rango5gps.drivelabauto.boot.NavMosaicLifecyclePolicyTest
+          python3 - <<'PY'
+          from pathlib import Path
+          own=Path("nav-release-v42/apps/nav/bridge-runtime-overlay/NavOwnClusterProbe.java").read_text(encoding="utf8")
+          assert "DriveLabNAVClusterOwn" in own
+          assert "NavMosaicExitPolicy.parse" in own
+          assert "new Presentation(owner,hardware)" in own
+          assert "compareCentralTasks(false)" in own and "compareCentralTasks(true)" in own
+          assert not any(n in own for n in ("T1Launcher","T1Mapa","Mainthor","startActivity(","moveTask","am stack move"))
+          assert "NavOwnClusterWazePolicy.inspect(" in own
+          assert "BridgeLocalAdb.startOwnClusterWaze(" in own
+          assert "NavWazeRelocationPolicy.removeOwned(" in own
+          route=Path("nav-release-v42/apps/nav/bridge-runtime-overlay/NavMosaicMapsRoute.java").read_text(encoding="utf8")
+          touch=Path("nav-release-v42/apps/nav/bridge-runtime-overlay/NavMosaicTouchService.java").read_text(encoding="utf8")
+          assert "NavMosaicMapsRoute.arm(" in Path("nav-release-v42/tools/nav-maps-central-dialog-stage.py").read_text(encoding="utf8")
+          assert "NavMosaicMapsRoute.consumeExit(this,request)" in touch
+          assert "BridgeGoogleMapsReplacement.exitQuestion(label)" in touch
+          assert "NavMosaicSessionRegistry.snapshot(context)" in route
+          lifecycle=Path("nav-release-v42/apps/nav/bridge-runtime-overlay/NavMosaicLifecyclePolicy.java").read_text(encoding="utf8")
+          central=Path("nav-release-v42/apps/nav/bridge-runtime-overlay/NavVirtualMosaicActivity.java").read_text(encoding="utf8")
+          own=Path("nav-release-v42/apps/nav/bridge-runtime-overlay/NavOwnClusterProbe.java").read_text(encoding="utf8")
+          assert "retainOnStop(" in lifecycle and "retainSurfaceOnDestroy(" in lifecycle
+          assert "NavMosaicLifecyclePolicy.retainOnStop(" in central
+          assert "p.retainedTexture=surface" in central
+          assert "p.display.setSurface(fresh)" in central
+          assert "NavOwnClusterProbe.hasOwnWazeFocusGrace(" in central
+          assert "lastWazeTrialEndedAt=SystemClock.elapsedRealtime()" in own
+          ownWaze=Path("nav-release-v42/apps/nav/bridge-runtime-overlay/NavOwnClusterWazePolicy.java").read_text(encoding="utf8")
+          exactAdb=Path("nav-release-v42/tools/nav-own-cluster-waze-adb-stage.py").read_text(encoding="utf8")
+          trace=Path("nav-release-v42/apps/nav/bridge-runtime-overlay/NavWazeDisplayTrace.java").read_text(encoding="utf8")
+          assert 'getLaunchIntentForPackage("com.waze")' in own
+          assert 'android.intent.action.MAIN' in ownWaze
+          assert 'android.intent.category.LAUNCHER' in ownWaze
+          assert 'getActivityInfo(target.getComponent(),0)' in own
+          assert 'moveNewWazeStackToOwn(' in own
+          assert 'NavWazeRelocationPolicy.relocated(' in own
+          assert "if(info==null||!info.exported)" in own
+          exitPolicy=Path("nav-release-v42/apps/nav/bridge-runtime-overlay/NavMosaicExitPolicy.java").read_text(encoding="utf8")
+          central=Path("nav-release-v42/apps/nav/bridge-runtime-overlay/NavVirtualMosaicActivity.java").read_text(encoding="utf8")
+          ownProbe=Path("nav-release-v42/apps/nav/bridge-runtime-overlay/NavOwnClusterProbe.java").read_text(encoding="utf8")
+          assert "taskStillExists(String report,Task expected)" in exitPolicy
+          assert "NavMosaicExitPolicy.taskStillExists(" in central
+          assert "NavOwnClusterProbe.releaseActiveThen(" in central
+          assert "exitInProgress||exitPending||openingApps" in central
+          assert "recordWazeLaunchReply(reply)" in ownProbe
+          assert "--activity-single-top" in exactAdb and "move-stack" in exactAdb
+          assert "NavWazeDisplayTrace.summarize(" in own
+          assert "NavOwnClusterProbe.showLastWazeTrace(this)" in central
+          assert "com.waze" in trace and "com.google.android.apps.maps" in trace and "com.spotify.music" in trace
+          assert "WAZE_DURATION_MS" not in own
+          assert "if(!wazeTrial)handler.postDelayed(deadline,DURATION_MS)" in own
+          assert "NavMosaicGeometry.fromSurface(width,height)" in central
+          assert "p.sourceWidth=dw;p.sourceHeight=dh" in central
+          assert "NavMosaicGeometry.fit(" in central
+          assert "PANELES · REENCUADRAR SIN RECORTAR" in central
+          assert "owned.getRealSize(dimensions)" in touch
+          assert "NavMosaicGeometry.fromSurface(" in touch
+          assert 'expectedName=panel==0?"DriveLabNAVMapa":"DriveLabNAVSpotify"' in touch
+          assert "int width=panel==0?1280:480" not in touch
+          assert "int dw=index==0?1280:480" not in central
+          assert 'NavMosaicGeometry.java' in Path(
+            "nav-release-v42/tools/nav-virtual-mosaic-stage.py"
+          ).read_text(encoding="utf8")
+          assert "NavOwnClusterProbe.senderRouteTarget" in exactAdb
+          assert "bandHeight=wazeTrial?clusterHeight:" in own
+          assert "toggleWazeDirect(Activity owner,long token)" in own
+          compact=Path("nav-release-v42/apps/nav/bridge-runtime-overlay/NavVirtualMosaicActivity.java").read_text(encoding="utf8")
+          assert 'settingsButton=quickButton("⚙"' in compact
+          assert 'quickClusterButton=quickButton("○  CLÚSTER OFF"' in compact
+          assert 'quickExitButton=quickButton("⏻"' in compact
+          assert "setFullMosaic(true)" in compact
+          assert "NavOwnClusterProbe.toggleWazeDirect(" in compact
+          assert "stopSpotifyAfterOwnedExit(" in compact
+          assert "start_apps_automatically" in compact
+          assert "start_waze_cluster_automatically" in compact
+          assert 'open_in_mosaic' in compact
+          spotifyStage=Path("nav-release-v42/tools/nav-spotify-explicit-close-stage.py").read_text(encoding="utf8")
+          assert '"am force-stop com.spotify.music"' in spotifyStage
+          assert 'exactSpotifyExit=verifiedSpotifyStop&&ownLab' in spotifyStage
+          homeStage=Path("nav-release-v42/tools/nav-virtual-mosaic-stage.py").read_text(encoding="utf8")
+          assert 'getBooleanExtra("nav_open_config_only",false)' in homeStage
+          assert 'getBoolean("open_in_mosaic",true)' in homeStage
+          assert '⌂  VOLVER AL MOSAICO' in homeStage
+          assert "home.setOnClickListener(v->finish())" in homeStage
+          assert "new RippleDrawable(" in compact
+          assert "transparent.setColor(Color.TRANSPARENT)" in compact
+          assert "bar.setBackground(toolbarShape);" in compact
+          assert "toolbarShape.setCornerRadius(dp(this,21))" in compact
+          assert "bar.setClipToOutline(true)" in compact
+          assert "rounded.setCornerRadius(dp(this,24))" in compact
+          assert "clusterRounded.setCornerRadius(19f*density)" in own
+          assert "texture.setClipToOutline(true)" in own
+          pairScript=Path("nav-release-v42/tools/nav-pairing-ota-resume-stage.py").read_text(encoding="utf8")
+          assert "MY_PACKAGE_REPLACED" in pairScript
+          assert "BootLinkService.START" in pairScript
+          assert '"secret"' in pairScript
+          assert 'assert "PAIR_QR" not in s' in pairScript
+          assert "android.intent.action.MY_PACKAGE_REPLACED" in pairScript
+          assert "super.onCreate(state)" in pairScript
+          assert "body.setPadding(0,0,0,0)" in compact
+          assert "normalizedCoverPoint(" in compact
+          assert "GradientDrawable rounded" in compact
+          assert "viewport.setClipToOutline(true)" in compact
+          assert "COVER_PANELS" in compact
+          assert "AUTO_TOUCH" in compact
+          assert "tryEnableSavedTouch();" in compact
+          assert "if(!sent)show(" in compact
+          assert 'TextView cap=label' not in compact
+          assert "frame.setPadding(0,0,0,0)" in compact
+          assert "BridgeWheelAccessibilityService.setManuallyArmed(false)" in compact
+
+
+          assert "deliverToExistingNavWaze(" in exactAdb
+          assert "exactNavWazeDelivery(" in exactAdb
+          assert "BridgeRouteTarget.WAZE.equals(target)" in Path("nav-release-v42/tools/nav-mosaic-route-stage.py").read_text(encoding="utf8")
+          assert 'NavWazeRoutePolicy.java' in Path("nav-release-v42/tools/nav-virtual-mosaic-stage.py").read_text(encoding="utf8")
+          assert "CLÚSTER NAV · WAZE (ABRIR / CERRAR MANUAL)" in central
+          print("PASS Waze exported launcher with guarded new-stack relocation; no global cleanup")
+          PY
+          python3 - "$stage/settings.gradle" <<'PY'
+          import pathlib,sys
+          p=pathlib.Path(sys.argv[1]);s=p.read_text()
+          before="include ':common', ':sender', ':receiver', ':boot'"
+          assert s.count(before)==1
+          p.write_text(s.replace(before,"include ':common', ':sender', ':boot', ':navCore'"))
+          PY
+          cat >> "$stage/boot/build.gradle" <<'GRADLE'
+          dependencies { implementation project(':navCore') }
+          GRADLE
+          target="$stage/boot/src/main/java/ar/com/rango5gps/drivelabauto/boot"
+          cp nav-transition/BridgeNavCorePreview.java "$target/"
+          python3 nav-transition/bridge-nav-preview-patch.py "$target/BootActivity.java"
+          python3 "$root/tools/nav-virtual-mosaic-stage.py" "$stage" "$root"
+          python3 "$root/tools/nav-mosaic-route-stage.py" "$stage" "$root"
+          python3 "$root/tools/nav-mosaic-adb-launch-stage.py" "$stage"
+          python3 "$root/tools/nav-own-cluster-waze-adb-stage.py" "$stage"
+          python3 "$root/tools/nav-mosaic-wheel-stage.py" "$stage"
+          python3 "$root/tools/nav-maps-central-dialog-stage.py" "$stage"
+          python3 "$root/tools/nav-spotify-explicit-close-stage.py" "$stage"
+          (
+            cd "$stage"
+            mkdir -p .qa_classes
+            javac -encoding UTF-8 -d .qa_classes boot/tests/BridgeLabOtaSourceContractTest.java
+            java -cp .qa_classes ar.com.rango5gps.drivelabauto.boot.BridgeLabOtaSourceContractTest
+          )
+          python3 nav-transition/nav-transition-branding.py "$stage"
+          python3 nav-transition/bridge-v26-ota-compat.py "$stage"
+          python3 "$root/tools/nav-v27-stage.py" "$stage"
+          python3 "$root/tools/nav-v28-stage.py" "$stage"
+          python3 "$root/tools/nav-v29-stage.py" "$stage"
+          python3 "$root/tools/nav-v30-stage.py" "$stage"
+          python3 "$root/tools/nav-v31-stage.py" "$stage"
+          python3 "$root/tools/nav-v32-stage.py" "$stage"
+          python3 "$root/tools/nav-v34-stage.py" "$stage"
+          python3 "$root/tools/nav-v36-stage.py" "$stage"
+          python3 "$root/tools/nav-v37-stage.py" "$stage"
+          python3 "$root/tools/nav-v38-stage.py" "$stage"
+          python3 "$root/tools/nav-v39-stage.py" "$stage"
+          python3 "$root/tools/nav-v40-stage.py" "$stage"
+          python3 "$root/tools/nav-v41-stage.py" "$stage"
+          python3 "$root/tools/nav-v42-stage.py" "$stage"
+          python3 "$root/tools/nav-v43-stage.py" "$stage"
+          python3 "$root/tools/nav-v44-stage.py" "$stage"
+          python3 "$root/tools/nav-v45-stage.py" "$stage"
+          python3 "$root/tools/nav-v46-stage.py" "$stage"
+          python3 "$root/tools/nav-v47-stage.py" "$stage"
+          python3 "$root/tools/nav-v48-stage.py" "$stage"
+          python3 "$root/tools/nav-pairing-ota-resume-stage.py" "$stage"
+          python3 "$root/tools/nav-v49-stage.py" "$stage"
+          gradle --no-daemon -p "$stage" :navCore:classes :boot:assembleLab
+      - name: Verify exact original certificate, package and v36 Android build; generate metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          stage="$RUNNER_TEMP/nav-v43-boot"
+          signed="$stage/boot/build/outputs/apk/lab/boot-lab.apk"
+          test -s "$signed"
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          signer="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          "$aapt" dump badging "$signed" | grep -F "package: name='ar.com.rango5gps.drivelabauto.boot.lab' versionCode='53' versionName='0.1.51-lab.49'"
+          "$aapt" dump badging "$signed" | grep -F "application-label:'DriveLab NAV'"
+          "$signer" verify --print-certs "$signed" >/dev/null
+          mkdir -p original
+          gh release download bridge-lab-v27 -R bruceferra/drivelab-auto-standalone --pattern 'DriveLab-Bridge-LAB-v0.1.29-lab.27.apk' --dir original
+          echo '7e051f6efa3089bbd06e632ca91229352b0d70fd8b3048d9ec99876a163fe3bc  original/DriveLab-Bridge-LAB-v0.1.29-lab.27.apk' | sha256sum -c -
+          cert(){ "$signer" verify --print-certs "$1" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF;exit}'; }
+          test -n "$(cert "$signed")"
+          test "$(cert "$signed")" = "$(cert original/DriveLab-Bridge-LAB-v0.1.29-lab.27.apk)" || {
+            echo 'BLOCKED: wrong Android permanent certificate; DO NOT publish'; exit 42;
+          }
+          mkdir -p dist/nav49
+          cp "$signed" dist/nav49/DriveLab-Bridge-LAB-v0.1.51-lab.49.apk
+          (
+            cd dist/nav49
+            sha256sum *.apk > SHA256SUMS
+          )
+          python3 - <<'PY'
+          import pathlib,json,hashlib
+          d=pathlib.Path('dist/nav49')
+          apk=d/'DriveLab-Bridge-LAB-v0.1.51-lab.49.apk'
+          m={
+            'channel':'bridge-lab',
+            'packageName':'ar.com.rango5gps.drivelabauto.boot.lab',
+            'versionName':'0.1.51-lab.49',
+            'versionCode':53,
+            'tag':'bridge-lab-v49',
+            'size':apk.stat().st_size,
+            'sha256':hashlib.sha256(apk.read_bytes()).hexdigest(),
+            'apkUrl':'https://github.com/bruceferra/drivelab-auto-standalone/releases/download/bridge-lab-v49/'+apk.name
+          }
+          # Fail if APK name is not EXACT installed BootUpdater LAB policy.
+          legacy='DriveLab-Bridge-LAB-v'+m['versionName']+'.apk'
+          assert apk.name==legacy, 'BLOCKED: legacy OTA APK filename mismatch'
+          assert m['apkUrl'].endswith('/'+legacy), 'BLOCKED: legacy OTA URL mismatch'
+          assert m['tag']=='bridge-lab-v49' and m['versionCode']==53
+          (d/'bridge-lab.json').write_text(json.dumps(m,indent=2)+'\n',encoding='utf8')
+          PY
+          echo 'PASS original installed certificate, NAV package, version 48 and signed LAB 49 candidate. NO OTA released. Sender unchanged.' >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve verified signed APK as private-run artifact — NOT release yet
+        uses: actions/upload-artifact@v4
+        with:
+          name: DriveLab-NAV-LAB49-SIGNED-CANDIDATE-NO-OTA
+          path: dist/nav49/
+          if-no-files-found: error
+          retention-days: 14
