@@ -37,7 +37,8 @@ jobs:
             'NavFourSlotSwapController.java','NavFourSlotSwapControllerTest.java',
             'NavFourSlotTaskInventory.java','NavFourSlotTaskInventoryTest.java',
             'NavFourSlotAndroidSurfaceDriver.java',
-            'NavFourSlotControls.java','NavFourSlotClusterABHost.java')}
+            'NavFourSlotControls.java','NavFourSlotClusterABHost.java',
+            'NavFourSlotLiveRouting.java','NavFourSlotSessionCoordinator.java')}
           files.add('.github/workflows/nav52-four-slot-android-backend-tests.yml')
           assert changed==files,('BLOCKED unrelated LAB51 change',changed^files)
           from pathlib import Path
@@ -63,6 +64,16 @@ jobs:
           assert 'TABLERO  A⇄B' in ui
           assert 'requestVerified(from,options[index],snapshot)' in ui
           assert 'send.request(from,to,original.session,original.revision)' in ui
+          runtime=Path(base+'NavFourSlotSessionCoordinator.java').read_text()
+          routing=Path(base+'NavFourSlotLiveRouting.java').read_text()
+          assert 'touches.pauseAllCentralInput()' in runtime
+          assert 'NavFourSlotSwapController.transact(' in runtime
+          assert 'NavFourSlotLiveRouting.publish(' in runtime
+          assert 'requireRecovery(result.reason)' in runtime
+          assert 'NavFourSlotLiveRouting.clear(current.session)' in runtime
+          assert 'Display.FLAG_PRIVATE' in routing
+          assert 'copy=new NavFourSlotPolicy.State(' in routing
+          assert 'panel==0?NavFourSlotPolicy.Slot.CENTRAL_A:' in routing
           print('PASS unchanged LAB51 source, strict Android display ownership and no OEM/ADB mutations')
           PY
       - name: Android platform API for compile-only surface driver
@@ -86,6 +97,9 @@ jobs:
             "$p/NavFourSlotAndroidSurfaceDriver.java" \
             "$p/NavFourSlotControls.java" \
             "$p/NavFourSlotClusterABHost.java" \
+            "$p/NavFourSlotLiveRouting.java" \
+            "$p/NavFourSlotSessionCoordinator.java" \
+            "$p/NavMosaicSessionRegistry.java" \
             "$p/NavMosaicGeometry.java" \
             "$p/NavFourSlotPolicyTest.java" \
             "$p/NavFourSlotSwapControllerTest.java" \
