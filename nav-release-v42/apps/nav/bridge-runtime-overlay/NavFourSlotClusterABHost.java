@@ -92,6 +92,24 @@ final class NavFourSlotClusterABHost {
     }
 
     /**
+     * The cluster's single-app layout stays FULL WIDTH until both A and B
+     * contain a verified NAV stream. The optional B TextureView remains
+     * attached (alpha 0) so Android can bind it without recreation.
+     */
+    void layoutFor(boolean aOccupied,boolean bOccupied){
+        if(!split)return;
+        int half=physicalWidth/2;
+        int aW=aOccupied&&bOccupied?half:physicalWidth;
+        int bW=aOccupied&&bOccupied?physicalWidth-half:
+            bOccupied?physicalWidth:physicalWidth-half;
+        originalWaze.setLayoutParams(new FrameLayout.LayoutParams(
+            aW,physicalHeight,Gravity.LEFT|Gravity.TOP));
+        secondContainer.setLayoutParams(new FrameLayout.LayoutParams(
+            bW,physicalHeight,Gravity.RIGHT|Gravity.TOP));
+        originalWaze.setAlpha(aOccupied?1f:0f);
+        secondContainer.setAlpha(bOccupied?1f:0f);
+    }
+    /**
      * Return to full-screen mode ONLY after the owner has verified that
      * no VirtualDisplay is bound to B. Never discard an active task.
      */
