@@ -136,5 +136,34 @@ start_patch="""        draw();
 if s.count(start_anchor)!=1:
     raise SystemExit("ABORT: BootActivity main entry anchor changed")
 s=s.replace(start_anchor,start_patch,1)
+# Pin a visible HOME button ABOVE the advanced BootActivity scroll area,
+# not another menu item buried below dozens of diagnostic controls.
+set_anchor="""        setContentView(scroll);
+        getWindow().getDecorView().setSystemUiVisibility("""
+set_patch="""        if(getIntent()!=null&&
+           getIntent().getBooleanExtra("nav_open_config_only",false)){
+            LinearLayout holder=new LinearLayout(this);
+            holder.setOrientation(LinearLayout.VERTICAL);
+            Button home=new Button(this);
+            home.setAllCaps(false);
+            home.setText("⌂  VOLVER AL MOSAICO");
+            home.setTextSize(15f);
+            home.setBackgroundTintList(
+                ColorStateList.valueOf(0xFF16465B));
+            home.setTextColor(Color.WHITE);
+            home.setOnClickListener(v->finish());
+            holder.addView(home,new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT));
+            holder.addView(scroll,new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,0,1f));
+            setContentView(holder);
+        }else{
+            setContentView(scroll);
+        }
+        getWindow().getDecorView().setSystemUiVisibility("""
+if s.count(set_anchor)!=1:
+    raise SystemExit("ABORT: BootActivity advanced controls not found")
+s=s.replace(set_anchor,set_patch,1)
 activity.write_text(s,encoding="utf-8")
-print("PASS NAV private mosaic home routing and settings bypass; no HOME override or ignition Activity start")
+print("PASS NAV returns to SAME mosaic session from pinned advanced config button; original OTA/settings intact")
