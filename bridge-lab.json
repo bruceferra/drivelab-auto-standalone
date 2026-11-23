@@ -1,10 +1,10 @@
 {
   "channel": "bridge-lab",
   "packageName": "ar.com.rango5gps.drivelabauto.boot.lab",
-  "versionName": "0.1.56-lab.54",
-  "versionCode": 58,
-  "tag": "bridge-lab-v54",
-  "size": 5163617,
-  "sha256": "5b917b231e7475623c91b0413b9c0fb59205d7171b90b589f794f3d8c6b9b222",
-  "apkUrl": "https://github.com/bruceferra/drivelab-auto-standalone/releases/download/bridge-lab-v54/DriveLab-Bridge-LAB-v0.1.56-lab.54.apk"
+  "versionName": "0.1.57-lab.55",
+  "versionCode": 59,
+  "tag": "bridge-lab-v55",
+  "size": 5175041,
+  "sha256": "ab87bab10979a637c832bb9a9ae43a86502e4dffd3e6ef962a155e6d45df9656",
+  "apkUrl": "https://github.com/bruceferra/drivelab-auto-standalone/releases/download/bridge-lab-v55/DriveLab-Bridge-LAB-v0.1.57-lab.55.apk"
 }
