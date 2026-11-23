@@ -11,6 +11,7 @@ public final class NavFourSlotSwapControllerTest {
         boolean badSlot,badTask,badFrame,badRollback;
         int bindCalls,ownershipChecks,taskReads,evictions;
         int failureOnBind=-1;
+        int waitCalls,failWaitOnceAt=-1;
         Fake(NavFourSlotPolicy.State state){
             for(Map.Entry<NavFourSlotPolicy.Slot,String> e:
                     state.bindings.entrySet())
@@ -43,6 +44,8 @@ public final class NavFourSlotSwapControllerTest {
         }
         @Override public boolean awaitFrame(
             NavFourSlotPolicy.Stream stream,NavFourSlotPolicy.Slot slot){
+            waitCalls++;
+            if(waitCalls==failWaitOnceAt)return false;
             return !badFrame&&slot==bindings.get(stream.id);
         }
         String at(String id){return String.valueOf(bindings.get(id));}
@@ -114,6 +117,35 @@ public final class NavFourSlotSwapControllerTest {
             NavFourSlotPolicy.Slot.TABLERO_A,777,0,new Fake(four)),
             "full four-slot occupied swap must not pause a VD");
 
+        // Regression from physical LAB56: a Spotify/Maps swap
+        // briefly PARKS one app on vacant TABLERO_B. Do not move a
+        // second app before verifying a fresh parking-slot frame.
+        Fake parkingNoFrame=new Fake(three);
+        parkingNoFrame.failWaitOnceAt=1;
+        NavFourSlotSwapController.Outcome parkedRejected=
+            NavFourSlotSwapController.transact(three,
+                NavFourSlotPolicy.Slot.CENTRAL_A,
+                NavFourSlotPolicy.Slot.CENTRAL_B,777,0,parkingNoFrame);
+        yes(!parkedRejected.accepted&&parkedRejected.rollbackVerified&&
+            !parkedRejected.requiresRecovery&&
+            parkingNoFrame.bindCalls==2&&
+            parkingNoFrame.at("maps").equals("CENTRAL_A")&&
+            parkingNoFrame.at("spotify").equals("CENTRAL_B"),
+            "missing PARKING frame blocks subsequent swap; restores A/B");
+
+        Fake secondHopNoFrame=new Fake(three);
+        secondHopNoFrame.failWaitOnceAt=2;
+        NavFourSlotSwapController.Outcome secondRejected=
+            NavFourSlotSwapController.transact(three,
+                NavFourSlotPolicy.Slot.CENTRAL_A,
+                NavFourSlotPolicy.Slot.CENTRAL_B,777,0,secondHopNoFrame);
+        yes(!secondRejected.accepted&&secondRejected.rollbackVerified&&
+            !secondRejected.requiresRecovery&&
+            secondHopNoFrame.bindCalls==4&&
+            secondHopNoFrame.at("maps").equals("CENTRAL_A")&&
+            secondHopNoFrame.at("spotify").equals("CENTRAL_B"),
+            "unrendered second hop does not bind third and safely restores A/B");
+
         Fake uncertain=new Fake(three);
         uncertain.failureOnBind=2;
         NavFourSlotSwapController.Outcome interrupted=
@@ -162,7 +194,7 @@ public final class NavFourSlotSwapControllerTest {
             NavFourSlotPolicy.Slot.CENTRAL_A,
             NavFourSlotPolicy.Slot.TABLERO_A,777,1,new Fake(three)),
             "stale revision forbidden");
-        System.out.println("PASS NAV55: direct vacant moves, free-panel swap, "+
+        System.out.println("PASS NAV57: fresh frame on every parking/transfer hop, "+
             "occupied A/B swap without pausing, fail closed on uncertainty");
     }
 }
