@@ -111,6 +111,9 @@ final class NavFourSlotClusterABHost {
         NavFourSlotParkingVisibilityPolicy.Front front=
             NavFourSlotParkingVisibilityPolicy.frontWhenParking(
                 visibleA,visibleB,NavFourSlotPolicy.Slot.TABLERO_B);
+        if(originalWaze.getWidth()<physicalWidth-2)
+            throw new SecurityException(
+                "Tablero A aún no cubre la vista temporal B");
         secondContainer.setVisibility(View.VISIBLE);
         // Keep the temporary VD attached and alpha=1 so Android can
         // render a NEW frame for LAB57's guard. Cover its transient
@@ -132,6 +135,9 @@ final class NavFourSlotClusterABHost {
         NavFourSlotParkingVisibilityPolicy.Front front=
             NavFourSlotParkingVisibilityPolicy.frontWhenParking(
                 visibleA,visibleB,NavFourSlotPolicy.Slot.TABLERO_A);
+        if(secondContainer.getWidth()<physicalWidth-2)
+            throw new SecurityException(
+                "Tablero B aún no cubre la vista temporal A");
         originalWaze.setAlpha(1f);
         if(front==NavFourSlotParkingVisibilityPolicy.Front.B)
             secondContainer.bringToFront();
