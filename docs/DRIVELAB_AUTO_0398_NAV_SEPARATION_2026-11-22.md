@@ -23,4 +23,4 @@ Componentes Android de navegación deshabilitados en manifest; autoarranque y se
 4. Comprobar que Nav sigue manejando Waze/Maps, Spotify, ventanas y clúster; Auto no interfiere.
 5. Mantener la release 0.3.97 como respaldo. Pruebas de manejo, sensores y actuadores OEM solo con el vehículo detenido y verificando readback.
 
-**Firma:** versión 0.3.98, versionCode 199; publicación exige firma idéntica a Receiver v0.3.97 y conserva sender.json v0.2.22; no toca Sender, Boot ni proyectos antiguos.
+**Firma:** versión 0.3.98, versionCode 199; publicación exige firma idéntica a Receiver v0.3.97 y conserva sender.json de la release anterior sin fijar versión; no toca Sender, Boot ni proyectos antiguos.
