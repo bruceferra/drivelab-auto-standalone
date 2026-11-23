@@ -547,7 +547,7 @@ jobs:
           legacy='DriveLab-Bridge-LAB-v'+m['versionName']+'.apk'
           assert apk.name==legacy, 'BLOCKED: legacy OTA APK filename mismatch'
           assert m['apkUrl'].endswith('/'+legacy), 'BLOCKED: legacy OTA URL mismatch'
-          assert m['tag']=='bridge-lab-v55' and m['versionCode']==58
+          assert m['tag']=='bridge-lab-v55' and m['versionCode']==59
           (d/'bridge-lab.json').write_text(json.dumps(m,indent=2)+'\n',encoding='utf8')
           PY
           echo 'PASS original installed certificate, NAV package, version 59 and signed LAB 55 candidate. NO OTA released. Sender unchanged.' >> "$GITHUB_STEP_SUMMARY"
