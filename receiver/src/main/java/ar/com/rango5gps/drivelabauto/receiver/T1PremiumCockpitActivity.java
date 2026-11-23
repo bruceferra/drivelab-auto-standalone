@@ -1022,6 +1022,7 @@ public final class T1PremiumCockpitActivity extends T1ImmersiveActivity {
         });
         T1JetourTheme.button(microphone,0xFF14536B);
         top.addView(microphone,new LinearLayout.LayoutParams(-2,52));
+        if(T1NavSeparation.NAV_DELEGATED)microphone.setVisibility(View.GONE);
         Button pendingTests=new Button(this);
         pendingTests.setAllCaps(false);
         pendingTests.setTextSize(12);
