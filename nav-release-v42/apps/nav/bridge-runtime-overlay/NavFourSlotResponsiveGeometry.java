@@ -1,12 +1,14 @@
 package ar.com.rango5gps.drivelabauto.boot;
 
 /**
- * LAB56: geometry ONLY for the already verified four-slot compositor.
+ * LAB58: app-agnostic geometry for the existing four-slot compositor.
  *
- * An existing VirtualDisplay needs the native size of its CURRENT
- * TextureView host to allow Waze/Maps/Spotify to reflow their UI.
- * The LAB55 task identity, transfer transaction and Surface ownership
- * remain unchanged; this policy must NEVER move a task or detach a VD.
+ * Every selected app has an OWNED VirtualDisplay. Its requested pixel
+ * geometry comes from the ACTUAL host AFTER Android layout, regardless
+ * of the app's name, original slot, or original source aspect ratio.
+ * Apps that do not honor display-resize may letterbox internally; the
+ * caller must preserve aspect ratio until the native viewport confirms.
+ * NEVER create/release a VirtualDisplay, move tasks, or alter OEM views.
  */
 final class NavFourSlotResponsiveGeometry {
     static final int DENSITY_DPI=213;
@@ -35,17 +37,9 @@ final class NavFourSlotResponsiveGeometry {
         if(slot==null||state.at(slot)==null)
             throw new SecurityException("No redimensionar panel vacío");
         if(slot.touch){
-            NavFourSlotPolicy.Stream stream=state.at(slot);
-            // LAB57: Spotify starts in a narrow native central B VD.
-            // Repeatedly resizing that same Spotify task to wide
-            // Central A produces clipped/scrolled responsive UI on the
-            // Jetour. Keep its stable ORIGINAL VD size in BOTH central
-            // panels and letterbox the host with center-inside Matrix.
-            // Original display/task IDs and their A/B swaps are untouched.
-            if("spotify".equals(stream.id))
-                return new Target(stream.width,stream.height);
-            // Maps and Waze already passed real physical A/B swaps and
-            // should remain responsive to the current host geometry.
+            // All registered apps, including future selectable ones,
+            // share the same policy. Fixed Spotify/Maps/Waze exceptions
+            // made successive A/B moves alternately crop or letterbox.
             return new Target(centralWidth,centralHeight);
         }
         if(clusterWidth<1200||clusterHeight<480||
@@ -58,6 +52,8 @@ final class NavFourSlotResponsiveGeometry {
             return new Target(slot==NavFourSlotPolicy.Slot.TABLERO_A?
                 half:clusterWidth-half,clusterHeight);
         }
+        // If the other half is empty, display the only app at full
+        // 1920x720 instead of reserving a blank 50% of the cluster.
         return new Target(clusterWidth,clusterHeight);
     }
 }
