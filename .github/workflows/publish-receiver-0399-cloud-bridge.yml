@@ -1,0 +1,149 @@
+name: DriveLab AUTO 0.3.99 · signed OTA Cloud bridge
+# Temporary original-key signing bridge. Canonical source: private bruceferra/drivelab.
+on:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/publish-receiver-0399-cloud-bridge.yml']
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: signed-drivelabauto-publication
+  cancel-in-progress: false
+jobs:
+  publish:
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    env:
+      RECEIVER_STORE_PASSWORD: ${{ secrets.RECEIVER_STORE_PASSWORD }}
+      RECEIVER_KEY_ALIAS: ${{ secrets.RECEIVER_KEY_ALIAS }}
+      RECEIVER_KEY_PASSWORD: ${{ secrets.RECEIVER_KEY_PASSWORD }}
+      GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+      - name: Android SDK 35 and original signing certificate
+        env:
+          RECEIVER_KEYSTORE_B64: ${{ secrets.RECEIVER_KEYSTORE_B64 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          tool=$(command -v sdkmanager || find "$ANDROID_HOME/cmdline-tools" -name sdkmanager -type f | head -1)
+          "$tool" 'platforms;android-35' 'build-tools;35.0.0'
+          test -n "$RECEIVER_KEYSTORE_B64" && test -n "$RECEIVER_STORE_PASSWORD"
+          test -n "$RECEIVER_KEY_ALIAS" && test -n "$RECEIVER_KEY_PASSWORD"
+          printf %s "$RECEIVER_KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/receiver.p12"
+          chmod 600 "$RUNNER_TEMP/receiver.p12"
+          echo "RECEIVER_KEYSTORE=$RUNNER_TEMP/receiver.p12" >> "$GITHUB_ENV"
+      - name: Verify canonical code mirror and offline AUTO OTA policies
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git hash-object common/src/main/java/ar/com/rango5gps/drivelabauto/common/Updater.java)" = 00d3a0d99e418f7f419b08842e46630699028cda
+          test "$(git hash-object common/src/main/java/ar/com/rango5gps/drivelabauto/common/ReceiverCloudOta.java)" = d4755403a849263ade0c831c66d0f1cca46d3169
+          test "$(git hash-object common/src/main/java/ar/com/rango5gps/drivelabauto/common/ReceiverCloudOtaPolicy.java)" = 523d7e6711928e4d7871e3bce5ea8e78e09fa78f
+          test "$(git hash-object common/tests/ReceiverCloudOtaPolicyTest.java)" = b849df504621a7ae05fc6b6e9a0596ded6999d8d
+          test "$(git hash-object receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1GlobalToolbar.java)" = 2db4177cfa1c43240910d1eefa11a1ca40ceb148
+          test "$(git hash-object receiver/build.gradle)" = a7b4457149a2b343292f6e8d622ee12f24492cbd
+          mkdir -p "$RUNNER_TEMP/drivelab-auto-ota-tests"
+          javac -encoding UTF-8 --release 17 -d "$RUNNER_TEMP/drivelab-auto-ota-tests" \
+            common/src/main/java/ar/com/rango5gps/drivelabauto/common/ReceiverCloudOtaPolicy.java \
+            common/tests/ReceiverCloudOtaPolicyTest.java
+          java -cp "$RUNNER_TEMP/drivelab-auto-ota-tests" ar.com.rango5gps.drivelabauto.common.ReceiverCloudOtaPolicyTest
+          python3 - <<'PY'
+          from pathlib import Path
+          common=Path('common/src/main/java/ar/com/rango5gps/drivelabauto/common')
+          updater=(common/'Updater.java').read_text()
+          client=(common/'ReceiverCloudOta.java').read_text()
+          toolbar=Path('receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver/T1GlobalToolbar.java').read_text()
+          gradle=Path('receiver/build.gradle').read_text()
+          checks=['ReceiverCloudOta.lookup(a)','latestReceiverViaApi(a)','latestFromManifest(a,app)',
+                  '!certificateHashes(current).equals(certificateHashes(candidate))',
+                  'certificateHashes(candidate).contains(offer.signerSha256)',
+                  'ReceiverCloudOtaPolicy.allowedAnyDownloadUrl(current.toString())',
+                  'requestInstaller(a,apk,offer,reporter)']
+          assert all(s in updater for s in checks)
+          assert 'ReceiverCloudOta.isEnrolled(owner)' in toolbar
+          assert 'AndroidKeyStore' in client and 'AES/GCM/NoPadding' in client
+          assert "versionCode 200" in gradle and "versionName '0.3.99'" in gradle
+          print('AUTO_099_CANONICAL_SIGNED_BUILD_POLICY_OK')
+          PY
+      - name: Verify disabled Nav components and preserved trip services
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import xml.etree.ElementTree as E
+          from pathlib import Path
+          a=E.parse('receiver/src/main/AndroidManifest.xml').getroot().find('application')
+          ns='{http://schemas.android.com/apk/res/android}'
+          entries={c.get(ns+'name'):c for c in a}
+          nav='ReceiverService T1BootMosaicBridgeReceiver T1BootMosaicBridgeService T1OemMicrophoneService ShareToClusterActivity T1ClusterWazeSettingsActivity T1CenterMosaicActivity T1MosaicShortcutActivity T1AppTaskManagerActivity T1CenterFreeformTestActivity T1CenterDualLeftActivity T1CenterDualRightActivity T1ClusterLayoutSettingsActivity T1SteeringKeysActivity T1WheelSettingsActivity T1WazeWheelService T1VoiceRouteActivity T1VoiceShortcutActivity VoiceAssistantShortcut'.split()
+          for n in nav: assert entries['.'+n].get(ns+'enabled')=='false',n
+          kept='BootReceiver ReceiverActivity T1TripRecorderService T1AutoJourneyService T1ChargeRecorderService T1OptimizedAutoService T1TripMapReplayService MirrorAutomationService RecirculationGuardService'.split()
+          for n in kept: assert entries['.'+n].get(ns+'enabled')!='false',n
+          root=Path('receiver/src/main/java/ar/com/rango5gps/drivelabauto/receiver')
+          assert 'NAV_DELEGATED = true' in (root/'T1NavSeparation.java').read_text()
+          boot=(root/'BootReceiver.java').read_text()
+          assert 'receiverBoot=false;clusterBoot=false;' in boot
+          assert 'T1AutoJourneyService.startIfEnabled(context)' in boot
+          assert 'T1ChargeRecorderService.startIfEnabled(context)' in boot
+          assert 'T1TripRecorderService.ACTION_RESTORE' in boot
+          print('PASS Auto/Nav isolation and trip/charge recovery')
+          PY
+      - name: Compile signed Receiver and verify original signer
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$GITHUB_REPOSITORY" = 'bruceferra/drivelab-auto-standalone'
+          ! gh release view v0.3.99 >/dev/null 2>&1
+          gradle --no-daemon :receiver:assembleRelease
+          apk=receiver/build/outputs/apk/release/receiver-release.apk
+          test -s "$apk"
+          sig="$ANDROID_HOME/build-tools/35.0.0/apksigner"
+          aapt="$ANDROID_HOME/build-tools/35.0.0/aapt"
+          "$sig" verify --print-certs "$apk"
+          badge=$("$aapt" dump badging "$apk" | head -1)
+          echo "$badge" | grep -F "package: name='ar.com.rango5gps.drivelabauto.receiver'"
+          echo "$badge" | grep -F "versionCode='200'"
+          echo "$badge" | grep -F "versionName='0.3.99'"
+          mkdir -p old output
+          gh release download v0.3.98 --pattern 'DriveLab-Auto-Receiver-v0.3.98.apk' --dir old
+          gh release download v0.3.98 --pattern 'sender.json' --dir output
+          before=$("$sig" verify --print-certs old/DriveLab-Auto-Receiver-v0.3.98.apk | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          after=$("$sig" verify --print-certs "$apk" | awk '/Signer #1 certificate SHA-256 digest:/{print $NF}' | head -1)
+          test -n "$before" && test "$before" = "$after"
+          cp "$apk" output/DriveLab-Auto-Receiver-v0.3.99.apk
+          export RECEIVER_SHA=$(sha256sum output/DriveLab-Auto-Receiver-v0.3.99.apk | awk '{print $1}')
+          python3 - <<'PY'
+          import json,os
+          manifest={'packageName':'ar.com.rango5gps.drivelabauto.receiver',
+            'versionName':'0.3.99','versionCode':200,'sha256':os.environ['RECEIVER_SHA'],
+            'apkUrl':'https://github.com/bruceferra/drivelab-auto-standalone/releases/download/v0.3.99/DriveLab-Auto-Receiver-v0.3.99.apk'}
+          with open('output/receiver.json','w') as f:json.dump(manifest,f,indent=2)
+          with open('output/sender.json') as f:sender=json.load(f)
+          assert sender.get('packageName')=='ar.com.rango5gps.drivelabauto.sender'
+          assert int(sender.get('versionCode',0))>0 and sender.get('versionName')
+          print('Preserving existing Sender',sender['versionName'],sender['versionCode'])
+          PY
+          sha256sum output/DriveLab-Auto-Receiver-v0.3.99.apk > output/receiver.sha256
+      - name: Publish Receiver only; preserve Sender and Boot unchanged
+        shell: bash
+        run: |
+          set -euo pipefail
+          ! gh release view v0.3.99 >/dev/null 2>&1
+          gh release create v0.3.99 \
+            output/DriveLab-Auto-Receiver-v0.3.99.apk \
+            output/receiver.json output/sender.json output/receiver.sha256 \
+            --target "$GITHUB_SHA" --latest \
+            --title 'DriveLab AUTO 0.3.99 · OTA unificado, firma original' \
+            --notes 'AUTO 0.3.99: opcion Cloud OTA autenticada, compatibilidad GitHub firmada como respaldo; package, SHA256, versionCode y certificado original verificados. Mismos datos y servicios OEM del AUTO anterior, sin tocar Sender ni NAV. Instalar sobre AUTO; NO desinstalar.'
+          mkdir -p verify
+          gh release download v0.3.99 --pattern receiver.json --dir verify
+          cmp output/receiver.json verify/receiver.json

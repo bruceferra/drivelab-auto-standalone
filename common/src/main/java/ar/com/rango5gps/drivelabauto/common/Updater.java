@@ -104,15 +104,19 @@ public final class Updater {
     }
 
     private static final class Offer {
-        final String name,url,hash,backupUrl;
-        final long code;
+        final String name,url,hash,backupUrl,signerSha256;
+        final long code,expectedBytes;
         Offer(String version,String apkUrl,String sha,long versionCode){
-            this(version,apkUrl,sha,versionCode,null);
+            this(version,apkUrl,sha,versionCode,null,null,-1);
         }
         Offer(String version,String apkUrl,String sha,long versionCode,
               String apiAssetUrl){
+            this(version,apkUrl,sha,versionCode,apiAssetUrl,null,-1);
+        }
+        Offer(String version,String apkUrl,String sha,long versionCode,
+              String apiAssetUrl,String signer,long size){
             name=version;url=apkUrl;hash=sha;code=versionCode;
-            backupUrl=apiAssetUrl;
+            backupUrl=apiAssetUrl;signerSha256=signer;expectedBytes=size;
         }
     }
 
@@ -234,6 +238,16 @@ public final class Updater {
      * Sender. Never claim "up to date" when both network paths fail. */
     private static Offer latest(Activity a,String app,String proper)throws Exception {
         if("receiver".equals(app)){
+            // Cloud is the primary source ONLY after explicit secure enrollment.
+            // The original signed GitHub updater remains a recovery bridge.
+            try{
+                ReceiverCloudOta.Release cloud=ReceiverCloudOta.lookup(a);
+                if(cloud!=null)
+                    return new Offer(cloud.versionName,cloud.url,cloud.sha256,
+                        cloud.versionCode,null,cloud.signerSha256,cloud.bytes);
+            }catch(IOException networkUnavailable){
+                // Cloud not reachable/authenticated: preserve legacy signed OTA.
+            }
             Exception apiError;
             try{return latestReceiverViaApi(a);}
             catch(Exception failure){apiError=failure;}
@@ -347,8 +361,10 @@ public final class Updater {
             partial.delete();
             try{
                 notify(a,reporter,source==0?
-                    "Descargando APK · canal GitHub "+(offer.backupUrl==null?
-                        "directo":"API")+"…":
+                    (offer.signerSha256!=null?
+                        "Descargando APK · DriveLab Cloud…":
+                        "Descargando APK · canal GitHub "+(offer.backupUrl==null?
+                            "directo":"API")+"…"):
                     "Descarga alternativa · GitHub Releases…");
                 long verifiedCode=downloadVerifiedSource(a,sources[source],
                     partial,offer,reporter);
@@ -387,6 +403,8 @@ public final class Updater {
         try{
             long length=connection.getContentLengthLong();
             if(length>MAX_APK)throw new IOException("La APK supera el tamaño máximo");
+            if(offer.expectedBytes>0&&length>0&&length!=offer.expectedBytes)
+                throw new SecurityException("Tamaño anunciado de Cloud OTA distinto");
             String type=connection.getContentType();
             if(type!=null&&(type.toLowerCase(Locale.ROOT).contains("text/html")||
                             type.toLowerCase(Locale.ROOT).contains("application/json")))
@@ -411,6 +429,8 @@ public final class Updater {
                 out.getFD().sync();
             }
             if(bytes<1024)throw new IOException("Descarga de APK vacía o incompleta");
+            if(offer.expectedBytes>0&&bytes!=offer.expectedBytes)
+                throw new SecurityException("Tamaño de Cloud OTA incorrecto");
             if(!offer.hash.equals(hex(digest.digest())))
                 throw new SecurityException("SHA-256 incorrecto; se canceló la instalación");
             if(!hasApkSignature(partial))
@@ -435,6 +455,11 @@ public final class Updater {
             throw new SecurityException("APK de otro paquete o versión");
         if(!certificateHashes(current).equals(certificateHashes(candidate)))
             throw new SecurityException("La firma de la APK es distinta de la instalada");
+        if(offer.signerSha256!=null&&
+            !certificateHashes(candidate).contains(offer.signerSha256))
+            throw new SecurityException("Firma de Cloud OTA no coincide con certificado original");
+        if(offer.expectedBytes>0&&file.length()!=offer.expectedBytes)
+            throw new SecurityException("Archivo Cloud OTA de tamaño diferente");
         return candidate.getLongVersionCode();
     }
 
@@ -714,7 +739,9 @@ public final class Updater {
         URL current=new URL(url);
         for(int attempt=0;attempt<7;attempt++){
             if(!"https".equalsIgnoreCase(current.getProtocol())||
-               !allowedHost(current.getHost()))
+               !allowedHost(current.getHost())||
+               ("promanager.com.ar".equalsIgnoreCase(current.getHost())&&
+                !ReceiverCloudOtaPolicy.allowedAnyDownloadUrl(current.toString())))
                 throw new SecurityException("La descarga salió del canal HTTPS autorizado");
             HttpURLConnection c=(HttpURLConnection)current.openConnection();
             c.setInstanceFollowRedirects(false);
@@ -748,6 +775,7 @@ public final class Updater {
         String normalized=host.toLowerCase(Locale.ROOT);
         return "github.com".equals(normalized)||
             "api.github.com".equals(normalized)||
+            "promanager.com.ar".equals(normalized)||
             normalized.endsWith(".githubusercontent.com");
     }
     private static String hex(byte[] bytes){

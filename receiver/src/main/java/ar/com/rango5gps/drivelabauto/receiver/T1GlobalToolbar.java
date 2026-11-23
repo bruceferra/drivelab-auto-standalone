@@ -2,6 +2,7 @@ package ar.com.rango5gps.drivelabauto.receiver;
 
 import android.app.AlertDialog;
 import ar.com.rango5gps.drivelabauto.common.Updater;
+import ar.com.rango5gps.drivelabauto.common.ReceiverCloudOta;
 import android.content.Context;
 import android.content.ClipData;
 import android.view.DragEvent;
@@ -223,7 +224,49 @@ final class T1GlobalToolbar {
             this::checkReceiverUpdate);
         update.setTextSize(27f);
         update.setContentDescription("Buscar e instalar actualización DriveLab Auto Receiver");
-        update.setTooltipText("Actualizar DriveLab Auto");
+        update.setTooltipText("Actualizar DriveLab Auto · mantener presionado: Cloud");
+        update.setOnLongClickListener(v->{
+            if(!foreground)return true;
+            String status=ReceiverCloudOta.isEnrolled(owner)?
+                "Dispositivo vinculado con DriveLab Cloud. La consulta de OTA "+
+                "usará el catálogo central cuando esté disponible.":
+                "DriveLab Cloud OTA todavía no está vinculado en este equipo. "+
+                "La actualización firmada actual continúa por GitHub, "+
+                "sin tocar tus datos ni modificar la firma.";
+            LinearLayout content=new LinearLayout(owner);
+            content.setOrientation(LinearLayout.VERTICAL);
+            content.setPadding(dp(22),dp(20),dp(22),dp(14));
+            content.setBackground(T1JetourTheme.surface(
+                T1JetourTheme.PANEL,16));
+            TextView heading=new TextView(owner);
+            heading.setText("DRIVELAB CLOUD · OTA AUTO");
+            heading.setTextColor(T1JetourTheme.CYAN);
+            heading.setTextSize(19f);
+            heading.setTypeface(null,Typeface.BOLD);
+            content.addView(heading);
+            TextView detail=new TextView(owner);
+            detail.setText(status);
+            detail.setTextColor(T1JetourTheme.WHITE);
+            detail.setTextSize(15f);
+            detail.setPadding(0,dp(14),0,dp(12));
+            content.addView(detail);
+            AlertDialog dialog=new AlertDialog.Builder(owner,
+                android.R.style.Theme_Material_Light_Dialog_Alert)
+                .setView(content)
+                .setNegativeButton("CERRAR",null)
+                .setPositiveButton("BUSCAR ACTUALIZACIÓN",
+                    (d,w)->checkReceiverUpdate())
+                .create();
+            dialog.show();
+            if(dialog.getWindow()!=null)
+                dialog.getWindow().setBackgroundDrawable(
+                    T1JetourTheme.surface(T1JetourTheme.PANEL,16));
+            dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+                .setTextColor(T1JetourTheme.GREEN);
+            dialog.getButton(AlertDialog.BUTTON_NEGATIVE)
+                .setTextColor(T1JetourTheme.MUTED);
+            return true;
+        });
         // Scale only the right-hand chrome at narrow window widths.
         // Keep critical OEM buttons accessible by swiping firstStrip.
         final boolean[] compactHeader={false};
