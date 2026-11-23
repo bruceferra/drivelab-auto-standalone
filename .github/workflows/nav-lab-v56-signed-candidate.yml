@@ -161,6 +161,7 @@ jobs:
             "nav-release-v42/apps/nav/bridge-runtime-overlay/NavFourSlotAndroidSurfaceDriver.java",
             "nav-release-v42/apps/nav/bridge-runtime-overlay/NavFourSlotResponsiveGeometry.java",
             "nav-release-v42/apps/nav/bridge-runtime-overlay/NavFourSlotResponsiveGeometryTest.java",
+            "nav-release-v42/apps/nav/bridge-runtime-overlay/NavFourSlotRepeatedSwapTest.java",
             "nav-release-v42/tools/nav-v56-stage.py",
           }
           changed=set(x.decode() for x in subprocess.check_output(
@@ -517,7 +518,12 @@ jobs:
             "$root/apps/nav/bridge-runtime-overlay/NavFourSlotResponsiveGeometry.java" \
             "$root/apps/nav/bridge-runtime-overlay/NavFourSlotResponsiveGeometryTest.java"
           java -cp "$stage/.nav-qa-classes" ar.com.rango5gps.drivelabauto.boot.NavFourSlotResponsiveGeometryTest
-          # Only owner-side geometry changes; LAB55 transfer engine and
+          javac -encoding UTF-8 -d "$stage/.nav-qa-classes" \
+            "$root/apps/nav/bridge-runtime-overlay/NavFourSlotPolicy.java" \
+            "$root/apps/nav/bridge-runtime-overlay/NavFourSlotSwapController.java" \
+            "$root/apps/nav/bridge-runtime-overlay/NavFourSlotRepeatedSwapTest.java"
+          java -cp "$stage/.nav-qa-classes" ar.com.rango5gps.drivelabauto.boot.NavFourSlotRepeatedSwapTest
+          # Exact Surface ownership and timestamped fresh frames, while
           # task/virtual-display routing remain byte-for-byte unchanged.
           for f in NavFourSlotExperimentalManager.java NavVirtualMosaicActivity.java NavFourSlotResponsiveGeometry.java NavFourSlotAndroidSurfaceDriver.java; do
             cp "$root/apps/nav/bridge-runtime-overlay/$f" "$stage/boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/$f"
