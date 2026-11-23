@@ -35,9 +35,17 @@ final class NavFourSlotResponsiveGeometry {
         if(slot==null||state.at(slot)==null)
             throw new SecurityException("No redimensionar panel vacío");
         if(slot.touch){
-            // Central slots may exchange Waze / Maps / Spotify.
-            // Reflow the existing owned VirtualDisplay to the actual
-            // host size and keep its touch coordinates in lockstep.
+            NavFourSlotPolicy.Stream stream=state.at(slot);
+            // LAB57: Spotify starts in a narrow native central B VD.
+            // Repeatedly resizing that same Spotify task to wide
+            // Central A produces clipped/scrolled responsive UI on the
+            // Jetour. Keep its stable ORIGINAL VD size in BOTH central
+            // panels and letterbox the host with center-inside Matrix.
+            // Original display/task IDs and their A/B swaps are untouched.
+            if("spotify".equals(stream.id))
+                return new Target(stream.width,stream.height);
+            // Maps and Waze already passed real physical A/B swaps and
+            // should remain responsive to the current host geometry.
             return new Target(centralWidth,centralHeight);
         }
         if(clusterWidth<1200||clusterHeight<480||
