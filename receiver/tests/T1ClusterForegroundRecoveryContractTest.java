@@ -16,8 +16,12 @@ public final class T1ClusterForegroundRecoveryContractTest {
         String foreground=src("T1ClusterForegroundRecovery.java");
         String toolbar=src("T1GlobalToolbar.java");
         String manifest=Files.readString(Path.of("receiver/src/main/AndroidManifest.xml"));
-        check(manifest.contains("android.permission.REORDER_TASKS"),
-            "Task foreground permission is required");
+        boolean navDelegated=src("T1NavSeparation.java")
+            .contains("NAV_DELEGATED = true");
+        check(navDelegated?
+                !manifest.contains("android.permission.REORDER_TASKS"):
+                manifest.contains("android.permission.REORDER_TASKS"),
+            "Receiver must not request Nav task-control permission once delegated");
         check(!toolbar.contains("button(actions,\"TOMAR CONTROL\"")&&
             !toolbar.contains("this::takeClusterControl")&&
             toolbar.contains("this::confirmClusterReload")&&
