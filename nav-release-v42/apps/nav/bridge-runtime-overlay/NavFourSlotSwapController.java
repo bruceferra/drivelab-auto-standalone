@@ -114,6 +114,16 @@ final class NavFourSlotSwapController {
                 locations.put(old,null);
                 locations.put(next.slot,next.stream);
                 undo.add(new NavFourSlotPolicy.Bind(next.stream,old));
+                // LAB57: do not move a SECOND stream until the PREVIOUS
+                // rebind has produced a genuinely new native frame.
+                // Previously the three-hop A/B exchange only checked its
+                // final slots. An unrendered parking hop could leave a
+                // stale Spotify or Maps buffer under the next label.
+                // The driver also verifies exact owner Surface identity.
+                if(!d.awaitFrame(stream,next.slot))
+                    throw new IllegalStateException(
+                        "Panel temporal/final sin cuadro nuevo para "+
+                        next.stream+" en "+next.slot);
             }
             // The temporary parking surface is NOT a final destination.
             // Wait for frames only at the exact final slots.
