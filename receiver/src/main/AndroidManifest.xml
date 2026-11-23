@@ -7,18 +7,18 @@
     <uses-permission android:name="ar.com.rango5gps.drivelabauto.receiver.permission.BOOT_MOSAIC" />
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Foreground, one-shot speech only after user enters voice screen. -->
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- RECORD_AUDIO pertenece a DriveLab Nav. -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
     <!-- Only user-triggered, verified signed updates; system confirmation required. -->
     <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Manual, user-requested foreground recovery of verified map tasks only. -->
-    <uses-permission android:name="android.permission.REORDER_TASKS" />
+    <!-- REORDER_TASKS pertenece a DriveLab Nav. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <!-- GPS is optional: TRIP falls back to flagged OEM-speed distance. -->
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
+    <!-- SYSTEM_ALERT_WINDOW pertenece a DriveLab Nav. -->
     <!-- Standard Automotive MIRROR_FOLD requires OEM-granted signature privilege. -->
     <uses-permission android:name="android.car.permission.CONTROL_CAR_MIRRORS" />
     <queries>
@@ -94,7 +94,7 @@
         <!-- DriveLab Boot is a SEPARATE APK, not Jetour HOME or cluster.
              An explicitly protected broadcast starts Receiver's existing
              paired-ADB mosaic. No raw shell interface is exported. -->
-        <receiver android:name=".T1BootMosaicBridgeReceiver"
+        <receiver android:name=".T1BootMosaicBridgeReceiver" android:enabled="false"
             android:exported="true"
             android:permission="ar.com.rango5gps.drivelabauto.receiver.permission.BOOT_MOSAIC">
             <intent-filter>
@@ -102,12 +102,12 @@
                 <action android:name="ar.com.rango5gps.drivelabauto.receiver.action.BOOT_MOSAIC_TAKEOVER" />
             </intent-filter>
         </receiver>
-        <service android:name=".T1BootMosaicBridgeService"
+        <service android:name=".T1BootMosaicBridgeService" android:enabled="false"
             android:exported="false" android:foregroundServiceType="dataSync" />
         <!-- Physical microphone key from APK: OEM 1010/100, opt-in only. -->
-        <service android:name=".T1OemMicrophoneService"
+        <service android:name=".T1OemMicrophoneService" android:enabled="false"
             android:exported="false" />
-        <service android:name=".ReceiverService" android:exported="false"
+        <service android:name=".ReceiverService" android:enabled="false" android:exported="false"
             android:foregroundServiceType="dataSync" />
         <!-- User-triggered, 35-second OEM 1033 read-only sampler; independent of navigation. -->
         <service android:name=".GearCaptureService" android:exported="false"
@@ -152,7 +152,7 @@
             </intent-filter>
         </receiver>
         <!-- User-selected Share target inside Jetour T1: maps place -> Waze navigation. -->
-        <activity android:name=".ShareToClusterActivity"
+        <activity android:name=".ShareToClusterActivity" android:enabled="false"
             android:exported="true" android:launchMode="singleTop"
             android:label="DriveLab · Navegar en clúster">
             <intent-filter>
@@ -170,20 +170,20 @@
                 <data android:scheme="https" android:host="google.com" android:pathPrefix="/maps" />
             </intent-filter>
         </activity>
-        <activity android:name=".T1ClusterWazeSettingsActivity" android:exported="false" />
-        <activity android:name=".T1CenterMosaicActivity" android:exported="false" />
+        <activity android:name=".T1ClusterWazeSettingsActivity" android:enabled="false" android:exported="false" />
+        <activity android:name=".T1CenterMosaicActivity" android:enabled="false" android:exported="false" />
         <!-- Explicit pin-shortcut target, not a second MAIN/LAUNCHER
              entry; never replaces the vehicle HOME. -->
-        <activity android:name=".T1MosaicShortcutActivity"
+        <activity android:name=".T1MosaicShortcutActivity" android:enabled="false"
             android:exported="true"
             android:excludeFromRecents="true"
             android:taskAffinity="${applicationId}.restoremosaic" />
         <!-- User-confirmed Android 11 task inventory and safe app closing. -->
-        <activity android:name=".T1AppTaskManagerActivity" android:exported="false" />
+        <activity android:name=".T1AppTaskManagerActivity" android:enabled="false" android:exported="false" />
         <!-- Explicit shell-only, disposable app-owned window test; never HOME.
              Own affinity isolates the probe from Receiver and vehicle tasks.
              Exported for adb shell explicit component; no intent filters or data. -->
-        <activity android:name=".T1CenterFreeformTestActivity"
+        <activity android:name=".T1CenterFreeformTestActivity" android:enabled="false"
             android:exported="true"
             android:resizeableActivity="true"
             android:excludeFromRecents="true"
@@ -191,26 +191,26 @@
         <!-- Experimental Display 0 dual-pane check. These two app-owned
              activities have separate task affinities, never replace HOME,
              and self-remove after 30 seconds. Shell-only: no intent filters. -->
-        <activity android:name=".T1CenterDualLeftActivity"
+        <activity android:name=".T1CenterDualLeftActivity" android:enabled="false"
             android:exported="true"
             android:resizeableActivity="true"
             android:excludeFromRecents="true"
             android:launchMode="singleTask"
             android:taskAffinity="${applicationId}.dualprobe.left" />
-        <activity android:name=".T1CenterDualRightActivity"
+        <activity android:name=".T1CenterDualRightActivity" android:enabled="false"
             android:exported="true"
             android:resizeableActivity="true"
             android:excludeFromRecents="true"
             android:launchMode="singleTask"
             android:taskAffinity="${applicationId}.dualprobe.right" />
-        <activity android:name=".T1ClusterLayoutSettingsActivity"
+        <activity android:name=".T1ClusterLayoutSettingsActivity" android:enabled="false"
             android:exported="false" />
         <activity android:name=".ReceiverVehicleActivity" android:exported="false" />
-        <activity android:name=".T1SteeringKeysActivity" android:exported="false" />
-        <activity android:name=".T1WheelSettingsActivity" android:exported="false" />
+        <activity android:name=".T1SteeringKeysActivity" android:enabled="false" android:exported="false" />
+        <activity android:name=".T1WheelSettingsActivity" android:enabled="false" android:exported="false" />
         <!-- User must explicitly enable this service in Android accessibility.
              No root or OEM privilege; monitor ONLY when Waze is foreground. -->
-        <service android:name=".T1WazeWheelService"
+        <service android:name=".T1WazeWheelService" android:enabled="false"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             android:exported="true">
             <intent-filter>
@@ -228,8 +228,8 @@
             android:exported="false" />
         <activity android:name=".T1OptimizedModeActivity" android:exported="false" />
         <activity android:name=".T1TripMapAnalysisActivity" android:exported="false" />
-        <activity android:name=".T1VoiceRouteActivity" android:exported="false" />
-        <activity android:name=".T1VoiceShortcutActivity"
+        <activity android:name=".T1VoiceRouteActivity" android:enabled="false" android:exported="false" />
+        <activity android:name=".T1VoiceShortcutActivity" android:enabled="false"
             android:exported="false" android:theme="@android:style/Theme.NoDisplay" />
         <!-- Keep the primary Receiver entry before the voice alias, because
              some OEM launchers only show ONE LAUNCHER target per APK. -->
@@ -242,7 +242,7 @@
              shortcut, but do NOT publish a second LAUNCHER icon: T1Launcher
              may collapse multiple icons from the same APK and hide Receiver.
              Voice remains available from Receiver's own menu. -->
-        <activity-alias android:name=".VoiceAssistantShortcut"
+        <activity-alias android:name=".VoiceAssistantShortcut" android:enabled="false"
             android:targetActivity=".T1VoiceShortcutActivity"
             android:exported="true"
             android:enabled="true"
