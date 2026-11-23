@@ -138,6 +138,8 @@ final class NavFourSlotClusterABHost {
             bW,physicalHeight,Gravity.RIGHT|Gravity.TOP));
         originalWaze.setAlpha(aOccupied?1f:0f);
         secondContainer.setAlpha(bOccupied?1f:0f);
+        // Restore normal visual layering after the pre-commit A probe.
+        if(bOccupied)secondContainer.bringToFront();
         if(aOccupied&&!bOccupied){
             // A failed attempt must not leave Waze looking miniature.
             // Its normal full-width 1920x720 original Surface is unchanged.
