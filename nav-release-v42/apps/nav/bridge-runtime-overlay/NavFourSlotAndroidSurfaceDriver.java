@@ -73,6 +73,7 @@ final class NavFourSlotAndroidSurfaceDriver
         SurfaceTexture originalTexture;
         final boolean ownerProvided;
         long frames;
+        long lastFrameTime;
         Host(NavFourSlotPolicy.Slot slot,TextureView texture,
              Surface fromOwner){
             this.slot=slot;this.texture=texture;
@@ -131,6 +132,7 @@ final class NavFourSlotAndroidSurfaceDriver
     private final Map<String,RegisteredDisplay> running=new HashMap<>();
     private final Map<String,NavFourSlotPolicy.Slot> bound=new HashMap<>();
     private final Map<String,Long> baseline=new HashMap<>();
+    private final Map<String,Long> baselineTime=new HashMap<>();
     private volatile boolean failedClosed;
 
     NavFourSlotAndroidSurfaceDriver(
@@ -312,6 +314,7 @@ final class NavFourSlotAndroidSurfaceDriver
             SurfaceTexture texture=destination.texture.getSurfaceTexture();
             texture.setDefaultBufferSize(stream.width,stream.height);
             baseline.put(stream.id,destination.frames);
+            baselineTime.put(stream.id,destination.lastFrameTime);
             // Rebind DIRECTLY. No temporary OFF state, no second writer.
             selected.virtual.setSurface(surface);
             if(selected.virtual.getSurface()!=surface)
@@ -337,7 +340,12 @@ final class NavFourSlotAndroidSurfaceDriver
                    !surfaceBindingsExact())return false;
                 Host h=hosts.get(target);
                 Long start=baseline.get(stream.id);
-                if(start!=null&&h.frames>start)return true;
+                Long timestamp=baselineTime.get(stream.id);
+                // Count alone can accept a queued OLD Maps frame while
+                // Spotify is already labeled as the new occupant.
+                // Confirm a newly latched TextureView buffer timestamp.
+                if(start!=null&&timestamp!=null&&h.frames>start&&
+                   h.lastFrameTime>timestamp)return true;
                 monitor.wait(Math.min(125L,
                     Math.max(1L,deadline-SystemClock.elapsedRealtime())));
             }
@@ -348,7 +356,16 @@ final class NavFourSlotAndroidSurfaceDriver
     void onFrame(NavFourSlotPolicy.Slot slot){
         synchronized(monitor){
             Host h=hosts.get(slot);
-            if(h!=null){h.frames++;monitor.notifyAll();}
+            if(h!=null){
+                h.frames++;
+                SurfaceTexture st=h.texture==null?
+                    null:h.texture.getSurfaceTexture();
+                if(st!=null){
+                    try{h.lastFrameTime=st.getTimestamp();}
+                    catch(RuntimeException ignored){}
+                }
+                monitor.notifyAll();
+            }
         }
     }
     /**
@@ -359,7 +376,8 @@ final class NavFourSlotAndroidSurfaceDriver
         synchronized(monitor){
             failedClosed=true;
             for(Host host:hosts.values())host.release();
-            baseline.clear();bound.clear();running.clear();
+            baseline.clear();baselineTime.clear();
+            bound.clear();running.clear();
             monitor.notifyAll();
         }
     }
