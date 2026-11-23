@@ -45,8 +45,12 @@ public final class SenderAudioBootstrapSourceContractTest {
             bridge.contains("am.abandonAudioFocusRequest(focus)")&&
             bridge.contains("session.setActive(false);session.release();"),
             "Prime a short native media session and always clean up audio focus");
-        must(activity.contains("ELEGIR T1 EMPAREJADA")&&
-            activity.contains("DESACTIVAR INICIO DE AUDIO T1")&&
+        // Jetour Sender compact UI uses sentence-case labels, but retains
+        // explicit bonded-device selection and the original A2DP safeguards.
+        must((activity.contains("ELEGIR T1 EMPAREJADA")||
+              activity.contains("action(\"Elegir T1\""))&&
+            (activity.contains("DESACTIVAR INICIO DE AUDIO T1")||
+              activity.contains("Desactivar inicio de audio T1"))&&
             activity.contains("BLUETOOTH_CONNECT")&&
             activity.contains("getBondedDevices()")&&
             !activity.contains("getRemoteDevice(\"00:"),
