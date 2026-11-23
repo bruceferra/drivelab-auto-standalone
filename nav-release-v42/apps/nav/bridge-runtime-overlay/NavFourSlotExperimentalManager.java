@@ -367,6 +367,15 @@ final class NavFourSlotExperimentalManager {
             controls=new NavFourSlotControls(owner,
                 mapsHost,spotifyHost,toolbar,
                 (from,to,nonce,revision)->{
+                    // Never overlap a new A/B swap with an asynchronous
+                    // VirtualDisplay.resize() from the previous move.
+                    // A stale view/configuration during a second swap was
+                    // the trigger for the photographed LAB56 desync.
+                    if(geometrySettling){
+                        reporter.status("NAV: esperando ajuste de "+
+                            "resolución antes del próximo intercambio");
+                        return;
+                    }
                     if(coordinator!=null)
                         coordinator.request(from,to,nonce,revision);
                 });
