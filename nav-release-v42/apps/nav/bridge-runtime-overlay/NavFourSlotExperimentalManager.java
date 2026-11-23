@@ -3,7 +3,11 @@ package ar.com.rango5gps.drivelabauto.boot;
 import android.app.Activity;
 import android.app.AlertDialog;
 import android.graphics.SurfaceTexture;
+import android.graphics.Point;
 import android.hardware.display.VirtualDisplay;
+import android.util.DisplayMetrics;
+import android.view.Display;
+import android.view.View;
 import android.view.Surface;
 import android.os.Handler;
 import android.os.Looper;
@@ -50,6 +54,15 @@ final class NavFourSlotExperimentalManager {
     // Geometry is separate from LAB55's already verified Surface swaps.
     private int clusterPhysicalWidth,clusterPhysicalHeight;
     private long geometryGeneration;
+    private long layoutRefreshSerial;
+    private boolean geometrySettling;
+    // Only views owned by NAV; no foreign/OEM display layout callbacks.
+    private final View.OnLayoutChangeListener geometryLayoutListener=
+        (view,l,t,r,b,oldL,oldT,oldR,oldB)->{
+            if(!closed&&active&&(r-l!=oldR-oldL||b-t!=oldB-oldT))
+                scheduleGeometryRefresh();
+        };
+    private final Map<String,VirtualDisplay> ownerDisplays=new HashMap<>();
     private final Map<String,NavFourSlotResponsiveGeometry.Target>
         appliedGeometry=new HashMap<>();
     private NavFourSlotAndroidSurfaceDriver driver;
@@ -82,7 +95,9 @@ final class NavFourSlotExperimentalManager {
 
     boolean isActive(){return active&&!closed;}
     boolean isPreparing(){return (starting||initializing)&&!closed;}
-    boolean blockedInput(){return touchPaused||starting||initializing;}
+    boolean blockedInput(){
+        return touchPaused||starting||initializing||geometrySettling;
+    }
     boolean canSafelyClose(){
         // If a rollback was unconfirmed, central input remains blocked,
         // but the owner must still be able to CLOSE its own verified
@@ -335,6 +350,11 @@ final class NavFourSlotExperimentalManager {
                 borrowed);
             clusterPhysicalWidth=cluster.width;
             clusterPhysicalHeight=cluster.height;
+            ownerDisplays.clear();
+            for(Map.Entry<String,
+                    NavFourSlotAndroidSurfaceDriver.RegisteredDisplay> item:
+                    records.entrySet())
+                ownerDisplays.put(item.getKey(),item.getValue().virtual);
             for(NavFourSlotPolicy.Stream st:state.streams.values())
                 appliedGeometry.put(st.id,
                     new NavFourSlotResponsiveGeometry.Target(
@@ -376,6 +396,8 @@ final class NavFourSlotExperimentalManager {
                     }
                 },controls);
             active=true;
+            for(TextureView tv:surfaces.values())
+                tv.addOnLayoutChangeListener(geometryLayoutListener);
             updateVisibleSlots();
             reporter.stateChanged(true);
             reporter.status("CUATRO ESPACIOS preparados: Central A/B y "+
@@ -395,35 +417,95 @@ final class NavFourSlotExperimentalManager {
             NavFourSlotPolicy.Slot.TABLERO_A);
         NavFourSlotPolicy.Stream clusterB=s.state.at(
             NavFourSlotPolicy.Slot.TABLERO_B);
+        // First commit physical A/B view WIDTHS. In Android this
+        // schedules a layout traversal; getWidth() still has OLD values
+        // until OnLayoutChange. LAB56/LAB57 measured too early, causing
+        // Waze 1920x720 to remain inside a 960x720 TextureView.
         NavOwnClusterProbe.layoutFourSlots(owner,token,
             clusterA!=null,clusterB!=null);
-        final long generation=++geometryGeneration;
+        geometryGeneration++;
         for(NavFourSlotPolicy.Slot slot:NavFourSlotPolicy.Slot.values()){
             TextureView tv=surfaces.get(slot);
             if(tv==null)continue;
             NavFourSlotPolicy.Stream content=s.state.at(slot);
-            // Empty central A is intentional: its Maps task moved intact.
             tv.setAlpha(content==null?0f:1f);
-            if(content==null){
+            if(content==null)
                 tv.setTransform(new android.graphics.Matrix());
-                continue;
+            else{
+                // Never stretch a previously decoded buffer while
+                // Android is still laying out the destination panel.
+                NavFourSlotResponsiveGeometry.Target current=
+                    appliedGeometry.get(content.id);
+                if(current!=null)
+                    NavFourSlotClusterABHost.fit(
+                        tv,current.width,current.height);
             }
-            // After LAB55 confirms the same running task and new frames,
-            // resize its native VD viewport. No new display/task created.
-            tv.post(()->applyResponsiveGeometry(
-                s.state,slot,content,tv,generation));
         }
+        scheduleGeometryRefresh();
+    }
+    /**
+     * Debounce actual host layout changes before touching any VD size.
+     * Future apps automatically use the same policy by stream ID; no
+     * per-app package name, original-slot assumptions or task moves.
+     */
+    private void scheduleGeometryRefresh(){
+        if(!active||closed)return;
+        final long serial=++layoutRefreshSerial;
+        final long generation=geometryGeneration;
+        geometrySettling=true;
+        main.postDelayed(()->{
+            if(closed||!active||serial!=layoutRefreshSerial||
+               generation!=geometryGeneration)return;
+            if(touchPaused)return; // resumeCentralInput queues a new pass
+            NavFourSlotLiveRouting.Snapshot snap=
+                NavFourSlotLiveRouting.snapshot(owner,token);
+            if(snap==null){
+                geometrySettling=false;return;
+            }
+            for(NavFourSlotPolicy.Slot slot:
+                    NavFourSlotPolicy.Slot.values()){
+                NavFourSlotPolicy.Stream content=snap.state.at(slot);
+                TextureView tv=surfaces.get(slot);
+                if(content==null||tv==null)continue;
+                if(tv.getWidth()<240||tv.getHeight()<240||
+                   !tv.isAvailable()){
+                    // The view's layout listener queues another pass
+                    // once Android gives it final physical dimensions.
+                    continue;
+                }
+                applyResponsiveGeometry(snap.state,slot,content,tv,
+                    generation);
+            }
+            geometrySettling=false;
+        },120L);
     }
     private VirtualDisplay ownedDisplay(NavFourSlotPolicy.Stream content){
-        if(content==null)return null;
-        if("maps".equals(content.id))return mapsDisplay;
-        if("spotify".equals(content.id))return spotifyDisplay;
-        if("waze".equals(content.id)){
-            NavOwnClusterProbe.FourSlotAnchor anchor=
-                NavOwnClusterProbe.fourSlotAnchor(owner,token);
-            return anchor==null?null:anchor.virtual;
+        // Owned VirtualDisplay registry, not app-specific "if Spotify".
+        // Later selectable apps need only register a verified stream+VD.
+        return content==null?null:ownerDisplays.get(content.id);
+    }
+    private static NavFourSlotResponsiveGeometry.Target realGeometry(
+            VirtualDisplay vd,NavFourSlotResponsiveGeometry.Target fallback){
+        Display d=vd==null?null:vd.getDisplay();
+        if(d==null)return fallback;
+        Point physical=new Point();
+        d.getRealSize(physical);
+        try{
+            return new NavFourSlotResponsiveGeometry.Target(
+                physical.x,physical.y);
+        }catch(SecurityException invalid){
+            return fallback;
         }
-        return null;
+    }
+    private static int nativeDensity(VirtualDisplay vd){
+        Display d=vd==null?null:vd.getDisplay();
+        if(d!=null){
+            DisplayMetrics metrics=new DisplayMetrics();
+            d.getMetrics(metrics);
+            if(metrics.densityDpi>=120&&metrics.densityDpi<=640)
+                return metrics.densityDpi;
+        }
+        return NavFourSlotResponsiveGeometry.DENSITY_DPI;
     }
     private void applyResponsiveGeometry(NavFourSlotPolicy.State verified,
             NavFourSlotPolicy.Slot slot,NavFourSlotPolicy.Stream content,
@@ -437,47 +519,54 @@ final class NavFourSlotExperimentalManager {
         VirtualDisplay vd=ownedDisplay(content);
         if(vd==null||vd.getDisplay()==null||
            vd.getDisplay().getDisplayId()!=content.displayId)return;
+        NavFourSlotResponsiveGeometry.Target previous=
+            appliedGeometry.get(content.id);
+        if(previous==null)previous=new NavFourSlotResponsiveGeometry.Target(
+            content.width,content.height);
+        NavFourSlotResponsiveGeometry.Target before=
+            realGeometry(vd,previous);
         try{
+            // Last *measured* TextureView size. Left/right cluster halves
+            // are 960x720 only AFTER the physical Presentation laid out.
             NavFourSlotResponsiveGeometry.Target target=
                 NavFourSlotResponsiveGeometry.forSlot(
                     verified,slot,clusterPhysicalWidth,
                     clusterPhysicalHeight,tv.getWidth(),tv.getHeight());
-            NavFourSlotResponsiveGeometry.Target previous=
-                appliedGeometry.get(content.id);
-            if(previous==null||!previous.same(target)){
-                // Buffer first, then resize the SAME VirtualDisplay.
-                // On a half-width cluster host this triggers app layout
-                // reflow to 960x720 without changing Android task/display.
-                tv.getSurfaceTexture().setDefaultBufferSize(
-                    target.width,target.height);
-                vd.resize(target.width,target.height,
-                    NavFourSlotResponsiveGeometry.DENSITY_DPI);
-                appliedGeometry.put(content.id,target);
-            }else{
-                tv.getSurfaceTexture().setDefaultBufferSize(
-                    target.width,target.height);
-            }
-            if(slot.touch){
-                // Central gesture mapping remains calibrated to the
-                // original stream-native virtual-display dimensions.
+            if(!before.same(target)){
+                // Same exact owned VirtualDisplay, existing Android task.
+                // Do not reset the transform to identity prematurely:
+                // retain center-inside for the existing source frame
+                // until the VD has negotiated the target dimensions.
                 NavFourSlotClusterABHost.fit(
-                    tv,target.width,target.height);
+                    tv,before.width,before.height);
+                tv.getSurfaceTexture().setDefaultBufferSize(
+                    target.width,target.height);
+                vd.resize(target.width,target.height,nativeDensity(vd));
             }else{
-                // Cluster VD now matches the physical A/B viewport.
-                // Reset LAB55's stale panoramic letterbox Matrix.
-                tv.setTransform(new android.graphics.Matrix());
+                tv.getSurfaceTexture().setDefaultBufferSize(
+                    target.width,target.height);
             }
-        }catch(RuntimeException resizeError){
-            // Layout-only experiment, do not interrupt the proven swap.
-            // Preserve all VDs/tasks. Fall back to LAB55 center-inside.
             NavFourSlotResponsiveGeometry.Target actual=
-                appliedGeometry.get(content.id);
-            int sw=actual==null?content.width:actual.width;
-            int sh=actual==null?content.height:actual.height;
-            NavFourSlotClusterABHost.fit(tv,sw,sh);
-            reporter.status("LAB56: traslado correcto, reencuadre "+
-                content.id+" no confirmado: "+
-                resizeError.getClass().getSimpleName());
+                realGeometry(vd,before);
+            // The actual Android VD pixels, NOT a stale stream's
+            // original width, are the coordinate basis for rendering
+            // and central accessibility touch inversion.
+            appliedGeometry.put(content.id,actual);
+            NavFourSlotClusterABHost.fit(tv,actual.width,actual.height);
+            if(!actual.same(target)){
+                reporter.status("NAV geometría pendiente "+content.id+
+                    ": "+actual+" → "+target+" (sin deformar)");
+            }
+        }catch(RuntimeException resizingFailed){
+            // Keep the last native-size center-inside transform. Never
+            // disturb the proven LAB57 Surface swap or task IDs.
+            NavFourSlotResponsiveGeometry.Target actual=
+                realGeometry(vd,previous);
+            appliedGeometry.put(content.id,actual);
+            NavFourSlotClusterABHost.fit(tv,
+                actual.width,actual.height);
+            reporter.status("NAV reencuadre "+content.id+" no aplicado: "+
+                resizingFailed.getClass().getSimpleName());
         }
     }
     NavFourSlotPolicy.Stream centralStream(int panel){
@@ -499,13 +588,11 @@ final class NavFourSlotExperimentalManager {
             new NavFourSlotResponsiveGeometry.Target(
                 content.width,content.height):actual;
     }
-    /** If central viewport dimensions change while 4P is active,
-     * resize its owner VD only; never affect task/Surface transfers.
+    /** Refresh once Android has laid out the current central panel.
+     * No repeated cluster layout, app relaunch or ADB commands.
      */
     void centralHostResized(){
-        if(isActive()&&!touchPaused){
-            updateVisibleSlots();
-        }
+        if(isActive())scheduleGeometryRefresh();
     }
     void frameCentral(int index){
         if(driver!=null&&index>=0&&index<=1)
@@ -527,7 +614,12 @@ final class NavFourSlotExperimentalManager {
     void closeAfterOwnerCleanup(){
         closed=true;starting=false;active=false;
         geometryGeneration++;
+        layoutRefreshSerial++;
+        geometrySettling=false;
+        for(TextureView tv:surfaces.values())
+            tv.removeOnLayoutChangeListener(geometryLayoutListener);
         appliedGeometry.clear();
+        ownerDisplays.clear();
         touchPaused=true;
         if(coordinator!=null){
             try{coordinator.closeAfterOwnerRelease();}
