@@ -65,6 +65,8 @@ final class NavFourSlotExperimentalManager {
     private final Map<String,VirtualDisplay> ownerDisplays=new HashMap<>();
     private final Map<String,NavFourSlotResponsiveGeometry.Target>
         appliedGeometry=new HashMap<>();
+    private final Map<String,NavFourSlotResponsiveGeometry.Target>
+        lastResizeRequest=new HashMap<>();
     private NavFourSlotAndroidSurfaceDriver driver;
     private NavFourSlotSessionCoordinator coordinator;
     private NavFourSlotControls controls;
@@ -453,31 +455,43 @@ final class NavFourSlotExperimentalManager {
         final long serial=++layoutRefreshSerial;
         final long generation=geometryGeneration;
         geometrySettling=true;
-        main.postDelayed(()->{
-            if(closed||!active||serial!=layoutRefreshSerial||
-               generation!=geometryGeneration)return;
-            if(touchPaused)return; // resumeCentralInput queues a new pass
-            NavFourSlotLiveRouting.Snapshot snap=
-                NavFourSlotLiveRouting.snapshot(owner,token);
-            if(snap==null){
-                geometrySettling=false;return;
+        main.postDelayed(()->convergeGeometry(serial,generation,0),120L);
+    }
+    private void convergeGeometry(long serial,long generation,int attempt){
+        if(closed||!active||serial!=layoutRefreshSerial||
+           generation!=geometryGeneration)return;
+        if(touchPaused)return; // resumeCentralInput triggers the new pass
+        NavFourSlotLiveRouting.Snapshot snap=
+            NavFourSlotLiveRouting.snapshot(owner,token);
+        if(snap==null){
+            geometrySettling=false;return;
+        }
+        boolean pending=false;
+        for(NavFourSlotPolicy.Slot slot:NavFourSlotPolicy.Slot.values()){
+            NavFourSlotPolicy.Stream content=snap.state.at(slot);
+            TextureView tv=surfaces.get(slot);
+            if(content==null||tv==null)continue;
+            if(tv.getWidth()<240||tv.getHeight()<240||
+               !tv.isAvailable()){
+                pending=true;
+                continue;
             }
-            for(NavFourSlotPolicy.Slot slot:
-                    NavFourSlotPolicy.Slot.values()){
-                NavFourSlotPolicy.Stream content=snap.state.at(slot);
-                TextureView tv=surfaces.get(slot);
-                if(content==null||tv==null)continue;
-                if(tv.getWidth()<240||tv.getHeight()<240||
-                   !tv.isAvailable()){
-                    // The view's layout listener queues another pass
-                    // once Android gives it final physical dimensions.
-                    continue;
-                }
-                applyResponsiveGeometry(snap.state,slot,content,tv,
-                    generation);
-            }
+            if(!applyResponsiveGeometry(snap.state,slot,content,tv,
+                    generation))pending=true;
+        }
+        // VirtualDisplay.resize() and SurfaceTexture buffer-size changes
+        // are asynchronous on Android 11. Re-read actual display pixels
+        // after the host has settled, but NEVER resize in a tight loop.
+        if(pending&&attempt<3){
+            main.postDelayed(()->convergeGeometry(
+                serial,generation,attempt+1),180L);
+        }else{
             geometrySettling=false;
-        },120L);
+            if(pending)
+                reporter.status("NAV: una aplicación no confirmó "+
+                    "su resolución nueva. Se preservó su proporción "+
+                    "y las tareas originales.");
+        }
     }
     private VirtualDisplay ownedDisplay(NavFourSlotPolicy.Stream content){
         // Owned VirtualDisplay registry, not app-specific "if Spotify".
@@ -507,18 +521,18 @@ final class NavFourSlotExperimentalManager {
         }
         return NavFourSlotResponsiveGeometry.DENSITY_DPI;
     }
-    private void applyResponsiveGeometry(NavFourSlotPolicy.State verified,
+    private boolean applyResponsiveGeometry(NavFourSlotPolicy.State verified,
             NavFourSlotPolicy.Slot slot,NavFourSlotPolicy.Stream content,
             TextureView tv,long generation){
         if(closed||!active||touchPaused||generation!=geometryGeneration||
-           !tv.isAvailable()||tv.getSurfaceTexture()==null)return;
+           !tv.isAvailable()||tv.getSurfaceTexture()==null)return false;
         NavFourSlotLiveRouting.Snapshot live=
             NavFourSlotLiveRouting.snapshot(owner,token);
         if(live==null||live.state.revision!=verified.revision||
-           live.state.at(slot)!=content)return;
+           live.state.at(slot)!=content)return false;
         VirtualDisplay vd=ownedDisplay(content);
         if(vd==null||vd.getDisplay()==null||
-           vd.getDisplay().getDisplayId()!=content.displayId)return;
+           vd.getDisplay().getDisplayId()!=content.displayId)return false;
         NavFourSlotResponsiveGeometry.Target previous=
             appliedGeometry.get(content.id);
         if(previous==null)previous=new NavFourSlotResponsiveGeometry.Target(
@@ -534,17 +548,22 @@ final class NavFourSlotExperimentalManager {
                     clusterPhysicalHeight,tv.getWidth(),tv.getHeight());
             if(!before.same(target)){
                 // Same exact owned VirtualDisplay, existing Android task.
-                // Do not reset the transform to identity prematurely:
-                // retain center-inside for the existing source frame
-                // until the VD has negotiated the target dimensions.
+                // Keep the OLD frame center-inside while Android updates
+                // the output; never stretch a panorama vertically.
                 NavFourSlotClusterABHost.fit(
                     tv,before.width,before.height);
-                tv.getSurfaceTexture().setDefaultBufferSize(
-                    target.width,target.height);
-                vd.resize(target.width,target.height,nativeDensity(vd));
+                NavFourSlotResponsiveGeometry.Target requested=
+                    lastResizeRequest.get(content.id);
+                if(requested==null||!requested.same(target)){
+                    tv.getSurfaceTexture().setDefaultBufferSize(
+                        target.width,target.height);
+                    vd.resize(target.width,target.height,nativeDensity(vd));
+                    lastResizeRequest.put(content.id,target);
+                }
             }else{
                 tv.getSurfaceTexture().setDefaultBufferSize(
                     target.width,target.height);
+                lastResizeRequest.put(content.id,target);
             }
             NavFourSlotResponsiveGeometry.Target actual=
                 realGeometry(vd,before);
@@ -553,10 +572,7 @@ final class NavFourSlotExperimentalManager {
             // and central accessibility touch inversion.
             appliedGeometry.put(content.id,actual);
             NavFourSlotClusterABHost.fit(tv,actual.width,actual.height);
-            if(!actual.same(target)){
-                reporter.status("NAV geometría pendiente "+content.id+
-                    ": "+actual+" → "+target+" (sin deformar)");
-            }
+            return actual.same(target);
         }catch(RuntimeException resizingFailed){
             // Keep the last native-size center-inside transform. Never
             // disturb the proven LAB57 Surface swap or task IDs.
@@ -567,6 +583,7 @@ final class NavFourSlotExperimentalManager {
                 actual.width,actual.height);
             reporter.status("NAV reencuadre "+content.id+" no aplicado: "+
                 resizingFailed.getClass().getSimpleName());
+            return true; // keep last known safe geometry; do not loop
         }
     }
     NavFourSlotPolicy.Stream centralStream(int panel){
@@ -619,6 +636,7 @@ final class NavFourSlotExperimentalManager {
         for(TextureView tv:surfaces.values())
             tv.removeOnLayoutChangeListener(geometryLayoutListener);
         appliedGeometry.clear();
+        lastResizeRequest.clear();
         ownerDisplays.clear();
         touchPaused=true;
         if(coordinator!=null){
