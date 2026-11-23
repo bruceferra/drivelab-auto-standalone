@@ -61,8 +61,10 @@ public abstract class T1ImmersiveActivity extends Activity {
         if(globalToolbar!=null)globalToolbar.onResume();
         // When returning from another DriveLab screen, recheck the real
         // Display 1 overlay token. Width stays in SharedPreferences.
-        T1ClusterEdgeFade.refresh(this);
-        T1OemMicrophoneService.ensureRunning(this);
+        if(!T1NavSeparation.NAV_DELEGATED){
+            T1ClusterEdgeFade.refresh(this);
+            T1OemMicrophoneService.ensureRunning(this);
+        }
     }
     @Override protected void onPause(){
         activeScreen=false;
