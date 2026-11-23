@@ -14,6 +14,14 @@ geo=(app/"NavFourSlotResponsiveGeometry.java").read_text(encoding="utf8")
 swap=(app/"NavFourSlotSwapController.java").read_text(encoding="utf8")
 driver=(app/"NavFourSlotAndroidSurfaceDriver.java").read_text(encoding="utf8")
 touch=(app/"NavVirtualMosaicActivity.java").read_text(encoding="utf8")
+host=(app/"NavFourSlotClusterABHost.java").read_text(encoding="utf8")
+parking=(app/"NavFourSlotParkingVisibilityPolicy.java").read_text(encoding="utf8")
+assert "frontWhenParking(" in parking
+assert "NavFourSlotParkingVisibilityPolicy.frontWhenParking(" in host
+assert "originalWaze.bringToFront()" in host
+assert "secondContainer.bringToFront()" in host
+assert 'visibleA=aOccupied;' in host
+assert 'visibleB=bOccupied;' in host
 assert "addOnLayoutChangeListener(geometryLayoutListener)" in manager
 assert "removeOnLayoutChangeListener(geometryLayoutListener)" in manager
 assert "convergeGeometry(serial,generation,0)" in manager
