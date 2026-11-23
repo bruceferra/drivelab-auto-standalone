@@ -289,10 +289,13 @@ final class NavFourSlotExperimentalManager {
                                 // callback. Expose it so the TextureView
                                 // actually consumes frames before commit,
                                 // while leaving Waze A full size/untouched.
-                                boolean available=slot!=
-                                    NavFourSlotPolicy.Slot.TABLERO_B||
+                                boolean available=slot==
+                                    NavFourSlotPolicy.Slot.TABLERO_B?
                                     NavOwnClusterProbe.previewFourSlotB(
-                                        owner,token);
+                                        owner,token):
+                                    slot==NavFourSlotPolicy.Slot.TABLERO_A?
+                                    NavOwnClusterProbe.previewFourSlotA(
+                                        owner,token):true;
                                 if(available){
                                     host.setAlpha(1f);
                                     success[0]=true;
