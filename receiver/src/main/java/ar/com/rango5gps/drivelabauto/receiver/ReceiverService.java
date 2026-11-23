@@ -64,6 +64,12 @@ public final class ReceiverService extends Service {
             "DriveLab Auto · destinos",NotificationManager.IMPORTANCE_DEFAULT));
     }
     @Override public int onStartCommand(Intent intent,int flags,int startId){
+        // DriveLab Nav exclusively owns socket ports and route dispatch.
+        if(T1NavSeparation.NAV_DELEGATED){
+            prefs().edit().putBoolean("running",false)
+                .putString("status","INACTIVO · NAVEGACIÓN EN DRIVELAB NAV").apply();
+            stopSelf();return START_NOT_STICKY;
+        }
         String action=intent==null?"":intent.getAction();
         if(ACTION_STOP.equals(action)){
             prefs().edit().putBoolean("keep_alive",false)
