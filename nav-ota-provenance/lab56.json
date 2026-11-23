@@ -1,0 +1,15 @@
+{
+  "kind": "drivelab-nav-ota-provenance",
+  "approvedScope": "LAB56 4P visual and identity regression fix: after LAB55 verified owner-only Surface swaps, resize the SAME VirtualDisplay to real current central A/B host dimensions or 960x720 split cluster halves (full 1920x720 when single cluster occupant); match touch inversion; verify exact getSurface identity for each existing VDisplay and require freshly latched frame timestamp to reject stale Maps image while Spotify label remains. Preserve LAB55 task/Surface swap policy and original app tasks; keep 4P parked-only opt-in.",
+  "sourceRunId": 45089043895,
+  "sourceCommit": "deff36edd54a655d18e8dd2c57bcbc4a33d3187e",
+  "sourceBranch": "fix/nav-lab56-responsive-cluster-half-viewport-20261122",
+  "applicationId": "ar.com.rango5gps.drivelabauto.boot.lab",
+  "versionName": "0.1.58-lab.56",
+  "versionCode": 60,
+  "releaseTag": "bridge-lab-v56",
+  "previousOtaVersion": "0.1.57-lab.55",
+  "previousOtaSha256": "ab87bab10979a637c832bb9a9ae43a86502e4dffd3e6ef962a155e6d45df9656",
+  "previousOtaSize": 5175041,
+  "note": "Original signed CI success. Passed pure geometry and five-cycle Spotify central A/B roundtrip plus Waze/Maps cross-panel moves; physical on-car visual identity still unverified. Do not change Sender/Receiver/QR/OEM/T1Launcher; LAB55 fallback remains."
+}
