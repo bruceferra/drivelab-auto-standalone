@@ -1,0 +1,16 @@
+{
+  "kind": "drivelab-nav-ota-provenance",
+  "approvedScope": "LAB58: read actual Android-owned VD pixels and measured Central A/B and cluster half/full host sizes, converge deferred VirtualDisplay.resize, app-agnostic. Hide temporary parked cluster frame behind verified existing fullscreen app; preserve all LAB57 per-hop native-frame verification and original Android task identity.",
+  "sourceRunId": 45199990355,
+  "sourceCommit": "d354e3e5d96217f733c5544cf2c424f3ef4d7e60",
+  "sourceBranch": "fix/nav-lab58-universal-panel-geometry-20261123",
+  "applicationId": "ar.com.rango5gps.drivelabauto.boot.lab",
+  "versionName": "0.1.60-lab.58",
+  "versionCode": 62,
+  "releaseTag": "bridge-lab-v58",
+  "previousOtaVersion": "0.1.59-lab.57",
+  "previousOtaSha256": "975a13cd81c1a603931fbc6c11a40d7d44bd7b209034badaf5de4fdfc8e88a83",
+  "previousOtaSize": 5181825,
+  "stableReleaseAtApproval": "v0.3.99",
+  "note": "User approved LAB58 signed OTA. Strict LAB57 rollback and stationary-only physical experiment. Sender/Receiver remain untouched. Source candidate signed with original NAV certificate and CI success; physical real-device geometry to be verified."
+}
