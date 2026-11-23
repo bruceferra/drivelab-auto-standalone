@@ -212,6 +212,10 @@ final class T1GlobalToolbar {
         reload.setTextSize(12f);
         reload.setContentDescription("Reparación automática de mapas desactivada por seguridad: "+
             "no borra datos ni caché");
+        if(T1NavSeparation.NAV_DELEGATED){
+            recoverMosaic.setVisibility(View.GONE);
+            reload.setVisibility(View.GONE);
+        }
         // Last control in the permanent toolbar on every Receiver screen.
         // Exactly the same verified OTA updater as Inicio > Conexión Xiaomi.
         // Never redirect to Xiaomi settings, a browser or an unverified APK.
@@ -269,6 +273,10 @@ final class T1GlobalToolbar {
         wheelPanelButton=button(actions,"VOLANTE · PANEL A",
             T1JetourTheme.PANEL_HI,158,this::toggleWheelPanel);
         refreshWheelPanel();
+        if(T1NavSeparation.NAV_DELEGATED){
+            clusterButton.setVisibility(View.GONE);
+            wheelPanelButton.setVisibility(View.GONE);
+        }
         button(actions,"COCKPIT",T1JetourTheme.GREEN_BUTTON,114,
             ()->navigate(T1PremiumCockpitActivity.class));
         optimizer=button(actions,"OPTIMIZADO OFF",T1JetourTheme.RED_BUTTON,144,
@@ -293,8 +301,9 @@ final class T1GlobalToolbar {
         airButton=button(actions,"AIRE INTERIOR AUTO",T1JetourTheme.GREEN_BUTTON,170,
             this::airStatus);
         // Vehicle details and OEM validation are available from Inicio.
-        button(actions,"IA / WAZE",T1JetourTheme.PANEL_HI,115,
+        Button assistantButton=button(actions,"IA / WAZE",T1JetourTheme.PANEL_HI,115,
             ()->navigate(T1VoiceRouteActivity.class));
+        if(T1NavSeparation.NAV_DELEGATED)assistantButton.setVisibility(View.GONE);
         // Wheel calibration is a technical option, not a driving control.
         button(actions,"INICIO",T1JetourTheme.PANEL_HI,95,
             ()->navigate(ReceiverActivity.class));
@@ -627,7 +636,7 @@ final class T1GlobalToolbar {
      * Mark an unverified close in amber until task inspection succeeds.
      */
     private void refreshCluster(){
-        if(clusterButton==null)return;
+        if(T1NavSeparation.NAV_DELEGATED||clusterButton==null)return;
         SharedPreferences p=T1ClusterWazeRouter.prefs(owner);
         boolean active=T1ClusterWazeRouter.enabled(owner);
         boolean pending=p.getBoolean(T1ClusterWazeRouter.CLOSE_PENDING,false);
@@ -649,7 +658,7 @@ final class T1GlobalToolbar {
             "Clúster desactivado. Tocar para enviar Waze al Display elegido");
     }
     private void refreshWheelPanel(){
-        if(wheelPanelButton==null)return;
+        if(T1NavSeparation.NAV_DELEGATED||wheelPanelButton==null)return;
         boolean b=T1WheelTarget.panelB(owner);
         wheelPanelButton.setText("VOLANTE · PANEL "+(b?"B":"A"));
         T1JetourTheme.button(wheelPanelButton,b?

@@ -18,6 +18,8 @@ public final class BootReceiver extends BroadcastReceiver {
             ReceiverService.PREFS,Context.MODE_PRIVATE)
                 .getBoolean("auto_boot",false);
         boolean clusterBoot=T1ClusterWazeRouter.autoBoot(context);
+        // Ignore historical Nav boot flags, preserve stored preferences.
+        if(T1NavSeparation.NAV_DELEGATED){receiverBoot=false;clusterBoot=false;}
         if(receiverBoot||clusterBoot){
             // Persist a real ignition broadcast receipt so the owner can
             // distinguish "never triggered" from a failed ADB step.
@@ -44,7 +46,8 @@ public final class BootReceiver extends BroadcastReceiver {
             }
         }
         // T1N134 verified key 1010, activated only after user opt-in.
-        if(T1OemMicrophoneService.prefs(context).getBoolean(
+        if(!T1NavSeparation.NAV_DELEGATED &&
+           T1OemMicrophoneService.prefs(context).getBoolean(
                 T1OemMicrophoneService.ENABLED,false)){
             try{
                 context.startForegroundService(
