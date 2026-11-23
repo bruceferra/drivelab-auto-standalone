@@ -52,8 +52,8 @@ public final class NavFourSlotResponsiveGeometryTest {
             "native 960x720 per half, no vertical letterboxing");
         NavFourSlotResponsiveGeometry.Target central=target(
             both,NavFourSlotPolicy.Slot.CENTRAL_A);
-        ok(central.width==1250&&central.height==820,
-            "central app native to its real host, not Waze 1920x720");
+        ok(central.width==620&&central.height==980,
+            "central VD reverts to source native resolution for touch");
         try{
             target(singleA,NavFourSlotPolicy.Slot.TABLERO_B);
             throw new AssertionError("empty panel should be rejected");
