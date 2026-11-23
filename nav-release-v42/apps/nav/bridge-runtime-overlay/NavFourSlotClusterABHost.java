@@ -31,6 +31,10 @@ final class NavFourSlotClusterABHost {
     private final TextureView second;
     private final int physicalWidth,physicalHeight;
     private boolean split;
+    // The last VERIFIED visual A/B occupancy; previews are NOT commits.
+    // An empty NAV host may temporarily receive an app during a swap
+    // but its pixels must stay hidden behind the existing full-width app.
+    private boolean visibleA=true,visibleB=false;
 
     NavFourSlotClusterABHost(FrameLayout root,TextureView waze,
                              int width,int height,SlotListener callback){
@@ -104,21 +108,34 @@ final class NavFourSlotClusterABHost {
         if(!split||!second.isAvailable()||
            !secondContainer.isAttachedToWindow())
             throw new SecurityException("Tablero B sin superficie NAV");
-        secondContainer.bringToFront();
+        NavFourSlotParkingVisibilityPolicy.Front front=
+            NavFourSlotParkingVisibilityPolicy.frontWhenParking(
+                visibleA,visibleB,NavFourSlotPolicy.Slot.TABLERO_B);
         secondContainer.setVisibility(View.VISIBLE);
+        // Keep the temporary VD attached and alpha=1 so Android can
+        // render a NEW frame for LAB57's guard. Cover its transient
+        // pixels with the existing, already visible A fullscreen View.
+        // Previously bringToFront(B) flashed Spotify/Maps for ~1 sec.
         secondContainer.setAlpha(1f);
         second.setAlpha(1f);
+        if(front==NavFourSlotParkingVisibilityPolicy.Front.A)
+            originalWaze.bringToFront();
+        else secondContainer.bringToFront();
     }
-    /** If A is empty and B full width, B otherwise obscures A's
-     * TextureView and the incoming app may never produce a visible frame.
-     * Bring A forward only for the guarded pre-commit frame probe.
+    /** A can be vacant while the already verified B app fills the
+     * entire cluster. Park to A BEHIND B, never flash the parking app.
      */
     void previewFirst(){
         if(!split||!originalWaze.isAvailable()||
            !originalWaze.isAttachedToWindow())
             throw new SecurityException("Tablero A sin superficie NAV");
-        originalWaze.bringToFront();
+        NavFourSlotParkingVisibilityPolicy.Front front=
+            NavFourSlotParkingVisibilityPolicy.frontWhenParking(
+                visibleA,visibleB,NavFourSlotPolicy.Slot.TABLERO_A);
         originalWaze.setAlpha(1f);
+        if(front==NavFourSlotParkingVisibilityPolicy.Front.B)
+            secondContainer.bringToFront();
+        else originalWaze.bringToFront();
     }
 
     /**
@@ -128,6 +145,8 @@ final class NavFourSlotClusterABHost {
      */
     void layoutFor(boolean aOccupied,boolean bOccupied){
         if(!split)return;
+        visibleA=aOccupied;
+        visibleB=bOccupied;
         int half=physicalWidth/2;
         int aW=aOccupied&&bOccupied?half:physicalWidth;
         int bW=aOccupied&&bOccupied?physicalWidth-half:
@@ -140,6 +159,7 @@ final class NavFourSlotClusterABHost {
         secondContainer.setAlpha(bOccupied?1f:0f);
         // Restore normal visual layering after the pre-commit A probe.
         if(bOccupied)secondContainer.bringToFront();
+        else if(aOccupied)originalWaze.bringToFront();
         if(aOccupied&&!bOccupied){
             // A failed attempt must not leave Waze looking miniature.
             // Its normal full-width 1920x720 original Surface is unchanged.
@@ -157,6 +177,7 @@ final class NavFourSlotClusterABHost {
         secondContainer.setAlpha(0f);
         secondContainer.setVisibility(View.GONE);
         originalWaze.setAlpha(1f);
+        visibleA=true;visibleB=false;
         originalWaze.setTransform(new Matrix());
         originalWaze.setLayoutParams(new FrameLayout.LayoutParams(
             physicalWidth,physicalHeight,Gravity.BOTTOM));
