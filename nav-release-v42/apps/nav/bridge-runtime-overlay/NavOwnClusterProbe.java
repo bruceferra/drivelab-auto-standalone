@@ -130,6 +130,18 @@ final class NavOwnClusterProbe implements TextureView.SurfaceTextureListener {
             return true;
         }catch(RuntimeException denied){return false;}
     }
+    /** LAB55: show only the prospective NAV-owned B surface while
+     * waiting for a real frame. Does not resize/move the live Waze A. */
+    static boolean previewFourSlotB(Activity owner,long token){
+        NavOwnClusterProbe p=active;
+        if(p==null||p.owner!=owner||p.session!=token||
+           p.ended||p.fourHost==null||!p.fourHost.isSplit())
+            return false;
+        try{
+            p.fourHost.previewSecond();
+            return true;
+        }catch(RuntimeException denied){return false;}
+    }
     static boolean restoreSingleFourSlot(Activity owner,long token){
         NavOwnClusterProbe p=active;
         if(p==null||p.owner!=owner||p.session!=token||
