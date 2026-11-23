@@ -258,6 +258,20 @@ public final class Updater {
                     "(github.com: "+shortError(directError)+")",directError);
             }
         }
+        if("sender".equals(app)){
+            // Sender remains an independently signed APK with a separate Cloud
+            // enrollment and package-bound nav-sender channel. Until its Cloud
+            // release is published, the original Sender manifest stays active.
+            try{
+                SenderCloudOta.Release cloud=SenderCloudOta.lookup(a);
+                if(cloud!=null)
+                    return new Offer(cloud.versionName,cloud.url,cloud.sha256,
+                        cloud.versionCode,null,cloud.signerSha256,cloud.bytes);
+            }catch(IOException networkUnavailable){
+                // Fail over only on transport/auth outages; invalid release
+                // identity, certificate or APK hash MUST stop installation.
+            }
+        }
         return latestFromManifest(a,app);
     }
 

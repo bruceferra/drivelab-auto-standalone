@@ -15,11 +15,14 @@ import java.util.Collections;
 import java.util.List;
 import android.net.Uri;
 import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
+import android.content.res.ColorStateList;
 import android.view.*;
 import android.widget.*;
 import ar.com.rango5gps.drivelabauto.common.MapLinks;
 import ar.com.rango5gps.drivelabauto.common.BridgeRouteTarget;
 import ar.com.rango5gps.drivelabauto.common.Updater;
+import ar.com.rango5gps.drivelabauto.common.SenderCloudOta;
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning;
 import com.google.mlkit.vision.codescanner.GmsBarcodeScannerOptions;
 import com.google.mlkit.vision.barcode.common.Barcode;
@@ -31,6 +34,7 @@ public final class SenderActivity extends Activity {
     private String status="";
     private ScrollView currentScroll;
     private long lastAutoCheckElapsed=0;
+    private long lastBridgeReconnectElapsed=0;
     @Override public void onCreate(Bundle state){
         super.onCreate(state);render();acceptQrIntent(getIntent());
     }
@@ -42,109 +46,280 @@ public final class SenderActivity extends Activity {
         render();
         Updater.onResume(this,this::info);
         long now=android.os.SystemClock.elapsedRealtime();
+        if(SenderClient.configured(this)&&
+            (lastBridgeReconnectElapsed==0||
+             now-lastBridgeReconnectElapsed>120000)){
+            lastBridgeReconnectElapsed=now;
+            new Thread(()->{
+                SenderClient.Delivery state=SenderClient.reconnect(this);
+                runOnUiThread(()->{
+                    if(!isFinishing()&&!isDestroyed()){
+                        status=state.status;
+                        render();
+                    }
+                });
+            },"Sender-Bridge-QR-Persistent-Reconnect").start();
+        }
         if(lastAutoCheckElapsed==0||now-lastAutoCheckElapsed>120000){
             lastAutoCheckElapsed=now;
             Updater.checkOnOpen(this,"sender",this::info);
         }
     }
-    private void title(LinearLayout body,String s,int size){
-        TextView t=new TextView(this);t.setText(s);t.setTextSize(size);
-        t.setTextColor(NAVY);t.setPadding(8,12,8,12);body.addView(t);
+    // Xiaomi Sender cosmetic layer. No change to SenderClient, route packet
+    // signing, Bluetooth/media service, pairing, updater or Uber share flow.
+    private static final int J_BG=0xFF081A25;
+    private static final int J_CARD=0xFF142E3A;
+    private static final int J_ACCENT=0xFF4FD6D3;
+    private static final int J_TEXT=0xFFF3F8F9;
+    private static final int J_MUTED=0xFFAAC3CC;
+    private static final int J_LINE=0xFF285063;
+    private static final int J_BUTTON=0xFF234556;
+    private static final String ADVANCED_PREF="sender_xiaomi_jetour_advanced";
+    private int dp(int amount){
+        return Math.round(amount*getResources().getDisplayMetrics().density);
     }
-    private void button(LinearLayout body,String text,Runnable work){
-        Button b=new Button(this);b.setAllCaps(false);b.setText(text);
-        b.setOnClickListener(v->work.run());body.addView(b);
+    private GradientDrawable rounded(int fill,int radius,int line){
+        GradientDrawable bg=new GradientDrawable();
+        bg.setColor(fill);
+        bg.setCornerRadius(dp(radius));
+        if(line!=0)bg.setStroke(dp(1),line);
+        return bg;
+    }
+    private TextView label(String value,int size,int color,boolean bold){
+        TextView v=new TextView(this);
+        v.setText(value);
+        v.setTextColor(color);
+        v.setTextSize(size);
+        if(bold)v.setTypeface(null,android.graphics.Typeface.BOLD);
+        v.setGravity(Gravity.CENTER_VERTICAL);
+        return v;
+    }
+    private void infoText(LinearLayout parent,String value){
+        TextView text=label(value,13,J_MUTED,false);
+        text.setPadding(dp(2),dp(5),dp(2),dp(7));
+        parent.addView(text);
+    }
+    private LinearLayout section(LinearLayout parent,String heading,
+                                 String description){
+        LinearLayout card=new LinearLayout(this);
+        card.setOrientation(LinearLayout.VERTICAL);
+        card.setPadding(dp(14),dp(13),dp(14),dp(13));
+        card.setBackground(rounded(J_CARD,16,J_LINE));
+        LinearLayout.LayoutParams margins=new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT);
+        margins.setMargins(0,0,0,dp(12));
+        parent.addView(card,margins);
+        TextView label=label(heading,16,J_TEXT,true);
+        card.addView(label);
+        if(description!=null&&!description.isEmpty())
+            infoText(card,description);
+        return card;
+    }
+    private Button action(String caption,Runnable click,boolean highlighted){
+        Button b=new Button(this);
+        b.setAllCaps(false);
+        b.setText(caption);
+        b.setTextSize(13f);
+        b.setMinHeight(dp(46));
+        b.setMinimumHeight(dp(46));
+        b.setPadding(dp(8),dp(4),dp(8),dp(4));
+        b.setTextColor(highlighted?J_BG:J_TEXT);
+        b.setBackground(rounded(highlighted?J_ACCENT:J_BUTTON,11,
+                               highlighted?0:J_LINE));
+        b.setOnClickListener(v->click.run());
+        return b;
+    }
+    private void addAction(LinearLayout parent,String caption,
+                           Runnable click,boolean highlighted){
+        Button b=action(caption,click,highlighted);
+        LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0,dp(5),0,dp(3));
+        parent.addView(b,lp);
+    }
+    private void actionRow(LinearLayout parent,Button first,Button second){
+        LinearLayout row=new LinearLayout(this);
+        row.setOrientation(LinearLayout.HORIZONTAL);
+        LinearLayout.LayoutParams outer=new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT);
+        outer.setMargins(0,dp(5),0,dp(3));
+        parent.addView(row,outer);
+        LinearLayout.LayoutParams a=new LinearLayout.LayoutParams(
+            0,LinearLayout.LayoutParams.WRAP_CONTENT,1f);
+        a.setMargins(0,0,dp(4),0);
+        row.addView(first,a);
+        LinearLayout.LayoutParams b=new LinearLayout.LayoutParams(
+            0,LinearLayout.LayoutParams.WRAP_CONTENT,1f);
+        b.setMargins(dp(4),0,0,0);
+        row.addView(second,b);
+    }
+    private Button targetChip(String caption,String target,String selected){
+        return action(caption,()->{
+            SenderRouteTarget.choose(this,target);
+            render();
+        },target.equals(selected));
     }
     private void info(String text){status=text;render();}
     private void render(){
-        final int restoreY=currentScroll==null?0:currentScroll.getScrollY();
+        int restoreY=currentScroll==null?0:currentScroll.getScrollY();
         ScrollView scroll=new ScrollView(this);
-        LinearLayout body=new LinearLayout(this);body.setOrientation(LinearLayout.VERTICAL);
-        body.setPadding(25,25,25,40);scroll.addView(body);
-        title(body,"DRIVELAB AUTO · SENDER",24);
-        title(body,"Xiaomi · Navegación Uber / Google Maps / Waze",14);
-        boolean only=SenderClient.prefs(this).getBoolean("only_cluster",true);
-        title(body,only?"MODO: SOLO CLÚSTER":"MODO: CLÚSTER + XIAOMI",18);
-        button(body,only?"Cambiar a clúster + Xiaomi":"Cambiar a solo clúster",()->{
-            SenderClient.prefs(this).edit().putBoolean("only_cluster",!only).apply();render();
-        });
-        title(body,"DESTINO PREDETERMINADO DE UBER",18);
-        String navMode=SenderRouteTarget.selected(this);
-        title(body,"Al tocar NAVEGAR: "+SenderRouteTarget.label(navMode)+
-            "\nSe guarda la elección. No pregunta en cada viaje.",14);
-        button(body,"ELEGIR DESTINO · WAZE / GOOGLE / AMBOS",
-            this::chooseNavigationTarget);
+        scroll.setFillViewport(true);
+        scroll.setBackgroundColor(J_BG);
+        LinearLayout page=new LinearLayout(this);
+        page.setOrientation(LinearLayout.VERTICAL);
+        page.setPadding(dp(14),dp(14),dp(14),dp(28));
+        scroll.addView(page);
+
+        // Compact dashboard-like header: always shows pairing and nav target.
+        LinearLayout header=new LinearLayout(this);
+        header.setOrientation(LinearLayout.VERTICAL);
+        header.setPadding(dp(15),dp(14),dp(15),dp(14));
+        header.setBackground(rounded(0xFF0E2935,18,0xFF286E78));
+        LinearLayout.LayoutParams headLp=new LinearLayout.LayoutParams(
+            LinearLayout.LayoutParams.MATCH_PARENT,
+            LinearLayout.LayoutParams.WRAP_CONTENT);
+        headLp.setMargins(0,0,0,dp(12));
+        page.addView(header,headLp);
+        header.addView(label("DRIVELAB   |   SENDER",23,J_TEXT,true));
+        infoText(header,"JETOUR T1  •  XIAOMI  •  NAVEGACIÓN");
         boolean paired=SenderClient.configured(this);
-        title(body,paired?"T1 VINCULADA":"T1 SIN VINCULAR",18);
-        if(paired)title(body,"IP receptor: "+SenderClient.prefs(this).getString("receiver_ip",""),14);
-        title(body,"Envíos confirmados: "+SenderClient.prefs(this).getInt("sent",0)+
-            "\nÚltimo resultado: "+SenderClient.prefs(this).getString("last_status","Sin pruebas"),14);
+        String navMode=SenderRouteTarget.selected(this);
+        TextView summary=label(
+            (paired?"● T1 vinculada":"○ T1 sin vincular")+
+            "     •     "+SenderRouteTarget.label(navMode),13,
+            paired?J_ACCENT:J_MUTED,true);
+        summary.setPadding(0,dp(6),0,0);
+        header.addView(summary);
+
+        LinearLayout navigation=section(page,"Navegación",
+            "Destino de Uber · tu elección se guarda para el próximo viaje");
+        LinearLayout modeRow=new LinearLayout(this);
+        modeRow.setOrientation(LinearLayout.HORIZONTAL);
+        navigation.addView(modeRow);
+        for(String[] spec:new String[][]{
+                {"Waze",BridgeRouteTarget.WAZE},
+                {"Maps",BridgeRouteTarget.MAPS},
+                {"Ambos",BridgeRouteTarget.BOTH}
+            }){
+            LinearLayout.LayoutParams lp=new LinearLayout.LayoutParams(
+                0,LinearLayout.LayoutParams.WRAP_CONTENT,1f);
+            lp.setMargins(dp(2),dp(2),dp(2),dp(2));
+            modeRow.addView(targetChip(spec[0],spec[1],navMode),lp);
+        }
+        boolean only=SenderClient.prefs(this).getBoolean("only_cluster",true);
+        infoText(navigation,only?"Salida: SOLO CLÚSTER":
+            "Salida: CLÚSTER + XIAOMI");
+        addAction(navigation,only?
+            "Mostrar también la ruta en Xiaomi":"Enviar solo al clúster",
+            ()->{SenderClient.prefs(this).edit()
+                .putBoolean("only_cluster",!only).apply();render();},false);
+
+        LinearLayout car=section(page,"Conexión con la T1",
+            paired?"Receptor vinculado y clave de conexión conservada":
+                   "Vinculá el receptor mediante QR para enviar rutas");
+        if(paired)infoText(car,"IP del receptor: "+
+            SenderClient.prefs(this).getString("receiver_ip",""));
+        infoText(car,"Envíos confirmados: "+
+            SenderClient.prefs(this).getInt("sent",0)+
+            "   •   "+SenderClient.prefs(this).getString(
+                "last_status","Sin pruebas"));
+        actionRow(car,
+            action("Escanear QR",this::scanPairQr,!paired),
+            action("Reconectar",()->new Thread(()->{
+                SenderClient.Delivery result=SenderClient.reconnect(this);
+                runOnUiThread(()->info(result.status));
+            },"Sender-Reconnect-No-QR").start(),paired));
+        actionRow(car,
+            action("Pegar ubicación",this::paste,false),
+            action("Probar ruta",this::test,false));
         String routeState=getSharedPreferences(
             RouteDispatchService.STATE_PREFS,MODE_PRIVATE).getString(
                 RouteDispatchService.LAST_STATE,"");
-        if(!routeState.isEmpty())title(body,"Última navegación desde Uber: "+
-            routeState,13);
-        button(body,"VINCULAR T1 POR QR · SIN CÓDIGOS",this::scanPairQr);
-        button(body,"Vincular manualmente · 6 dígitos (respaldo)",this::pair);
-        button(body,"Probar envío real a La Plata",this::test);
-        button(body,"Pegar enlace de Google Maps / WhatsApp",this::paste);
-        title(body,"AUDIO BLUETOOTH T1 · SPOTIFY / PLAY",18);
+        if(!routeState.isEmpty())
+            infoText(car,"Último envío desde Uber: "+routeState);
+
+        LinearLayout music=section(page,"Audio y Spotify",
+            "Bluetooth de Xiaomi → Jetour T1");
         android.content.SharedPreferences audio=SenderAudioBootstrap.prefs(this);
-        String selected=audio.getString(SenderAudioBootstrap.LABEL,"Sin vehículo elegido");
         boolean enabled=SenderAudioBootstrap.configured(this);
-        title(body,"Bluetooth emparejado: "+selected+
-            "\nPrueba automática: "+(enabled?"ACTIVA (solo la T1)":"NO CONFIGURADA")+
-            "\nÚltima prueba: "+audio.getString(SenderAudioBootstrap.STATUS,"Sin prueba"),13);
-        title(body,"El selector muestra ÚNICAMENTE dispositivos "+
-            "que ya están emparejados con el Xiaomi. Si la T1 no aparece, "+
-            "abrí Ajustes Bluetooth y emparejala allí; después volvé "+
-            "a seleccionar la T1 en DriveLab. No es la vinculación Wi-Fi "+
-            "del Receiver.",13);
-        title(body,"PROBAR PLAY envía al reproductor multimedia activo del "+
-            "Xiaomi (habitualmente Spotify si fue el último), después de "+
-            "confirmar conexión A2DP con la T1 elegida. No empareja ni "+
-            "cambia la fuente Radio/Bluetooth de Jetour. AUTO PLAY es "+
-            "opcional; si está apagado, al conectar se mantiene solo la "+
-            "prueba breve de tono. El resultado físico debe verificarse.",13);
-        button(body,"1 · ELEGIR T1 EMPAREJADA · ACTIVAR AUTO",
-            this::chooseCarAudio);
-        button(body,"ABRIR AJUSTES BLUETOOTH DEL XIAOMI",
-            this::openBluetoothSettings);
-        button(body,"2 · PROBAR PLAY MULTIMEDIA EN XIAOMI",
-            this::testResumeCarAudio);
-        button(body,"DIAGNÓSTICO · TONO A2DP (1,4 S)",
-            this::testCarAudio);
-        if(enabled)button(body,audio.getBoolean(
-            SenderAudioBootstrap.AUTO_RESUME,false)?
-            "AUTO PLAY AL CONECTAR · ON (APAGAR)":
-            "AUTO PLAY AL CONECTAR · OFF (ACTIVAR)",()->{
-                boolean enable=!audio.getBoolean(
-                    SenderAudioBootstrap.AUTO_RESUME,false);
-                audio.edit().putBoolean(SenderAudioBootstrap.AUTO_RESUME,enable)
-                    .putString(SenderAudioBootstrap.STATUS,enable?
-                        "AUTO PLAY pedido al conectar la T1. "+
-                        "Se envía PLAY a la última sesión multimedia Android.":
-                        "AUTO PLAY desactivado; solo prueba de tono A2DP")
-                    .apply();
+        String selected=audio.getString(SenderAudioBootstrap.LABEL,
+            "Sin vehículo elegido");
+        infoText(music,(enabled?"● AUTO AUDIO ACTIVO":"○ AUDIO SIN CONFIGURAR")+
+            "   •   "+selected);
+        actionRow(music,
+            action("Elegir T1",this::chooseCarAudio,!enabled),
+            action("Probar PLAY",this::testResumeCarAudio,false));
+        actionRow(music,
+            action("Ajustes Bluetooth",this::openBluetoothSettings,false),
+            action("Diagnóstico A2DP",this::testCarAudio,false));
+        if(enabled){
+            boolean auto=audio.getBoolean(
+                SenderAudioBootstrap.AUTO_RESUME,false);
+            addAction(music,auto?
+                "Auto PLAY al conectar · ON":"Auto PLAY al conectar · OFF",
+                ()->{
+                    boolean setting=!audio.getBoolean(
+                        SenderAudioBootstrap.AUTO_RESUME,false);
+                    audio.edit().putBoolean(
+                        SenderAudioBootstrap.AUTO_RESUME,setting)
+                        .putString(SenderAudioBootstrap.STATUS,setting?
+                            "AUTO PLAY pedido al conectar la T1. "+
+                            "Se envía PLAY al último reproductor Android.":
+                            "AUTO PLAY desactivado; prueba A2DP solamente")
+                        .apply();
+                    render();
+                },auto);
+        }
+
+        boolean advanced=getPreferences(MODE_PRIVATE).getBoolean(
+            ADVANCED_PREF,false);
+        addAction(page,advanced?"▴  Ocultar ajustes avanzados":
+            "▾  Más opciones y diagnóstico",()->{
+                getPreferences(MODE_PRIVATE).edit().putBoolean(
+                    ADVANCED_PREF,!advanced).apply();
                 render();
-            });
-        if(enabled)button(body,"DESACTIVAR INICIO DE AUDIO T1",
-            ()->{
+            },false);
+        if(advanced){
+            LinearLayout more=section(page,"Configuración avanzada",
+                "Pruebas y recuperación · no cambian el clúster automáticamente");
+            addAction(more,"Destino completo: Waze / Maps / Ambos / T1Launcher",
+                this::chooseNavigationTarget,false);
+            addAction(more,"Prueba T1Launcher (ruta real)",
+                this::chooseT1LauncherRouteTrial,false);
+            addAction(more,"Vinculación manual (6 dígitos)",
+                this::pair,false);
+            if(enabled)addAction(more,"Desactivar inicio de audio T1",()->{
                 audio.edit().putBoolean(SenderAudioBootstrap.ENABLED,false)
                     .putString(SenderAudioBootstrap.STATUS,
                         "Inicio automático desactivado por usuario").apply();
                 render();
-            });
-        button(body,"ACTUALIZAR SENDER · INSTALACIÓN DIRECTA",()->Updater.check(this,"sender",this::info));
-        if(!status.isEmpty())title(body,"Actualizador / estado: "+status,14);
-        button(body,"Desvincular Receiver",()->new AlertDialog.Builder(this)
-            .setMessage("¿Desvincular? La próxima vez tendrás que comparar los 6 dígitos.")
-            .setNegativeButton("CANCELAR",null)
-            .setPositiveButton("DESVINCULAR",(d,w)->{SenderClient.unpair(this);render();}).show());
-        title(body,"En Uber: elegí DriveLab Auto Sender para enviar destinos. "+
-            "Ahora la pantalla de Uber queda visible: el envío al clúster se realiza "+
-            "sin mostrar DriveLab. Los fallos aparecen en una notificación. "+
-            "Modo Solo clúster no abre Waze en Xiaomi.",13);
+            },false);
+            infoText(more,"Último A2DP: "+
+                audio.getString(SenderAudioBootstrap.STATUS,"Sin prueba"));
+            addAction(more,"Desvincular receptor",()->
+                new AlertDialog.Builder(this)
+                    .setMessage("¿Desvincular? La próxima vez deberás "+
+                        "comparar los 6 dígitos de emparejamiento.")
+                    .setNegativeButton("CANCELAR",null)
+                    .setPositiveButton("DESVINCULAR",(d,w)->{
+                        SenderClient.unpair(this);render();
+                    }).show(),false);
+            infoText(more,"Micrófono y ruedita: pendientes en la T1. "+
+                "El Sender no captura teclas del volante.");
+        }
+        addAction(page,"Buscar actualización del Sender",
+            ()->Updater.check(this,"sender",this::info),false);
+        infoText(page,SenderCloudOta.isEnrolled(this)?
+            "OTA Cloud: dispositivo vinculado. Descarga con firma verificada.":
+            "OTA Cloud: conexión pendiente. Sigue activo el canal OTA firmado de GitHub.");
+        if(!status.isEmpty())
+            infoText(page,"Actualización / estado: "+status);
+        infoText(page,"En Uber seleccioná DriveLab Auto Sender. "+
+            "La ruta se envía sin abrir la interfaz y sin "+
+            "interrumpir la navegación del Xiaomi cuando está en solo clúster.");
         setContentView(scroll);
         currentScroll=scroll;
         if(restoreY>0)scroll.post(()->{
@@ -153,18 +328,43 @@ public final class SenderActivity extends Activity {
     }
     private void chooseNavigationTarget(){
         String current=SenderRouteTarget.selected(this);
-        final String[] choices={"Waze","Google Maps","Ambos simultáneamente"};
+        final String[] choices={"Waze","Google Maps","Ambos simultáneamente",
+            "Google Maps en T1Launcher · tarea virtual existente (LAB)"};
         int selected=BridgeRouteTarget.MAPS.equals(current)?1:
-            BridgeRouteTarget.BOTH.equals(current)?2:0;
+            BridgeRouteTarget.BOTH.equals(current)?2:
+            BridgeRouteTarget.T1_LAUNCHER.equals(current)?3:0;
         new AlertDialog.Builder(this)
             .setTitle("NAVEGACIÓN DE UBER EN LA T1")
             .setSingleChoiceItems(choices,selected,(dialog,which)->{
                 SenderRouteTarget.choose(this,which==1?
                     BridgeRouteTarget.MAPS:which==2?
-                    BridgeRouteTarget.BOTH:BridgeRouteTarget.WAZE);
+                    BridgeRouteTarget.BOTH:which==3?
+                    BridgeRouteTarget.T1_LAUNCHER:BridgeRouteTarget.WAZE);
                 dialog.dismiss();render();
             })
             .setNegativeButton("CANCELAR",null).show();
+    }
+    private void chooseT1LauncherRouteTrial(){
+        new AlertDialog.Builder(this)
+            .setTitle("T1LAUNCHER · NO DUPLICAR GOOGLE MAPS")
+            .setMessage("Sólo con la T1 estacionada. Dejá Google Maps "+
+                "abierto DENTRO del Cluster de T1Launcher, como en la foto. "+
+                "Este botón selecciona la ruta experimental para los "+
+                "PRÓXIMOS destinos compartidos desde Uber. "+
+                "Bridge buscará una única tarea Google Maps en un "+
+                "Display VIRTUAL (nunca el Display 1 físico), y "+
+                "solicitará al Android entregar la dirección "+
+                "explícitamente a ese ID de tarea. "+
+                "Si la tarea no es única o cambió, FALLA sin abrir "+
+                "otra ventana. No modifica el controlador del volante "+
+                "de T1Launcher ni su mosaico. "+
+                "Se puede volver a Waze/Maps/Ambos desde ELEGIR DESTINO.")
+            .setNegativeButton("CANCELAR",null)
+            .setPositiveButton("ACTIVAR PARA PRÓXIMO UBER",(d,w)->{
+                SenderRouteTarget.choose(this,BridgeRouteTarget.T1_LAUNCHER);
+                info("MODO T1LAUNCHER LISTO · compartí un destino "+
+                    "de Uber desde tu Xiaomi. No se manda una ruta ficticia.");
+            }).show();
     }
     private void acceptQrIntent(Intent intent){
         if(intent==null||intent.getData()==null)return;
@@ -241,6 +441,13 @@ public final class SenderActivity extends Activity {
             },"Sender-Pair-Finish").start()).show();
     }
     private void test(){
+        if(BridgeRouteTarget.T1_LAUNCHER.equals(
+                SenderRouteTarget.selected(this))){
+            info("T1LAUNCHER: no se envía ruta de prueba a La Plata. "+
+                "Usá un destino real compartido desde Uber; "+
+                "no queremos reemplazar la navegación actual.");
+            return;
+        }
         if(!SenderClient.configured(this)){info("Primero vinculá el Receiver");return;}
         new Thread(()->{
             SenderClient.Delivery result=SenderClient.send(this,
