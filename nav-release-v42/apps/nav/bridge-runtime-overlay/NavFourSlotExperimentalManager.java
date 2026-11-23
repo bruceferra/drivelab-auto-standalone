@@ -445,18 +445,28 @@ final class NavFourSlotExperimentalManager {
             NavFourSlotResponsiveGeometry.Target previous=
                 appliedGeometry.get(content.id);
             if(previous==null||!previous.same(target)){
-                // Resize the existing same-owned VD only. This prompts
-                // Maps/Waze to recalculate UI at 960x720 for a half panel.
-                // The original task/display IDs remain unchanged.
+                // Buffer first, then resize the SAME VirtualDisplay.
+                // On a half-width cluster host this triggers app layout
+                // reflow to 960x720 without changing Android task/display.
+                tv.getSurfaceTexture().setDefaultBufferSize(
+                    target.width,target.height);
                 vd.resize(target.width,target.height,
                     NavFourSlotResponsiveGeometry.DENSITY_DPI);
                 appliedGeometry.put(content.id,target);
+            }else{
+                tv.getSurfaceTexture().setDefaultBufferSize(
+                    target.width,target.height);
             }
-            tv.getSurfaceTexture().setDefaultBufferSize(
-                target.width,target.height);
-            // Native responsive size now matches the host; there must be
-            // no stale letterbox/crop Matrix from LAB55.
-            tv.setTransform(new android.graphics.Matrix());
+            if(slot.touch){
+                // Central gesture mapping remains calibrated to the
+                // original stream-native virtual-display dimensions.
+                NavFourSlotClusterABHost.fit(
+                    tv,target.width,target.height);
+            }else{
+                // Cluster VD now matches the physical A/B viewport.
+                // Reset LAB55's stale panoramic letterbox Matrix.
+                tv.setTransform(new android.graphics.Matrix());
+            }
         }catch(RuntimeException resizeError){
             // Layout-only experiment, do not interrupt the proven swap.
             // Preserve all VDs/tasks. Fall back to LAB55 center-inside.
