@@ -104,9 +104,21 @@ final class NavFourSlotClusterABHost {
         if(!split||!second.isAvailable()||
            !secondContainer.isAttachedToWindow())
             throw new SecurityException("Tablero B sin superficie NAV");
+        secondContainer.bringToFront();
         secondContainer.setVisibility(View.VISIBLE);
         secondContainer.setAlpha(1f);
         second.setAlpha(1f);
+    }
+    /** If A is empty and B full width, B otherwise obscures A's
+     * TextureView and the incoming app may never produce a visible frame.
+     * Bring A forward only for the guarded pre-commit frame probe.
+     */
+    void previewFirst(){
+        if(!split||!originalWaze.isAvailable()||
+           !originalWaze.isAttachedToWindow())
+            throw new SecurityException("Tablero A sin superficie NAV");
+        originalWaze.bringToFront();
+        originalWaze.setAlpha(1f);
     }
 
     /**
