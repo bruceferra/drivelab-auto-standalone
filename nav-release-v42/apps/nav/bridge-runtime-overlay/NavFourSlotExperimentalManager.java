@@ -486,6 +486,27 @@ final class NavFourSlotExperimentalManager {
             NavFourSlotLiveRouting.central(owner,token,panel);
         return t==null?null:t.stream;
     }
+    /** Same geometry used for drawing AND central gesture inversion.
+     * Called by owner only on its UI thread. If a resize fails, retain
+     * the previous native geometry and its center-inside touch mapping.
+     */
+    NavFourSlotResponsiveGeometry.Target currentCentralGeometry(int panel){
+        NavFourSlotPolicy.Stream content=centralStream(panel);
+        if(content==null)return null;
+        NavFourSlotResponsiveGeometry.Target actual=
+            appliedGeometry.get(content.id);
+        return actual==null?
+            new NavFourSlotResponsiveGeometry.Target(
+                content.width,content.height):actual;
+    }
+    /** If central viewport dimensions change while 4P is active,
+     * resize its owner VD only; never affect task/Surface transfers.
+     */
+    void centralHostResized(){
+        if(isActive()&&!touchPaused){
+            updateVisibleSlots();
+        }
+    }
     void frameCentral(int index){
         if(driver!=null&&index>=0&&index<=1)
             driver.onFrame(index==0?
