@@ -184,7 +184,10 @@ public final class NavVirtualMosaicActivity extends Activity {
             NavFourSlotPolicy.Stream showing=
                 fourSlotManager.centralStream(panel);
             if(showing==null)return -1f;
-            sw=showing.width;sh=showing.height;
+            NavFourSlotResponsiveGeometry.Target drawing=
+                fourSlotManager.currentCentralGeometry(panel);
+            if(drawing==null)return -1f;
+            sw=drawing.width;sh=drawing.height;
         }
         NavMosaicGeometry.Fit fit=NavMosaicGeometry.fit(
             sw,sh,w,h);
@@ -467,6 +470,13 @@ public final class NavVirtualMosaicActivity extends Activity {
             viewport.addOnLayoutChangeListener((v,l,t,r,b,ol,ot,or,ob)->{
                 int vw=r-l,vh=b-t;
                 if(vw<1||vh<1)return;
+                if(fourSlotManager!=null&&fourSlotManager.isActive()){
+                    // In the 4P experiment the CURRENT occupant may be
+                    // Waze, Maps or Spotify, not panels[index]'s old app.
+                    // Never restore an obsolete source-size Matrix.
+                    fourSlotManager.centralHostResized();
+                    return;
+                }
                 Panel p=panels[index];
                 applyPanelCrop(texture,
                     p.sourceWidth>0?p.sourceWidth:vw,
