@@ -389,8 +389,12 @@ final class NavFourSlotExperimentalManager {
                     }
                     @Override public void resumeCentralInput(){
                         if(!closed){
-                            updateVisibleSlots();
+                            // Release LAB57's guarded transfer gate FIRST,
+                            // then schedule LAB58's async geometry pass.
+                            // Otherwise the UI callback posted while paused
+                            // returns early and geometrySettling never clears.
                             touchPaused=false;
+                            updateVisibleSlots();
                         }
                     }
                     @Override public void onUnverifiedRollback(){
