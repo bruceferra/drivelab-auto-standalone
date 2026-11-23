@@ -129,6 +129,35 @@ public final class ReceiverActivity extends T1ImmersiveActivity {
         }catch(Exception ignored){}
         label(body,"v"+installedVersion+
             " · pantalla inmersiva + área libre Hola Jetour",13);
+        if(T1NavSeparation.NAV_DELEGATED){
+            label(body,"DRIVELAB AUTO · VIAJES Y VEHÍCULO",19);
+            label(body,"Navegación, clúster, mosaicos, voz y volante: DriveLab Nav.",13);
+            button(body,"COCKPIT · VIAJES 1/2 · JORNADAS · ENERGÍA",()->
+                startActivity(new Intent(this,T1PremiumCockpitActivity.class)));
+            button(body,"VIAJES AUTOMÁTICOS POR ENCENDIDO",()->
+                startActivity(new Intent(this,T1AutoJourneyActivity.class)));
+            button(body,"ANÁLISIS DE VIAJES Y MAPAS HISTÓRICOS",()->
+                startActivity(new Intent(this,T1TripMapAnalysisActivity.class)));
+            button(body,"CARGAS · HISTORIAL Y ENERGÍA",()->
+                startActivity(new Intent(this,T1ChargeHistoryActivity.class)));
+            button(body,"CONTROLES Y DATOS OEM DEL VEHÍCULO",()->
+                startActivity(new Intent(this,ReceiverVehicleActivity.class)));
+            button(body,"OPTIMIZADOR · CONFIGURAR PERFILES",()->
+                startActivity(new Intent(this,T1OptimizedModeActivity.class)));
+            button(body,"TANQUE · CONSUMO · AUTONOMÍA",()->
+                startActivity(new Intent(this,T1TankDashboardActivity.class)));
+            button(body,"DIAGNÓSTICO Y VALIDACIONES OEM",()->
+                startActivity(new Intent(this,T1ValidationWizardActivity.class)));
+            button(body,"COMPROBAR ACTUALIZACIÓN RECEIVER",()->
+                Updater.check(this,"receiver",this::report));
+            if(Updater.hasPendingInstall(this))
+                button(body,"REINTENTAR INSTALACIÓN DESCARGADA",()->
+                    Updater.retryInstall(this,this::report));
+            if(!message.isEmpty())label(body,message,13);
+            setContentView(scroll);
+            currentScroll=scroll;
+            return;
+        }
         // Daily home: no duplicate fixed-toolbar controls or lab pilots.
         label(body,"FUNCIONES",17);
         button(body,"COCKPIT · VIAJES Y ENERGÍA",()->
