@@ -22,6 +22,8 @@ assert "getRealSize(physical)" in manager
 assert "vd.resize(target.width,target.height,nativeDensity(vd))" in manager
 assert "ownerDisplays.get(content.id)" in manager
 assert "geometrySettling" in manager
+assert 'if(geometrySettling){' in manager
+assert 'lastResizeRequest.get(content.id)' in manager
 assert "NavFourSlotClusterABHost.fit(tv,actual.width,actual.height)" in manager
 assert 'if("spotify".equals(stream.id))' not in geo
 assert "return new Target(centralWidth,centralHeight)" in geo
