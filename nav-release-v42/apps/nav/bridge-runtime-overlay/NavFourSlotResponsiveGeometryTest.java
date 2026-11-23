@@ -52,8 +52,32 @@ public final class NavFourSlotResponsiveGeometryTest {
             "native 960x720 per half, no vertical letterboxing");
         NavFourSlotResponsiveGeometry.Target central=target(
             both,NavFourSlotPolicy.Slot.CENTRAL_A);
-        ok(central.width==1250&&central.height==820,
-            "central VD reflows to the current A/B host, with matching touch");
+        ok(central.width==620&&central.height==980,
+            "Spotify remains at original native VD in wide central A");
+        NavMosaicGeometry.Fit fit=NavMosaicGeometry.fit(
+            central.width,central.height,1250,820);
+        ok(fit.sx>0f&&fit.sx<1f&&fit.sy==1f,
+            "Spotify must be fitted center-inside, not horizontally cropped");
+        ok(fit.contains(625f,410f)&&!fit.contains(0f,410f),
+            "central taps outside Spotify letterbox must be rejected");
+        NavFourSlotPolicy.State moved=NavFourSlotPolicy.swap(
+            both,NavFourSlotPolicy.Slot.CENTRAL_A,
+            NavFourSlotPolicy.Slot.CENTRAL_B,
+            SESSION,both.revision).after;
+        NavFourSlotResponsiveGeometry.Target spotifyB=target(
+            moved,NavFourSlotPolicy.Slot.CENTRAL_B);
+        ok(spotifyB.same(central),
+            "Spotify keeps exactly same original VD across A/B and back");
+        // Maps in any other central host should still reflow natively.
+        NavFourSlotPolicy.State mapsCenter=make("waze","spotify");
+        NavFourSlotResponsiveGeometry.Target mapsA=target(
+            mapsCenter,NavFourSlotPolicy.Slot.CENTRAL_A);
+        ok(mapsA.width==1250&&mapsA.height==820,
+            "Maps remains responsive when placed in Central A");
+        NavFourSlotResponsiveGeometry.Target spotifyCluster=target(
+            mapsCenter,NavFourSlotPolicy.Slot.TABLERO_B);
+        ok(spotifyCluster.width==960&&spotifyCluster.height==720,
+            "Spotify can still use native resized cluster half when needed");
         try{
             target(singleA,NavFourSlotPolicy.Slot.TABLERO_B);
             throw new AssertionError("empty panel should be rejected");
@@ -61,7 +85,7 @@ public final class NavFourSlotResponsiveGeometryTest {
         ok(singleA.streams.get("waze").displayId==
            both.streams.get("waze").displayId,
            "geometry never changes original app display ID");
-        System.out.println("PASS NAV56: 1920x720 single, 960x720 dual, "+
-            "native central host; task/VD identities unmodified");
+        System.out.println("PASS NAV57: Spotify native Central A/B with "+
+            "center-inside safe touch, Maps responsive, cluster geometry preserved");
     }
 }
