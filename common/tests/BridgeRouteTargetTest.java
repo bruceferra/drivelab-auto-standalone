@@ -8,7 +8,7 @@ public final class BridgeRouteTargetTest {
         for(String base:Arrays.asList("coord","search")){
             ck(BridgeRouteTarget.sendKind(base,"waze").equals(base),
                 "Legacy sender must continue using old Waze wire kind");
-            for(String mode:Arrays.asList("maps","both")){
+            for(String mode:Arrays.asList("maps","both","t1")){
                 String kind=BridgeRouteTarget.sendKind(base,mode);
                 ck(base.equals(BridgeRouteTarget.baseKind(kind)),
                     "Original coordinate/search type must survive routing");
@@ -21,6 +21,6 @@ public final class BridgeRouteTargetTest {
         ck(BridgeRouteTarget.baseKind("ping")==null&&
             BridgeRouteTarget.baseKind("coord_systemui")==null,
             "No unknown app or system command accepted");
-        System.out.println("PASS route choice Waze/Google/Both and legacy wire");
+        System.out.println("PASS route choice Waze/Google/Both/T1 existing-task and legacy wire");
     }
 }

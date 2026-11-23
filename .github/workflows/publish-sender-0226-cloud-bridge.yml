@@ -58,9 +58,18 @@ jobs:
           test "$(git hash-object sender/src/main/java/ar/com/rango5gps/drivelabauto/sender/SenderBridgeDiscovery.java)" = a103b019e56f9f19d4aaef8c6082b10f451dddf4
           test "$(git hash-object sender/src/main/java/ar/com/rango5gps/drivelabauto/sender/SenderClient.java)" = e9c3edf009ea5bf539eecb8ea9759f12ddf0150f
           test "$(git hash-object sender/src/main/java/ar/com/rango5gps/drivelabauto/sender/SenderRouteTarget.java)" = befe66f0478b6b3af376bd0863bb85610d0ba4f9
+          test "$(git hash-object common/src/main/java/ar/com/rango5gps/drivelabauto/common/BridgeDiscoveryProof.java)" = 81a6335d9b289dd45cb233b39dcc55e5fe6d1cb3
+          test "$(git hash-object common/src/main/java/ar/com/rango5gps/drivelabauto/common/BridgeRouteTarget.java)" = ab0d309db7605ec542995ffc6169d0e119822de0
+          test "$(git hash-object common/tests/BridgeDiscoveryProofTest.java)" = a7d41cab9e4a4691c8762c3683a76eb2357668c3
+          test "$(git hash-object common/tests/BridgeRouteTargetTest.java)" = c59fe5f36e9452fd54502f040cd3c23c18d1b87c
           mkdir -p "$RUNNER_TEMP/sender-cloud-tests"
-          javac -encoding UTF-8 --release 17 -d "$RUNNER_TEMP/sender-cloud-tests" common/src/main/java/ar/com/rango5gps/drivelabauto/common/SenderCloudOtaPolicy.java common/tests/SenderCloudOtaPolicyTest.java
+          javac -encoding UTF-8 --release 17 -d "$RUNNER_TEMP/sender-cloud-tests" \
+            common/src/main/java/ar/com/rango5gps/drivelabauto/common/SenderCloudOtaPolicy.java common/tests/SenderCloudOtaPolicyTest.java \
+            common/src/main/java/ar/com/rango5gps/drivelabauto/common/BridgeDiscoveryProof.java common/tests/BridgeDiscoveryProofTest.java \
+            common/src/main/java/ar/com/rango5gps/drivelabauto/common/BridgeRouteTarget.java common/tests/BridgeRouteTargetTest.java
           java -cp "$RUNNER_TEMP/sender-cloud-tests" ar.com.rango5gps.drivelabauto.common.SenderCloudOtaPolicyTest
+          java -cp "$RUNNER_TEMP/sender-cloud-tests" ar.com.rango5gps.drivelabauto.common.BridgeDiscoveryProofTest
+          java -cp "$RUNNER_TEMP/sender-cloud-tests" ar.com.rango5gps.drivelabauto.common.BridgeRouteTargetTest
           python3 - <<'PY'
           from pathlib import Path
           root=Path('common/src/main/java/ar/com/rango5gps/drivelabauto/common')
