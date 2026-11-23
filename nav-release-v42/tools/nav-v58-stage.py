@@ -4,11 +4,25 @@ Universal pixel-size negotiation after physical NAV host layout. LAB57
 verified Surface swaps and owner display tasks must be byte-identical.
 """
 from pathlib import Path
+import shutil
 import sys
 if len(sys.argv)!=2:raise SystemExit("usage: nav-v58-stage.py STAGE")
 stage=Path(sys.argv[1]).resolve()
 g=stage/"boot/build.gradle"
 app=stage/"boot/src/main/java/ar/com/rango5gps/drivelabauto/boot"
+# LAB57 is already staged and signed by the approved build workflow.
+# Overlay ONLY the owner-owned geometry/view classes from this checkout,
+# never the LAB57 task/swap/ADB/OTA/keys/receiver/sender infrastructure.
+source=Path(__file__).resolve().parent.parent/"apps/nav/bridge-runtime-overlay"
+for name in (
+    "NavFourSlotExperimentalManager.java",
+    "NavFourSlotResponsiveGeometry.java",
+    "NavFourSlotClusterABHost.java",
+    "NavFourSlotParkingVisibilityPolicy.java",
+):
+    src=source/name
+    assert src.is_file() and app.is_dir(),("LAB58 missing source/stage",name)
+    shutil.copy2(src,app/name)
 manager=(app/"NavFourSlotExperimentalManager.java").read_text(encoding="utf8")
 geo=(app/"NavFourSlotResponsiveGeometry.java").read_text(encoding="utf8")
 swap=(app/"NavFourSlotSwapController.java").read_text(encoding="utf8")
