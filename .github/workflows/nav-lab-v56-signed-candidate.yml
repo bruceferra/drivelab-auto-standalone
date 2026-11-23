@@ -158,6 +158,7 @@ jobs:
             ".github/workflows/nav-lab-v56-signed-candidate.yml",
             "nav-release-v42/apps/nav/bridge-runtime-overlay/NavFourSlotExperimentalManager.java",
             "nav-release-v42/apps/nav/bridge-runtime-overlay/NavVirtualMosaicActivity.java",
+            "nav-release-v42/apps/nav/bridge-runtime-overlay/NavFourSlotAndroidSurfaceDriver.java",
             "nav-release-v42/apps/nav/bridge-runtime-overlay/NavFourSlotResponsiveGeometry.java",
             "nav-release-v42/apps/nav/bridge-runtime-overlay/NavFourSlotResponsiveGeometryTest.java",
             "nav-release-v42/tools/nav-v56-stage.py",
@@ -518,7 +519,7 @@ jobs:
           java -cp "$stage/.nav-qa-classes" ar.com.rango5gps.drivelabauto.boot.NavFourSlotResponsiveGeometryTest
           # Only owner-side geometry changes; LAB55 transfer engine and
           # task/virtual-display routing remain byte-for-byte unchanged.
-          for f in NavFourSlotExperimentalManager.java NavVirtualMosaicActivity.java NavFourSlotResponsiveGeometry.java; do
+          for f in NavFourSlotExperimentalManager.java NavVirtualMosaicActivity.java NavFourSlotResponsiveGeometry.java NavFourSlotAndroidSurfaceDriver.java; do
             cp "$root/apps/nav/bridge-runtime-overlay/$f" "$stage/boot/src/main/java/ar/com/rango5gps/drivelabauto/boot/$f"
           done
           python3 "$root/tools/nav-v56-stage.py" "$stage"
