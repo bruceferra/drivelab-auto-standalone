@@ -131,12 +131,28 @@ final class NavFourSlotPolicy {
         State after=new State(before.session,before.revision+1,
             before.streams,next);
         // Rebind surfaces, NOT task identities. No shell or foreign display.
+        // Keep all three original VirtualDisplays alive. The spare fourth
+        // panel is a temporary parking Surface for an occupied A<->B swap:
+        // occupant -> spare, source -> destination, occupant -> source.
+        // No setSurface(null): Android otherwise pauses the display.
+        Slot spare=null;
+        if(b!=null){
+            for(Slot candidate:Slot.values())
+                if(before.idAt(candidate)==null){
+                    spare=candidate;break;
+                }
+            if(spare==null)
+                throw new SecurityException(
+                    "Intercambio sin panel libre: no pausar las tareas NAV");
+        }
         Bind[] apply=b==null?
             new Bind[]{new Bind(a,to)}:
-            new Bind[]{new Bind(a,to),new Bind(b,from)};
+            new Bind[]{new Bind(b,spare),new Bind(a,to),new Bind(b,from)};
+        // Full-transaction inverse. Partial failures use the coordinator's
+        // journal of completed moves instead of blindly applying this array.
         Bind[] rollback=b==null?
             new Bind[]{new Bind(a,from)}:
-            new Bind[]{new Bind(a,from),new Bind(b,to)};
+            new Bind[]{new Bind(b,spare),new Bind(a,from),new Bind(b,to)};
         return new Swap(before,after,apply,rollback,from,to);
     }
 
