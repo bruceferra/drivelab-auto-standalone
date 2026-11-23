@@ -35,11 +35,10 @@ final class NavFourSlotResponsiveGeometry {
         if(slot==null||state.at(slot)==null)
             throw new SecurityException("No redimensionar panel vacío");
         if(slot.touch){
-            // Restore EXACT source-native size on the central touchscreen.
-            // Its existing gesture mapping uses the source-native size,
-            // so do not silently modify the proven LAB55 touch routing.
-            NavFourSlotPolicy.Stream stream=state.at(slot);
-            return new Target(stream.width,stream.height);
+            // Central slots may exchange Waze / Maps / Spotify.
+            // Reflow the existing owned VirtualDisplay to the actual
+            // host size and keep its touch coordinates in lockstep.
+            return new Target(centralWidth,centralHeight);
         }
         if(clusterWidth<1200||clusterHeight<480||
            clusterWidth>3000||clusterHeight>2200)
