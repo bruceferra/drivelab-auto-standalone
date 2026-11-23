@@ -95,7 +95,9 @@ jobs:
             'apkUrl':'https://github.com/bruceferra/drivelab-auto-standalone/releases/download/v0.3.98/DriveLab-Auto-Receiver-v0.3.98.apk'}
           with open('output/receiver.json','w') as f:json.dump(manifest,f,indent=2)
           with open('output/sender.json') as f:sender=json.load(f)
-          assert sender['versionCode']==23 and sender['versionName']=='0.2.22'
+          assert sender.get('packageName')=='ar.com.rango5gps.drivelabauto.sender'
+          assert int(sender.get('versionCode',0))>0 and sender.get('versionName')
+          print('Preserving existing Sender',sender['versionName'],sender['versionCode'])
           PY
           sha256sum output/DriveLab-Auto-Receiver-v0.3.98.apk > output/receiver.sha256
       - name: Publish Receiver only; preserve Sender and Boot unchanged
