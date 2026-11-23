@@ -1,14 +1,7 @@
 name: Receiver voice assistant · Gemini ChatGPT Waze routing
+# Historical receiver voice test. Voice now belongs to DriveLab Nav.
+# Keep available manually for audits, never gate Auto trip-only releases.
 on:
-  push:
-    branches: [main]
-    paths:
-      - 'receiver/**'
-      - '.github/workflows/receiver-voice-ci.yml'
-  pull_request:
-    paths:
-      - 'receiver/**'
-      - '.github/workflows/receiver-voice-ci.yml'
   workflow_dispatch:
 permissions:
   contents: read
