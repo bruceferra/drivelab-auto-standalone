@@ -1,0 +1,15 @@
+{
+  "kind": "drivelab-nav-ota-provenance",
+  "approvedScope": "LAB57 opt-in 4P recovery candidate: occupied swaps must wait for a fresh frame at EACH hop, including the spare fourth slot; Spotify keeps original native VirtualDisplay geometry in central A/B and is fitted center-inside to avoid cropping. Retain LAB56 ownership checks, exact task identity, displays, sender/receiver and OEM integrations untouched.",
+  "sourceRunId": 45091272709,
+  "sourceCommit": "78cb046475f424ed943791d62b3c434128932be7",
+  "sourceBranch": "fix/nav-lab57-spotify-native-central-fit-20261122",
+  "applicationId": "ar.com.rango5gps.drivelabauto.boot.lab",
+  "versionName": "0.1.59-lab.57",
+  "versionCode": 61,
+  "releaseTag": "bridge-lab-v57",
+  "previousOtaVersion": "0.1.58-lab.56",
+  "previousOtaSha256": "fdb47d322f1d2f2242d59318eda74000f8b57b403a6619d6615e2f251d337d7d",
+  "previousOtaSize": 5178793,
+  "note": "Original signed source-only candidate CI PASS, exact owner signer validated. Tests validate no moving a second VD until previous parking frame verified and Spotify native central geometry; physical recovery regression not yet verified. Only opt-in 4P while parked; LAB56 release remains as fallback."
+}
