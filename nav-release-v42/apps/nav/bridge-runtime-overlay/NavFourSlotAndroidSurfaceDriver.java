@@ -234,10 +234,11 @@ final class NavFourSlotAndroidSurfaceDriver
     }
 
     /**
-     * The current occupant of an occupied destination is detached FIRST.
-     * This prevents two separate VirtualDisplays from writing into the
-     * same TextureView Surface during an A↔B swap. The controller
-     * restores both original slots on any failure.
+     * LAB55: direct Surface rebind ONLY to an empty NAV-owned host.
+     * Android treats setSurface(null) as a paused virtual display;
+     * an occupied-slot swap must first park the occupant in the fourth
+     * unoccupied NAV slot, keeping all original app tasks alive.
+     * A foreign or occupied destination is NEVER evicted.
      */
     @Override public void bind(
             NavFourSlotPolicy.Stream stream,
@@ -250,34 +251,36 @@ final class NavFourSlotAndroidSurfaceDriver
            !checkIdentity(selected)||!proof.ownsDisplay(stream))
             throw new SecurityException("Flujo NAV no reconocido");
         Host destination=hosts.get(target);
-        // Geometry/touch callback must update its per-slot VID and fit.
-        if(!geometry.prepare(stream,target))
-            throw new SecurityException(
-                "No se aplicó la geometría/tacto del destino");
+        // Before making a temporary slot visible, prove it is vacant.
         synchronized(monitor){
-            if(!current()||!destination.ready())
-                throw new SecurityException("Surface NAV retirada");
-            String other=null;
+            if(!current()||!destination.ready()||
+               !bound.containsKey(stream.id)||bound.get(stream.id)==target)
+                throw new SecurityException(
+                    "Origen o destino NAV no disponible");
             for(Map.Entry<String,NavFourSlotPolicy.Slot> entry:
                     bound.entrySet())
-                if(entry.getValue()==target&&
-                   !entry.getKey().equals(stream.id)){
-                    other=entry.getKey();break;
-                }
-            if(other!=null){
-                RegisteredDisplay occupant=running.get(other);
-                if(occupant==null||!checkIdentity(occupant))
-                    throw new SecurityException("Ocupante no pertenece a NAV");
-                // No force-stop, no task relaunch.
-                occupant.virtual.setSurface(null);
-                bound.remove(other);
-            }
-            selected.virtual.setSurface(null);
-            bound.remove(stream.id);
+                if(entry.getValue()==target)
+                    throw new SecurityException(
+                        "Destino NAV ocupado: usar cuarto espacio libre");
+        }
+        // Prepare the (empty) host on the UI thread, not the live source.
+        if(!geometry.prepare(stream,target))
+            throw new SecurityException(
+                "No se habilitó el panel destino para verificación");
+        synchronized(monitor){
+            if(!current()||!destination.ready()||
+               !bound.containsKey(stream.id))
+                throw new SecurityException("Surface NAV retirada");
+            for(Map.Entry<String,NavFourSlotPolicy.Slot> entry:
+                    bound.entrySet())
+                if(entry.getValue()==target)
+                    throw new SecurityException(
+                        "Destino NAV ocupado tras preparar");
             Surface surface=destination.surface();
             SurfaceTexture texture=destination.texture.getSurfaceTexture();
             texture.setDefaultBufferSize(stream.width,stream.height);
             baseline.put(stream.id,destination.frames);
+            // Rebind DIRECTLY. No temporary OFF state, no second writer.
             selected.virtual.setSurface(surface);
             bound.put(stream.id,target);
         }
