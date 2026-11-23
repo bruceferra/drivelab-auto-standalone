@@ -34,7 +34,13 @@ final class NavFourSlotResponsiveGeometry {
         NavFourSlotPolicy.validate(state);
         if(slot==null||state.at(slot)==null)
             throw new SecurityException("No redimensionar panel vacío");
-        if(slot.touch)return new Target(centralWidth,centralHeight);
+        if(slot.touch){
+            // Restore EXACT source-native size on the central touchscreen.
+            // Its existing gesture mapping uses the source-native size,
+            // so do not silently modify the proven LAB55 touch routing.
+            NavFourSlotPolicy.Stream stream=state.at(slot);
+            return new Target(stream.width,stream.height);
+        }
         if(clusterWidth<1200||clusterHeight<480||
            clusterWidth>3000||clusterHeight>2200)
             throw new SecurityException("Clúster NAV físico inesperado");
