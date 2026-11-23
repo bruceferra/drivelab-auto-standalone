@@ -34,7 +34,11 @@ assert "NavFourSlotLiveRouting.snapshot(owner,token)" in manager
 assert "live.state.revision!=verified.revision" in manager
 assert "generation!=geometryGeneration" in manager
 assert "forSlot(" in geo and "half" in geo
-assert "new Target(stream.width,stream.height)" in geo
+assert "new Target(centralWidth,centralHeight)" in geo
+central=(app/"NavVirtualMosaicActivity.java").read_text(encoding="utf8")
+assert "fourSlotManager.currentCentralGeometry(panel)" in central
+assert "fourSlotManager.centralHostResized()" in central
+assert "NavFourSlotResponsiveGeometry.Target currentCentralGeometry(" in manager
 assert "selected.virtual.setSurface(surface)" in driver
 assert "selected.virtual.setSurface(null)" not in driver
 assert "occupant.virtual.setSurface(null)" not in driver
