@@ -1,0 +1,15 @@
+{
+  "kind": "drivelab-nav-ota-provenance",
+  "approvedScope": "LAB55 opt-in four-slot no-pause swap QA: direct VirtualDisplay.setSurface(dest) to vacant NAV-owned Surface; occupied swap parks occupant in fourth empty slot; both cluster A/B visible frame probes; fail-closed on Android mutation uncertainty. Classic Maps+Spotify/Waze remains default. Do not change Sender/Receiver/QR/OEM/T1Launcher; physical swap still unverified.",
+  "sourceRunId": 45087227874,
+  "sourceCommit": "a3aa1aa687eaf26fe310640eb523c0e9d35b818b",
+  "sourceBranch": "fix/nav-lab55-no-pause-four-slot-transfer-20261122",
+  "applicationId": "ar.com.rango5gps.drivelabauto.boot.lab",
+  "versionName": "0.1.57-lab.55",
+  "versionCode": 59,
+  "releaseTag": "bridge-lab-v55",
+  "previousOtaVersion": "0.1.56-lab.54",
+  "previousOtaSha256": "5b917b231e7475623c91b0413b9c0fb59205d7171b90b589f794f3d8c6b9b222",
+  "previousOtaSize": 5163617,
+  "note": "Build original-signed CI passes and exact original certificate verified; vehicle physical transfer unverified, keep manual ↔ 4P opt-in only parked. Available fourth slot is a parking surface; no fourth independent app created. LAB54 fallback remains and NAV LAB52 classic behavior preserved."
+}
