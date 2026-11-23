@@ -186,6 +186,8 @@ final class NavFourSlotAndroidSurfaceDriver
             String name=initial.idAt(slot);
             if(name!=null)bound.put(name,slot);
         }
+        if(!surfaceBindingsExact())throw new SecurityException(
+            "LAB56: Surface/VirtualDisplay inicial no coincide");
     }
     private boolean checkIdentity(RegisteredDisplay r){
         // VirtualDisplay.setSurface(null) temporarily suspends video
@@ -208,6 +210,33 @@ final class NavFourSlotAndroidSurfaceDriver
         Display d=r.virtual.getDisplay();
         return d!=null&&d.getState()!=Display.STATE_OFF;
     }
+    /**
+     * A callback on a TextureView is NOT proof that its pixels came from
+     * the declared application. LAB55 previously accepted any next frame
+     * while the controls still labeled the original stream.
+     *
+     * First verify the exact Surface held by EVERY original owned VD,
+     * and ensure there is only one producer for each of the four hosts.
+     * Never alter an OEM Surface or any Android task.
+     */
+    private boolean surfaceBindingsExact(){
+        synchronized(monitor){
+            java.util.HashSet<Surface> seen=new java.util.HashSet<>();
+            if(bound.size()!=running.size())return false;
+            for(Map.Entry<String,RegisteredDisplay> entry:
+                    running.entrySet()){
+                NavFourSlotPolicy.Slot slot=bound.get(entry.getKey());
+                Host host=hosts.get(slot);
+                if(host==null||host.ownedSurface==null||
+                   !host.ownedSurface.isValid())return false;
+                Surface attached=entry.getValue().virtual.getSurface();
+                if(attached==null||attached!=host.ownedSurface||
+                   !seen.add(attached))return false;
+            }
+            return true;
+        }
+    }
+
     private void requireWorker(){
         if(Looper.myLooper()==Looper.getMainLooper())
             throw new SecurityException(
@@ -228,7 +257,7 @@ final class NavFourSlotAndroidSurfaceDriver
             return false;
         RegisteredDisplay r=running.get(expected.id);
         return r!=null&&r.stream==expected&&checkDisplay(r)&&
-            proof.ownsDisplay(expected)&&
+            proof.ownsDisplay(expected)&&surfaceBindingsExact()&&
             NavFourSlotTaskInventory.exact(
                 inventory.readStackList(),expected);
     }
@@ -251,6 +280,9 @@ final class NavFourSlotAndroidSurfaceDriver
            !checkIdentity(selected)||!proof.ownsDisplay(stream))
             throw new SecurityException("Flujo NAV no reconocido");
         Host destination=hosts.get(target);
+        if(!surfaceBindingsExact())
+            throw new SecurityException(
+                "Superficie real y etiqueta NAV no coinciden");
         // Before making a temporary slot visible, prove it is vacant.
         synchronized(monitor){
             if(!current()||!destination.ready()||
@@ -282,7 +314,13 @@ final class NavFourSlotAndroidSurfaceDriver
             baseline.put(stream.id,destination.frames);
             // Rebind DIRECTLY. No temporary OFF state, no second writer.
             selected.virtual.setSurface(surface);
+            if(selected.virtual.getSurface()!=surface)
+                throw new SecurityException(
+                    "Android no confirmó Surface del flujo "+stream.id);
             bound.put(stream.id,target);
+            if(!surfaceBindingsExact())
+                throw new SecurityException(
+                    "Dos displays NAV comparten pantalla o etiqueta");
         }
     }
 
@@ -295,7 +333,8 @@ final class NavFourSlotAndroidSurfaceDriver
         synchronized(monitor){
             while(SystemClock.elapsedRealtime()<deadline){
                 if(!ownsSlot(target,session)||
-                   bound.get(stream.id)!=target)return false;
+                   bound.get(stream.id)!=target||
+                   !surfaceBindingsExact())return false;
                 Host h=hosts.get(target);
                 Long start=baseline.get(stream.id);
                 if(start!=null&&h.frames>start)return true;
