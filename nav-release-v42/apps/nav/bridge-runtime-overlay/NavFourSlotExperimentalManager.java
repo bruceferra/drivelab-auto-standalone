@@ -285,15 +285,18 @@ final class NavFourSlotExperimentalManager {
                         try{
                             TextureView host=surfaces.get(slot);
                             if(host!=null&&host.isAvailable()){
-                                // Preflight must NEVER transform this
-                                // TextureView: it may still be rendering
-                                // the previous occupant (Waze). LAB53
-                                // changed its Matrix to the NEW app before
-                                // the Surface transfer succeeded, creating
-                                // a miniature Waze window after rollback.
-                                // Only the verified completion callback
-                                // may resize or reframe the destination.
-                                success[0]=true;
+                                // Only a vacant destination reaches this
+                                // callback. Expose it so the TextureView
+                                // actually consumes frames before commit,
+                                // while leaving Waze A full size/untouched.
+                                boolean available=slot!=
+                                    NavFourSlotPolicy.Slot.TABLERO_B||
+                                    NavOwnClusterProbe.previewFourSlotB(
+                                        owner,token);
+                                if(available){
+                                    host.setAlpha(1f);
+                                    success[0]=true;
+                                }
                             }
                         }catch(RuntimeException ignored){}
                         finally{done.countDown();}
