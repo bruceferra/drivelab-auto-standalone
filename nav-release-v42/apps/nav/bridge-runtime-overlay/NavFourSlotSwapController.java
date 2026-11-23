@@ -139,9 +139,11 @@ final class NavFourSlotSwapController {
         }catch(Exception failure){
             boolean rollback=!uncertainBind;
             String diagnostic=shortCause(failure);
-            // Reverse precisely the transfers that completed, without
-            // evicting a live VD or using a guessed Android display.
-            for(int i=undo.size()-1;i>=0;i--){
+            // Reverse only if Android never threw during setSurface.
+            // On a mutating exception, actual Surface ownership is unknown:
+            // attempting another transfer could target an occupied host.
+            // Leave all VDs untouched and require NAV session recovery.
+            for(int i=undo.size()-1;!uncertainBind&&i>=0;i--){
                 NavFourSlotPolicy.Bind previous=undo.get(i);
                 try{
                     NavFourSlotPolicy.Stream stream=
