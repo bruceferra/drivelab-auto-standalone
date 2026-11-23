@@ -96,6 +96,19 @@ final class NavFourSlotClusterABHost {
         split=true;
     }
 
+    /** Reveal the empty physical B target during frame verification only.
+     * Waze A retains its native full-size Surface and Matrix. A verified
+     * commit or rollback restores the actual A/B occupancy layout.
+     */
+    void previewSecond(){
+        if(!split||!second.isAvailable()||
+           !secondContainer.isAttachedToWindow())
+            throw new SecurityException("Tablero B sin superficie NAV");
+        secondContainer.setVisibility(View.VISIBLE);
+        secondContainer.setAlpha(1f);
+        second.setAlpha(1f);
+    }
+
     /**
      * The cluster's single-app layout stays FULL WIDTH until both A and B
      * contain a verified NAV stream. The optional B TextureView remains
