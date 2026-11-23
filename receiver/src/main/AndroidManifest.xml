@@ -245,7 +245,6 @@
         <activity-alias android:name=".VoiceAssistantShortcut" android:enabled="false"
             android:targetActivity=".T1VoiceShortcutActivity"
             android:exported="true"
-            android:enabled="true"
             android:label="DriveLab · Asistente de voz" />
         <activity android:name=".T1WhatIfActivity" android:exported="false" />
         <!-- Isolated historical/read-only T1 fuel dashboard; no OEM writes. -->
