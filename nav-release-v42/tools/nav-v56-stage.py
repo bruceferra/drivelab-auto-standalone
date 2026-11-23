@@ -40,6 +40,10 @@ assert "fourSlotManager.currentCentralGeometry(panel)" in central
 assert "fourSlotManager.centralHostResized()" in central
 assert "NavFourSlotResponsiveGeometry.Target currentCentralGeometry(" in manager
 assert "selected.virtual.setSurface(surface)" in driver
+assert "surfaceBindingsExact()" in driver
+assert "selected.virtual.getSurface()!=surface" in driver
+assert "h.lastFrameTime>timestamp" in driver
+assert "st.getTimestamp()" in driver
 assert "selected.virtual.setSurface(null)" not in driver
 assert "occupant.virtual.setSurface(null)" not in driver
 assert "java.util.ArrayList<NavFourSlotPolicy.Bind> undo" in swap
