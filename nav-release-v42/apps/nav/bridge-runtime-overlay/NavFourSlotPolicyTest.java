@@ -50,14 +50,22 @@ public final class NavFourSlotPolicyTest {
         ok("maps".equals(reverse.after.idAt(NavFourSlotPolicy.Slot.CENTRAL_A)),
             "return without task relaunch");
         NavFourSlotPolicy.State all=state(true);
-        NavFourSlotPolicy.Swap cross=NavFourSlotPolicy.swap(all,
+        NavFourSlotPolicy.Swap cross=NavFourSlotPolicy.swap(normal,
             NavFourSlotPolicy.Slot.CENTRAL_B,
             NavFourSlotPolicy.Slot.TABLERO_A,777,0);
-        ok(cross.apply.length==2&&cross.rollback.length==2,
-            "occupied destination swaps atomically at policy layer");
+        ok(cross.apply.length==3&&cross.rollback.length==3,
+            "occupied swap parks the existing app in free fourth slot");
+        ok(cross.apply[0].slot==NavFourSlotPolicy.Slot.TABLERO_B&&
+            cross.apply[1].slot==NavFourSlotPolicy.Slot.TABLERO_A&&
+            cross.apply[2].slot==NavFourSlotPolicy.Slot.CENTRAL_B,
+            "parking then direct occupied A/B interchange");
         ok("spotify".equals(cross.after.idAt(NavFourSlotPolicy.Slot.TABLERO_A))&&
             "waze".equals(cross.after.idAt(NavFourSlotPolicy.Slot.CENTRAL_B)),
             "bidirectional cross");
+        blocked(()->NavFourSlotPolicy.swap(all,
+            NavFourSlotPolicy.Slot.CENTRAL_B,
+            NavFourSlotPolicy.Slot.TABLERO_A,777,0),
+            "do not swap four live VDs with no empty parking Surface");
         ok(NavFourSlotPolicy.touchDisplay(cross.after,
             NavFourSlotPolicy.Slot.CENTRAL_B)==8,
             "touch follows actual VD after swap");
