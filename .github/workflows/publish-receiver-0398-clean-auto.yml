@@ -1,4 +1,5 @@
 name: DriveLab Auto 0.3.98 CLEAN Receiver signed release
+# Build gate revalidated after fixing the legacy voice alias XML attribute.
 on:
   push:
     branches: [main]
